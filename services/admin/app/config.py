@@ -13,5 +13,11 @@ class Settings(BaseSettings):
     oidc_client_id: str = "ai-gateway-admin"
     oidc_client_secret: str = "ai-gateway-admin-secret"
 
+    # Sibling service URLs for system health checks
+    auth_url: str = "http://auth:8001"
+    cache_url: str = "http://cache:8002"
+    litellm_url: str = "http://litellm:8003"
+    observability_url: str = "http://observability:8004"
+
 
 settings = Settings()

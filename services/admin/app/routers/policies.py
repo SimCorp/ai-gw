@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import audit
 from app.db import get_session
 from app.models.policy import Policy
 
@@ -58,6 +59,11 @@ async def upsert_policy(team_id: UUID, body: PolicyUpdate, request: Request, ses
         .returning(Policy)
     )
     result = await session.execute(stmt)
+    await audit.record(
+        session, request, "upsert_policy", "policy",
+        resource_id=str(team_id),
+        details=body.model_dump(),
+    )
     await session.commit()
 
     # Sync policy to Redis so cache + auth services pick up the new values immediately.
