@@ -12,7 +12,7 @@ from app.workers import insights, postgres
 async def lifespan(app: FastAPI):
     bus = make_bus(settings)
 
-    pg_handler, pg_pool = await postgres.make_handler(settings.db_url)
+    pg_handler, pg_pool = await postgres.make_handler(settings.database_url)
     bus.subscribe(pg_handler)
     bus.subscribe(insights.make_handler(settings.appinsights_connection_string))
 
