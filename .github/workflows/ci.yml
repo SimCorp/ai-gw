@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      redis:
+        image: redis/redis-stack:7.2.0-v14
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: aigateway
+          POSTGRES_USER: aigateway
+          POSTGRES_PASSWORD: aigateway
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U aigateway"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install service dependencies
+        run: |
+          pip install \
+            "services/auth[dev]" \
+            "services/cache[dev]" \
+            "services/observability[dev]" \
+            "services/admin[dev]"
+
+      - name: Lint
+        run: |
+          pip install ruff
+          ruff check services/
+
+      - name: Test
+        env:
+          DATABASE_URL: postgresql+asyncpg://aigateway:aigateway@localhost:5432/aigateway
+          REDIS_URL: redis://localhost:6379/0
+          DEV_BYPASS_AUTH: "true"
+          BUS_PROVIDER: memory
+        run: pytest services/ -v --tb=short
