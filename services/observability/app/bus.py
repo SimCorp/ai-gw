@@ -54,11 +54,10 @@ class InMemoryBus(EventBus):
 class ServiceBusBus(EventBus):
     """Azure Service Bus implementation. Requires azure-servicebus installed."""
 
-    _SUBSCRIPTION = "gateway-workers"
-
-    def __init__(self, connection_string: str, topic: str) -> None:
+    def __init__(self, connection_string: str, topic: str, subscription: str) -> None:
         self._conn = connection_string
         self._topic = topic
+        self._subscription = subscription
         self._handlers: list[Handler] = []
         self._sender = None
         self._client = None
@@ -93,7 +92,7 @@ class ServiceBusBus(EventBus):
 
         async with ServiceBusClient.from_connection_string(self._conn) as client:
             async with client.get_subscription_receiver(
-                self._topic, self._SUBSCRIPTION
+                self._topic, self._subscription
             ) as receiver:
                 async for msg in receiver:
                     try:
@@ -113,5 +112,6 @@ def make_bus(settings) -> EventBus:
         return ServiceBusBus(
             settings.azure_service_bus_connection_string,
             settings.azure_service_bus_topic,
+            settings.azure_service_bus_subscription,
         )
     return InMemoryBus()

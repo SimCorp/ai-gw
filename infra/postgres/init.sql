@@ -54,3 +54,19 @@ CREATE TABLE cost_records (
 );
 
 CREATE INDEX ON cost_records (team_id, created_at DESC);
+
+CREATE TABLE model_pricing (
+    model_prefix TEXT PRIMARY KEY,
+    price_input_per_1k  NUMERIC(12,8) NOT NULL DEFAULT 0,
+    price_output_per_1k NUMERIC(12,8) NOT NULL DEFAULT 0,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+INSERT INTO model_pricing (model_prefix, price_input_per_1k, price_output_per_1k) VALUES
+    ('claude-opus-4-7',    0.015,    0.075),
+    ('claude-sonnet-4-6',  0.003,    0.015),
+    ('claude-haiku-4-5',   0.0008,   0.004),
+    ('gpt-4o-mini',        0.00015,  0.0006),
+    ('gpt-4o',             0.0025,   0.01),
+    ('gemini-1.5-flash',   0.000075, 0.0003),
+    ('gemini-1.5-pro',     0.00125,  0.005);

@@ -1,10 +1,13 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from redis.asyncio import Redis
 
+from app.auth import require_admin_auth
 from app.config import settings
-from app.routers import api_keys, dashboard, policies, teams
+from app.routers import api_keys, dashboard, policies, pricing, teams
+
+_auth = [Depends(require_admin_auth)]
 
 
 @asynccontextmanager
@@ -15,10 +18,11 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="AI Gateway — Admin Portal", lifespan=lifespan)
-app.include_router(dashboard.router)
-app.include_router(teams.router)
-app.include_router(api_keys.router)
-app.include_router(policies.router)
+app.include_router(dashboard.router, dependencies=_auth)
+app.include_router(teams.router, dependencies=_auth)
+app.include_router(api_keys.router, dependencies=_auth)
+app.include_router(policies.router, dependencies=_auth)
+app.include_router(pricing.router, dependencies=_auth)
 
 
 @app.get("/health")

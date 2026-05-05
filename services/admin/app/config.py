@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://aigateway:aigateway@localhost:5432/aigateway"
     redis_url: str = "redis://localhost:6379/0"
     secret_key: str = "change-me-in-production"
+    admin_token: str = ""  # required when dev_bypass_auth=False
     dev_bypass_auth: bool = True
     oidc_issuer: str = "http://dex:5556/dex"
     oidc_client_id: str = "ai-gateway-admin"
