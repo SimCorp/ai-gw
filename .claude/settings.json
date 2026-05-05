@@ -1,0 +1,30 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "powershell",
+            "statusMessage": "Linting with ruff...",
+            "command": "$data = $input | ConvertFrom-Json; $file = $data.tool_input.file_path; if ($file -and $file.EndsWith('.py')) { ruff check --fix $file 2>$null; ruff format $file 2>$null } exit 0"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "powershell",
+            "statusMessage": "Checking file safety...",
+            "command": "$data = $input | ConvertFrom-Json; $file = $data.tool_input.file_path; $basename = [System.IO.Path]::GetFileName($file); if ($basename -eq '.env') { @{decision='block'; reason='Direct .env edits blocked — use .env.example or configure secrets in Azure Key Vault'} | ConvertTo-Json -Compress; exit 1 }; exit 0"
+          }
+        ]
+      }
+    ]
+  }
+}
