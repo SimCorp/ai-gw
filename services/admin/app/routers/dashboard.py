@@ -26,7 +26,7 @@ _STATS_QUERY = text("""
 @router.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request, session: AsyncSession = Depends(get_session)):
     rows = (await session.execute(_STATS_QUERY)).mappings().all()
-    return templates.TemplateResponse("dashboard.html", {"request": request, "rows": rows})
+    return templates.TemplateResponse(request, "dashboard.html", {"rows": rows})
 
 
 @router.get("/dashboard/stats")
