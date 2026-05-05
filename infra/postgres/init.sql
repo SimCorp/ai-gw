@@ -1,13 +1,13 @@
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
-CREATE TABLE teams (
+CREATE TABLE IF NOT EXISTS teams (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
     slug TEXT NOT NULL UNIQUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE projects (
+CREATE TABLE IF NOT EXISTS projects (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     team_id UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
@@ -16,7 +16,7 @@ CREATE TABLE projects (
     UNIQUE (team_id, slug)
 );
 
-CREATE TABLE api_keys (
+CREATE TABLE IF NOT EXISTS api_keys (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     team_id UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
     project_id UUID REFERENCES projects(id) ON DELETE SET NULL,
@@ -26,7 +26,7 @@ CREATE TABLE api_keys (
     revoked_at TIMESTAMPTZ
 );
 
-CREATE TABLE policies (
+CREATE TABLE IF NOT EXISTS policies (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     team_id UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
     project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
@@ -40,7 +40,7 @@ CREATE TABLE policies (
     UNIQUE (team_id, project_id)
 );
 
-CREATE TABLE cost_records (
+CREATE TABLE IF NOT EXISTS cost_records (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     team_id UUID NOT NULL REFERENCES teams(id),
     project_id UUID REFERENCES projects(id),
@@ -53,9 +53,9 @@ CREATE TABLE cost_records (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX ON cost_records (team_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS cost_records_team_id_created_at_idx ON cost_records (team_id, created_at DESC);
 
-CREATE TABLE model_pricing (
+CREATE TABLE IF NOT EXISTS model_pricing (
     model_prefix TEXT PRIMARY KEY,
     price_input_per_1k  NUMERIC(12,8) NOT NULL DEFAULT 0,
     price_output_per_1k NUMERIC(12,8) NOT NULL DEFAULT 0,
@@ -69,22 +69,21 @@ INSERT INTO model_pricing (model_prefix, price_input_per_1k, price_output_per_1k
     ('gpt-4o-mini',        0.00015,  0.0006),
     ('gpt-4o',             0.0025,   0.01),
     ('gemini-1.5-flash',   0.000075, 0.0003),
-    ('gemini-1.5-pro',     0.00125,  0.005);
+    ('gemini-1.5-pro',     0.00125,  0.005)
+ON CONFLICT (model_prefix) DO NOTHING;
 
--- Team membership with roles
-CREATE TABLE team_members (
+CREATE TABLE IF NOT EXISTS team_members (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     team_id UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
-    user_id TEXT NOT NULL,  -- Entra OID or similar identity
+    user_id TEXT NOT NULL,
     role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('admin', 'member')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (team_id, user_id)
 );
 
-CREATE INDEX ON team_members (team_id);
+CREATE INDEX IF NOT EXISTS team_members_team_id_idx ON team_members (team_id);
 
--- Audit log for all admin mutations
-CREATE TABLE audit_log (
+CREATE TABLE IF NOT EXISTS audit_log (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     actor TEXT NOT NULL DEFAULT 'unknown',
@@ -94,14 +93,13 @@ CREATE TABLE audit_log (
     details JSONB
 );
 
-CREATE INDEX ON audit_log (timestamp DESC);
-CREATE INDEX ON audit_log (resource_type, resource_id);
+CREATE INDEX IF NOT EXISTS audit_log_timestamp_idx ON audit_log (timestamp DESC);
+CREATE INDEX IF NOT EXISTS audit_log_resource_idx ON audit_log (resource_type, resource_id);
 
--- Global model registry — superset of all available models
-CREATE TABLE model_registry (
+CREATE TABLE IF NOT EXISTS model_registry (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name TEXT NOT NULL,           -- display name
-    model_id TEXT NOT NULL UNIQUE, -- LiteLLM identifier
+    name TEXT NOT NULL,
+    model_id TEXT NOT NULL UNIQUE,
     provider TEXT NOT NULL,
     enabled BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -114,4 +112,5 @@ INSERT INTO model_registry (name, model_id, provider) VALUES
     ('GPT-4o',              'gpt-4o',                'openai'),
     ('GPT-4o Mini',         'gpt-4o-mini',           'openai'),
     ('Gemini 1.5 Pro',      'gemini-1.5-pro',        'google'),
-    ('Gemini 1.5 Flash',    'gemini-1.5-flash',      'google');
+    ('Gemini 1.5 Flash',    'gemini-1.5-flash',      'google')
+ON CONFLICT (model_id) DO NOTHING;

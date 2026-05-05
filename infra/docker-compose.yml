@@ -50,6 +50,19 @@ services:
 
   # ── AI Gateway services ───────────────────────────────────────────────────────
 
+  db-migrate:
+    image: postgres:16
+    environment:
+      PGPASSWORD: aigateway
+    volumes:
+      - ./postgres/init.sql:/init.sql:ro
+    command: >
+      psql -h postgres -U aigateway -d aigateway -f /init.sql
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
   litellm:
     build:
       context: ../services/litellm
@@ -76,8 +89,8 @@ services:
       - "8001:8001"
     env_file: ../.env
     depends_on:
-      postgres:
-        condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
     healthcheck:
@@ -112,8 +125,8 @@ services:
       - "8004:8004"
     env_file: ../.env
     depends_on:
-      postgres:
-        condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8004/health')\" 2>/dev/null || exit 1"]
       interval: 10s
@@ -128,8 +141,8 @@ services:
       - "8005:8005"
     env_file: ../.env
     depends_on:
-      postgres:
-        condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
     healthcheck:

@@ -6,6 +6,8 @@ class Settings(BaseSettings):
 
     redis_url: str = "redis://localhost:6379/0"
     litellm_url: str = "http://litellm:8003"
+    litellm_master_key: str = "sk-litellm-local-dev"
+    auth_url: str = "http://auth:8001"
     observability_url: str = "http://observability:8004"
     embedding_model: str = "text-embedding-3-small"
     embedding_api_key: str = "sk-placeholder"

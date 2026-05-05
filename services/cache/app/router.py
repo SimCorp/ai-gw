@@ -13,7 +13,6 @@ router = APIRouter()
 
 
 def _prompt_text(body: dict) -> str:
-    """Extract a single string from the messages list for embedding."""
     messages = body.get("messages", [])
     return " ".join(m.get("content", "") for m in messages if isinstance(m.get("content"), str))
 
@@ -22,7 +21,23 @@ async def _emit_event(client: httpx.AsyncClient, event: dict) -> None:
     try:
         await client.post(f"{settings.observability_url}/events", json=event, timeout=2)
     except Exception:
-        pass  # observability failure must never block the request path
+        pass
+
+
+async def _validate_token(client: httpx.AsyncClient, token: str, model: str | None) -> tuple[str, str | None] | None:
+    """Call auth service to validate token. Returns (team_id, project_id) or None on failure."""
+    try:
+        resp = await client.post(
+            f"{settings.auth_url}/validate",
+            json={"token": token, "model": model},
+            timeout=5,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            return data["team_id"], data.get("project_id")
+        return None
+    except Exception:
+        return None
 
 
 @router.post("/v1/chat/completions")
@@ -31,8 +46,13 @@ async def chat_completions(request: Request):
     redis = request.app.state.redis
     http = request.app.state.http
 
-    team_id = request.headers.get("X-Team-Id", "unknown")
-    project_id = request.headers.get("X-Project-Id")
+    # Validate caller token via auth service
+    auth_header = request.headers.get("Authorization", "")
+    token = auth_header.removeprefix("Bearer ").strip()
+    result = await _validate_token(http, token, body.get("model"))
+    if result is None:
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    team_id, project_id = result
 
     try:
         policy = await get_policy(team_id, project_id, redis)
@@ -70,8 +90,12 @@ async def chat_completions(request: Request):
         except Exception:
             emb = None  # embedding failure → treat as miss
 
-    # 3. Forward to LiteLLM
-    headers = {k: v for k, v in request.headers.items() if k.lower() not in ("host", "content-length")}
+    # 3. Forward to LiteLLM with master key (not caller's token)
+    headers = {
+        k: v for k, v in request.headers.items()
+        if k.lower() not in ("host", "content-length", "authorization")
+    }
+    headers["Authorization"] = f"Bearer {settings.litellm_master_key}"
     resp = await http.post(f"{settings.litellm_url}/v1/chat/completions", json=body, headers=headers, timeout=600)
     response_body = resp.json()
 
