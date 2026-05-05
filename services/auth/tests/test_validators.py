@@ -1,11 +1,10 @@
 import hashlib
+from unittest.mock import AsyncMock
 
 import pytest
-from fastapi import HTTPException
-from unittest.mock import AsyncMock, MagicMock, patch
-
 from app.rate_limiter import check_rate_limit
 from app.validators.api_key import validate_api_key
+from fastapi import HTTPException
 
 
 @pytest.fixture

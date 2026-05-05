@@ -60,11 +60,17 @@ async def upsert_policy(team_id: UUID, body: PolicyUpdate, request: Request, ses
     result = await session.execute(stmt)
     await session.commit()
 
-    # Invalidate Redis policy cache so cache service picks up the new values.
+    # Sync policy to Redis so cache + auth services pick up the new values immediately.
     redis = request.app.state.redis
     cache_key = f"policy:{team_id}"
     if body.project_id:
         cache_key = f"{cache_key}:{body.project_id}"
-    await redis.delete(cache_key)
+    await redis.hset(cache_key, mapping={
+        "ttl_seconds": body.cache_ttl_seconds,
+        "similarity_threshold": body.cache_similarity_threshold,
+        "opt_out": str(body.cache_opt_out).lower(),
+        "embedding_model": body.embedding_model,
+        "rate_limit_rpm": body.rate_limit_rpm,
+    })
 
     return result.scalar_one()

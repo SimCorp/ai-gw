@@ -5,10 +5,16 @@ import numpy as np
 from openai import AsyncOpenAI
 from redis.asyncio import Redis
 
-from app.config import Settings
+from app.config import settings as _settings
 
 _INDEX = "sem_cache_idx"
 _PREFIX = "sem:"
+
+# Shared client — avoids opening a new connection per request.
+_client = AsyncOpenAI(
+    api_key=_settings.embedding_api_key,
+    base_url=_settings.embedding_base_url,
+)
 
 
 def _cosine(a: list[float], b: list[float]) -> float:
@@ -17,10 +23,12 @@ def _cosine(a: list[float], b: list[float]) -> float:
     return float(np.dot(va, vb) / denom) if denom else 0.0
 
 
-async def embed(text: str, settings: Settings) -> list[float]:
+async def embed(text: str, model: str | None = None) -> list[float]:
     # Direct client — never routes through this service to avoid recursion.
-    client = AsyncOpenAI(api_key=settings.embedding_api_key, base_url=settings.embedding_base_url)
-    resp = await client.embeddings.create(input=text, model=settings.embedding_model)
+    resp = await _client.embeddings.create(
+        input=text,
+        model=model or _settings.embedding_model,
+    )
     return resp.data[0].embedding
 
 
