@@ -7,21 +7,28 @@ from app.config import Settings
 _jwks_cache: dict = {}
 
 
+async def _fetch_jwks(settings: Settings) -> dict:
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(settings.jwks_uri, timeout=5)
+        resp.raise_for_status()
+        return resp.json()
+
+
 async def validate_jwt(token: str, settings: Settings) -> dict:
     """Fetch JWKS, verify token signature + claims, return {team_id, project_id}."""
     global _jwks_cache
     try:
         if not _jwks_cache:
-            async with httpx.AsyncClient() as client:
-                resp = await client.get(settings.jwks_uri, timeout=5)
-                resp.raise_for_status()
-                _jwks_cache = resp.json()
+            _jwks_cache = await _fetch_jwks(settings)
 
         header = jwt.get_unverified_header(token)
-        key = next(
-            (k for k in _jwks_cache.get("keys", []) if k.get("kid") == header.get("kid")),
-            None,
-        )
+        kid = header.get("kid")
+        key = next((k for k in _jwks_cache.get("keys", []) if k.get("kid") == kid), None)
+
+        # Unknown kid — keys may have rotated; refresh once and retry.
+        if key is None:
+            _jwks_cache = await _fetch_jwks(settings)
+            key = next((k for k in _jwks_cache.get("keys", []) if k.get("kid") == kid), None)
         if key is None:
             raise HTTPException(status_code=401, detail="Unknown signing key")
 

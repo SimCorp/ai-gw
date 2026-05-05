@@ -1,9 +1,8 @@
 import asyncio
 from abc import ABC, abstractmethod
-from typing import Callable, Awaitable
+from typing import Awaitable, Callable
 
 from app.models import GatewayEvent
-
 
 Handler = Callable[[GatewayEvent], Awaitable[None]]
 
@@ -55,27 +54,57 @@ class InMemoryBus(EventBus):
 class ServiceBusBus(EventBus):
     """Azure Service Bus implementation. Requires azure-servicebus installed."""
 
-    def __init__(self, connection_string: str, topic: str) -> None:
+    def __init__(self, connection_string: str, topic: str, subscription: str) -> None:
         self._conn = connection_string
         self._topic = topic
+        self._subscription = subscription
         self._handlers: list[Handler] = []
+        self._sender = None
+        self._client = None
+        self._consumer_task: asyncio.Task | None = None
 
     def subscribe(self, handler: Handler) -> None:
         self._handlers.append(handler)
 
     async def publish(self, event: GatewayEvent) -> None:
-        from azure.servicebus.aio import ServiceBusClient
         from azure.servicebus import ServiceBusMessage
 
-        async with ServiceBusClient.from_connection_string(self._conn) as client:
-            async with client.get_topic_sender(self._topic) as sender:
-                await sender.send_messages(ServiceBusMessage(event.model_dump_json()))
+        await self._sender.send_messages(ServiceBusMessage(event.model_dump_json()))
 
     async def start(self) -> None:
-        pass
+        from azure.servicebus.aio import ServiceBusClient
+
+        self._client = ServiceBusClient.from_connection_string(self._conn)
+        self._sender = self._client.get_topic_sender(self._topic)
+        await self._sender.__aenter__()
+        self._consumer_task = asyncio.create_task(self._consume())
 
     async def stop(self) -> None:
-        pass
+        if self._consumer_task:
+            self._consumer_task.cancel()
+        if self._sender:
+            await self._sender.__aexit__(None, None, None)
+        if self._client:
+            await self._client.__aexit__(None, None, None)
+
+    async def _consume(self) -> None:
+        from azure.servicebus.aio import ServiceBusClient
+
+        async with ServiceBusClient.from_connection_string(self._conn) as client:
+            async with client.get_subscription_receiver(
+                self._topic, self._subscription
+            ) as receiver:
+                async for msg in receiver:
+                    try:
+                        event = GatewayEvent.model_validate_json(str(msg))
+                        for handler in self._handlers:
+                            try:
+                                await handler(event)
+                            except Exception:
+                                pass
+                        await receiver.complete_message(msg)
+                    except Exception:
+                        await receiver.abandon_message(msg)
 
 
 def make_bus(settings) -> EventBus:
@@ -83,5 +112,6 @@ def make_bus(settings) -> EventBus:
         return ServiceBusBus(
             settings.azure_service_bus_connection_string,
             settings.azure_service_bus_topic,
+            settings.azure_service_bus_subscription,
         )
     return InMemoryBus()

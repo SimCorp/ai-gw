@@ -1,18 +1,25 @@
-import hashlib
+from contextlib import asynccontextmanager
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from fastapi import HTTPException
-from unittest.mock import AsyncMock, MagicMock, patch
-
 from app.rate_limiter import check_rate_limit
 from app.validators.api_key import validate_api_key
+from fastapi import HTTPException
 
 
-@pytest.fixture
-def mock_redis():
+def _make_pipeline_redis(incr_result: int) -> AsyncMock:
+    """Build a mock Redis whose pipeline().execute() returns [incr_result, True]."""
+    pipe = AsyncMock()
+    pipe.incr = MagicMock()
+    pipe.expire = MagicMock()
+    pipe.execute = AsyncMock(return_value=[incr_result, True])
+
+    @asynccontextmanager
+    async def _pipeline(transaction=False):
+        yield pipe
+
     redis = AsyncMock()
-    redis.incr = AsyncMock(return_value=1)
-    redis.expire = AsyncMock()
+    redis.pipeline = _pipeline
     return redis
 
 
@@ -24,7 +31,6 @@ def mock_db():
 
 async def test_api_key_valid(mock_db):
     key = "sk-test-key-123"
-    key_hash = hashlib.sha256(key.encode()).hexdigest()
     mock_db.fetchrow = AsyncMock(return_value={"team_id": "team-1", "project_id": None})
 
     result = await validate_api_key(key, mock_db)
@@ -42,16 +48,15 @@ async def test_api_key_invalid(mock_db):
     assert exc_info.value.status_code == 401
 
 
-async def test_rate_limit_allows_under_limit(mock_redis):
-    mock_redis.incr = AsyncMock(return_value=1)
-    await check_rate_limit("team-1", "claude-3-5-sonnet", mock_redis, rpm_limit=100)
+async def test_rate_limit_allows_under_limit():
+    await check_rate_limit("team-1", "claude-3-5-sonnet", _make_pipeline_redis(1), rpm_limit=100)
 
 
-async def test_rate_limit_blocks_over_limit(mock_redis):
-    mock_redis.incr = AsyncMock(return_value=101)
-
+async def test_rate_limit_blocks_over_limit():
     with pytest.raises(HTTPException) as exc_info:
-        await check_rate_limit("team-1", "claude-3-5-sonnet", mock_redis, rpm_limit=100)
+        await check_rate_limit(
+            "team-1", "claude-3-5-sonnet", _make_pipeline_redis(101), rpm_limit=100
+        )
 
     assert exc_info.value.status_code == 429
     assert "Retry-After" in exc_info.value.headers

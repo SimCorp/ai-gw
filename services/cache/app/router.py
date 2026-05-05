@@ -1,5 +1,4 @@
 import asyncio
-import json
 import time
 
 import httpx
@@ -8,7 +7,7 @@ from fastapi.responses import JSONResponse
 
 from app import exact, semantic
 from app.config import settings
-from app.policy import get_policy
+from app.policy import CachePolicy, get_policy
 
 router = APIRouter()
 
@@ -35,21 +34,33 @@ async def chat_completions(request: Request):
     team_id = request.headers.get("X-Team-Id", "unknown")
     project_id = request.headers.get("X-Project-Id")
 
-    policy = await get_policy(team_id, project_id, redis)
+    try:
+        policy = await get_policy(team_id, project_id, redis)
+    except Exception:
+        policy = CachePolicy(
+            ttl_seconds=settings.default_ttl_seconds,
+            similarity_threshold=settings.default_similarity_threshold,
+            opt_out=False,
+            embedding_model=settings.embedding_model,
+        )
     start = time.monotonic()
 
+    emb: list[float] | None = None
     if not policy.opt_out:
         # 1. Exact match
-        cached = await exact.get(body, redis)
-        if cached:
-            asyncio.create_task(
-                _emit_event(http, {"team_id": team_id, "project_id": project_id, "model": body.get("model"), "cache_hit": True, "latency_ms": int((time.monotonic() - start) * 1000)})
-            )
-            return JSONResponse(cached, headers={"X-Cache": "HIT"})
+        try:
+            cached = await exact.get(body, redis)
+            if cached:
+                asyncio.create_task(
+                    _emit_event(http, {"team_id": team_id, "project_id": project_id, "model": body.get("model"), "cache_hit": True, "latency_ms": int((time.monotonic() - start) * 1000)})
+                )
+                return JSONResponse(cached, headers={"X-Cache": "HIT"})
+        except Exception:
+            pass  # Redis failure → fail open
 
         # 2. Semantic match
         try:
-            emb = await semantic.embed(_prompt_text(body), settings)
+            emb = await semantic.embed(_prompt_text(body), policy.embedding_model)
             cached = await semantic.get(emb, policy.similarity_threshold, redis)
             if cached:
                 asyncio.create_task(
@@ -57,7 +68,7 @@ async def chat_completions(request: Request):
                 )
                 return JSONResponse(cached, headers={"X-Cache": "HIT"})
         except Exception:
-            pass  # embedding failure → treat as miss
+            emb = None  # embedding failure → treat as miss
 
     # 3. Forward to LiteLLM
     headers = {k: v for k, v in request.headers.items() if k.lower() not in ("host", "content-length")}
@@ -66,12 +77,15 @@ async def chat_completions(request: Request):
 
     # Store in cache on success
     if resp.status_code == 200 and not policy.opt_out:
-        await exact.set(body, response_body, policy.ttl_seconds, redis)
         try:
-            if "emb" in dir():
-                await semantic.set(emb, response_body, policy.ttl_seconds, redis)
+            await exact.set(body, response_body, policy.ttl_seconds, redis)
         except Exception:
             pass
+        if emb is not None:
+            try:
+                await semantic.set(emb, response_body, policy.ttl_seconds, redis)
+            except Exception:
+                pass
 
     usage = response_body.get("usage", {})
     asyncio.create_task(

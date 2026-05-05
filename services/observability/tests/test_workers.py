@@ -1,7 +1,5 @@
 import asyncio
 
-import pytest
-
 from app.bus import InMemoryBus
 from app.models import GatewayEvent
 

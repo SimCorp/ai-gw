@@ -1,11 +1,23 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
+from fastapi import Depends, FastAPI
 from redis.asyncio import Redis
 
+from app.auth import require_admin_auth
 from app.config import settings
-from app.routers import api_keys, dashboard, policies, teams
+from app.routers import (
+    api_keys,
+    audit_log,
+    dashboard,
+    members,
+    model_registry,
+    policies,
+    pricing,
+    system,
+    teams,
+)
+
+_auth = [Depends(require_admin_auth)]
 
 
 @asynccontextmanager
@@ -15,13 +27,24 @@ async def lifespan(app: FastAPI):
     await app.state.redis.aclose()
 
 
-app = FastAPI(title="AI Gateway — Admin Portal", lifespan=lifespan)
-app.include_router(dashboard.router)
-app.include_router(teams.router)
-app.include_router(api_keys.router)
-app.include_router(policies.router)
+app = FastAPI(
+    title="AI Gateway — Admin Portal",
+    lifespan=lifespan,
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
+)
+app.include_router(dashboard.router, dependencies=_auth)
+app.include_router(teams.router, dependencies=_auth)
+app.include_router(members.router, dependencies=_auth)
+app.include_router(api_keys.router, dependencies=_auth)
+app.include_router(policies.router, dependencies=_auth)
+app.include_router(pricing.router, dependencies=_auth)
+app.include_router(model_registry.router, dependencies=_auth)
+app.include_router(system.router, dependencies=_auth)
+app.include_router(audit_log.router, dependencies=_auth)
 
 
-@app.get("/health")
+@app.get("/health", tags=["health"])
 async def health():
     return {"status": "ok"}

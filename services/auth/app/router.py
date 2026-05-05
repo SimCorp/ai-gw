@@ -31,5 +31,14 @@ async def validate(body: ValidateRequest, request: Request):
     else:
         identity = await validate_jwt(token, settings)
 
-    await check_rate_limit(identity["team_id"], body.model, redis, settings.rate_limit_default_rpm)
+    rpm_limit = settings.rate_limit_default_rpm
+    try:
+        policy_key = f"policy:{identity['team_id']}"
+        raw = await redis.hget(policy_key, "rate_limit_rpm")
+        if raw is not None:
+            rpm_limit = int(raw)
+    except Exception:
+        pass  # Redis failure → use global default
+
+    await check_rate_limit(identity["team_id"], body.model, redis, rpm_limit)
     return ValidateResponse(**identity)
