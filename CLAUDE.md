@@ -1,0 +1,51 @@
+# AI Gateway — SimCorp Developer Platform
+
+Enterprise AI gateway for ~2000 engineers. Five FastAPI services behind a shared Redis + PostgreSQL, orchestrated via Docker Compose for local development.
+
+## Quick start
+
+```bash
+cp .env.example .env        # edit if you want real provider keys
+docker compose -f infra/docker-compose.yml up --build
+```
+
+## Service ports
+
+| Service | URL | Purpose |
+|---|---|---|
+| auth | http://localhost:8001 | JWT / API key validation, rate limiting |
+| cache | http://localhost:8002 | Semantic + exact cache proxy |
+| litellm | http://localhost:8003 | Provider routing (OpenAI-compatible) |
+| observability | http://localhost:8004 | Async event ingestion |
+| admin | http://localhost:8005 | Team management, API keys, dashboards |
+| redis | localhost:6379 | Cache + rate limit counters |
+| postgres | localhost:5432 | Teams, policies, cost records |
+| dex (mock OIDC) | http://localhost:5556 | Local Entra ID substitute |
+| ollama | http://localhost:11434 | Local model serving |
+
+## Running tests (no Docker needed)
+
+```bash
+pip install \
+  -e "services/auth[dev]" \
+  -e "services/cache[dev]" \
+  -e "services/observability[dev]" \
+  -e "services/admin[dev]"
+
+pytest services/ -v
+```
+
+## Linting
+
+```bash
+ruff check services/
+ruff format services/
+```
+
+## Architecture
+
+See `docs/superpowers/specs/2026-05-05-ai-gateway-design.md` for the full design.
+
+Request path: `caller → auth(:8001) → cache(:8002) → litellm(:8003) → provider`
+
+The admin portal (:8005) is a standalone web app sharing the same Postgres instance.
