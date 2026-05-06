@@ -26,6 +26,7 @@ LITELLM_URL = os.environ.get("LITELLM_URL", "http://localhost:8003")
 OBSERVABILITY_URL = os.environ.get("OBSERVABILITY_URL", "http://localhost:8004")
 
 ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN", "local-dev-admin-key-change-in-prod")
+DEV_BYPASS_AUTH = os.environ.get("DEV_BYPASS_AUTH", "false").lower() in ("true", "1", "yes")
 
 # Expose service URL map for smoke tests
 SERVICE_HEALTH_URLS: dict[str, str] = {

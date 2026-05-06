@@ -57,12 +57,17 @@ async def test_missing_authorization_returns_401():
 
 @pytest.mark.asyncio
 async def test_empty_bearer_returns_401():
-    """An 'Authorization: Bearer ' header with no token must return 401."""
+    """An 'Authorization: Bearer' header with no token must return 401.
+
+    Note: 'Bearer ' (trailing space) is an illegal HTTP header value rejected
+    by the HTTP client before it reaches the server, so we use 'Bearer' without
+    the trailing space — the server still receives no valid sk- token.
+    """
     async with httpx.AsyncClient(base_url=GATEWAY_URL, timeout=15.0) as client:
         resp = await client.post(
             "/v1/chat/completions",
             json=_MINIMAL_PAYLOAD,
-            headers={"Authorization": "Bearer "},
+            headers={"Authorization": "Bearer"},
         )
     assert resp.status_code == 401, (
         f"Expected 401 for empty bearer, got {resp.status_code}: {resp.text[:300]}"

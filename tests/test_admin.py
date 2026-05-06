@@ -44,9 +44,15 @@ async def test_system_health_postgres_shape(admin_client):
 
 @pytest.mark.asyncio
 async def test_system_health_requires_admin_token():
-    """GET /system/health must reject requests without the admin token."""
+    """GET /system/health must reject requests without the admin token.
+
+    Skipped when DEV_BYPASS_AUTH=true (local dev stack has auth disabled).
+    """
     import httpx
-    from conftest import ADMIN_URL
+    from conftest import ADMIN_URL, DEV_BYPASS_AUTH
+
+    if DEV_BYPASS_AUTH:
+        pytest.skip("DEV_BYPASS_AUTH=true — admin token check is bypassed in this stack")
 
     async with httpx.AsyncClient(base_url=ADMIN_URL, timeout=10.0) as client:
         resp = await client.get("/system/health")

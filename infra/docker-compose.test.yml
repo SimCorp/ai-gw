@@ -25,10 +25,12 @@ services:
     environment:
       AUTH_URL: http://auth:8001
       CACHE_URL: http://cache:8002
+      GATEWAY_URL: http://cache:8002
       LITELLM_URL: http://litellm:8003
       OBSERVABILITY_URL: http://observability:8004
       ADMIN_URL: http://admin:8005
       ADMIN_TOKEN: ${ADMIN_TOKEN:-local-dev-admin-key-change-in-prod}
+      DEV_BYPASS_AUTH: ${DEV_BYPASS_AUTH:-false}
     volumes:
       # Mount tests/ read-only so the runner always sees the latest sources
       - ../tests:/tests:ro
@@ -36,7 +38,7 @@ services:
   claude-agent:
     build:
       context: ../tests/claude-agent
-    profiles: [test]
+    profiles: [claude-agent]
     stdin_open: true
     tty: true
     restart: "no"
@@ -46,8 +48,7 @@ services:
       auth:
         condition: service_healthy
     environment:
-      # :? causes docker compose to fail fast when the variable is unset
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?ANTHROPIC_API_KEY must be set to a gateway sk- key}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       ANTHROPIC_BASE_URL: http://cache:8002/anthropic
       GATEWAY_CACHE_URL: http://cache:8002
       GATEWAY_AUTH_URL: http://auth:8001
