@@ -1,0 +1,214 @@
+{% extends "portal_base.html" %}
+{% block title %}Quick Start — AI Gateway Dev Portal{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+  <h2 class="fw-bold mb-1" style="font-size:1.4rem">Quick Start</h2>
+  <p class="text-muted mb-0" style="font-size:.85rem">Everything you need to make your first API call in under 5 minutes.</p>
+</div>
+
+<!-- How it works -->
+<div class="card mb-4">
+  <div class="card-header py-2 px-3">How the gateway works</div>
+  <div class="card-body">
+    <p class="mb-3 small">Every request flows through three layers before reaching the AI provider:</p>
+    <pre style="font-size:.8rem">Your code
+  ↓
+Auth service (:8001)   — validates your key, enforces rate limits
+  ↓
+Cache engine (:8002)   — checks Redis for cached responses (x-cache: HIT)
+  ↓
+LiteLLM proxy (:8003)  — routes to provider, injects provider API key
+  ↓
+Provider (Anthropic / Google / GitHub / Ollama)</pre>
+    <div class="row g-3 mt-1">
+      <div class="col-md-6">
+        <div class="p-3 rounded" style="background:#f8fafc;border:1px solid #e2e8f0">
+          <p class="fw-semibold small mb-1">OpenAI-compatible endpoint</p>
+          <code class="inline">http://localhost:8002/v1</code>
+          <p class="small text-muted mt-1 mb-0">All models, all frameworks with OpenAI support</p>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="p-3 rounded" style="background:#f8fafc;border:1px solid #e2e8f0">
+          <p class="fw-semibold small mb-1">Anthropic-compatible endpoint</p>
+          <code class="inline">http://localhost:8002/anthropic</code>
+          <p class="small text-muted mt-1 mb-0">Claude models, Anthropic SDK, Claude Code CLI</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- First call -->
+<div class="card mb-4">
+  <div class="card-header py-2 px-3">Your first API call</div>
+  <div class="card-body pb-0">
+    <p class="small text-muted mb-3">Replace <code class="inline">sk-YOUR-KEY-HERE</code> with your actual key from <a href="/portal/keys">My Keys</a>.</p>
+
+    <ul class="nav nav-tabs" id="snippetTabs" role="tablist">
+      <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-curl">curl</button></li>
+      <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-openai">Python (OpenAI SDK)</button></li>
+      <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-anthropic">Python (Anthropic SDK)</button></li>
+      <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-cli">Claude Code CLI</button></li>
+    </ul>
+    <div class="tab-content" id="snippetTabsContent">
+
+      <div class="tab-pane fade show active" id="tab-curl">
+        <div class="d-flex justify-content-end pt-2 pb-1">
+          <button class="btn btn-sm btn-outline-secondary copy-btn" onclick="copyToClipboard(document.getElementById('curl-snippet').textContent, this)">Copy</button>
+        </div>
+        <pre id="curl-snippet">curl http://localhost:8002/v1/chat/completions \
+  -H "Authorization: Bearer sk-YOUR-KEY-HERE" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "claude-haiku-4-5",
+    "messages": [
+      {"role": "user", "content": "Hello, which model are you?"}
+    ]
+  }'</pre>
+      </div>
+
+      <div class="tab-pane fade" id="tab-openai">
+        <div class="d-flex justify-content-end pt-2 pb-1">
+          <button class="btn btn-sm btn-outline-secondary copy-btn" onclick="copyToClipboard(document.getElementById('openai-snippet').textContent, this)">Copy</button>
+        </div>
+        <pre id="openai-snippet">from openai import OpenAI
+
+client = OpenAI(
+    api_key="sk-YOUR-KEY-HERE",
+    base_url="http://localhost:8002/v1",
+)
+
+response = client.chat.completions.create(
+    model="claude-haiku-4-5",
+    messages=[
+        {"role": "user", "content": "Hello, which model are you?"}
+    ],
+)
+
+print(response.choices[0].message.content)</pre>
+      </div>
+
+      <div class="tab-pane fade" id="tab-anthropic">
+        <div class="d-flex justify-content-end pt-2 pb-1">
+          <button class="btn btn-sm btn-outline-secondary copy-btn" onclick="copyToClipboard(document.getElementById('anthropic-snippet').textContent, this)">Copy</button>
+        </div>
+        <pre id="anthropic-snippet">import anthropic
+
+client = anthropic.Anthropic(
+    api_key="sk-YOUR-KEY-HERE",
+    base_url="http://localhost:8002/anthropic",
+)
+
+message = client.messages.create(
+    model="claude-haiku-4-5",
+    max_tokens=1024,
+    messages=[
+        {"role": "user", "content": "Hello, which model are you?"}
+    ],
+)
+
+print(message.content[0].text)</pre>
+        <p class="small text-muted p-3 pt-2 mb-0">Note: point <code class="inline">base_url</code> at <code class="inline">/anthropic</code>, not <code class="inline">/v1</code>. The two endpoints use different wire protocols.</p>
+      </div>
+
+      <div class="tab-pane fade" id="tab-cli">
+        <div class="d-flex justify-content-end pt-2 pb-1">
+          <button class="btn btn-sm btn-outline-secondary copy-btn" onclick="copyToClipboard(document.getElementById('cli-snippet').textContent, this)">Copy</button>
+        </div>
+        <pre id="cli-snippet"># Add to your ~/.bashrc or ~/.zshrc
+export ANTHROPIC_API_KEY=sk-YOUR-KEY-HERE
+export ANTHROPIC_BASE_URL=http://localhost:8002/anthropic
+
+# Then use Claude Code normally
+claude "Explain this codebase"
+
+# Or pass inline (no env var needed)
+ANTHROPIC_API_KEY=sk-YOUR-KEY-HERE \
+ANTHROPIC_BASE_URL=http://localhost:8002/anthropic \
+claude "Summarise the last 10 commits"</pre>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Streaming -->
+<div class="card mb-4">
+  <div class="card-header py-2 px-3">Streaming</div>
+  <div class="card-body pb-0">
+    <p class="small text-muted mb-2">All models support streaming via both endpoints.</p>
+    <pre>from openai import OpenAI
+
+client = OpenAI(api_key="sk-YOUR-KEY-HERE", base_url="http://localhost:8002/v1")
+
+with client.chat.completions.stream(
+    model="claude-sonnet-4-6",
+    messages=[{"role": "user", "content": "Write a haiku about caching."}],
+) as stream:
+    for text in stream.text_stream:
+        print(text, end="", flush=True)</pre>
+  </div>
+</div>
+
+<!-- Available models -->
+<div class="card mb-4">
+  <div class="card-header py-2 px-3">Available models</div>
+  <div class="card-body p-0">
+    <table class="table mb-0">
+      <thead>
+        <tr><th>Model ID</th><th>Provider</th><th>Context</th><th>Best for</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code class="inline">claude-haiku-4-5</code></td><td>Anthropic</td><td>200k</td><td>High-volume, low latency, classification</td></tr>
+        <tr><td><code class="inline">claude-sonnet-4-6</code></td><td>Anthropic</td><td>200k</td><td>Agents, code generation, RAG — recommended default</td></tr>
+        <tr><td><code class="inline">claude-opus-4-7</code></td><td>Anthropic</td><td>200k</td><td>Complex reasoning, architecture decisions</td></tr>
+        <tr><td><code class="inline">gemini-1.5-pro</code></td><td>Google</td><td>1M</td><td>Very long documents, multimodal</td></tr>
+        <tr><td><code class="inline">github-gpt-4o</code></td><td>GitHub</td><td>128k</td><td>OpenAI-native tool calling patterns</td></tr>
+        <tr><td><code class="inline">local</code></td><td>Ollama</td><td>varies</td><td>Dev/test — data never leaves your machine</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Common errors -->
+<div class="card mb-4">
+  <div class="card-header py-2 px-3">Common errors &amp; fixes</div>
+  <div class="card-body">
+    <div class="pitfall"><strong>401 — Invalid or revoked API key</strong><br>
+    Check <code class="inline">Authorization: Bearer sk-YOUR-KEY</code>. Keys are case-sensitive; prefix must be <code class="inline">sk-</code> (lowercase).</div>
+
+    <div class="pitfall"><strong>Connection refused / ECONNREFUSED</strong><br>
+    Wrong port. The gateway listens on <code class="inline">:8002</code>. From inside Docker use <code class="inline">http://gateway:8002</code>; from host use <code class="inline">http://localhost:8002</code>.</div>
+
+    <div class="pitfall"><strong>404 on /v1/chat/completions</strong><br>
+    Your <code class="inline">base_url</code> must end with <code class="inline">/v1</code> (OpenAI SDK) or <code class="inline">/anthropic</code> (Anthropic SDK). Do not append <code class="inline">/v1</code> twice.</div>
+
+    <div class="pitfall"><strong>429 — Too Many Requests</strong><br>
+    You have hit your team's rate limit. Implement exponential backoff with <code class="inline">Retry-After</code> header, or request a limit increase from Platform Engineering.</div>
+
+    <div class="pitfall"><strong>400 — model not found</strong><br>
+    Use exact model IDs from the table above. <code class="inline">claude-haiku-4-5</code> not <code class="inline">haiku</code> or <code class="inline">claude-haiku</code>.</div>
+  </div>
+</div>
+
+<div class="text-center py-2">
+  <a href="/portal/guides/agents" class="btn btn-outline-primary">Read the Agent Integration guide →</a>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Restore tab preference from localStorage
+const savedTab = localStorage.getItem('portal-snippet-tab');
+if (savedTab) {
+  const el = document.querySelector(`[data-bs-target="${savedTab}"]`);
+  if (el) bootstrap.Tab.getOrCreateInstance(el).show();
+}
+document.querySelectorAll('#snippetTabs button').forEach(btn => {
+  btn.addEventListener('shown.bs.tab', e => localStorage.setItem('portal-snippet-tab', e.target.dataset.bsTarget));
+});
+</script>
+{% endblock %}

@@ -96,6 +96,26 @@ CREATE TABLE IF NOT EXISTS audit_log (
 CREATE INDEX IF NOT EXISTS audit_log_timestamp_idx ON audit_log (timestamp DESC);
 CREATE INDEX IF NOT EXISTS audit_log_resource_idx ON audit_log (resource_type, resource_id);
 
+CREATE TABLE IF NOT EXISTS developers (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email VARCHAR(255) NOT NULL UNIQUE,
+    display_name VARCHAR(255),
+    password_hash TEXT NOT NULL,
+    status VARCHAR(50) NOT NULL DEFAULT 'pending',
+    email_verified_at TIMESTAMPTZ,
+    team_id UUID REFERENCES teams(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_developers_email  ON developers(email);
+CREATE INDEX IF NOT EXISTS idx_developers_status ON developers(status);
+CREATE INDEX IF NOT EXISTS idx_developers_team   ON developers(team_id);
+
+ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS developer_id UUID REFERENCES developers(id) ON DELETE SET NULL;
+ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS last_used_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_api_keys_developer ON api_keys(developer_id);
+
 CREATE TABLE IF NOT EXISTS model_registry (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,

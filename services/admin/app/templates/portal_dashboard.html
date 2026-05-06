@@ -1,0 +1,121 @@
+{% extends "portal_base.html" %}
+{% block title %}Dashboard — AI Gateway Dev Portal{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <div>
+    <h2 class="fw-bold mb-1" style="font-size:1.4rem">
+      Welcome{% if dev.display_name %}, {{ dev.display_name }}{% endif %}
+    </h2>
+    <p class="text-muted mb-0" style="font-size:.85rem">Your usage summary for the selected period.</p>
+  </div>
+  <div class="d-flex gap-2 align-items-center">
+    <span class="text-muted small">Period:</span>
+    <div class="btn-group btn-group-sm">
+      <a href="/portal/dashboard?days=7" class="btn {% if days == 7 %}btn-primary{% else %}btn-outline-secondary{% endif %}">7d</a>
+      <a href="/portal/dashboard?days=30" class="btn {% if days == 30 %}btn-primary{% else %}btn-outline-secondary{% endif %}">30d</a>
+      <a href="/portal/dashboard?days=90" class="btn {% if days == 90 %}btn-primary{% else %}btn-outline-secondary{% endif %}">90d</a>
+      <a href="/portal/dashboard?days=0" class="btn {% if days == 0 %}btn-primary{% else %}btn-outline-secondary{% endif %}">All</a>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-label">Requests</div>
+      <div class="stat-value">{{ "{:,}".format(stats.requests) }}</div>
+      <div class="stat-sub">Total API calls</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-label">Tokens</div>
+      <div class="stat-value">{{ "{:,.0f}".format((stats.tokens_in + stats.tokens_out) / 1000) }}k</div>
+      <div class="stat-sub">{{ "{:,}".format(stats.tokens_in) }} in / {{ "{:,}".format(stats.tokens_out) }} out</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-label">Est. Cost</div>
+      <div class="stat-value">${{ "%.3f"|format(stats.cost) }}</div>
+      <div class="stat-sub">USD at list prices</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-label">Cache Hit Rate</div>
+      <div class="stat-value">{{ cache_pct }}%</div>
+      <div class="stat-sub">{{ stats.cache_hits }} cached responses</div>
+    </div>
+  </div>
+</div>
+
+{% if model_rows %}
+<div class="card mb-4">
+  <div class="card-header py-2 px-3">Usage by model</div>
+  <div class="card-body p-0">
+    <table class="table mb-0">
+      <thead>
+        <tr>
+          <th>Model</th>
+          <th class="text-end">Requests</th>
+          <th class="text-end">Input tokens</th>
+          <th class="text-end">Output tokens</th>
+          <th class="text-end">Est. cost</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in model_rows %}
+        <tr>
+          <td><code class="inline">{{ r.model }}</code></td>
+          <td class="text-end">{{ "{:,}".format(r.requests) }}</td>
+          <td class="text-end">{{ "{:,}".format(r.tokens_in) }}</td>
+          <td class="text-end">{{ "{:,}".format(r.tokens_out) }}</td>
+          <td class="text-end">${{ "%.4f"|format(r.cost) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="card mb-4">
+  <div class="card-body text-center py-5">
+    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="mb-3"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+    <p class="text-muted mb-3">No usage data yet for this period.</p>
+    <a href="/portal/keys" class="btn btn-primary btn-sm">Create your first API key →</a>
+  </div>
+</div>
+{% endif %}
+
+<div class="row g-3">
+  <div class="col-md-4">
+    <div class="card h-100">
+      <div class="card-body">
+        <h6 class="fw-semibold mb-1">API Keys</h6>
+        <p class="text-muted small mb-3">Create and manage keys for your projects.</p>
+        <a href="/portal/keys" class="btn btn-sm btn-outline-primary">Manage keys →</a>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card h-100">
+      <div class="card-body">
+        <h6 class="fw-semibold mb-1">Quick Start</h6>
+        <p class="text-muted small mb-3">Copy-paste code to make your first API call.</p>
+        <a href="/portal/quickstart" class="btn btn-sm btn-outline-primary">View guide →</a>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card h-100">
+      <div class="card-body">
+        <h6 class="fw-semibold mb-1">Agent Integration</h6>
+        <p class="text-muted small mb-3">LangChain, LlamaIndex, OpenAI Agents SDK, Claude Code.</p>
+        <a href="/portal/guides/agents" class="btn btn-sm btn-outline-primary">View guide →</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

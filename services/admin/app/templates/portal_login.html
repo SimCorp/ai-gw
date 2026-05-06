@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign in — AI Gateway Developer Portal</title>
+  <link href="/static/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background: #f8fafc; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+    .login-card { width: 100%; max-width: 420px; }
+    .brand-logo { text-align: center; margin-bottom: 2rem; }
+    .brand-logo svg { display: block; margin: 0 auto .75rem; }
+    .brand-logo h1 { font-size: 1.4rem; font-weight: 700; color: #0f172a; }
+    .brand-logo p { color: #64748b; font-size: .875rem; margin: 0; }
+    .btn-primary { background: #6366f1; border-color: #6366f1; }
+    .btn-primary:hover { background: #4f46e5; border-color: #4f46e5; }
+    .form-control:focus { border-color: #6366f1; box-shadow: 0 0 0 .2rem rgba(99,102,241,.2); }
+  </style>
+</head>
+<body>
+<div class="login-card">
+  <div class="brand-logo">
+    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+    <h1>AI Gateway</h1>
+    <p>Developer Portal — SimCorp</p>
+  </div>
+
+  <div class="card border-0 shadow-sm">
+    <div class="card-body p-4">
+      <h5 class="mb-4 fw-semibold">Sign in</h5>
+
+      {% if success %}
+      <div class="alert alert-success py-2 small">{{ success }}</div>
+      {% endif %}
+      {% if error %}
+      <div class="alert alert-danger py-2 small">{{ error }}</div>
+      {% endif %}
+
+      <form method="post" action="/portal/login">
+        <div class="mb-3">
+          <label class="form-label small fw-semibold">Email</label>
+          <input type="email" name="email" class="form-control" placeholder="you@simcorp.com" required autofocus>
+        </div>
+        <div class="mb-4">
+          <label class="form-label small fw-semibold">Password</label>
+          <input type="password" name="password" class="form-control" placeholder="••••••••" required>
+        </div>
+        <button type="submit" class="btn btn-primary w-100">Sign in</button>
+      </form>
+
+      <hr class="my-3">
+      <p class="text-center small text-muted mb-0">
+        Don't have an account? <a href="/portal/signup" class="text-decoration-none">Sign up</a>
+      </p>
+    </div>
+  </div>
+</div>
+<script src="/static/bootstrap.bundle.min.js"></script>
+</body>
+</html>
