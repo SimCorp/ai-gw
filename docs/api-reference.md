@@ -30,6 +30,7 @@ Enterprise AI gateway for the SimCorp Developer Platform. This reference covers 
 | LiteLLM | `http://localhost:8003` | Internal — not called directly by API clients |
 | Admin REST API | `http://localhost:8005` | JSON endpoints for platform operators |
 | Developer portal | `http://localhost:8005/portal` | Browser UI; session-cookie auth |
+| claude-sandbox (SSH) | `ssh claude@localhost -p 2222` | `make sandbox`; run `go` inside to configure and launch Claude |
 
 All inference requests go through port **8002**. The cache service validates the bearer token with the auth service, checks for a cached response, then forwards cache misses to LiteLLM at :8003.
 
@@ -45,8 +46,31 @@ API keys start with the prefix `sk-` and are 32 bytes of URL-safe random data ap
 
 **Obtaining a key**
 
-- **Developer portal** — Register at `http://localhost:8005/portal/signup`, then visit `/portal/keys` to create a key.
+- **Developer portal** — Register with email and password at `http://localhost:8005/portal/signup` (self-service, no OIDC required). Once authenticated, visit `/portal/keys` to issue a key.
 - **Admin REST API** — `POST /teams/{team_id}/keys` (requires `X-Admin-Token` header).
+
+### Quick health check
+
+Verify your key and the gateway are working end-to-end:
+
+```python
+import httpx
+
+resp = httpx.post(
+    "http://localhost:8002/v1/chat/completions",
+    headers={"Authorization": "Bearer sk-YOUR-KEY-HERE"},
+    json={"model": "claude-haiku-4-5",
+          "messages": [{"role": "user", "content": "ping"}],
+          "max_tokens": 10},
+    timeout=30.0,
+)
+if resp.status_code == 200:
+    print("Gateway OK:", resp.json()["choices"][0]["message"]["content"])
+elif resp.status_code == 401:
+    print("Auth failed — check your key")
+else:
+    print(f"Unexpected {resp.status_code}:", resp.text)
+```
 
 ### Versioning
 
@@ -245,6 +269,25 @@ message = client.messages.create(
 
 print(message.content[0].text)
 ```
+
+---
+
+## 3a. Developer Portal
+
+The self-service portal at `http://localhost:8005/portal` provides browser-based access:
+
+| Route | Method | Purpose |
+|---|---|---|
+| `/portal/signup` | GET/POST | Register with email + password |
+| `/portal/login` | GET/POST | Sign in |
+| `/portal/dashboard` | GET | Usage overview |
+| `/portal/keys` | GET/POST | Create / list API keys |
+| `/portal/keys/{id}/revoke` | POST | Revoke a key |
+| `/portal/quickstart` | GET | Copy-paste code examples |
+| `/portal/guides/agents` | GET | LangChain, LlamaIndex, OpenAI Agents SDK, Claude Code CLI |
+| `/portal/profile` | GET/POST | Change display name / password |
+
+Auth uses a session cookie (`portal_session`) backed by Redis with an 8-hour TTL.
 
 ---
 

@@ -10,11 +10,13 @@
 1. [5-minute quickstart](#1-5-minute-quickstart)
 2. [Choosing a model](#2-choosing-a-model)
 3. [Integration examples](#3-integration-examples)
-4. [Streaming](#4-streaming)
-5. [Understanding the cache](#5-understanding-the-cache)
-6. [Rate limits](#6-rate-limits)
-7. [Common pitfalls](#7-common-pitfalls)
-8. [Getting help](#8-getting-help)
+4. [Interactive sandbox (Claude Code via SSH)](#4-interactive-sandbox-claude-code-via-ssh)
+5. [Testing your integration](#5-testing-your-integration)
+6. [Streaming](#6-streaming)
+7. [Understanding the cache](#7-understanding-the-cache)
+8. [Rate limits](#8-rate-limits)
+9. [Common pitfalls](#9-common-pitfalls)
+10. [Getting help](#10-getting-help)
 
 ---
 
@@ -24,7 +26,7 @@
 
 Open the self-service portal: **http://localhost:8005/portal**
 
-1. Sign in with your SimCorp account.
+1. Sign up with your email and password — no admin approval required.
 2. Go to **My Keys** and click **Create key**.
 3. Copy the key — it starts with `sk-` and is shown only once.
 
@@ -418,7 +420,53 @@ print(result.final_output)
 
 ---
 
-## 4. Streaming
+## 4. Interactive sandbox (Claude Code via SSH)
+
+The easiest way to experiment with the gateway is the Claude sandbox container — it has Claude Code CLI pre-installed and pre-configured to route through the gateway.
+
+```bash
+# Start the sandbox (runs until stopped)
+make sandbox
+
+# Connect via SSH
+ssh claude@localhost -p 2222
+# Password: gateway
+
+# Inside the container — run the interactive setup wizard
+go
+```
+
+The `go` script will:
+1. Check the gateway is reachable
+2. Ask for an API key (paste an existing one, create a new one via the admin API, or open the portal)
+3. Optionally pick a model from the live model list
+4. Launch `claude` with everything configured
+
+The sandbox is connected to the internal Docker network, so it uses the full gateway stack (auth, cache, observability).
+
+To stop: `make sandbox-stop`
+
+---
+
+## 5. Testing your integration
+
+The repo includes a full pytest integration suite that runs against the live stack:
+
+```bash
+DEV_BYPASS_AUTH=true make test
+```
+
+This runs 50 tests covering auth, caching, proxy, admin API, and the developer portal — all via real HTTP against real containers. Useful to confirm your changes haven't broken anything.
+
+For a quick smoke check only:
+
+```bash
+DEV_BYPASS_AUTH=true make test-smoke
+```
+
+---
+
+## 6. Streaming
 
 All models support streaming via both endpoints. Tokens are flushed as they are generated.
 
@@ -463,7 +511,7 @@ print()
 
 ---
 
-## 5. Understanding the cache
+## 7. Understanding the cache
 
 The gateway runs a semantic cache in front of every model call. This has two effects:
 
@@ -516,7 +564,7 @@ client = OpenAI(
 
 ---
 
-## 6. Rate limits
+## 8. Rate limits
 
 Rate limits are enforced per team. When you exceed your team's limit the gateway returns:
 
@@ -563,11 +611,11 @@ def call_with_backoff(messages, model="claude-sonnet-4-6", max_retries=5):
 - Create one API key per application or pipeline, not one shared key for everything. Limits are tracked per key.
 - For CI jobs that run in parallel, create a separate key per pipeline so they draw from separate buckets.
 - Use `claude-haiku-4-5` for high-volume batch work — it has a higher RPM allocation than Sonnet.
-- If your team genuinely needs a higher limit, contact Platform Engineering (see [Getting help](#8-getting-help)).
+- If your team genuinely needs a higher limit, contact Platform Engineering (see [Getting help](#10-getting-help)).
 
 ---
 
-## 7. Common pitfalls
+## 9. Common pitfalls
 
 ### 1. Wrong port or hostname
 
@@ -617,7 +665,7 @@ If your prompt text stays the same but the underlying data changes (e.g. you upd
 
 ---
 
-## 8. Getting help
+## 10. Getting help
 
 ### Self-service
 

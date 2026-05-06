@@ -122,6 +122,29 @@ docker compose -f infra/docker-compose.yml up --build auth -d
 docker compose -f infra/docker-compose.yml ps
 ```
 
+### Makefile Shortcuts
+
+```bash
+# Bring the full stack up and wait for all health checks
+make up
+
+# Tear down (keeps volumes)
+make down
+
+# Tail all service logs
+make logs
+
+# Run the full integration test suite (requires stack to be running)
+DEV_BYPASS_AUTH=true make test
+
+# Start the SSH Claude sandbox
+make sandbox        # → ssh claude@localhost -p 2222, password: gateway
+make sandbox-stop   # stop it
+
+# Run smoke tests only
+DEV_BYPASS_AUTH=true make test-smoke
+```
+
 ---
 
 ## 3. Health Monitoring
@@ -134,6 +157,8 @@ The admin portal exposes a built-in health dashboard:
 |-----|--------|-------|
 | `http://localhost:8005/system/health/ui` | HTML | Auto-refreshes every 10 seconds |
 | `http://localhost:8005/system/health` | JSON | Suitable for external monitoring/alerting |
+
+**Visual dashboard:** The JSON endpoint is also rendered as a rich visual dashboard at `http://localhost:8005/system/health/ui`. It polls every 10 seconds and shows: service status dots with latency bars, Redis memory, Postgres active connections, LiteLLM model count, gateway requests/minute, cache hit rate, and recent error events.
 
 The dashboard checks all of the following simultaneously:
 
@@ -185,6 +210,61 @@ docker compose -f infra/docker-compose.yml exec postgres \
 | requests_last_60s | `/system/health` > gateway | Sudden drop to 0 during business hours |
 | cache_hit_rate_last_60s | `/system/health` > gateway | Sustained drop below 0.20 |
 | models_available | `/system/health` > litellm | 0 models available |
+
+---
+
+## 3a. Integration Test Suite
+
+The repo ships a pytest suite in `tests/` that validates all five services end-to-end.
+
+### Running
+
+```bash
+# Requires stack to be running first
+DEV_BYPASS_AUTH=true make test
+```
+
+### What's Covered
+
+| File | Tests | What it checks |
+|---|---|---|
+| test_smoke.py | 5 | All services return 200 on /health |
+| test_auth.py | 6 | Valid key accepted, invalid rejected, revoked rejected |
+| test_cache.py | 5 | Exact cache hit, semantic hit, streaming miss |
+| test_proxy.py | 7 | Chat completions shape, streaming, unknown model |
+| test_admin.py | 9 | Team CRUD, key lifecycle, revoked key at gateway |
+| test_portal.py | 11 | Signup, login, session, key creation |
+
+### DB Tables Required
+
+The test fixture creates a throwaway team and tears it down after each run. If `POST /teams` returns 500, the gateway tables are missing — re-run init.sql:
+
+```bash
+docker run --rm --network aigateway -e PGPASSWORD=aigateway \
+  -v "$(pwd)/infra/postgres/init.sql:/init.sql:ro" \
+  postgres:16 psql -h postgres -U aigateway -d aigateway -f /init.sql
+```
+
+---
+
+## 3b. Claude Sandbox
+
+A Docker container with Claude Code CLI pre-installed for interactive testing.
+
+```bash
+# Start (detached, port 2222)
+make sandbox
+
+# Connect
+ssh claude@localhost -p 2222   # password: gateway
+
+# Inside — interactive setup wizard
+go
+```
+
+The `go` script checks gateway connectivity, prompts for an API key (or creates one), optionally selects a model, then launches `claude`. The container is on the `aigateway` Docker network so it reaches all internal services by hostname.
+
+To stop: `make sandbox-stop`
 
 ---
 
@@ -429,6 +509,7 @@ docker compose -f infra/docker-compose.yml exec postgres \
 | `cost_records` | One row per AI completion | Archive or delete rows older than 90 days |
 | `audit_log` | One row per notable event | Archive or delete rows older than 90 days |
 | `api_keys` | Accumulates revoked keys | Safe to delete rows where `revoked_at < NOW() - INTERVAL '1 year'` |
+| `developers` | Self-service portal users (email, PBKDF2 password hash, linked team_id) | Retain; remove only on explicit account deletion |
 
 ### Check Table Sizes
 

@@ -47,3 +47,26 @@ test-proxy:
 .PHONY: claude-agent
 claude-agent:
 	$(COMPOSE_TEST) run --rm -it claude-agent
+
+# ── Claude sandbox (SSH) ──────────────────────────────────────────────────────
+
+## Start the Claude sandbox container with SSH on port 2222.
+## Connect with: ssh claude@localhost -p 2222  (password: gateway)
+## Optionally set ANTHROPIC_API_KEY=<gateway sk- key> before running.
+.PHONY: sandbox
+sandbox:
+	$(COMPOSE) --profile sandbox up --build -d claude-sandbox
+	@echo ""
+	@echo "Sandbox started. Connect with:"
+	@echo "  ssh claude@localhost -p 2222"
+	@echo "  Password: gateway"
+	@echo ""
+	@echo "Logs: make sandbox-logs"
+
+.PHONY: sandbox-logs
+sandbox-logs:
+	$(COMPOSE) --profile sandbox logs -f claude-sandbox
+
+.PHONY: sandbox-stop
+sandbox-stop:
+	$(COMPOSE) --profile sandbox stop claude-sandbox

@@ -152,6 +152,24 @@ services:
       retries: 10
       start_period: 30s
 
+  claude-sandbox:
+    build:
+      context: ./claude-sandbox
+    profiles: [sandbox]
+    ports:
+      - "2222:22"
+    environment:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_BASE_URL: http://cache:8002/anthropic
+      GATEWAY_CACHE_URL: http://cache:8002
+      GATEWAY_ADMIN_URL: http://admin:8005
+    depends_on:
+      cache:
+        condition: service_healthy
+      auth:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   ollama_data:
