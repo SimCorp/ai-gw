@@ -216,7 +216,7 @@ claude --version
 claude "What model are you running on?"</pre>
 
     <p class="fw-medium small mb-2 mt-3">CI / GitHub Actions:</p>
-    <pre># .github/workflows/ai-review.yml
+    <pre>{% raw %}# .github/workflows/ai-review.yml
 - name: AI code review
   env:
     ANTHROPIC_API_KEY: ${{ secrets.SIMCORP_GATEWAY_KEY }}
@@ -224,7 +224,7 @@ claude "What model are you running on?"</pre>
   run: |
     claude --output-format json \
       "Review the changes in this PR for security issues" \
-      > review.json</pre>
+      > review.json{% endraw %}</pre>
 
     <p class="fw-medium small mb-2 mt-3">From Python (subprocess):</p>
     <pre>import subprocess, os, json
