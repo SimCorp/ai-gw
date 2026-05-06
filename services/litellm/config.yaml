@@ -1,7 +1,17 @@
 model_list:
-  - model_name: claude-3-5-sonnet
+  - model_name: claude-sonnet-4-6
     litellm_params:
-      model: anthropic/claude-3-5-sonnet-20241022
+      model: anthropic/claude-sonnet-4-6
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  - model_name: claude-opus-4-7
+    litellm_params:
+      model: anthropic/claude-opus-4-7
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  - model_name: claude-haiku-4-5
+    litellm_params:
+      model: anthropic/claude-haiku-4-5-20251001
       api_key: os.environ/ANTHROPIC_API_KEY
 
   - model_name: gemini-1.5-pro
@@ -26,7 +36,7 @@ litellm_settings:
   num_retries: 3
   allowed_fails: 1
   fallbacks:
-    - claude-3-5-sonnet:
+    - claude-sonnet-4-6:
         - gemini-1.5-pro
 
 general_settings:

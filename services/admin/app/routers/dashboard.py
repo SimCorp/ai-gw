@@ -1,13 +1,10 @@
-from fastapi import APIRouter, Depends, Request
-from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
+from fastapi import APIRouter, Depends
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
 
 router = APIRouter(tags=["dashboard"])
-templates = Jinja2Templates(directory="app/templates")
 
 _STATS_QUERY = text("""
     SELECT
@@ -21,12 +18,6 @@ _STATS_QUERY = text("""
     GROUP BY t.id, t.name
     ORDER BY total_tokens DESC NULLS LAST
 """)
-
-
-@router.get("/", response_class=HTMLResponse)
-async def dashboard(request: Request, session: AsyncSession = Depends(get_session)):
-    rows = (await session.execute(_STATS_QUERY)).mappings().all()
-    return templates.TemplateResponse(request, "dashboard.html", {"rows": rows})
 
 
 @router.get("/dashboard/stats")

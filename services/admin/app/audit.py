@@ -7,9 +7,11 @@ from app.models.audit_log import AuditLog
 
 
 def _actor(request: Request) -> str:
+    import hashlib
     token = request.headers.get("x-admin-token")
     if token:
-        return f"token:{token[:8]}..."
+        digest = hashlib.sha256(token.encode()).hexdigest()[:12]
+        return f"token:{digest}"
     return "dev-bypass"
 
 

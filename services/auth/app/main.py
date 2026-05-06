@@ -11,7 +11,11 @@ from app.router import router
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.redis = Redis.from_url(settings.redis_url, decode_responses=True)
-    app.state.db = await asyncpg.connect(settings.database_url.replace("+asyncpg", ""))
+    app.state.db = await asyncpg.create_pool(
+        settings.database_url.replace("+asyncpg", ""),
+        min_size=2,
+        max_size=10,
+    )
     yield
     await app.state.redis.aclose()
     await app.state.db.close()

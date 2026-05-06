@@ -35,7 +35,7 @@ async def validate_jwt(token: str, settings: Settings) -> dict:
         payload = jwt.decode(
             token,
             key,
-            algorithms=[header.get("alg", "RS256")],
+            algorithms=["RS256"],
             audience=settings.entra_client_id,
             options={"verify_at_hash": False},
         )

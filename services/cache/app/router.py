@@ -91,12 +91,43 @@ async def chat_completions(request: Request):
             emb = None  # embedding failure → treat as miss
 
     # 3. Forward to LiteLLM with master key (not caller's token)
-    headers = {
+    fwd_headers = {
         k: v for k, v in request.headers.items()
         if k.lower() not in ("host", "content-length", "authorization")
     }
-    headers["Authorization"] = f"Bearer {settings.litellm_master_key}"
-    resp = await http.post(f"{settings.litellm_url}/v1/chat/completions", json=body, headers=headers, timeout=600)
+    fwd_headers["Authorization"] = f"Bearer {settings.litellm_master_key}"
+
+    is_stream = body.get("stream", False)
+
+    if is_stream:
+        # Pass streaming response straight through — do not buffer, do not cache.
+        req = http.build_request(
+            "POST",
+            f"{settings.litellm_url}/v1/chat/completions",
+            json=body,
+            headers=fwd_headers,
+        )
+        upstream = await http.send(req, stream=True)
+        asyncio.create_task(
+            _emit_event(http, {
+                "team_id": team_id,
+                "project_id": project_id,
+                "model": body.get("model"),
+                "cache_hit": False,
+                "latency_ms": int((time.monotonic() - start) * 1000),
+                "error": None if upstream.status_code == 200 else str(upstream.status_code),
+            })
+        )
+        from fastapi.responses import StreamingResponse
+        return StreamingResponse(
+            upstream.aiter_raw(),
+            status_code=upstream.status_code,
+            media_type=upstream.headers.get("content-type", "text/event-stream"),
+            headers={"X-Cache": "MISS"},
+            background=None,
+        )
+
+    resp = await http.post(f"{settings.litellm_url}/v1/chat/completions", json=body, headers=fwd_headers, timeout=600)
     response_body = resp.json()
 
     # Store in cache on success

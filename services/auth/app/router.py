@@ -25,6 +25,9 @@ async def validate(body: ValidateRequest, request: Request):
     db = request.app.state.db
 
     token = body.token.removeprefix("Bearer ").strip()
+    if not token:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=401, detail="Missing token")
 
     if token.startswith("sk-"):
         identity = await validate_api_key(token, db)
