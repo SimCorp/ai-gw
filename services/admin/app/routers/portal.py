@@ -124,6 +124,17 @@ def _redirect(url: str, status_code: int = 303):
     return RedirectResponse(url, status_code=status_code)
 
 
+# ── Landing page ─────────────────────────────────────────────────────────────
+
+@router.get("", response_class=HTMLResponse)
+@router.get("/", response_class=HTMLResponse)
+async def portal_root(request: Request, session: AsyncSession = Depends(get_session)):
+    dev = await get_developer(request, session)
+    if dev:
+        return RedirectResponse("/portal/dashboard", status_code=303)
+    return templates.TemplateResponse(request, "portal_landing.html", {})
+
+
 # ── Auth routes (public) ─────────────────────────────────────────────────────
 
 @router.get("/login", response_class=HTMLResponse)

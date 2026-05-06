@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI Gateway — Developer Portal</title>
+  <link href="/static/bootstrap.min.css" rel="stylesheet">
+  <style>
+    :root { --accent: #6366f1; --accent-dark: #4f46e5; }
+    body { background: #0f172a; color: #fff; min-height: 100vh; display: flex; flex-direction: column; }
+    .hero { flex: 1; display: flex; align-items: center; justify-content: center; padding: 4rem 1.5rem; }
+    .hero-inner { max-width: 680px; text-align: center; }
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: .5rem;
+      background: rgba(99,102,241,.15); border: 1px solid rgba(99,102,241,.3);
+      color: #a5b4fc; font-size: .75rem; font-weight: 600; letter-spacing: .05em;
+      padding: .35rem .9rem; border-radius: 99px; margin-bottom: 1.5rem;
+      text-transform: uppercase;
+    }
+    .hero h1 { font-size: clamp(2rem, 5vw, 3rem); font-weight: 800; line-height: 1.1; margin-bottom: 1rem; }
+    .hero h1 span { color: #818cf8; }
+    .hero p { font-size: 1.05rem; color: #94a3b8; max-width: 520px; margin: 0 auto 2.5rem; }
+    .hero-actions { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+    .btn-hero-primary {
+      background: var(--accent); color: #fff; border: none;
+      padding: .75rem 1.75rem; border-radius: 8px; font-weight: 600; font-size: .95rem;
+      text-decoration: none; transition: background .15s;
+    }
+    .btn-hero-primary:hover { background: var(--accent-dark); color: #fff; }
+    .btn-hero-outline {
+      background: transparent; color: #94a3b8;
+      border: 1px solid #334155; padding: .75rem 1.75rem;
+      border-radius: 8px; font-weight: 500; font-size: .95rem;
+      text-decoration: none; transition: border-color .15s, color .15s;
+    }
+    .btn-hero-outline:hover { border-color: #6366f1; color: #fff; }
+    .features { background: #0f172a; border-top: 1px solid #1e293b; padding: 3rem 1.5rem; }
+    .features-inner { max-width: 900px; margin: 0 auto; }
+    .features h2 { text-align: center; font-size: 1.25rem; font-weight: 700; margin-bottom: 2rem; color: #e2e8f0; }
+    .feature-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.25rem; }
+    .feature-card {
+      background: #1e293b; border: 1px solid #334155;
+      border-radius: 10px; padding: 1.25rem 1.5rem;
+    }
+    .feature-card .icon { font-size: 1.5rem; margin-bottom: .75rem; }
+    .feature-card h3 { font-size: .95rem; font-weight: 600; color: #e2e8f0; margin-bottom: .4rem; }
+    .feature-card p { font-size: .82rem; color: #64748b; margin: 0; }
+    footer { background: #020617; border-top: 1px solid #0f172a; padding: 1rem 1.5rem; text-align: center; font-size: .75rem; color: #475569; }
+    footer a { color: #6366f1; text-decoration: none; }
+  </style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="hero-inner">
+    <div class="hero-badge">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+      SimCorp AI Gateway
+    </div>
+    <h1>Build faster with<br><span>AI APIs</span> at enterprise scale</h1>
+    <p>Self-service access to Claude, Gemini, GPT-4o, and more — through a single authenticated endpoint. Get your API key in under a minute.</p>
+    <div class="hero-actions">
+      <a href="/portal/signup" class="btn-hero-primary">Get started free →</a>
+      <a href="/portal/login" class="btn-hero-outline">Sign in</a>
+    </div>
+  </div>
+</div>
+
+<div class="features">
+  <div class="features-inner">
+    <h2>Everything you need to ship AI-powered features</h2>
+    <div class="feature-grid">
+      <div class="feature-card">
+        <div class="icon">🔑</div>
+        <h3>Self-service API keys</h3>
+        <p>Create keys instantly — no ticket, no waiting. Revoke and rotate at any time.</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">🤖</div>
+        <h3>Multiple models</h3>
+        <p>Claude, Gemini, GPT-4o, and local Ollama — one key, one endpoint, all providers.</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">⚡</div>
+        <h3>Semantic cache</h3>
+        <p>Repeated and similar prompts served from cache — zero provider cost, instant response.</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">📊</div>
+        <h3>Usage dashboard</h3>
+        <p>Track requests, tokens, and cost per model. Spot expensive workflows before they scale.</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">📖</div>
+        <h3>Copy-paste guides</h3>
+        <p>Quickstart for curl, OpenAI SDK, Anthropic SDK, and Claude Code CLI — pre-filled with your key.</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">🔗</div>
+        <h3>Agent-ready</h3>
+        <p>LangChain, LlamaIndex, OpenAI Agents SDK, Claude Code — all documented with real examples.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  SimCorp Internal — <a href="/portal/signup">Sign up</a> · <a href="/portal/login">Sign in</a> · <a href="/docs" target="_blank">API Docs</a> · <a href="http://localhost:8005" target="_blank">Admin Portal</a>
+</footer>
+
+<script src="/static/bootstrap.bundle.min.js"></script>
+</body>
+</html>

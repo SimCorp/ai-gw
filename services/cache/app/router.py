@@ -156,3 +156,70 @@ async def chat_completions(request: Request):
         })
     )
     return Response(content=resp.content, status_code=resp.status_code, media_type="application/json", headers={"X-Cache": "MISS"})
+
+
+@router.post("/anthropic/{path:path}")
+async def anthropic_proxy(path: str, request: Request):
+    """Anthropic-compatible passthrough — validates gateway key then forwards to LiteLLM.
+
+    Claude Code CLI and the Anthropic SDK send POST /v1/messages (and other paths).
+    LiteLLM exposes these at /anthropic/<path>. We auth with the gateway sk- key,
+    then forward with the LiteLLM master key, preserving full request/response fidelity.
+    """
+    http = request.app.state.http
+
+    # Accept both Anthropic SDK auth styles
+    token = (
+        request.headers.get("x-api-key", "")
+        or request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+    )
+    body_bytes = await request.body()
+    body = {}
+    try:
+        import json
+        body = json.loads(body_bytes) if body_bytes else {}
+    except Exception:
+        pass
+
+    result = await _validate_token(http, token, body.get("model"))
+    if result is None:
+        return JSONResponse({"error": {"type": "authentication_error", "message": "Invalid API key"}}, status_code=401)
+    team_id, project_id = result
+
+    fwd_headers = {
+        k: v for k, v in request.headers.items()
+        if k.lower() not in ("host", "content-length", "authorization", "x-api-key")
+    }
+    fwd_headers["x-api-key"] = settings.litellm_master_key
+
+    is_stream = body.get("stream", False)
+    target = f"{settings.litellm_url}/anthropic/{path}"
+
+    start = time.monotonic()
+    if is_stream:
+        req = http.build_request("POST", target, content=body_bytes, headers=fwd_headers)
+        upstream = await http.send(req, stream=True)
+        asyncio.create_task(_emit_event(http, {
+            "team_id": team_id, "project_id": project_id,
+            "model": body.get("model"), "cache_hit": False,
+            "latency_ms": int((time.monotonic() - start) * 1000),
+        }))
+        from fastapi.responses import StreamingResponse
+        return StreamingResponse(
+            upstream.aiter_raw(),
+            status_code=upstream.status_code,
+            media_type=upstream.headers.get("content-type", "text/event-stream"),
+            headers={"X-Cache": "MISS"},
+        )
+
+    resp = await http.post(target, content=body_bytes, headers=fwd_headers, timeout=600)
+    asyncio.create_task(_emit_event(http, {
+        "team_id": team_id, "project_id": project_id,
+        "model": body.get("model"), "cache_hit": False,
+        "latency_ms": int((time.monotonic() - start) * 1000),
+    }))
+    return Response(
+        content=resp.content, status_code=resp.status_code,
+        media_type=resp.headers.get("content-type", "application/json"),
+        headers={"X-Cache": "MISS"},
+    )
