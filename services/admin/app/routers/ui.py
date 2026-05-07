@@ -12,6 +12,8 @@ from app import audit
 from app.db import get_session
 from app.models.api_key import APIKey
 from app.models.audit_log import AuditLog
+from app.models.model_registry import ModelRegistry
+from app.models.pricing import ModelPricing
 from app.models.team import Team
 from app.routers.api_keys import KeyCreate
 from app.routers.teams import TeamCreate
@@ -228,3 +230,93 @@ async def audit_log_page(
     return templates.TemplateResponse(
         request, "audit_log.html", {"entries": result.scalars().all()}
     )
+
+
+# ── Pricing ───────────────────────────────────────────────────────────────────
+
+@router.get("/ui/pricing", response_class=HTMLResponse)
+async def pricing_page(request: Request, session: AsyncSession = Depends(get_session)):
+    result = await session.execute(select(ModelPricing).order_by(ModelPricing.model_prefix))
+    return templates.TemplateResponse(request, "pricing.html", {"rows": result.scalars().all()})
+
+
+@router.post("/ui/pricing")
+async def upsert_pricing_ui(
+    request: Request,
+    model_prefix: str = Form(...),
+    price_input_per_1k: float = Form(...),
+    price_output_per_1k: float = Form(...),
+    session: AsyncSession = Depends(get_session),
+):
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+    stmt = (
+        pg_insert(ModelPricing)
+        .values(model_prefix=model_prefix, price_input_per_1k=price_input_per_1k, price_output_per_1k=price_output_per_1k)
+        .on_conflict_do_update(
+            index_elements=["model_prefix"],
+            set_={"price_input_per_1k": price_input_per_1k, "price_output_per_1k": price_output_per_1k, "updated_at": text("NOW()")},
+        )
+    )
+    await session.execute(stmt)
+    await audit.record(session, request, "upsert_pricing", "model_pricing",
+                       details={"model_prefix": model_prefix, "input": price_input_per_1k, "output": price_output_per_1k})
+    await session.commit()
+    return RedirectResponse("/ui/pricing", status_code=303)
+
+
+@router.post("/ui/pricing/{model_prefix}/delete")
+async def delete_pricing_ui(model_prefix: str, request: Request, session: AsyncSession = Depends(get_session)):
+    row = await session.get(ModelPricing, model_prefix)
+    if row:
+        await audit.record(session, request, "delete_pricing", "model_pricing", details={"model_prefix": model_prefix})
+        await session.delete(row)
+        await session.commit()
+    return RedirectResponse("/ui/pricing", status_code=303)
+
+
+# ── Model Registry ────────────────────────────────────────────────────────────
+
+@router.get("/ui/models", response_class=HTMLResponse)
+async def model_registry_page(request: Request, session: AsyncSession = Depends(get_session)):
+    result = await session.execute(select(ModelRegistry).order_by(ModelRegistry.provider, ModelRegistry.name))
+    return templates.TemplateResponse(request, "model_registry.html", {"models": result.scalars().all()})
+
+
+@router.post("/ui/models")
+async def create_model_ui(
+    request: Request,
+    name: str = Form(...),
+    model_id: str = Form(...),
+    provider: str = Form(...),
+    session: AsyncSession = Depends(get_session),
+):
+    model = ModelRegistry(name=name, model_id=model_id, provider=provider, enabled=True)
+    session.add(model)
+    await session.flush()
+    await audit.record(session, request, "create_model", "model_registry",
+                       details={"model_id": model_id, "provider": provider})
+    await session.commit()
+    return RedirectResponse("/ui/models", status_code=303)
+
+
+@router.post("/ui/models/{model_id}/toggle")
+async def toggle_model_ui(model_id: str, request: Request, session: AsyncSession = Depends(get_session)):
+    result = await session.execute(select(ModelRegistry).where(ModelRegistry.model_id == model_id))
+    model = result.scalar_one_or_none()
+    if model:
+        model.enabled = not model.enabled
+        await audit.record(session, request, "toggle_model", "model_registry",
+                           resource_id=model_id, details={"enabled": model.enabled})
+        await session.commit()
+    return RedirectResponse("/ui/models", status_code=303)
+
+
+@router.post("/ui/models/{model_id}/delete")
+async def delete_model_ui(model_id: str, request: Request, session: AsyncSession = Depends(get_session)):
+    result = await session.execute(select(ModelRegistry).where(ModelRegistry.model_id == model_id))
+    model = result.scalar_one_or_none()
+    if model:
+        await audit.record(session, request, "delete_model", "model_registry", resource_id=model_id)
+        await session.delete(model)
+        await session.commit()
+    return RedirectResponse("/ui/models", status_code=303)
