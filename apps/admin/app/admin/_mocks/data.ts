@@ -21,7 +21,7 @@ export const AGENT_PLATFORM_TEAM = {
   name: 'agent-platform',
   idLabel: 'tm_tradin_8421',
   owner: 'a.kowalski@simcorp.com',
-  members: 18,
+  memberCount: 18,
   createdAt: 'Mar 4, 2026',
   spendMtd: '$6,485.55',
   budgetPct: 71,

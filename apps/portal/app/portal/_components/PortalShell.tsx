@@ -7,28 +7,24 @@ const NAV = [
   {
     group: "Use",
     items: [
-      { href: "/portal", label: "Home",       icon: <HomeIcon /> },
-      { href: "/portal/playground", label: "Playground", icon: <PlayIcon />,  kbd: "⌘P" },
-      { href: "/portal/keys",   label: "API keys",   icon: <KeyIcon /> },
-      { href: "/portal/usage",  label: "Usage",      icon: <ChartIcon /> },
-      { href: "/portal/models", label: "Models",     icon: <CubeIcon /> },
-      { href: "/portal/docs",   label: "Docs",       icon: <DocIcon /> },
-    ],
-  },
-  {
-    group: "Build",
-    items: [
-      { href: "/portal/prompts", label: "Prompts",  icon: <PromptIcon /> },
-      { href: "/portal/agents",  label: "Agents",   icon: <AgentIcon /> },
-      { href: "/portal/mcp",     label: "MCP",      icon: <McpIcon /> },
-      { href: "/portal/skills",  label: "Skills",   icon: <SkillIcon /> },
-      { href: "/portal/plugins", label: "Plugins",  icon: <PluginIcon /> },
+      { href: "/portal",            label: "Home",        icon: <HomeIcon /> },
+      { href: "/portal/playground", label: "Playground",  icon: <PlayIcon />, kbd: "⌘P" },
+      { href: "/portal/agents",     label: "Agents",      icon: <AgentIcon /> },
+      { href: "/portal/keys",       label: "API keys",    icon: <KeyIcon /> },
+      { href: "/portal/models",     label: "Models",      icon: <CubeIcon /> },
+      { href: "/portal/prompts",    label: "Prompts",     icon: <PromptIcon /> },
+      { href: "/portal/mcp",        label: "MCP servers", icon: <McpIcon /> },
+      { href: "/portal/plugins",    label: "Plugins",     icon: <PluginIcon /> },
+      { href: "/portal/skills",     label: "Skills",      icon: <SkillIcon /> },
+      { href: "/portal/docs",       label: "Quickstart",  icon: <DocIcon /> },
     ],
   },
   {
     group: "Account",
     items: [
-      { href: "/portal/settings", label: "Settings", icon: <SettingsIcon /> },
+      { href: "/portal/usage",    label: "Usage & spend", icon: <ChartIcon /> },
+      { href: "/portal/teams",    label: "My team",       icon: <TeamIcon /> },
+      { href: "/portal/settings", label: "Settings",      icon: <SettingsIcon /> },
     ],
   },
 ];
@@ -44,7 +40,7 @@ export default function PortalShell() {
       <div className="psidebar__brand">
         <div className="logo">AI</div>
         <div>
-          <div className="name">AI Gateway</div>
+          <div className="name">AI Portal</div>
           <div className="sub">agent-platform</div>
         </div>
       </div>
@@ -160,6 +156,16 @@ function PluginIcon() {
   return (
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
       <path d="M6 2v3H2v3h3v1a3 3 0 006 0v-1h3V5h-4V2H6z"/>
+    </svg>
+  );
+}
+function TeamIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <circle cx="6" cy="5" r="2.5"/>
+      <path d="M1.5 13.5c0-2.5 2-4 4.5-4s4.5 1.5 4.5 4"/>
+      <circle cx="11.5" cy="5.5" r="2"/>
+      <path d="M13.5 13.5c0-1.8-1-3-2.5-3.5"/>
     </svg>
   );
 }

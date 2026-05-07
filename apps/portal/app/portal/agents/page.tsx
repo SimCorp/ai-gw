@@ -112,7 +112,7 @@ export default function AgentsPage() {
                   </div>
                   <div>
                     <div className="muted" style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.04em" }}>Cost</div>
-                    <div style={{ fontSize: 13, fontWeight: 500 }}>$0.149</div>
+                    <div style={{ fontSize: 13, fontWeight: 500 }}>$0.68</div>
                   </div>
                 </div>
 

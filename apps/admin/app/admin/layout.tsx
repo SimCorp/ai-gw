@@ -13,16 +13,13 @@ const queryClient = new QueryClient({
 });
 
 function MSWGate({ children }: { children: React.ReactNode }) {
-  const [ready, setReady] = useState(process.env.NODE_ENV !== 'development');
-
   useEffect(() => {
     if (process.env.NODE_ENV !== 'development') return;
-    import('../_mocks/browser').then(({ worker }) =>
+    import('./_mocks/browser').then(({ worker }) =>
       worker.start({ onUnhandledRequest: 'bypass' })
-    ).then(() => setReady(true));
+    ).catch(() => { /* service worker unavailable — MSW runs in node mode */ });
   }, []);
 
-  if (!ready) return null;
   return <>{children}</>;
 }
 

@@ -1,2 +1,1 @@
-/* @aigw/ui/globals.css intentionally omitted — package is a stub */
-/* Portal styles are loaded in apps/portal/app/portal/_styles/portal.css */
+@import "@aigw/ui/globals.css";

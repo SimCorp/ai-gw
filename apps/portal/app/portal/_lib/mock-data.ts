@@ -3,9 +3,9 @@
 import type { ApiKey, Request, Session, Model, PromptTemplate, Agent, McpServer, Skill, Plugin } from "./types";
 
 export const MOCK_KEYS: ApiKey[] = [
-  { id: "k1", name: "prod-rag-service", prefix: "sk_live_••••8a31f", scope: "prod", calls7d: 38210, lastUsed: "2 min ago", status: "active" },
-  { id: "k2", name: "eval-runner",       prefix: "sk_test_••••c41d8", scope: "dev",  calls7d: 9114,  lastUsed: "11 min ago", status: "active" },
-  { id: "k3", name: "jupyter-notebook",  prefix: "sk_test_••••3a982", scope: "dev",  calls7d: 4288,  lastUsed: "1 h ago",    status: "expiring", daysToExpiry: 22 },
+  { id: "k1", name: "prod-rag-service", prefix: "sk_live_••••8a31f", scope: "prod", model: "claude-*, gemini-*", rate: "60 rpm", expires: "Aug 12, 2026", calls7d: 38210, lastUsed: "2 min ago", status: "active" },
+  { id: "k2", name: "eval-runner",       prefix: "sk_test_••••c41d8", scope: "dev",  model: "claude-*",           rate: "30 rpm", expires: "Sep 3, 2026",  calls7d: 9114,  lastUsed: "11 min ago", status: "active" },
+  { id: "k3", name: "jupyter-notebook",  prefix: "sk_test_••••3a982", scope: "dev",  model: "claude-haiku-*",     rate: "20 rpm", expires: "May 29, 2026", calls7d: 4288,  lastUsed: "1 h ago",    status: "expiring", daysToExpiry: 22 },
 ];
 
 export const MOCK_REQUESTS: Request[] = [
@@ -83,9 +83,9 @@ export const MOCK_PROMPTS: PromptTemplate[] = [
 ];
 
 export const MOCK_AGENTS: Agent[] = [
-  { id: "a1", name: "pr-review-bot",  description: "Reviews open pull requests against the engineering style guide. Posts inline comments and a summary to GitHub.", tools: 3, model: "claude-sonnet-4.5", status: "running",   lastRun: "18 min ago", successRate: "14/14 success this week" },
-  { id: "a2", name: "bug-triage",     description: "Triages incoming bug reports overnight. Deduplicates against existing issues, labels by severity, and assigns to on-call.", tools: 5, model: "claude-sonnet-4.5", status: "scheduled", lastRun: "this morning", successRate: "34/35 success" },
-  { id: "a3", name: "pre-merge-guard",description: "Pre-merge security check. Scans diffs for hardcoded secrets, risky deps, and missing tests before CI lets them merge.", tools: 4, model: "claude-sonnet-4.5", status: "draft" },
+  { id: "a1", name: "gr-decision-bot",  description: "Reads current positions, pulls target weights, computes drift, and proposes rebalance trades within policy bands. Posts final proposal to the portfolio Slack.", tools: 4, model: "claude-sonnet-4.5", status: "running",   lastRun: "18 min ago", successRate: "14/14 success this week" },
+  { id: "a2", name: "help-triage",      description: "Triages incoming help-desk and bug reports overnight. Deduplicates against existing issues, labels by severity, and assigns to on-call engineer.", tools: 5, model: "claude-sonnet-4.5", status: "scheduled", lastRun: "this morning", successRate: "34/35 success" },
+  { id: "a3", name: "pr-sentry-guard",  description: "Pre-merge security check. Scans diffs for hardcoded secrets, risky deps, and missing tests before CI lets them through.", tools: 4, model: "claude-sonnet-4.5", status: "draft" },
 ];
 
 export const MOCK_MCP: McpServer[] = [

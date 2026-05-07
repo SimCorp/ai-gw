@@ -110,6 +110,7 @@ export default function KeysPage() {
             <button className="copy-btn" onClick={() => handleCopy(newKey, "newkey")}>
               {copied === "newkey" ? "Copied!" : "Copy"}
             </button>
+            <button className="btn btn--sm" style={{ marginLeft: 8 }}>Test</button>
           </div>
           <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 12.5, color: "var(--fg-2)" }}>
             <span><strong style={{ color: "var(--fg-1)" }}>Scope:</strong> prod</span>
@@ -133,10 +134,12 @@ export default function KeysPage() {
               <thead>
                 <tr>
                   <th>Name</th>
-                  <th>Key</th>
+                  <th>Key ID</th>
                   <th>Scope</th>
-                  <th className="num">Calls 7d</th>
+                  <th>Model</th>
+                  <th>Rate</th>
                   <th>Last used</th>
+                  <th>Expires</th>
                   <th>Status</th>
                   <th />
                 </tr>
@@ -149,8 +152,10 @@ export default function KeysPage() {
                     <td>
                       <span className={`pill ${k.scope === "prod" ? "pill--info" : ""}`}>{k.scope}</span>
                     </td>
-                    <td className="num"><span className="mono">{k.calls7d.toLocaleString()}</span></td>
+                    <td>{k.model}</td>
+                    <td>{k.rate}</td>
                     <td>{k.lastUsed}</td>
+                    <td>{k.expires}</td>
                     <td>
                       {k.status === "active" && <span className="pill pill--good"><span className="dot" />active</span>}
                       {k.status === "expiring" && <span className="pill pill--warn"><span className="dot" />{k.daysToExpiry}d to expiry</span>}

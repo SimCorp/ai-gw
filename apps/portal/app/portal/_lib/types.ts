@@ -5,6 +5,9 @@ export interface ApiKey {
   name: string;
   prefix: string;
   scope: "prod" | "dev";
+  model: string;
+  rate: string;
+  expires: string;
   calls7d: number;
   lastUsed: string;
   status: "active" | "expiring" | "revoked";
