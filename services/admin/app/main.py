@@ -28,7 +28,6 @@ from app.routers import (
     members,
     model_registry,
     policies,
-    portal,
     pricing,
     settings as settings_router,
     system,
@@ -137,7 +136,7 @@ app.include_router(model_registry.router, dependencies=_auth)
 app.include_router(system.router, dependencies=_auth)
 app.include_router(audit_log.router, dependencies=_auth)
 app.include_router(budget.router, dependencies=_auth)
-app.include_router(portal.router)  # no admin auth — portal manages its own sessions
+
 
 
 @app.get("/health", tags=["health"])
