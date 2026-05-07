@@ -322,9 +322,47 @@ async def dashboard(
             stats["cache_hits"] += r[5] or 0
 
     cache_pct = round(stats["cache_hits"] / stats["requests"] * 100, 1) if stats["requests"] else 0
+
+    # Fetch team budget and current month spend for dashboard widget
+    budget_data: dict = {}
+    if dev["team_id"]:
+        try:
+            month_start = datetime.now(timezone.utc).replace(
+                day=1, hour=0, minute=0, second=0, microsecond=0
+            )
+            brow = (await session.execute(
+                text("""
+                    SELECT
+                        t.monthly_budget_usd,
+                        t.budget_alert_pct,
+                        t.budget_action,
+                        COALESCE(SUM(cr.cost_usd), 0) AS month_spend
+                    FROM teams t
+                    LEFT JOIN cost_records cr ON cr.team_id = t.id
+                        AND cr.created_at >= :month_start
+                    WHERE t.id = :team_id
+                    GROUP BY t.id
+                """),
+                {"team_id": dev["team_id"], "month_start": month_start},
+            )).fetchone()
+            if brow and brow[0] is not None:
+                limit = float(brow[0])
+                spend = float(brow[3])
+                budget_data = {
+                    "limit": limit,
+                    "spend": spend,
+                    "pct": min(100.0, spend / limit * 100) if limit else 0.0,
+                    "action": brow[2],
+                    "alert_pct": float(brow[1]) * 100,
+                }
+            elif brow:
+                budget_data = {"limit": None, "spend": float(brow[3])}
+        except Exception:
+            pass
+
     return templates.TemplateResponse(request, "portal_dashboard.html", {
         "dev": dev, "stats": stats, "model_rows": model_rows,
-        "days": days, "cache_pct": cache_pct,
+        "days": days, "cache_pct": cache_pct, "budget_data": budget_data,
     })
 
 
@@ -509,6 +547,43 @@ async def usage(request: Request, period: str = "30d", session: AsyncSession = D
         if stats.get("tokens_out") else "—"
     )
 
+    # Fetch team budget and current month spend
+    budget_data: dict = {}
+    if team_id:
+        try:
+            month_start = datetime.now(timezone.utc).replace(
+                day=1, hour=0, minute=0, second=0, microsecond=0
+            )
+            brow = (await session.execute(
+                text("""
+                    SELECT
+                        t.monthly_budget_usd,
+                        t.budget_alert_pct,
+                        t.budget_action,
+                        COALESCE(SUM(cr.cost_usd), 0) AS month_spend
+                    FROM teams t
+                    LEFT JOIN cost_records cr ON cr.team_id = t.id
+                        AND cr.created_at >= :month_start
+                    WHERE t.id = :team_id
+                    GROUP BY t.id
+                """),
+                {"team_id": team_id, "month_start": month_start},
+            )).fetchone()
+            if brow and brow[0] is not None:
+                limit = float(brow[0])
+                spend = float(brow[3])
+                budget_data = {
+                    "limit": limit,
+                    "spend": spend,
+                    "pct": min(100.0, spend / limit * 100) if limit else 0.0,
+                    "action": brow[2],
+                    "alert_pct": float(brow[1]) * 100,
+                }
+            elif brow:
+                budget_data = {"limit": None, "spend": float(brow[3])}
+        except Exception:
+            pass
+
     return templates.TemplateResponse(request, "portal_usage.html", {
         "dev": dev,
         "period": period,
@@ -519,7 +594,121 @@ async def usage(request: Request, period: str = "30d", session: AsyncSession = D
         "chart_data": chart_data,
         "max_model_cost": max_model_cost,
         "tokens_ratio": tokens_ratio,
+        "budget_data": budget_data,
     })
+
+
+@router.get("/teams", response_class=HTMLResponse)
+async def portal_teams(request: Request, session: AsyncSession = Depends(get_session)):
+    dev = await get_developer(request, session)
+    if not dev:
+        return RedirectResponse("/portal/login", status_code=303)
+
+    teams: list[dict] = []
+    members_by_team: dict[str, list[dict]] = {}
+
+    if dev["team_id"]:
+        try:
+            # Primary team via developers.team_id
+            trow = (await session.execute(
+                text("SELECT id, name, slug FROM teams WHERE id = :tid"),
+                {"tid": dev["team_id"]},
+            )).fetchone()
+            if trow:
+                teams.append({"id": str(trow[0]), "name": trow[1], "slug": trow[2], "primary": True})
+        except Exception:
+            pass
+
+        # Additional teams via team_members.developer_id (may be unpopulated)
+        try:
+            extra_rows = (await session.execute(
+                text("""
+                    SELECT t.id, t.name, t.slug
+                    FROM team_members tm
+                    JOIN teams t ON t.id = tm.team_id
+                    WHERE tm.developer_id = :did
+                      AND t.id != :primary_tid
+                """),
+                {"did": dev["id"], "primary_tid": dev["team_id"]},
+            )).fetchall()
+            for r in extra_rows:
+                teams.append({"id": str(r[0]), "name": r[1], "slug": r[2], "primary": False})
+        except Exception:
+            pass
+
+        # Fetch members for each team
+        for t in teams:
+            try:
+                mem_rows = (await session.execute(
+                    text("""
+                        SELECT d.email, d.display_name, tm.role, tm.created_at
+                        FROM team_members tm
+                        JOIN developers d ON d.id = tm.developer_id
+                        WHERE tm.team_id = :tid
+                        ORDER BY tm.created_at
+                    """),
+                    {"tid": t["id"]},
+                )).fetchall()
+                members_by_team[t["id"]] = [
+                    {
+                        "email": r[0],
+                        "display_name": r[1],
+                        "role": r[2],
+                        "joined": r[3],
+                    }
+                    for r in mem_rows
+                ]
+            except Exception:
+                members_by_team[t["id"]] = []
+
+    return templates.TemplateResponse(request, "portal_teams.html", {
+        "dev": dev,
+        "teams": teams,
+        "members_by_team": members_by_team,
+        "switched": request.query_params.get("switched"),
+    })
+
+
+@router.post("/teams/switch")
+async def portal_teams_switch(
+    request: Request,
+    team_id: str = Form(...),
+    session: AsyncSession = Depends(get_session),
+):
+    dev = await get_developer(request, session)
+    if not dev:
+        return RedirectResponse("/portal/login", status_code=303)
+
+    # Verify the developer actually belongs to the requested team
+    # (either it's their primary team, or they're in team_members for it)
+    is_member = False
+    try:
+        row = (await session.execute(
+            text("""
+                SELECT 1 FROM teams t
+                WHERE t.id = :tid
+                  AND (
+                    EXISTS (SELECT 1 FROM developers d WHERE d.id = :did AND d.team_id = t.id)
+                    OR
+                    EXISTS (SELECT 1 FROM team_members tm WHERE tm.team_id = t.id AND tm.developer_id = :did)
+                  )
+            """),
+            {"tid": team_id, "did": dev["id"]},
+        )).fetchone()
+        is_member = row is not None
+    except Exception:
+        pass
+
+    if not is_member:
+        return RedirectResponse("/portal/teams?error=not_member", status_code=303)
+
+    await _ensure_tables(session)
+    await session.execute(
+        text("UPDATE developers SET team_id = :tid, updated_at = NOW() WHERE id = :did"),
+        {"tid": team_id, "did": dev["id"]},
+    )
+    await session.commit()
+    return RedirectResponse("/portal/teams?switched=1", status_code=303)
 
 
 @router.get("/quickstart", response_class=HTMLResponse)

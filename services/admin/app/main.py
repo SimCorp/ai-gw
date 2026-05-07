@@ -23,6 +23,7 @@ from app.models import (  # noqa: F401
 from app.routers import (
     api_keys,
     audit_log,
+    budget,
     dashboard,
     members,
     model_registry,
@@ -68,6 +69,30 @@ _EXTRA_DDL = [
     "ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS developer_id UUID REFERENCES developers(id) ON DELETE SET NULL",
     "ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS last_used_at TIMESTAMPTZ",
     "CREATE INDEX IF NOT EXISTS idx_api_keys_developer ON api_keys(developer_id)",
+    # Budget fields on teams
+    "ALTER TABLE teams ADD COLUMN IF NOT EXISTS monthly_budget_usd NUMERIC(14,8)",
+    "ALTER TABLE teams ADD COLUMN IF NOT EXISTS budget_alert_pct FLOAT NOT NULL DEFAULT 0.8",
+    "ALTER TABLE teams ADD COLUMN IF NOT EXISTS budget_action TEXT NOT NULL DEFAULT 'alert'",
+    # Widen precision if column was previously created with NUMERIC(12,4)
+    "ALTER TABLE teams ALTER COLUMN monthly_budget_usd TYPE NUMERIC(14,8)",
+    # Per-key budget cap
+    "ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS monthly_budget_usd NUMERIC(14,8)",
+    "ALTER TABLE api_keys ALTER COLUMN monthly_budget_usd TYPE NUMERIC(14,8)",
+    # Track which key was used on each cost record
+    "ALTER TABLE cost_records ADD COLUMN IF NOT EXISTS api_key_id UUID REFERENCES api_keys(id) ON DELETE SET NULL",
+    "CREATE INDEX IF NOT EXISTS idx_cost_records_api_key_id ON cost_records(api_key_id, created_at DESC)",
+    # Link team_members to developers
+    "ALTER TABLE team_members ADD COLUMN IF NOT EXISTS developer_id UUID REFERENCES developers(id) ON DELETE CASCADE",
+    "CREATE INDEX IF NOT EXISTS idx_team_members_developer_id ON team_members(developer_id)",
+    # Org-level global budget ceiling
+    """CREATE TABLE IF NOT EXISTS org_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )""",
+    "INSERT INTO org_settings (key, value) VALUES ('monthly_budget_usd', '0') ON CONFLICT (key) DO NOTHING",
+    "INSERT INTO org_settings (key, value) VALUES ('budget_alert_pct', '0.8') ON CONFLICT (key) DO NOTHING",
+    "INSERT INTO org_settings (key, value) VALUES ('budget_action', 'alert') ON CONFLICT (key) DO NOTHING",
 ]
 
 _auth = [Depends(require_admin_auth)]
@@ -111,6 +136,7 @@ app.include_router(pricing.router, dependencies=_auth)
 app.include_router(model_registry.router, dependencies=_auth)
 app.include_router(system.router, dependencies=_auth)
 app.include_router(audit_log.router, dependencies=_auth)
+app.include_router(budget.router, dependencies=_auth)
 app.include_router(portal.router)  # no admin auth — portal manages its own sessions
 
 

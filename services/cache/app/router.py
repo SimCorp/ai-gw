@@ -24,8 +24,16 @@ async def _emit_event(client: httpx.AsyncClient, event: dict) -> None:
         pass
 
 
-async def _validate_token(client: httpx.AsyncClient, token: str, model: str | None) -> tuple[str, str | None] | None:
-    """Call auth service to validate token. Returns (team_id, project_id) or None on failure."""
+async def _validate_token(
+    client: httpx.AsyncClient, token: str, model: str | None
+) -> tuple[str, str | None, str | None] | Response | None:
+    """Validate token with auth service.
+
+    Returns:
+      (team_id, project_id, key_id) on success
+      Response on 429 (budget/rate-limit) — forward to caller as-is
+      None on auth failure (401, network error, etc.)
+    """
     try:
         resp = await client.post(
             f"{settings.auth_url}/validate",
@@ -34,7 +42,9 @@ async def _validate_token(client: httpx.AsyncClient, token: str, model: str | No
         )
         if resp.status_code == 200:
             data = resp.json()
-            return data["team_id"], data.get("project_id")
+            return data["team_id"], data.get("project_id"), data.get("key_id")
+        if resp.status_code == 429:
+            return Response(content=resp.content, status_code=429, media_type="application/json")
         return None
     except Exception:
         return None
@@ -48,6 +58,9 @@ async def list_models(request: Request):
     result = await _validate_token(http, token, None)
     if result is None:
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    if isinstance(result, Response):
+        return result
+    _team_id, _project_id, _key_id = result
     resp = await http.get(
         f"{settings.litellm_url}/v1/models",
         headers={"Authorization": f"Bearer {settings.litellm_master_key}"},
@@ -68,7 +81,9 @@ async def chat_completions(request: Request):
     result = await _validate_token(http, token, body.get("model"))
     if result is None:
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
-    team_id, project_id = result
+    if isinstance(result, Response):
+        return result
+    team_id, project_id, key_id = result
 
     try:
         policy = await get_policy(team_id, project_id, redis)
@@ -88,7 +103,7 @@ async def chat_completions(request: Request):
             cached = await exact.get(body, redis)
             if cached:
                 asyncio.create_task(
-                    _emit_event(http, {"team_id": team_id, "project_id": project_id, "model": body.get("model"), "cache_hit": True, "latency_ms": int((time.monotonic() - start) * 1000)})
+                    _emit_event(http, {"team_id": team_id, "project_id": project_id, "key_id": key_id, "model": body.get("model"), "cache_hit": True, "latency_ms": int((time.monotonic() - start) * 1000)})
                 )
                 return JSONResponse(cached, headers={"X-Cache": "HIT"})
         except Exception:
@@ -100,7 +115,7 @@ async def chat_completions(request: Request):
             cached = await semantic.get(emb, policy.similarity_threshold, redis)
             if cached:
                 asyncio.create_task(
-                    _emit_event(http, {"team_id": team_id, "project_id": project_id, "model": body.get("model"), "cache_hit": True, "latency_ms": int((time.monotonic() - start) * 1000)})
+                    _emit_event(http, {"team_id": team_id, "project_id": project_id, "key_id": key_id, "model": body.get("model"), "cache_hit": True, "latency_ms": int((time.monotonic() - start) * 1000)})
                 )
                 return JSONResponse(cached, headers={"X-Cache": "HIT"})
         except Exception:
@@ -128,6 +143,7 @@ async def chat_completions(request: Request):
             _emit_event(http, {
                 "team_id": team_id,
                 "project_id": project_id,
+                "key_id": key_id,
                 "model": body.get("model"),
                 "cache_hit": False,
                 "latency_ms": int((time.monotonic() - start) * 1000),
@@ -163,6 +179,7 @@ async def chat_completions(request: Request):
         _emit_event(http, {
             "team_id": team_id,
             "project_id": project_id,
+            "key_id": key_id,
             "model": body.get("model"),
             "tokens_input": usage.get("prompt_tokens", 0),
             "tokens_output": usage.get("completion_tokens", 0),
@@ -200,7 +217,9 @@ async def anthropic_proxy(path: str, request: Request):
     result = await _validate_token(http, token, body.get("model"))
     if result is None:
         return JSONResponse({"error": {"type": "authentication_error", "message": "Invalid API key"}}, status_code=401)
-    team_id, project_id = result
+    if isinstance(result, Response):
+        return result
+    team_id, project_id, key_id = result
 
     fwd_headers = {
         k: v for k, v in request.headers.items()
@@ -216,7 +235,7 @@ async def anthropic_proxy(path: str, request: Request):
         req = http.build_request("POST", target, content=body_bytes, headers=fwd_headers)
         upstream = await http.send(req, stream=True)
         asyncio.create_task(_emit_event(http, {
-            "team_id": team_id, "project_id": project_id,
+            "team_id": team_id, "project_id": project_id, "key_id": key_id,
             "model": body.get("model"), "cache_hit": False,
             "latency_ms": int((time.monotonic() - start) * 1000),
         }))
@@ -230,7 +249,7 @@ async def anthropic_proxy(path: str, request: Request):
 
     resp = await http.post(target, content=body_bytes, headers=fwd_headers, timeout=600)
     asyncio.create_task(_emit_event(http, {
-        "team_id": team_id, "project_id": project_id,
+        "team_id": team_id, "project_id": project_id, "key_id": key_id,
         "model": body.get("model"), "cache_hit": False,
         "latency_ms": int((time.monotonic() - start) * 1000),
     }))

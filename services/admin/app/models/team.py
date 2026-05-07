@@ -1,7 +1,8 @@
 import uuid
 from datetime import datetime
+from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, String, text
+from sqlalchemy import DateTime, Float, ForeignKey, Numeric, String, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -15,6 +16,9 @@ class Team(Base):
     name: Mapped[str] = mapped_column(String, nullable=False)
     slug: Mapped[str] = mapped_column(String, nullable=False, unique=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("NOW()"))
+    monthly_budget_usd: Mapped[Decimal | None] = mapped_column(Numeric(14, 8), nullable=True)
+    budget_alert_pct: Mapped[float] = mapped_column(Float, nullable=False, server_default=text("0.8"))
+    budget_action: Mapped[str] = mapped_column(String, nullable=False, server_default=text("'alert'"))
 
     projects: Mapped[list["Project"]] = relationship("Project", back_populates="team", cascade="all, delete-orphan")
 

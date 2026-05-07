@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from redis.asyncio import Redis
 
 from app.bus import make_bus
 from app.config import settings
@@ -12,7 +13,12 @@ from app.workers import insights, postgres
 async def lifespan(app: FastAPI):
     bus = make_bus(settings)
 
-    pg_handler, pg_pool = await postgres.make_handler(settings.database_url.replace("+asyncpg", ""))
+    redis = Redis.from_url(settings.redis_url, decode_responses=True)
+
+    pg_handler, pg_pool = await postgres.make_handler(
+        settings.database_url.replace("+asyncpg", ""),
+        redis=redis,
+    )
     bus.subscribe(pg_handler)
     bus.subscribe(insights.make_handler(settings.appinsights_connection_string))
 
@@ -21,6 +27,7 @@ async def lifespan(app: FastAPI):
     yield
     await bus.stop()
     await pg_pool.close()
+    await redis.aclose()
 
 
 app = FastAPI(title="AI Gateway — Observability Service", lifespan=lifespan)

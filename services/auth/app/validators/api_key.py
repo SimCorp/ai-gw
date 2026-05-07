@@ -9,7 +9,7 @@ async def validate_api_key(key: str, db: asyncpg.Connection) -> dict:
     key_hash = hashlib.sha256(key.encode()).hexdigest()
     row = await db.fetchrow(
         """
-        SELECT team_id, project_id
+        SELECT id, team_id, project_id
         FROM api_keys
         WHERE key_hash = $1 AND revoked_at IS NULL
         """,
@@ -17,4 +17,8 @@ async def validate_api_key(key: str, db: asyncpg.Connection) -> dict:
     )
     if row is None:
         raise HTTPException(status_code=401, detail="Invalid or revoked API key")
-    return {"team_id": str(row["team_id"]), "project_id": str(row["project_id"]) if row["project_id"] else None}
+    return {
+        "team_id": str(row["team_id"]),
+        "project_id": str(row["project_id"]) if row["project_id"] else None,
+        "key_id": str(row["id"]),
+    }
