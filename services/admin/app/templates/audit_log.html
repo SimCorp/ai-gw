@@ -43,7 +43,7 @@
             {% if e.details %}
             <span class="text-muted" title="{{ e.details | tojson }}">
               {% for k, v in (e.details.items() if e.details is mapping else {}.items()) %}
-                {% if loop.index <= 3 %}<span class="me-2"><strong>{{ k }}:</strong> {{ v | truncate(30) }}</span>{% endif %}
+                {% if loop.index <= 3 %}<span class="me-2"><strong>{{ k }}:</strong> {{ v | string | truncate(30) }}</span>{% endif %}
               {% endfor %}
             </span>
             {% else %}—{% endif %}
