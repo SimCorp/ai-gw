@@ -29,7 +29,7 @@ async def _validate_token(client: httpx.AsyncClient, token: str, model: str | No
     try:
         resp = await client.post(
             f"{settings.auth_url}/validate",
-            json={"token": token, "model": model},
+            json={"token": token, "model": model or ""},
             timeout=5,
         )
         if resp.status_code == 200:
@@ -38,6 +38,22 @@ async def _validate_token(client: httpx.AsyncClient, token: str, model: str | No
         return None
     except Exception:
         return None
+
+
+@router.get("/v1/models")
+async def list_models(request: Request):
+    http = request.app.state.http
+    auth_header = request.headers.get("Authorization", "")
+    token = auth_header.removeprefix("Bearer ").strip()
+    result = await _validate_token(http, token, None)
+    if result is None:
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    resp = await http.get(
+        f"{settings.litellm_url}/v1/models",
+        headers={"Authorization": f"Bearer {settings.litellm_master_key}"},
+        timeout=10,
+    )
+    return Response(content=resp.content, status_code=resp.status_code, media_type="application/json")
 
 
 @router.post("/v1/chat/completions")
