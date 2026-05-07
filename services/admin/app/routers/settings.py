@@ -3,9 +3,7 @@ import os
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,8 +11,6 @@ from app.config import settings
 from app.db import get_session
 
 router = APIRouter(tags=["settings"])
-templates = Jinja2Templates(directory="app/templates")
-
 # Provider definitions — env_var is what LiteLLM reads
 PROVIDERS = [
     {
@@ -126,41 +122,28 @@ def _build_model_status(stored: dict[str, str]) -> list[dict]:
     return rows
 
 
-@router.get("/ui/settings", response_class=HTMLResponse)
-async def settings_page(
-    request: Request,
-    saved: bool = False,
-    push_ok: bool = False,
-    session: AsyncSession = Depends(get_session),
-):
+@router.get("/api/settings/providers")
+async def list_providers(session: AsyncSession = Depends(get_session)):
+    """Return configured providers and which keys are set (values masked)."""
     stored = await _get_stored_keys(session)
-    return templates.TemplateResponse(
-        request,
-        "settings.html",
-        {
-            "providers": _build_provider_list(stored),
-            "model_status": _build_model_status(stored),
-            "saved": saved,
-            "push_ok": push_ok,
-            "error": None,
-        },
-    )
+    return {"providers": _build_provider_list(stored)}
 
 
-@router.post("/ui/settings/providers")
+@router.post("/api/settings/providers")
 async def save_provider_keys(
     request: Request,
     session: AsyncSession = Depends(get_session),
 ):
-    form = await request.form()
+    """Upsert provider API keys. Accepts JSON: {env_var: key_value, ...}"""
+    body = await request.json()
     await _ensure_table(session)
 
     push_results = []
     for p in PROVIDERS:
         env_var = p["env_var"]
-        raw = (form.get(env_var) or "").strip()
+        raw = (body.get(env_var) or "").strip()
         if not raw:
-            continue  # blank = keep existing
+            continue
 
         await session.execute(
             text("""
@@ -170,17 +153,12 @@ async def save_provider_keys(
             """),
             {"env_var": env_var, "val": raw},
         )
-        os.environ[env_var] = raw  # make available in this process immediately
+        os.environ[env_var] = raw
         ok = await _push_to_litellm(env_var, raw)
         push_results.append(ok)
 
     await session.commit()
-
-    all_pushed = all(push_results) if push_results else False
-    return RedirectResponse(
-        f"/ui/settings?saved=true&push_ok={str(all_pushed).lower()}",
-        status_code=303,
-    )
+    return {"saved": True, "pushed": all(push_results) if push_results else False}
 
 
 @router.post("/ui/settings/test/{env_var}")

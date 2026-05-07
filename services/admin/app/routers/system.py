@@ -5,8 +5,6 @@ from datetime import datetime, timezone
 
 import httpx
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,8 +12,6 @@ from app.config import settings
 from app.db import get_session
 
 router = APIRouter(prefix="/system", tags=["system"])
-templates = Jinja2Templates(directory="app/templates")
-
 _SERVICES = {
     "auth":          (settings.auth_url,          "/health"),
     "cache":         (settings.cache_url,          "/health"),
@@ -209,8 +205,3 @@ async def system_health(request: Request, session: AsyncSession = Depends(get_se
     return await _collect_health(request, session)
 
 
-@router.get("/health/ui", response_class=HTMLResponse)
-async def system_health_ui(request: Request, session: AsyncSession = Depends(get_session)):
-    """HTML health dashboard."""
-    data = await _collect_health(request, session)
-    return templates.TemplateResponse(request, "system_health.html", data)

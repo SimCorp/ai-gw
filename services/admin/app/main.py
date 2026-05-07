@@ -32,7 +32,6 @@ from app.routers import (
     settings as settings_router,
     system,
     teams,
-    ui,
 )
 
 # Extra DDL for tables without ORM models (run idempotently via IF NOT EXISTS)
@@ -124,7 +123,6 @@ app = FastAPI(
     openapi_url="/openapi.json",
 )
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
-app.include_router(ui.router, dependencies=_auth)
 app.include_router(settings_router.router, dependencies=_auth)
 app.include_router(dashboard.router, dependencies=_auth)
 app.include_router(teams.router, dependencies=_auth)
