@@ -1,7 +1,9 @@
 """Self-service developer portal — registration, auth, API key management."""
 import hashlib
+import json
 import os
 import secrets
+from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -395,6 +397,129 @@ async def revoke_key(
     )
     await session.commit()
     return RedirectResponse("/portal/keys", status_code=303)
+
+
+@router.get("/usage", response_class=HTMLResponse)
+async def usage(request: Request, period: str = "30d", session: AsyncSession = Depends(get_session)):
+    dev = await get_developer(request, session)
+    if not dev:
+        return RedirectResponse("/portal/login", status_code=303)
+
+    team_id = dev.get("team_id")
+    period_map = {"24h": "24 hours", "7d": "7 days", "30d": "30 days", "mtd": "MTD"}
+    if period not in period_map:
+        period = "30d"
+
+    if period == "mtd":
+        interval_sql = "date_trunc('month', NOW())"
+        interval_clause = "created_at >= date_trunc('month', NOW())"
+    else:
+        hours = {"24h": 24, "7d": 168, "30d": 720}[period]
+        interval_clause = f"created_at >= NOW() - INTERVAL '{hours} hours'"
+        interval_sql = None
+
+    stats = {"total_spend": 0.0, "request_count": 0, "tokens_in": 0, "tokens_out": 0,
+             "cache_rate": 0.0, "cache_saved": 0.0}
+    by_model: list[dict] = []
+    daily_rows: list[dict] = []
+    by_key: list[dict] = []
+
+    if team_id:
+        try:
+            row = (await session.execute(text(f"""
+                SELECT
+                    COALESCE(SUM(cost_usd), 0)                                       AS total_spend,
+                    COUNT(*)                                                          AS request_count,
+                    COALESCE(SUM(tokens_input), 0)                                   AS tokens_in,
+                    COALESCE(SUM(tokens_output), 0)                                  AS tokens_out,
+                    COALESCE(AVG(CASE WHEN cache_hit THEN 1.0 ELSE 0.0 END), 0)     AS cache_rate,
+                    COALESCE(SUM(CASE WHEN cache_hit THEN cost_usd ELSE 0 END), 0)   AS cache_saved
+                FROM cost_records
+                WHERE team_id = :tid AND {interval_clause}
+            """), {"tid": team_id})).mappings().one()
+            stats = dict(row)
+        except Exception:
+            pass
+
+        try:
+            rows = (await session.execute(text(f"""
+                SELECT model,
+                       COUNT(*)                    AS calls,
+                       COALESCE(SUM(tokens_input + tokens_output), 0)  AS tokens,
+                       COALESCE(SUM(cost_usd), 0) AS cost
+                FROM cost_records
+                WHERE team_id = :tid AND {interval_clause}
+                GROUP BY model ORDER BY cost DESC LIMIT 8
+            """), {"tid": team_id})).mappings().all()
+            by_model = [dict(r) for r in rows]
+        except Exception:
+            pass
+
+        try:
+            rows = (await session.execute(text(f"""
+                SELECT DATE_TRUNC('day', created_at)::date AS day,
+                       model,
+                       COALESCE(SUM(cost_usd), 0) AS cost
+                FROM cost_records
+                WHERE team_id = :tid AND {interval_clause}
+                GROUP BY day, model ORDER BY day
+            """), {"tid": team_id})).mappings().all()
+            daily_rows = [dict(r) for r in rows]
+        except Exception:
+            pass
+
+        try:
+            rows = (await session.execute(text(f"""
+                SELECT k.name                                                        AS key_name,
+                       COUNT(c.id)                                                   AS calls,
+                       COALESCE(SUM(c.tokens_input + c.tokens_output), 0)           AS tokens,
+                       COALESCE(SUM(c.cost_usd), 0)                                 AS cost
+                FROM cost_records c
+                JOIN api_keys k ON k.team_id = c.team_id
+                WHERE c.team_id = :tid AND {interval_clause}
+                GROUP BY k.name ORDER BY cost DESC LIMIT 6
+            """), {"tid": team_id})).mappings().all()
+            by_key = [dict(r) for r in rows]
+        except Exception:
+            pass
+
+    # Build chart data: collect all days and models
+    day_model_cost: dict = defaultdict(lambda: defaultdict(float))
+    all_days: list = []
+    all_models_seen: list = []
+    for r in daily_rows:
+        day_str = str(r["day"])
+        model_short = r["model"].split("/")[-1] if "/" in r["model"] else r["model"]
+        day_model_cost[day_str][model_short] += float(r["cost"])
+        if day_str not in all_days:
+            all_days.append(day_str)
+        if model_short not in all_models_seen:
+            all_models_seen.append(model_short)
+
+    chart_data = json.dumps({
+        "days": all_days,
+        "models": all_models_seen[:4],
+        "costs": {d: dict(v) for d, v in day_model_cost.items()},
+    })
+
+    max_model_cost = float(max((r["cost"] for r in by_model), default=1) or 1)
+    period_label = {"24h": "24 hours", "7d": "7 days", "30d": "30 days", "mtd": "month to date"}[period]
+    tokens_ratio = (
+        f"{stats['tokens_in'] / stats['tokens_out']:.1f}:1"
+        if stats.get("tokens_out") else "—"
+    )
+
+    return templates.TemplateResponse(request, "portal_usage.html", {
+        "dev": dev,
+        "period": period,
+        "period_label": period_label,
+        "stats": stats,
+        "by_model": by_model,
+        "by_key": by_key,
+        "chart_data": chart_data,
+        "max_model_cost": max_model_cost,
+        "tokens_ratio": tokens_ratio,
+    })
 
 
 @router.get("/quickstart", response_class=HTMLResponse)

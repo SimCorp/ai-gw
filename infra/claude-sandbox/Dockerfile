@@ -34,8 +34,10 @@ WORKDIR /home/claude/workspace
 RUN chown claude:claude /home/claude/workspace
 
 COPY entrypoint.sh /entrypoint.sh
+COPY go /usr/local/bin/go
 COPY CLAUDE.md /home/claude/workspace/CLAUDE.md
-RUN chmod +x /entrypoint.sh && chown claude:claude /home/claude/workspace/CLAUDE.md
+RUN chmod +x /entrypoint.sh /usr/local/bin/go \
+    && chown claude:claude /home/claude/workspace/CLAUDE.md
 
 EXPOSE 22
 
