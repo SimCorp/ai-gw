@@ -1,0 +1,8 @@
+{
+  "name": "@aigw/contracts",
+  "version": "0.0.1",
+  "private": true,
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": { "zod": "^3.24.0" },
+  "devDependencies": { "typescript": "^5.8.0" }
+}

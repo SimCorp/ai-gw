@@ -1,0 +1,173 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+
+const NAV = [
+  {
+    group: "Use",
+    items: [
+      { href: "/portal", label: "Home",       icon: <HomeIcon /> },
+      { href: "/portal/playground", label: "Playground", icon: <PlayIcon />,  kbd: "⌘P" },
+      { href: "/portal/keys",   label: "API keys",   icon: <KeyIcon /> },
+      { href: "/portal/usage",  label: "Usage",      icon: <ChartIcon /> },
+      { href: "/portal/models", label: "Models",     icon: <CubeIcon /> },
+      { href: "/portal/docs",   label: "Docs",       icon: <DocIcon /> },
+    ],
+  },
+  {
+    group: "Build",
+    items: [
+      { href: "/portal/prompts", label: "Prompts",  icon: <PromptIcon /> },
+      { href: "/portal/agents",  label: "Agents",   icon: <AgentIcon /> },
+      { href: "/portal/mcp",     label: "MCP",      icon: <McpIcon /> },
+      { href: "/portal/skills",  label: "Skills",   icon: <SkillIcon /> },
+      { href: "/portal/plugins", label: "Plugins",  icon: <PluginIcon /> },
+    ],
+  },
+  {
+    group: "Account",
+    items: [
+      { href: "/portal/settings", label: "Settings", icon: <SettingsIcon /> },
+    ],
+  },
+];
+
+export default function PortalShell() {
+  const path = usePathname();
+
+  const isActive = (href: string) =>
+    href === "/portal" ? path === "/portal" : path.startsWith(href);
+
+  return (
+    <aside className="psidebar">
+      <div className="psidebar__brand">
+        <div className="logo">AI</div>
+        <div>
+          <div className="name">AI Gateway</div>
+          <div className="sub">agent-platform</div>
+        </div>
+      </div>
+
+      <nav className="psidebar__nav">
+        {NAV.map((section) => (
+          <div key={section.group}>
+            <div className="group">{section.group}</div>
+            {section.items.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={isActive(item.href) ? "is-active" : ""}
+              >
+                {item.icon}
+                {item.label}
+                {"kbd" in item && item.kbd && (
+                  <span className="kbd">{item.kbd}</span>
+                )}
+              </Link>
+            ))}
+          </div>
+        ))}
+      </nav>
+
+      <div className="psidebar__user">
+        <div className="avatar">MW</div>
+        <div className="who">
+          <div className="name">Maja Weber</div>
+          <div className="team">agent-platform</div>
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+/* ── Icons ────────────────────────────────────────────────────── */
+
+function HomeIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M2 6.5l6-4.5 6 4.5V13.5a.5.5 0 01-.5.5h-3V10h-5v4H2.5a.5.5 0 01-.5-.5V6.5z"/>
+    </svg>
+  );
+}
+function PlayIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="currentColor">
+      <path d="M5 3.5v9l8-4.5-8-4.5z"/>
+    </svg>
+  );
+}
+function KeyIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <circle cx="5.5" cy="8" r="3"/><path d="M8.5 8h5M11.5 8v2"/>
+    </svg>
+  );
+}
+function ChartIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M2 13V8M6 13V5M10 13V3M14 13V7"/>
+    </svg>
+  );
+}
+function CubeIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M8 2L14 5.5v5L8 14 2 10.5v-5L8 2z"/><path d="M8 2v12M2 5.5l6 3.5 6-3.5"/>
+    </svg>
+  );
+}
+function DocIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M4 2h6l3 3v9H4V2z"/><path d="M10 2v3h3M6 7h5M6 10h3"/>
+    </svg>
+  );
+}
+function PromptIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M2 3h12v8H2zM5 11l-2 3M11 11l2 3"/>
+      <path d="M5 7h6M5 5h3"/>
+    </svg>
+  );
+}
+function AgentIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <rect x="3" y="5" width="10" height="8" rx="2"/>
+      <path d="M8 2v3M5.5 9h0M10.5 9h0"/>
+    </svg>
+  );
+}
+function McpIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <circle cx="5" cy="8" r="2"/><circle cx="11" cy="5" r="2"/><circle cx="11" cy="11" r="2"/>
+      <path d="M7 7l2.5-1.5M7 9l2.5 1.5"/>
+    </svg>
+  );
+}
+function SkillIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M8 2l1.8 3.6L14 6.5l-3 2.9.7 4.1L8 11.5 4.3 13.5l.7-4.1-3-2.9 4.2-.9L8 2z"/>
+    </svg>
+  );
+}
+function PluginIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M6 2v3H2v3h3v1a3 3 0 006 0v-1h3V5h-4V2H6z"/>
+    </svg>
+  );
+}
+function SettingsIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <circle cx="8" cy="8" r="2.5"/>
+      <path d="M8 1.5v1M8 13.5v1M1.5 8h1M13.5 8h1M3.2 3.2l.7.7M12.1 12.1l.7.7M3.2 12.8l.7-.7M12.1 3.9l.7-.7"/>
+    </svg>
+  );
+}
