@@ -15,6 +15,16 @@ interface Team {
   monthly_budget_usd: number | null;
   budget_alert_pct: number;
   budget_action: string;
+  area_id: string | null;
+  area_name: string | null;
+  area_color: string | null;
+}
+
+interface Area {
+  id: string;
+  name: string;
+  slug: string;
+  color: string;
 }
 
 interface ApiKey {
@@ -99,6 +109,7 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
   const [addMemberRole, setAddMemberRole] = useState<'member' | 'admin'>('member');
   const [addMemberError, setAddMemberError] = useState<string | null>(null);
   const [addMemberBusy, setAddMemberBusy] = useState(false);
+  const [assigningArea, setAssigningArea] = useState(false);
   const queryClient = useQueryClient();
 
   const teamQuery = useQuery<Team>({
@@ -132,6 +143,12 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
       return r.json();
     }),
     staleTime: 30_000,
+  });
+
+  const areasQuery = useQuery<Area[]>({
+    queryKey: ['areas'],
+    queryFn: () => fetch(`${BASE}/areas`).then(r => r.ok ? r.json() : []),
+    staleTime: 60_000,
   });
 
   const auditQuery = useQuery<AuditRow[]>({
@@ -208,6 +225,25 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
       queryClient.invalidateQueries({ queryKey: ['team-members', id] });
     } finally {
       setAddMemberBusy(false);
+    }
+  }
+
+  async function handleAssignArea(areaId: string | null) {
+    if (!team) return;
+    setAssigningArea(true);
+    try {
+      const res = await fetch(`${BASE}/teams/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: team.name, slug: team.slug, area_id: areaId }),
+      });
+      if (res.ok) {
+        queryClient.invalidateQueries({ queryKey: ['team', id] });
+        queryClient.invalidateQueries({ queryKey: ['teams'] });
+        queryClient.invalidateQueries({ queryKey: ['areas'] });
+      }
+    } finally {
+      setAssigningArea(false);
     }
   }
 
@@ -358,6 +394,32 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
                 <div className="dl">
                   <dt>Team ID</dt><dd className="mono" style={{ fontSize: 12 }}>{team.id}</dd>
                   <dt>Slug</dt><dd className="mono">{team.slug}</dd>
+                  <dt>Area</dt>
+                  <dd>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      {team.area_name ? (
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: team.area_color ?? '#888' }} />
+                          {team.area_name}
+                        </span>
+                      ) : <span className="muted">None</span>}
+                      <select
+                        value={team.area_id ?? ''}
+                        disabled={assigningArea}
+                        onChange={e => handleAssignArea(e.target.value || null)}
+                        style={{
+                          padding: '3px 7px', fontSize: 12, cursor: 'pointer',
+                          background: 'var(--surface-2)', border: '1px solid var(--rule)',
+                          borderRadius: 5, color: 'var(--fg-2)', fontFamily: 'inherit',
+                        }}
+                      >
+                        <option value="">No area</option>
+                        {(areasQuery.data ?? []).map(a => (
+                          <option key={a.id} value={a.id}>{a.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </dd>
                   <dt>Created</dt><dd>{formatDate(team.created_at)}</dd>
                   <dt>Monthly cap</dt><dd>{team.monthly_budget_usd != null ? `$${team.monthly_budget_usd}` : 'Unlimited'}</dd>
                   <dt>Alert at</dt><dd>{Math.round(team.budget_alert_pct * 100)}%</dd>

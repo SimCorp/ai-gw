@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { LoadingState, ErrorState, EmptyState } from '../_components/PageStates';
 
 const BASE = 'http://localhost:8005';
@@ -25,6 +25,14 @@ interface Area {
   created_at?: string;
 }
 
+interface Team {
+  id: string;
+  name: string;
+  slug: string;
+  area_id: string | null;
+  area_name: string | null;
+}
+
 function formatDate(iso: string | null | undefined) {
   if (!iso) return '—';
   return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -32,6 +40,196 @@ function formatDate(iso: string | null | undefined) {
 
 function toSlug(name: string): string {
   return name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
+// ── Manage teams modal ─────────────────────────────────────────────────────
+
+interface ManageTeamsModalProps {
+  area: Area;
+  onClose: () => void;
+  onChanged: () => void;
+}
+
+function ManageTeamsModal({ area, onClose, onChanged }: ManageTeamsModalProps) {
+  const queryClient = useQueryClient();
+  const [selectedAdd, setSelectedAdd] = useState('');
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const allTeamsQuery = useQuery<Team[]>({
+    queryKey: ['teams'],
+    queryFn: () => fetch(`${BASE}/teams`).then(r => r.json()),
+    staleTime: 30_000,
+  });
+
+  const areaTeamsQuery = useQuery<{ area: Area; teams: Team[] }>({
+    queryKey: ['area-teams', area.id],
+    queryFn: () => fetch(`${BASE}/areas/${area.id}`).then(r => r.json()),
+  });
+
+  const allTeams = allTeamsQuery.data ?? [];
+  const areaTeams = areaTeamsQuery.data?.teams ?? [];
+  const areaTeamIds = new Set(areaTeams.map(t => t.id));
+
+  // Teams not currently in this area
+  const available = allTeams.filter(t => !areaTeamIds.has(t.id));
+
+  const assignTeam = useMutation({
+    mutationFn: async (teamId: string) => {
+      const team = allTeams.find(t => t.id === teamId)!;
+      const res = await fetch(`${BASE}/teams/${teamId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: team.name, slug: team.slug, area_id: area.id }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error((body as { detail?: string }).detail ?? `Error ${res.status}`);
+      }
+    },
+    onSuccess: () => {
+      setSelectedAdd('');
+      queryClient.invalidateQueries({ queryKey: ['area-teams', area.id] });
+      queryClient.invalidateQueries({ queryKey: ['teams'] });
+      queryClient.invalidateQueries({ queryKey: ['areas'] });
+      onChanged();
+    },
+    onError: (e: Error) => setError(e.message),
+  });
+
+  const unassignTeam = useMutation({
+    mutationFn: async (team: Team) => {
+      const res = await fetch(`${BASE}/teams/${team.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: team.name, slug: team.slug, area_id: null }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error((body as { detail?: string }).detail ?? `Error ${res.status}`);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['area-teams', area.id] });
+      queryClient.invalidateQueries({ queryKey: ['teams'] });
+      queryClient.invalidateQueries({ queryKey: ['areas'] });
+      onChanged();
+    },
+    onError: (e: Error) => setError(e.message),
+  });
+
+  const handleAdd = async () => {
+    if (!selectedAdd) return;
+    setError(null);
+    setBusy(selectedAdd);
+    try { await assignTeam.mutateAsync(selectedAdd); } finally { setBusy(null); }
+  };
+
+  const handleRemove = async (team: Team) => {
+    setError(null);
+    setBusy(team.id);
+    try { await unassignTeam.mutateAsync(team); } finally { setBusy(null); }
+  };
+
+  const inputStyle: React.CSSProperties = {
+    flex: 1, padding: '7px 10px', fontSize: 13,
+    background: 'var(--surface-2)', border: '1px solid var(--rule)',
+    borderRadius: 6, color: 'var(--fg-1)', fontFamily: 'inherit',
+  };
+
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div style={{
+        background: 'var(--surface)', border: '1px solid var(--rule)',
+        borderRadius: 12, padding: 28, width: 500, maxWidth: '95vw', maxHeight: '85vh',
+        display: 'flex', flexDirection: 'column', gap: 0,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: 15, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 3, background: area.color }} />
+              {area.name} — Teams
+            </h3>
+            <p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--fg-3)' }}>
+              {areaTeams.length} team{areaTeams.length !== 1 ? 's' : ''} in this area
+            </p>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 0, cursor: 'pointer', fontSize: 18, color: 'var(--fg-3)' }}>✕</button>
+        </div>
+
+        {/* Add team row */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+          <select
+            value={selectedAdd}
+            onChange={e => setSelectedAdd(e.target.value)}
+            style={inputStyle}
+            disabled={available.length === 0}
+          >
+            <option value="">
+              {available.length === 0 ? 'All teams already assigned' : 'Select a team to add…'}
+            </option>
+            {available.map(t => (
+              <option key={t.id} value={t.id}>
+                {t.name}{t.area_name ? ` (from ${t.area_name})` : ''}
+              </option>
+            ))}
+          </select>
+          <button
+            className="btn btn--primary btn--sm"
+            onClick={handleAdd}
+            disabled={!selectedAdd || busy !== null}
+            style={{ whiteSpace: 'nowrap' }}
+          >
+            {busy === selectedAdd ? 'Adding…' : '+ Add team'}
+          </button>
+        </div>
+
+        {error && <p style={{ color: 'var(--bad)', fontSize: 12.5, margin: '0 0 10px' }}>{error}</p>}
+
+        {/* Current teams list */}
+        <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
+          {areaTeamsQuery.isLoading ? (
+            <LoadingState rows={3} />
+          ) : areaTeams.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--fg-3)', fontSize: 13 }}>
+              No teams in this area yet
+            </div>
+          ) : (
+            <table className="tbl">
+              <thead>
+                <tr><th>Team</th><th>Slug</th><th></th></tr>
+              </thead>
+              <tbody>
+                {areaTeams.map(t => (
+                  <tr key={t.id}>
+                    <td style={{ fontWeight: 500 }}>{t.name}</td>
+                    <td><span className="mono" style={{ fontSize: 12, color: 'var(--fg-3)' }}>{t.slug}</span></td>
+                    <td style={{ textAlign: 'right' }}>
+                      <button
+                        className="btn btn--sm btn--ghost"
+                        style={{ color: 'var(--bad)' }}
+                        disabled={busy === t.id}
+                        onClick={() => handleRemove(t)}
+                      >
+                        {busy === t.id ? '…' : 'Remove'}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <div style={{ paddingTop: 16, borderTop: '1px solid var(--rule)', marginTop: 8, textAlign: 'right' }}>
+          <button className="btn btn--sm btn--ghost" onClick={onClose}>Done</button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ── Area modal ─────────────────────────────────────────────────────────────
@@ -258,6 +456,7 @@ export default function AreasPage() {
   const [showModal, setShowModal] = useState(false);
   const [editingArea, setEditingArea] = useState<Area | null>(null);
   const [deletingArea, setDeletingArea] = useState<Area | null>(null);
+  const [managingArea, setManagingArea] = useState<Area | null>(null);
   const queryClient = useQueryClient();
 
   const areasQuery = useQuery<Area[]>({
@@ -292,6 +491,13 @@ export default function AreasPage() {
           area={deletingArea}
           onClose={() => setDeletingArea(null)}
           onDeleted={onSaved}
+        />
+      )}
+      {managingArea && (
+        <ManageTeamsModal
+          area={managingArea}
+          onClose={() => setManagingArea(null)}
+          onChanged={onSaved}
         />
       )}
 
@@ -359,10 +565,25 @@ export default function AreasPage() {
                         ? <span style={{ color: 'var(--fg-2)', fontSize: 13 }}>{area.description}</span>
                         : <span className="muted">—</span>}
                     </td>
-                    <td className="num mono">{area.team_count}</td>
+                    <td className="num">
+                      <button
+                        className="btn btn--sm btn--ghost"
+                        style={{ fontFamily: 'var(--font-mono, monospace)', fontWeight: 600, minWidth: 28 }}
+                        onClick={() => setManagingArea(area)}
+                        title="Manage teams in this area"
+                      >
+                        {area.team_count}
+                      </button>
+                    </td>
                     <td style={{ fontSize: 12.5, color: 'var(--fg-3)' }}>{formatDate(area.created_at)}</td>
                     <td>
                       <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                        <button
+                          className="btn btn--sm btn--ghost"
+                          onClick={() => setManagingArea(area)}
+                        >
+                          Teams
+                        </button>
                         <button
                           className="btn btn--sm btn--ghost"
                           onClick={() => { setEditingArea(area); setShowModal(false); }}
