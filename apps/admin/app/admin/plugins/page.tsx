@@ -1,20 +1,41 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { LoadingState, ErrorState, EmptyState } from '../_components/PageStates';
-import { PLUGINS_DATA } from '../_mocks/data';
+import { EmptyState } from '../_components/PageStates';
 
-type Plugin = typeof PLUGINS_DATA[number];
+type PluginStatus = 'enabled' | 'conditional' | 'blocked';
+type PluginScope = 'required' | 'opt-in' | 'per-user' | '—';
 
-function statusPill(s: Plugin['status']) {
+type Plugin = {
+  name: string;
+  desc: string;
+  category: string;
+  source: 'first-party' | 'community';
+  scope: PluginScope;
+  teamsUsing: string;
+  policyGate: string;
+  status: PluginStatus;
+};
+
+const PLUGINS_DATA: Plugin[] = [
+  { name: 'Datadog tracing',        desc: 'OTel spans — gateway / model / tool',           category: 'Observability', source: 'first-party', scope: 'required',  teamsUsing: '42 / 42',  policyGate: 'none',         status: 'enabled'     },
+  { name: 'Guardrails · PII',       desc: 'redact / block per policy',                     category: 'Safety',        source: 'first-party', scope: 'required',  teamsUsing: '42 / 42',  policyGate: 'always-on',    status: 'enabled'     },
+  { name: 'Semantic cache',         desc: 'embedding-backed dedupe',                       category: 'Routing',       source: 'first-party', scope: 'opt-in',    teamsUsing: '31 / 42',  policyGate: 'none',         status: 'enabled'     },
+  { name: 'VS Code · Inline complete',desc: 'routes Copilot-style completions',            category: 'Editor',        source: 'first-party', scope: 'per-user',  teamsUsing: '348 users', policyGate: 'cost-cap',    status: 'enabled'     },
+  { name: 'Eval harness · Inspect', desc: 'scheduled regression evals',                   category: 'Eval',          source: 'first-party', scope: 'opt-in',    teamsUsing: '8 / 42',   policyGate: 'none',         status: 'enabled'     },
+  { name: 'Smart router',           desc: 'complexity-classifier model picker',            category: 'Routing',       source: 'first-party', scope: 'opt-in',    teamsUsing: '6 / 42',   policyGate: 'cost-cap',     status: 'enabled'     },
+  { name: 'Slack notifier',         desc: 'community/oren — agent + budget alerts',        category: 'Observability', source: 'community',   scope: 'opt-in',    teamsUsing: '14 / 42',  policyGate: 'review · 30d', status: 'conditional' },
+  { name: 'External LLM router',    desc: 'community/x — routes to non-vendor APIs',       category: 'Routing',       source: 'community',   scope: '—',         teamsUsing: '0 / 42',   policyGate: 'blocked',      status: 'blocked'     },
+];
+
+function statusPill(s: PluginStatus) {
   if (s === 'enabled') return <span className="pill pill--good"><span className="dot"></span>enabled</span>;
   if (s === 'conditional') return <span className="pill pill--warn"><span className="dot"></span>conditional</span>;
   if (s === 'blocked') return <span className="pill pill--bad"><span className="dot"></span>blocked · data-egress</span>;
   return <span className="pill">{s}</span>;
 }
 
-function scopePill(s: Plugin['scope']) {
+function scopePill(s: PluginScope) {
   if (s === 'required') return <span className="pill pill--info">required</span>;
   return <span>{s}</span>;
 }
@@ -22,18 +43,12 @@ function scopePill(s: Plugin['scope']) {
 export default function PluginsPage() {
   const [filter, setFilter] = useState('All');
 
-  const { data, isLoading, isError, error, refetch } = useQuery<Plugin[]>({
-    queryKey: ['plugins'],
-    queryFn: () => fetch('/api/v1/plugins').then(r => r.json()),
-  });
-
-  if (isLoading) return <section className="page"><LoadingState rows={8} /></section>;
-  if (isError) return <section className="page"><ErrorState error={error as Error} retry={() => refetch()} /></section>;
-
-  const rows = data ?? PLUGINS_DATA;
+  const rows = PLUGINS_DATA;
 
   return (
     <section className="page">
+      <div className="pill pill--warn" style={{ marginBottom: 12 }}>Live data not yet available for this page · showing representative data</div>
+
       <div className="page__head">
         <div>
           <h1 className="page__title">Plugins</h1>

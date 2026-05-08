@@ -1,12 +1,33 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { LoadingState, ErrorState, EmptyState } from '../_components/PageStates';
-import { TEAMS_DATA } from '../_mocks/data';
 
-type TeamRow = typeof TEAMS_DATA[number];
+const BASE = 'http://localhost:8005';
+
+interface Team {
+  id: string;
+  slug: string;
+  name: string;
+  created_at: string;
+  monthly_budget_usd: number | null;
+  budget_alert_pct: number;
+  budget_action: string;
+}
+
+interface DashboardStat {
+  team_name: string;
+  request_count: number | null;
+  total_tokens: number | null;
+  total_cost_usd: number | null;
+  cache_hit_pct: number | null;
+}
+
+interface TeamRow extends Team {
+  stat: DashboardStat | null;
+}
 
 const COLORS = ['#083EA7','#1D958E','#4B17B6','#FB9B2A','#9D2E7B','#0A7BD7','#1A1D31','#EF3E4A'];
 function avatarColor(seed: string): string {
@@ -14,47 +35,97 @@ function avatarColor(seed: string): string {
   for (const c of seed) h = (h * 31 + c.charCodeAt(0)) >>> 0;
   return COLORS[h % COLORS.length];
 }
-function initials2(s: string) {
-  return s.split(/[-._\s]/).filter(Boolean).slice(0, 2).map(p => p[0]).join('').toUpperCase();
+
+function budgetPct(team: Team, stat: DashboardStat | null): number {
+  if (!stat || !team.monthly_budget_usd || stat.total_cost_usd == null) return 0;
+  return Math.min(Math.round((stat.total_cost_usd / team.monthly_budget_usd) * 100), 100);
 }
 
-function statusPill(t: TeamRow) {
-  if (t.status === 'good') return <span className="pill pill--good"><span className="dot"></span>Active</span>;
-  if (t.status === 'warn') return <span className="pill pill--warn"><span className="dot"></span>Attention</span>;
-  return <span className="pill pill--bad"><span className="dot"></span>Frozen</span>;
+function statusPill(pct: number) {
+  if (pct >= 100) return <span className="pill pill--bad"><span className="dot"></span>Frozen</span>;
+  if (pct >= (80)) return <span className="pill pill--warn"><span className="dot"></span>Attention</span>;
+  return <span className="pill pill--good"><span className="dot"></span>Active</span>;
 }
 
-function alertPill(t: TeamRow) {
-  if (t.alert === 'budget') return <span className="pill pill--warn">budget 84%</span>;
-  if (t.alert === 'rate') return <span className="pill pill--warn">rate-limited</span>;
-  if (t.alert === 'low_hit') return <span className="pill pill--info">low cache</span>;
-  if ((t as { isNew?: boolean }).isNew) return <span className="pill pill--info">new</span>;
-  if (t.alert === 'frozen') return <span className="pill pill--bad">frozen</span>;
+function alertPill(team: Team, pct: number) {
+  if (pct >= team.budget_alert_pct * 100) return <span className="pill pill--warn">budget {pct}%</span>;
   return null;
+}
+
+function formatCost(usd: number | null | undefined): string {
+  if (usd == null || usd === 0) return '$0.00';
+  if (usd < 0.01) return `$${usd.toFixed(6)}`;
+  if (usd < 1) return `$${usd.toFixed(4)}`;
+  return `$${usd.toFixed(2)}`;
 }
 
 export default function TeamsPage() {
   const [range, setRange] = useState('24h');
+  const queryClient = useQueryClient();
 
-  const { data, isLoading, isError, error, refetch } = useQuery<TeamRow[]>({
+  const teamsQuery = useQuery<Team[]>({
     queryKey: ['teams'],
-    queryFn: () => fetch('/api/v1/teams').then(r => r.json()),
+    queryFn: () => fetch(`${BASE}/teams`).then(r => {
+      if (!r.ok) throw new Error(`Failed to fetch teams: ${r.status}`);
+      return r.json();
+    }),
   });
 
+  const statsQuery = useQuery<DashboardStat[]>({
+    queryKey: ['dashboard-stats'],
+    queryFn: () => fetch(`${BASE}/dashboard/stats`).then(r => {
+      if (!r.ok) throw new Error(`Failed to fetch stats: ${r.status}`);
+      return r.json();
+    }),
+  });
+
+  async function handleNewTeam() {
+    const name = window.prompt('Team name:');
+    if (!name?.trim()) return;
+    const slug = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    const res = await fetch(`${BASE}/teams`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name.trim(), slug }),
+    });
+    if (!res.ok) {
+      window.alert(`Failed to create team: ${res.status}`);
+      return;
+    }
+    queryClient.invalidateQueries({ queryKey: ['teams'] });
+  }
+
+  const isLoading = teamsQuery.isLoading || statsQuery.isLoading;
+  const isError = teamsQuery.isError || statsQuery.isError;
+  const error = teamsQuery.error || statsQuery.error;
+
   if (isLoading) return <section className="page"><LoadingState rows={13} /></section>;
-  if (isError) return <section className="page"><ErrorState error={error as Error} retry={() => refetch()} /></section>;
-  if (!data || data.length === 0) return <section className="page"><EmptyState message="No teams found." /></section>;
+  if (isError) return <section className="page"><ErrorState error={error as Error} retry={() => { teamsQuery.refetch(); statsQuery.refetch(); }} /></section>;
+
+  const teams = teamsQuery.data ?? [];
+  const stats = statsQuery.data ?? [];
+
+  if (teams.length === 0) return <section className="page"><EmptyState message="No teams found." /></section>;
+
+  const statsMap = new Map<string, DashboardStat>(stats.map(s => [s.team_name, s]));
+
+  const rows: TeamRow[] = teams.map(t => ({
+    ...t,
+    stat: statsMap.get(t.name) ?? null,
+  }));
+
+  const totalSpend = stats.reduce((sum, s) => sum + (s.total_cost_usd ?? 0), 0);
 
   return (
     <section className="page">
       <div className="page__head">
         <div>
           <h1 className="page__title">Teams</h1>
-          <p className="page__sub">42 teams · 1,184 active members · $87,420 month-to-date</p>
+          <p className="page__sub">{teams.length} teams · ${totalSpend.toFixed(2)} month-to-date</p>
         </div>
         <div className="page__actions">
           <button className="btn">Import from Entra</button>
-          <button className="btn btn--primary">+ New team</button>
+          <button className="btn btn--primary" onClick={handleNewTeam}>+ New team</button>
         </div>
       </div>
 
@@ -78,7 +149,6 @@ export default function TeamsPage() {
               <tr>
                 <th style={{ width: 30 }}><input type="checkbox" /></th>
                 <th>Team</th>
-                <th>Owner</th>
                 <th>Members</th>
                 <th>API keys</th>
                 <th className="num">Requests (24h)</th>
@@ -90,9 +160,11 @@ export default function TeamsPage() {
               </tr>
             </thead>
             <tbody>
-              {data.map(t => {
-                const budgetColor = t.budgetPct >= 80 ? 'var(--bad)' : t.budgetPct >= 60 ? 'var(--warn)' : 'var(--good)';
-                const hitColor = t.cacheHit >= 30 ? 'var(--good)' : t.cacheHit >= 15 ? 'var(--warn)' : 'var(--bad)';
+              {rows.map(t => {
+                const pct = budgetPct(t, t.stat);
+                const cacheHit = t.stat?.cache_hit_pct != null ? Math.round(t.stat.cache_hit_pct) : 0;
+                const budgetColor = pct >= 80 ? 'var(--bad)' : pct >= 60 ? 'var(--warn)' : 'var(--good)';
+                const hitColor = cacheHit >= 30 ? 'var(--good)' : cacheHit >= 15 ? 'var(--warn)' : 'var(--bad)';
                 return (
                   <tr
                     key={t.id}
@@ -112,44 +184,36 @@ export default function TeamsPage() {
                             style={{ fontWeight: 500 }}
                             onClick={e => e.stopPropagation()}
                           >{t.name}</Link>
-                          {alertPill(t)}
+                          {alertPill(t, pct)}
                         </div>
-                        <span className="lo mono">tm_{t.name.replace(/-/g, '').slice(0, 6)}_xxxx</span>
+                        <span className="lo mono">{t.slug}</span>
                       </div>
                     </td>
-                    <td><span className="muted">{t.ownerEmail.split('@')[0]}</span></td>
-                    <td>
-                      <div className="avatar-row">
-                        {[0, 1, 2].map(i => (
-                          <span key={i} className="avatar avatar--stack" style={{ background: avatarColor(t.name + i) }}>
-                            {String.fromCharCode(65 + (i * 3 + t.name.length) % 26)}{String.fromCharCode(65 + (i * 7 + t.name.length) % 26)}
-                          </span>
-                        ))}
-                        {t.members > 3 && (
-                          <span className="avatar avatar--stack" style={{ background: 'var(--surface-soft)', color: 'var(--fg-2)', border: '2px solid var(--surface)' }}>+{t.members - 3}</span>
-                        )}
-                      </div>
-                    </td>
-                    <td><span className="tag mono">{t.keys}</span></td>
-                    <td className="num mono">{t.req24h}</td>
-                    <td className="num mono" style={{ fontWeight: 500 }}>{t.spendMtd}</td>
+                    <td><span className="muted">—</span></td>
+                    <td><span className="tag mono">—</span></td>
+                    <td className="num mono">{t.stat?.request_count != null ? t.stat.request_count.toLocaleString() : '—'}</td>
+                    <td className="num mono" style={{ fontWeight: 500 }}>{t.stat ? formatCost(t.stat.total_cost_usd) : '—'}</td>
                     <td className="num">
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
-                        <span className="mono">{t.cacheHit}%</span>
-                        <span style={{ display: 'inline-block', width: 38, height: 4, background: 'var(--surface-soft)', borderRadius: 2, position: 'relative', overflow: 'hidden' }}>
-                          <span style={{ position: 'absolute', inset: `0 ${100 - t.cacheHit}% 0 0`, background: hitColor, borderRadius: 2 }}></span>
-                        </span>
-                      </div>
+                      {t.stat ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
+                          <span className="mono">{cacheHit}%</span>
+                          <span style={{ display: 'inline-block', width: 38, height: 4, background: 'var(--surface-soft)', borderRadius: 2, position: 'relative', overflow: 'hidden' }}>
+                            <span style={{ position: 'absolute', inset: `0 ${100 - cacheHit}% 0 0`, background: hitColor, borderRadius: 2 }}></span>
+                          </span>
+                        </div>
+                      ) : <span className="muted">—</span>}
                     </td>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <span style={{ display: 'inline-block', width: 64, height: 4, background: 'var(--surface-soft)', borderRadius: 2, position: 'relative', overflow: 'hidden' }}>
-                          <span style={{ position: 'absolute', inset: `0 ${100 - t.budgetPct}% 0 0`, background: budgetColor, borderRadius: 2 }}></span>
+                          <span style={{ position: 'absolute', inset: `0 ${100 - pct}% 0 0`, background: budgetColor, borderRadius: 2 }}></span>
                         </span>
-                        <span className="mono" style={{ fontSize: 11.5, color: 'var(--fg-2)' }}>{t.budgetPct}%</span>
+                        <span className="mono" style={{ fontSize: 11.5, color: 'var(--fg-2)' }}>
+                          {t.monthly_budget_usd ? `${pct}%` : '—'}
+                        </span>
                       </div>
                     </td>
-                    <td>{statusPill(t)}</td>
+                    <td>{statusPill(pct)}</td>
                     <td><button className="btn btn--sm btn--ghost" onClick={e => e.stopPropagation()}>⋯</button></td>
                   </tr>
                 );

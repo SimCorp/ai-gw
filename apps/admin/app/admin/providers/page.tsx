@@ -1,93 +1,160 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { LoadingState, ErrorState } from '../_components/PageStates';
-import { PROVIDERS_DATA } from '../_mocks/data';
 
-type Provider = typeof PROVIDERS_DATA[number];
+interface Provider {
+  name: string;
+  icon: string;
+  env_var: string;
+  models: string[];
+  litellm_model_names: string[];
+  test_model: string;
+  is_set: boolean;
+}
 
-function statusPill(s: Provider['status']) {
-  if (s === 'good') return <span className="pill pill--good"><span className="dot"></span>healthy</span>;
-  if (s === 'warn') return <span className="pill pill--warn"><span className="dot"></span>degraded · 187ms p99</span>;
-  return <span className="pill pill--bad"><span className="dot"></span>5xx 8.2%</span>;
+interface ProvidersResponse {
+  providers: Provider[];
+}
+
+interface TestResult {
+  ok: boolean;
+  latency_ms?: number;
+  reply?: string;
+  model?: string;
+  error?: string;
+}
+
+function ProviderCard({ p, onSaved }: { p: Provider; onSaved: () => void }) {
+  const [keyInput, setKeyInput] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState('');
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<TestResult | null>(null);
+
+  async function saveKey() {
+    if (!keyInput.trim()) return;
+    setSaving(true);
+    setSaveMsg('');
+    try {
+      const res = await fetch('http://localhost:8005/api/settings/providers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [p.env_var]: keyInput.trim() }),
+      });
+      if (res.ok) {
+        setSaveMsg('Saved');
+        setKeyInput('');
+        onSaved();
+      } else {
+        setSaveMsg('Error saving');
+      }
+    } catch {
+      setSaveMsg('Error saving');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function testKey() {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const res = await fetch(`http://localhost:8005/ui/settings/test/${p.env_var}`, {
+        method: 'POST',
+      });
+      const json: TestResult = await res.json();
+      setTestResult(json);
+    } catch {
+      setTestResult({ ok: false, error: 'Request failed' });
+    } finally {
+      setTesting(false);
+    }
+  }
+
+  return (
+    <div className="prov-card">
+      <div className="prov-card__head">
+        <div className="prov-logo" style={{ background: 'var(--surface-soft)', fontSize: 20 }}>{p.icon}</div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 600, fontSize: 13.5 }}>{p.name}</div>
+          <div className="muted" style={{ fontSize: 12 }}>
+            {p.models.length} model{p.models.length !== 1 ? 's' : ''} · {p.env_var}
+          </div>
+        </div>
+        {p.is_set
+          ? <span className="pill pill--good"><span className="dot"></span>Key configured</span>
+          : <span className="pill pill--warn"><span className="dot"></span>No key set</span>
+        }
+      </div>
+      <div className="prov-card__body">
+        <div className="prov-stat" style={{ gridColumn: '1 / -1' }}>
+          <span className="prov-stat__l">Models</span>
+          <span className="prov-stat__v" style={{ fontSize: 12, fontWeight: 400, display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+            {p.models.map(m => <span key={m} className="tag">{m}</span>)}
+          </span>
+        </div>
+      </div>
+      <div className="prov-card__foot" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <input
+            type="password"
+            className="search"
+            placeholder={p.is_set ? 'Replace key…' : 'Paste API key…'}
+            value={keyInput}
+            onChange={e => setKeyInput(e.target.value)}
+            style={{ flex: 1, height: 30, padding: '0 10px', fontSize: 12 }}
+          />
+          <button className="btn btn--sm btn--primary" onClick={saveKey} disabled={saving || !keyInput.trim()}>
+            {saving ? 'Saving…' : 'Save key'}
+          </button>
+          {p.is_set && (
+            <button className="btn btn--sm" onClick={testKey} disabled={testing}>
+              {testing ? 'Testing…' : 'Test'}
+            </button>
+          )}
+        </div>
+        {saveMsg && <span style={{ fontSize: 12, color: saveMsg === 'Saved' ? 'var(--good)' : 'var(--bad)' }}>{saveMsg}</span>}
+        {testResult && (
+          <span style={{ fontSize: 12, color: testResult.ok ? 'var(--good)' : 'var(--bad)' }}>
+            {testResult.ok
+              ? `Pass · ${testResult.latency_ms}ms · ${testResult.model}`
+              : `Fail: ${testResult.error}`}
+          </span>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export default function ProvidersPage() {
-  const { data, isLoading, isError, error, refetch } = useQuery<Provider[]>({
+  const { data, isLoading, isError, error, refetch } = useQuery<ProvidersResponse>({
     queryKey: ['providers'],
-    queryFn: () => fetch('/api/v1/providers').then(r => r.json()),
+    queryFn: () => fetch('http://localhost:8005/api/settings/providers').then(r => r.json()),
   });
 
   if (isLoading) return <section className="page"><LoadingState rows={6} /></section>;
   if (isError) return <section className="page"><ErrorState error={error as Error} retry={() => refetch()} /></section>;
 
-  const providers = data ?? PROVIDERS_DATA;
+  const providers = data?.providers ?? [];
+  const configuredCount = providers.filter(p => p.is_set).length;
 
   return (
     <section className="page">
       <div className="page__head">
         <div>
           <h1 className="page__title">Providers</h1>
-          <p className="page__sub">Upstream model providers · API keys in Azure Key Vault · LiteLLM-routed</p>
+          <p className="page__sub">{providers.length} upstream providers · {configuredCount} key{configuredCount !== 1 ? 's' : ''} configured · LiteLLM-routed</p>
         </div>
         <div className="page__actions">
-          <button className="btn">View Key Vault</button>
-          <button className="btn btn--primary">+ Add provider</button>
+          <button className="btn" onClick={() => refetch()}>Refresh</button>
         </div>
       </div>
 
       <div className="prov">
         {providers.map(p => (
-          <div key={p.name} className="prov-card">
-            <div className="prov-card__head">
-              <div className="prov-logo" style={{ background: p.color }}>{p.abbr}</div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 600, fontSize: 13.5 }}>{p.name}</div>
-                <div className="muted" style={{ fontSize: 12 }}>{p.desc}</div>
-              </div>
-              {statusPill(p.status)}
-            </div>
-            <div className="prov-card__body">
-              <div className="prov-stat">
-                <span className="prov-stat__l">Endpoint</span>
-                <span className="prov-stat__v mono" style={{ fontSize: 12 }}>{p.endpoint}</span>
-              </div>
-              <div className="prov-stat">
-                <span className="prov-stat__l">Region</span>
-                <span className="prov-stat__v" style={{ fontSize: 12.5 }}>{p.region}</span>
-              </div>
-              <div className="prov-stat">
-                <span className="prov-stat__l">p99 latency</span>
-                <span className="prov-stat__v" style={{ color: p.status === 'bad' ? 'var(--bad)' : p.status === 'warn' ? 'var(--warn)' : undefined }}>{p.p99}</span>
-              </div>
-              <div className="prov-stat">
-                <span className="prov-stat__l">Success · 24h</span>
-                <span className="prov-stat__v" style={{ color: parseFloat(p.success) > 99 ? 'var(--good)' : parseFloat(p.success) < 95 ? 'var(--bad)' : undefined }}>{p.success}</span>
-              </div>
-              <div className="prov-stat">
-                <span className="prov-stat__l">Models</span>
-                <span className="prov-stat__v">{p.models}</span>
-              </div>
-              <div className="prov-stat">
-                <span className="prov-stat__l">Spend MTD</span>
-                <span className="prov-stat__v">{p.spend}</span>
-              </div>
-            </div>
-            {p.failover ? (
-              <div className="prov-card__foot" style={{ background: 'var(--bad-soft)' }}>
-                <span style={{ color: 'var(--bad)', fontWeight: 500 }}>⚠ {p.failoverMsg}</span>
-                <span className="muted">{p.failoverTo}</span>
-                <button className="btn btn--sm" style={{ marginLeft: 'auto' }}>Investigate</button>
-              </div>
-            ) : (
-              <div className="prov-card__foot">
-                <span>{p.authLabel}</span>
-                <span className="mono">{p.authValue}</span>
-                <span style={{ marginLeft: 'auto' }} className="muted">{p.rotated}</span>
-              </div>
-            )}
-          </div>
+          <ProviderCard key={p.env_var} p={p} onSaved={() => refetch()} />
         ))}
       </div>
 
@@ -107,6 +174,7 @@ export default function ProvidersPage() {
         .prov-stat__v { font-size: 14.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
         .prov-card__foot { padding: 10px 16px; border-top: 1px solid var(--rule); background: var(--surface-2); display:flex; align-items:center; gap: 8px; font-size: 11.5px; color: var(--fg-2); }
         .prov-card__foot .mono { color: var(--fg-1); }
+        .tag { display: inline-block; background: var(--surface-soft); border: 1px solid var(--rule); border-radius: 4px; padding: 1px 6px; font-size: 11px; font-family: var(--font-mono); }
       `}</style>
     </section>
   );

@@ -3,14 +3,39 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { LoadingState, ErrorState } from '../_components/PageStates';
-import { CACHE_STATS, CACHE_POLICY, CACHE_TEAM_OVERRIDES, CACHE_TOP_PROMPTS } from '../_mocks/data';
 
-type CacheData = {
-  stats: typeof CACHE_STATS;
-  policy: typeof CACHE_POLICY;
-  teamOverrides: typeof CACHE_TEAM_OVERRIDES;
-  topPrompts: typeof CACHE_TOP_PROMPTS;
-};
+const ADMIN_BASE = 'http://localhost:8005';
+
+interface SystemHealth {
+  redis: {
+    status: string;
+    ping_ms: number;
+    used_memory_mb: number;
+    connected_clients: number;
+  };
+  gateway: {
+    status: string;
+    requests_last_60s: number;
+    cache_hit_rate_last_60s: number;
+  };
+}
+
+// Static representative data for sections without live endpoints
+const CACHE_TEAM_OVERRIDES = [
+  { team: 'agent-platform',        threshold: '0.94', ttl: '24h', hit: '42%', note: 'stricter' as const },
+  { team: 'platform-research',     threshold: '0.90', ttl: '6h',  hit: '38%', note: 'looser'   as const },
+  { team: 'client-services-ai',    threshold: '0.92', ttl: '48h', hit: '34%', note: 'long-ttl' as const },
+  { team: 'compliance-automation', threshold: '—',    ttl: '—',   hit: '—',   note: 'opted-out' as const },
+  { team: 'sandbox-experiments',   threshold: '0.96', ttl: '1h',  hit: '9%',  note: 'low value' as const },
+];
+
+const CACHE_TOP_PROMPTS = [
+  { fingerprint: '"You are a trading research assistant…" + Q1 EM debt summary', team: 'agent-platform',      model: 'claude-sonnet-4.5', hits: '218', avgSim: '0.961', tokensSaved: '1.2M', lastHit: '2 min ago' },
+  { fingerprint: 'SDK changelog summarisation prompt template',                   team: 'developer-experience', model: 'claude-haiku-4.5',  hits: '184', avgSim: '0.948', tokensSaved: '412K', lastHit: '4 min ago' },
+  { fingerprint: 'Support ticket classifier · v2.1',                              team: 'client-services-ai',   model: 'gemini-2.5-pro',    hits: '142', avgSim: '0.931', tokensSaved: '820K', lastHit: '6 min ago' },
+  { fingerprint: 'Code review prompt · python style guide',                       team: 'platform-research',    model: 'claude-sonnet-4.5', hits: '98',  avgSim: '0.918', tokensSaved: '512K', lastHit: '11 min ago' },
+  { fingerprint: 'Incident postmortem draft · weekly',                            team: 'risk-engineering',     model: 'claude-sonnet-4.5', hits: '62',  avgSim: '0.974', tokensSaved: '388K', lastHit: '28 min ago' },
+];
 
 function noteVariant(note: string) {
   if (note === 'stricter') return 'info';
@@ -20,22 +45,39 @@ function noteVariant(note: string) {
 }
 
 export default function CachePage() {
-  const { data, isLoading, isError, error, refetch } = useQuery<CacheData>({
-    queryKey: ['cache'],
-    queryFn: () => fetch('/api/v1/cache').then(r => r.json()),
+  const { data: health, isLoading, isError, error, refetch } = useQuery<SystemHealth>({
+    queryKey: ['system-health'],
+    queryFn: () => fetch(`${ADMIN_BASE}/system/health`).then(r => r.json()),
+    refetchInterval: 15000,
   });
-
-  const d = data ?? { stats: CACHE_STATS, policy: CACHE_POLICY, teamOverrides: CACHE_TEAM_OVERRIDES, topPrompts: CACHE_TOP_PROMPTS };
 
   if (isLoading) return <section className="page"><LoadingState rows={6} /></section>;
   if (isError) return <section className="page"><ErrorState error={error as Error} retry={() => refetch()} /></section>;
+
+  const usedMemoryMb = health?.redis?.used_memory_mb ?? 0;
+  const connectedClients = health?.redis?.connected_clients ?? 0;
+  const cacheHitRate = health?.gateway?.cache_hit_rate_last_60s ?? 0;
+  const requestsLast60s = health?.gateway?.requests_last_60s ?? 0;
+  const redisStatus = health?.redis?.status ?? 'unknown';
+  const pingMs = health?.redis?.ping_ms ?? 0;
+
+  const hitRatePct = (cacheHitRate * 100).toFixed(1);
+  const memoryDisplay = usedMemoryMb < 1024
+    ? `${usedMemoryMb.toFixed(1)} MB`
+    : `${(usedMemoryMb / 1024).toFixed(2)} GB`;
 
   return (
     <section className="page">
       <div className="page__head">
         <div>
           <h1 className="page__title">Semantic cache</h1>
-          <p className="page__sub">Redis Stack 7.2 · vector index · <span className="mono">aigw_cache:v3</span></p>
+          <p className="page__sub">
+            Redis Stack 7.2 · vector index · <span className="mono">aigw_cache:v3</span>
+            {' · '}
+            <span className={redisStatus === 'ok' ? 'pill pill--good' : 'pill pill--bad'} style={{ display: 'inline-flex', marginLeft: 4 }}>
+              <span className="dot"></span>redis {redisStatus}
+            </span>
+          </p>
         </div>
         <div className="page__actions">
           <button className="btn">Flush by team…</button>
@@ -45,12 +87,28 @@ export default function CachePage() {
       </div>
 
       <div className="minimet-row" style={{ marginBottom: 18 }}>
-        <div className="minimet"><div className="minimet__l">Hit rate · 24h</div><div className="minimet__v" style={{ color: 'var(--good)' }}>31.4<span className="unit">%</span></div></div>
-        <div className="minimet"><div className="minimet__l">Tokens saved</div><div className="minimet__v">187<span className="unit">M</span></div></div>
-        <div className="minimet"><div className="minimet__l">$ saved</div><div className="minimet__v">$1,209</div></div>
-        <div className="minimet"><div className="minimet__l">Memory</div><div className="minimet__v">14.2<span className="unit">/32 GB</span></div></div>
-        <div className="minimet"><div className="minimet__l">Vector index</div><div className="minimet__v">2.41<span className="unit">M</span></div></div>
-        <div className="minimet"><div className="minimet__l">Ops/s p99</div><div className="minimet__v">4,810</div></div>
+        <div className="minimet">
+          <div className="minimet__l">Hit rate · 60s</div>
+          <div className="minimet__v" style={{ color: cacheHitRate > 0 ? 'var(--good)' : undefined }}>
+            {hitRatePct}<span className="unit">%</span>
+          </div>
+        </div>
+        <div className="minimet">
+          <div className="minimet__l">Requests · 60s</div>
+          <div className="minimet__v">{requestsLast60s.toLocaleString()}</div>
+        </div>
+        <div className="minimet">
+          <div className="minimet__l">Redis ping</div>
+          <div className="minimet__v">{pingMs.toFixed(1)}<span className="unit">ms</span></div>
+        </div>
+        <div className="minimet">
+          <div className="minimet__l">Memory used</div>
+          <div className="minimet__v">{memoryDisplay}</div>
+        </div>
+        <div className="minimet">
+          <div className="minimet__l">Clients</div>
+          <div className="minimet__v">{connectedClients}</div>
+        </div>
       </div>
 
       <div className="split-2" style={{ marginBottom: 16 }}>
@@ -125,12 +183,15 @@ export default function CachePage() {
         </div>
 
         <div className="card">
-          <div className="card__head"><h3 className="card__title">Per-team overrides</h3><span className="card__sub">5 teams differ from default</span></div>
+          <div className="card__head">
+            <h3 className="card__title">Per-team overrides</h3>
+            <span className="card__sub">representative data · 5 teams differ from default</span>
+          </div>
           <div className="card__body" style={{ padding: 0 }}>
             <table className="tbl">
               <thead><tr><th>Team</th><th>Threshold</th><th>TTL</th><th className="num">Hit %</th><th></th></tr></thead>
               <tbody>
-                {d.teamOverrides.map(o => {
+                {CACHE_TEAM_OVERRIDES.map(o => {
                   const v = noteVariant(o.note);
                   return (
                     <tr key={o.team}>
@@ -154,12 +215,15 @@ export default function CachePage() {
       </div>
 
       <div className="card">
-        <div className="card__head"><h3 className="card__title">Top cached prompts</h3><span className="card__sub">last 24h · by hit count</span></div>
+        <div className="card__head">
+          <h3 className="card__title">Top cached prompts</h3>
+          <span className="card__sub">representative data · live prompt fingerprints not yet available</span>
+        </div>
         <div className="card__body" style={{ padding: 0 }}>
           <table className="tbl">
             <thead><tr><th>Prompt fingerprint</th><th>Team</th><th>Model</th><th className="num">Hits</th><th className="num">Avg sim</th><th className="num">Tokens saved</th><th>Last hit</th></tr></thead>
             <tbody>
-              {d.topPrompts.map(p => (
+              {CACHE_TOP_PROMPTS.map(p => (
                 <tr key={p.fingerprint}>
                   <td><span className="mono">{p.fingerprint}</span></td>
                   <td>{p.team}</td>

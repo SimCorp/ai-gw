@@ -2,6 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState, useEffect, useRef } from "react";
+import { useAuth } from "../_lib/authContext";
+
+const ADMIN_BASE = "http://localhost:8005";
+
+interface Team { id: string; name: string; slug: string; }
 
 const NAV = [
   {
@@ -23,7 +29,6 @@ const NAV = [
     group: "Account",
     items: [
       { href: "/portal/usage",    label: "Usage & spend", icon: <ChartIcon /> },
-      { href: "/portal/teams",    label: "My team",       icon: <TeamIcon /> },
       { href: "/portal/settings", label: "Settings",      icon: <SettingsIcon /> },
     ],
   },
@@ -31,9 +36,37 @@ const NAV = [
 
 export default function PortalShell() {
   const path = usePathname();
+  const { developer, logout, selectTeam } = useAuth();
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [teamOpen, setTeamOpen] = useState(false);
+  const [userOpen, setUserOpen] = useState(false);
+  const teamRef = useRef<HTMLDivElement>(null);
+  const userRef = useRef<HTMLDivElement>(null);
 
   const isActive = (href: string) =>
     href === "/portal" ? path === "/portal" : path.startsWith(href);
+
+  // Load teams list for selector
+  useEffect(() => {
+    fetch(`${ADMIN_BASE}/teams`)
+      .then(r => r.json())
+      .then((data: Team[]) => setTeams(Array.isArray(data) ? data : []))
+      .catch(() => {});
+  }, []);
+
+  // Close dropdowns on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (teamRef.current && !teamRef.current.contains(e.target as Node)) setTeamOpen(false);
+      if (userRef.current && !userRef.current.contains(e.target as Node)) setUserOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const initials = developer?.display_name
+    ? developer.display_name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()
+    : "?";
 
   return (
     <aside className="psidebar">
@@ -41,7 +74,7 @@ export default function PortalShell() {
         <div className="logo">AI</div>
         <div>
           <div className="name">AI Portal</div>
-          <div className="sub">agent-platform</div>
+          <div className="sub">{developer?.team_name ?? "no team"}</div>
         </div>
       </div>
 
@@ -66,11 +99,107 @@ export default function PortalShell() {
         ))}
       </nav>
 
-      <div className="psidebar__user">
-        <div className="avatar">MW</div>
-        <div className="who">
-          <div className="name">Maja Weber</div>
-          <div className="team">agent-platform</div>
+      <div className="psidebar__user" style={{ flexDirection: "column", alignItems: "stretch", gap: 8 }}>
+        {/* Team picker */}
+        <div ref={teamRef} style={{ position: "relative" }}>
+          <button
+            onClick={() => setTeamOpen(v => !v)}
+            style={{
+              display: "flex", alignItems: "center", gap: 6,
+              padding: "5px 10px",
+              border: "1px solid var(--rule)",
+              borderRadius: "var(--radius-2, 6px)",
+              background: "var(--surface)",
+              color: "var(--fg-1)",
+              cursor: "pointer", fontSize: 12.5,
+              fontFamily: "inherit", width: "100%",
+            }}
+          >
+            <span style={{
+              width: 7, height: 7, borderRadius: "50%",
+              background: developer?.team_id ? "var(--good, #1F8A5B)" : "var(--fg-3)",
+              flexShrink: 0,
+            }} />
+            <span style={{ flex: 1, textAlign: "left", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {developer?.team_name ?? "Select team"}
+            </span>
+            <span style={{ color: "var(--fg-3)", fontSize: 10 }}>▾</span>
+          </button>
+
+          {teamOpen && (
+            <div style={{
+              position: "absolute", bottom: "calc(100% + 4px)", left: 0, right: 0,
+              background: "var(--surface)", border: "1px solid var(--rule)",
+              borderRadius: "var(--radius-3, 8px)",
+              boxShadow: "0 4px 16px rgba(0,0,0,0.12)", zIndex: 100, overflow: "hidden",
+            }}>
+              {teams.map(t => (
+                <button
+                  key={t.id}
+                  onClick={async () => { await selectTeam(t.id); setTeamOpen(false); }}
+                  style={{
+                    display: "block", width: "100%", textAlign: "left",
+                    padding: "9px 12px",
+                    background: t.id === developer?.team_id ? "var(--surface-soft, rgba(0,0,0,0.04))" : "transparent",
+                    border: 0, borderBottom: "1px solid var(--rule)",
+                    cursor: "pointer", fontSize: 12.5, color: "var(--fg-1)", fontFamily: "inherit",
+                  }}
+                >
+                  <div style={{ fontWeight: t.id === developer?.team_id ? 600 : 400 }}>{t.name}</div>
+                  <div style={{ fontSize: 11, color: "var(--fg-3)", marginTop: 1 }}>{t.slug}</div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* User row */}
+        <div ref={userRef} style={{ position: "relative" }}>
+          <button
+            onClick={() => setUserOpen(v => !v)}
+            style={{
+              display: "flex", alignItems: "center", gap: 10,
+              width: "100%", background: "none", border: 0,
+              cursor: "pointer", padding: "2px 0", textAlign: "left",
+            }}
+          >
+            <div className="avatar" style={{ flexShrink: 0 }}>{initials}</div>
+            <div className="who" style={{ flex: 1, minWidth: 0 }}>
+              <div className="name" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {developer?.display_name ?? "—"}
+              </div>
+              <div className="team" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {developer?.email ?? ""}
+              </div>
+            </div>
+            <span style={{ color: "var(--fg-3)", fontSize: 10, flexShrink: 0 }}>▾</span>
+          </button>
+
+          {userOpen && (
+            <div style={{
+              position: "absolute", bottom: "calc(100% + 4px)", left: 0, right: 0,
+              background: "var(--surface)", border: "1px solid var(--rule)",
+              borderRadius: "var(--radius-3, 8px)",
+              boxShadow: "0 4px 16px rgba(0,0,0,0.12)", zIndex: 100, overflow: "hidden",
+            }}>
+              <div style={{ padding: "10px 12px", borderBottom: "1px solid var(--rule)" }}>
+                <div style={{ fontSize: 12.5, fontWeight: 500 }}>{developer?.display_name}</div>
+                <div style={{ fontSize: 11.5, color: "var(--fg-3)", marginTop: 2 }}>{developer?.email}</div>
+              </div>
+              <button
+                onClick={async () => { setUserOpen(false); await logout(); }}
+                style={{
+                  display: "block", width: "100%", textAlign: "left",
+                  padding: "10px 12px",
+                  background: "transparent", border: 0,
+                  cursor: "pointer", fontSize: 13, color: "var(--bad)",
+                  fontFamily: "inherit",
+                }}
+              >
+                Sign out
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </aside>
@@ -87,11 +216,7 @@ function HomeIcon() {
   );
 }
 function PlayIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="currentColor">
-      <path d="M5 3.5v9l8-4.5-8-4.5z"/>
-    </svg>
-  );
+  return <svg viewBox="0 0 16 16" fill="currentColor"><path d="M5 3.5v9l8-4.5-8-4.5z"/></svg>;
 }
 function KeyIcon() {
   return (
@@ -156,16 +281,6 @@ function PluginIcon() {
   return (
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
       <path d="M6 2v3H2v3h3v1a3 3 0 006 0v-1h3V5h-4V2H6z"/>
-    </svg>
-  );
-}
-function TeamIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-      <circle cx="6" cy="5" r="2.5"/>
-      <path d="M1.5 13.5c0-2.5 2-4 4.5-4s4.5 1.5 4.5 4"/>
-      <circle cx="11.5" cy="5.5" r="2"/>
-      <path d="M13.5 13.5c0-1.8-1-3-2.5-3.5"/>
     </svg>
   );
 }

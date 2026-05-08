@@ -1,13 +1,35 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { LoadingState, ErrorState, EmptyState } from '../_components/PageStates';
-import { MCP_DATA } from '../_mocks/data';
+import { EmptyState } from '../_components/PageStates';
 
-type McpServer = typeof MCP_DATA[number];
+type McpStatus = 'good' | 'warn' | 'bad' | 'pending';
 
-function statusPill(s: McpServer['status']) {
+type McpServer = {
+  name: string;
+  version: string;
+  transport: string;
+  owner: string;
+  source: 'internal' | 'vendored';
+  tools: number;
+  scopes: string[];
+  calls24h: string;
+  p50: string;
+  err: string;
+  status: McpStatus;
+  btn: string;
+};
+
+const MCP_DATA: McpServer[] = [
+  { name: 'portfolio-mcp',   version: 'v2.4.1',      transport: 'stdio',    owner: 'platform-data',       source: 'internal', tools: 9,  scopes: ['positions:read','weights:read'],  calls24h: '4,218', p50: '74 ms',  err: '0.02%', status: 'good',    btn: 'Inspect' },
+  { name: 'market-data-mcp', version: 'v1.9.0',      transport: 'http+sse', owner: 'trading',             source: 'internal', tools: 14, scopes: ['quotes:read','refdata:read'],    calls24h: '3,841', p50: '48 ms',  err: '0.01%', status: 'good',    btn: 'Inspect' },
+  { name: 'filings-mcp',     version: 'v0.8.3',      transport: 'http',     owner: 'research',            source: 'internal', tools: 6,  scopes: ['filings:read'],                  calls24h: '1,108', p50: '312 ms', err: '2.1%',  status: 'warn',    btn: 'Inspect' },
+  { name: 'github-mcp',      version: 'v0.6.0',      transport: 'stdio',    owner: 'platform-engineering',source: 'vendored', tools: 11, scopes: ['repo:read','pr:write'],           calls24h: '1,684', p50: '128 ms', err: '0.04%', status: 'good',    btn: 'Inspect' },
+  { name: 'confluence-mcp',  version: 'v0.3.1',      transport: 'http',     owner: '(third-party)',       source: 'vendored', tools: 5,  scopes: ['space:read'],                    calls24h: '0',     p50: '—',      err: '91%',   status: 'bad',     btn: 'Reconnect' },
+  { name: 'trade-mcp',       version: 'v1.0.0-rc.2', transport: 'stdio',    owner: 'trading',             source: 'internal', tools: 4,  scopes: ['orders:write','orders:read'],    calls24h: '—',     p50: '—',      err: '—',     status: 'pending', btn: 'Review' },
+];
+
+function statusPill(s: McpStatus) {
   if (s === 'good') return <span className="pill pill--good"><span className="dot"></span>healthy</span>;
   if (s === 'warn') return <span className="pill pill--warn"><span className="dot"></span>degraded</span>;
   if (s === 'bad') return <span className="pill pill--bad"><span className="dot"></span>auth failing</span>;
@@ -22,18 +44,12 @@ function scopePill(scope: string) {
 export default function McpPage() {
   const [filter, setFilter] = useState('All');
 
-  const { data, isLoading, isError, error, refetch } = useQuery<McpServer[]>({
-    queryKey: ['mcp-servers'],
-    queryFn: () => fetch('/api/v1/mcp/servers').then(r => r.json()),
-  });
-
-  if (isLoading) return <section className="page"><LoadingState rows={6} /></section>;
-  if (isError) return <section className="page"><ErrorState error={error as Error} retry={() => refetch()} /></section>;
-
-  const rows = data ?? MCP_DATA;
+  const rows = MCP_DATA;
 
   return (
     <section className="page">
+      <div className="pill pill--warn" style={{ marginBottom: 12 }}>Live data not yet available for this page · showing representative data</div>
+
       <div className="page__head">
         <div>
           <h1 className="page__title">MCP server registry</h1>

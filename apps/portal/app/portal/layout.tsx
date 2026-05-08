@@ -1,13 +1,19 @@
 "use client";
 
 import "./_styles/portal.css";
+import { AuthProvider } from "./_lib/authContext";
 import PortalShell from "./_components/PortalShell";
+import AuthGate from "./_components/AuthGate";
 
 export default function PortalLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="papp">
-      <PortalShell />
-      {children}
-    </div>
+    <AuthProvider>
+      <AuthGate>
+        <div className="papp">
+          <PortalShell />
+          {children}
+        </div>
+      </AuthGate>
+    </AuthProvider>
   );
 }

@@ -1,122 +1,330 @@
 'use client';
 
-import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import React, { use, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { LoadingState, ErrorState } from '../../_components/PageStates';
-import { AGENT_PLATFORM_TEAM } from '../../_mocks/data';
 
-type TeamDetail = typeof AGENT_PLATFORM_TEAM;
+const BASE = 'http://localhost:8005';
+
+interface Team {
+  id: string;
+  slug: string;
+  name: string;
+  created_at: string;
+  monthly_budget_usd: number | null;
+  budget_alert_pct: number;
+  budget_action: string;
+}
+
+interface ApiKey {
+  id: string;
+  team_id: string;
+  name: string;
+  key_hash: string;
+  revoked_at: string | null;
+  monthly_budget_usd: number | null;
+  project_id: string | null;
+  created_at: string;
+}
+
+interface Member {
+  id: string;
+  team_id: string;
+  user_id: string;
+  role: string;
+  joined_at: string | null;
+  developer_id: string | null;
+}
+
+interface DashboardStat {
+  team_name: string;
+  request_count: number | null;
+  total_tokens: number | null;
+  total_cost_usd: number | null;
+  cache_hit_pct: number | null;
+}
+
+interface AuditRow {
+  id: string;
+  actor: string;
+  action: string;
+  resource_id: string;
+  resource_type: string;
+  details: Record<string, unknown> | null;
+  timestamp: string;
+}
 
 const TABS = ['overview', 'keys', 'policies', 'members', 'audit'] as const;
 type Tab = typeof TABS[number];
 
-export default function TeamDetailPage({ params }: { params: { id: string } }) {
-  const [tab, setTab] = useState<Tab>('overview');
+function formatDate(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  try {
+    return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  } catch { return iso; }
+}
 
-  const { data, isLoading, isError, error, refetch } = useQuery<TeamDetail>({
-    queryKey: ['team-detail', params.id],
-    queryFn: () => fetch(`/api/v1/teams/${params.id}/detail`).then(r => r.json()),
+function formatTime(iso: string): string {
+  try {
+    return new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  } catch { return iso; }
+}
+
+function formatCost(usd: number | null | undefined): string {
+  if (usd == null) return '$0.00';
+  if (usd === 0) return '$0.00';
+  if (usd < 0.01) return `$${usd.toFixed(6)}`;
+  if (usd < 1) return `$${usd.toFixed(4)}`;
+  return `$${usd.toFixed(2)}`;
+}
+
+function initials2(s: string) {
+  return s.split(/[-._\s]/).filter(Boolean).slice(0, 2).map(p => p[0]).join('').toUpperCase();
+}
+
+const COLORS = ['#083EA7','#1D958E','#4B17B6','#FB9B2A','#9D2E7B','#0A7BD7','#1A1D31','#EF3E4A'];
+function avatarColor(seed: string): string {
+  let h = 0;
+  for (const c of seed) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return COLORS[h % COLORS.length];
+}
+
+export default function TeamDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
+  const [tab, setTab] = useState<Tab>('overview');
+  const [newKeyValue, setNewKeyValue] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+
+  const teamQuery = useQuery<Team>({
+    queryKey: ['team', id],
+    queryFn: () => fetch(`${BASE}/teams/${id}`).then(r => {
+      if (!r.ok) throw new Error(`Team not found (${r.status})`);
+      return r.json();
+    }),
   });
 
-  const t = data ?? AGENT_PLATFORM_TEAM;
+  const keysQuery = useQuery<ApiKey[]>({
+    queryKey: ['team-keys', id],
+    queryFn: () => fetch(`${BASE}/teams/${id}/keys`).then(r => {
+      if (!r.ok) throw new Error(`Failed to fetch keys: ${r.status}`);
+      return r.json();
+    }),
+  });
 
-  if (isLoading) return <section className="page"><LoadingState rows={8} /></section>;
-  if (isError) return <section className="page"><ErrorState error={error as Error} retry={() => refetch()} /></section>;
+  const membersQuery = useQuery<Member[]>({
+    queryKey: ['team-members', id],
+    queryFn: () => fetch(`${BASE}/teams/${id}/members`).then(r => {
+      if (!r.ok) throw new Error(`Failed to fetch members: ${r.status}`);
+      return r.json();
+    }),
+  });
+
+  const statsQuery = useQuery<DashboardStat[]>({
+    queryKey: ['dashboard-stats'],
+    queryFn: () => fetch(`${BASE}/dashboard/stats`).then(r => {
+      if (!r.ok) throw new Error(`Failed to fetch stats: ${r.status}`);
+      return r.json();
+    }),
+    staleTime: 30_000,
+  });
+
+  const auditQuery = useQuery<AuditRow[]>({
+    queryKey: ['team-audit', id],
+    queryFn: () => fetch(`${BASE}/audit?resource_id=${id}&limit=50`).then(r => {
+      if (!r.ok) throw new Error(`Failed to fetch audit: ${r.status}`);
+      return r.json();
+    }),
+    enabled: tab === 'audit',
+  });
+
+  if (teamQuery.isLoading) return <section className="page"><LoadingState rows={8} /></section>;
+  if (teamQuery.isError) return <section className="page"><ErrorState error={teamQuery.error as Error} retry={() => teamQuery.refetch()} /></section>;
+
+  const team = teamQuery.data!;
+  const keys = keysQuery.data ?? [];
+  const members = membersQuery.data ?? [];
+  const stats = Array.isArray(statsQuery.data) ? statsQuery.data : [];
+  const stat = stats.find(s => s.team_name === team.name) ?? null;
+  const auditRows = auditQuery.data ?? [];
+
+  const activeKeys = keys.filter(k => !k.revoked_at);
+
+  const budgetPct = stat?.total_cost_usd != null && team.monthly_budget_usd
+    ? Math.min(Math.round((stat.total_cost_usd / team.monthly_budget_usd) * 100), 100)
+    : null;
+
+  async function handleIssueKey() {
+    const name = window.prompt('API key name:');
+    if (!name?.trim()) return;
+    const res = await fetch(`${BASE}/teams/${id}/keys`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name.trim() }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      window.alert(`Failed to create key: ${(err as {detail?: string}).detail ?? res.status}`);
+      return;
+    }
+    const data = await res.json() as { key: string };
+    setNewKeyValue(data.key);
+    queryClient.invalidateQueries({ queryKey: ['team-keys', id] });
+  }
+
+  async function handleRevokeKey(keyId: string, keyName: string) {
+    if (!window.confirm(`Revoke key "${keyName}"? This cannot be undone.`)) return;
+    const res = await fetch(`${BASE}/teams/${id}/keys/${keyId}`, { method: 'DELETE' });
+    if (!res.ok) {
+      window.alert(`Failed to revoke key: ${res.status}`);
+      return;
+    }
+    queryClient.invalidateQueries({ queryKey: ['team-keys', id] });
+  }
 
   return (
     <section className="page">
+      {/* New key reveal banner */}
+      {newKeyValue && (
+        <div style={{
+          background: 'var(--warn-soft, rgba(249,115,22,0.08))',
+          border: '1px solid var(--warn, #f97316)',
+          borderRadius: 8, padding: '12px 16px', marginBottom: 16,
+          display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+        }}>
+          <span style={{ color: 'var(--warn)', fontWeight: 600, fontSize: 13 }}>
+            Save this key — shown once only:
+          </span>
+          <code className="mono" style={{ flex: 1, fontSize: 13, wordBreak: 'break-all' }}>{newKeyValue}</code>
+          <button className="btn btn--sm" onClick={() => {
+            navigator.clipboard.writeText(newKeyValue).catch(() => {});
+          }}>Copy</button>
+          <button className="btn btn--sm btn--ghost" onClick={() => setNewKeyValue(null)}>Dismiss</button>
+        </div>
+      )}
+
       <div className="page__head">
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <span style={{
             display: 'grid', placeItems: 'center',
             width: 36, height: 36, borderRadius: 8,
-            background: 'linear-gradient(135deg,var(--sc-blue),var(--sc-purple))',
+            background: avatarColor(team.name),
             color: '#fff', fontWeight: 700, fontSize: 13,
-          }}>TC</span>
+          }}>{initials2(team.name)}</span>
           <div>
             <h1 className="page__title">
-              {t.name} <span style={{ color: 'var(--fg-3)', fontWeight: 400, fontSize: 13, marginLeft: 6 }} className="mono">{t.idLabel}</span>
+              {team.name}
+              <span style={{ color: 'var(--fg-3)', fontWeight: 400, fontSize: 13, marginLeft: 8 }} className="mono">
+                {team.id.slice(0, 8)}
+              </span>
             </h1>
-            <p className="page__sub">Owner <strong>{t.owner}</strong> · {typeof t.members === 'number' ? t.members : 18} members · created {t.createdAt}</p>
+            <p className="page__sub">
+              Slug <strong>{team.slug}</strong> · {activeKeys.length} active key{activeKeys.length !== 1 ? 's' : ''} · created {formatDate(team.created_at)}
+            </p>
           </div>
         </div>
         <div className="page__actions">
           <button className="btn">Edit</button>
-          <button className="btn">Suspend</button>
-          <button className="btn btn--primary">+ Issue API key</button>
+          <button className="btn btn--primary" onClick={handleIssueKey}>+ Issue API key</button>
         </div>
       </div>
 
+      {/* Minimet strip */}
       <div className="minimet-row" style={{ marginBottom: 18 }}>
-        <div className="minimet"><div className="minimet__l">Spend MTD</div><div className="minimet__v">{t.spendMtd}</div></div>
-        <div className="minimet"><div className="minimet__l">Budget</div><div className="minimet__v">{t.budgetPct}<span className="unit">%</span> · {t.budgetCap} cap</div></div>
-        <div className="minimet"><div className="minimet__l">Requests 24h</div><div className="minimet__v">{t.req24h}</div></div>
-        <div className="minimet"><div className="minimet__l">Cache hit</div><div className="minimet__v">{t.cacheHit}<span className="unit">%</span></div></div>
-        <div className="minimet"><div className="minimet__l">p99 latency</div><div className="minimet__v">{t.p99}</div></div>
-        <div className="minimet"><div className="minimet__l">Error rate</div><div className="minimet__v">{t.errorRate}</div></div>
+        <div className="minimet">
+          <div className="minimet__l">Spend MTD</div>
+          <div className="minimet__v">{formatCost(stat?.total_cost_usd)}</div>
+        </div>
+        <div className="minimet">
+          <div className="minimet__l">Budget cap</div>
+          <div className="minimet__v">
+            {team.monthly_budget_usd != null ? `$${team.monthly_budget_usd}` : 'None'}
+          </div>
+        </div>
+        <div className="minimet">
+          <div className="minimet__l">Budget used</div>
+          <div className="minimet__v">{budgetPct != null ? `${budgetPct}%` : '—'}</div>
+        </div>
+        <div className="minimet">
+          <div className="minimet__l">Requests</div>
+          <div className="minimet__v">{(stat?.request_count ?? 0).toLocaleString()}</div>
+        </div>
+        <div className="minimet">
+          <div className="minimet__l">Cache hit</div>
+          <div className="minimet__v">
+            {stat?.cache_hit_pct != null ? `${Math.round(stat.cache_hit_pct)}` : '—'}
+            <span className="unit">%</span>
+          </div>
+        </div>
+        <div className="minimet">
+          <div className="minimet__l">Tokens</div>
+          <div className="minimet__v">
+            {stat?.total_tokens != null ? (stat.total_tokens >= 1000 ? `${(stat.total_tokens / 1000).toFixed(1)}k` : stat.total_tokens.toString()) : '—'}
+          </div>
+        </div>
       </div>
 
+      {/* Tabs */}
       <nav className="tabbar">
-        <a href="#overview" className={tab === 'overview' ? 'is-active' : undefined} onClick={e => { e.preventDefault(); setTab('overview'); }}>Overview</a>
-        <a href="#keys" className={tab === 'keys' ? 'is-active' : undefined} onClick={e => { e.preventDefault(); setTab('keys'); }}>API keys <span className="tag" style={{ marginLeft: 6 }}>14</span></a>
-        <a href="#policies" className={tab === 'policies' ? 'is-active' : undefined} onClick={e => { e.preventDefault(); setTab('policies'); }}>Policies</a>
-        <a href="#members" className={tab === 'members' ? 'is-active' : undefined} onClick={e => { e.preventDefault(); setTab('members'); }}>Members <span className="tag" style={{ marginLeft: 6 }}>18</span></a>
-        <a href="#audit" className={tab === 'audit' ? 'is-active' : undefined} onClick={e => { e.preventDefault(); setTab('audit'); }}>Audit</a>
+        {(['overview', 'keys', 'policies', 'members', 'audit'] as Tab[]).map(t => (
+          <a key={t} href={`#${t}`}
+            className={tab === t ? 'is-active' : undefined}
+            onClick={e => { e.preventDefault(); setTab(t); }}
+          >
+            {t.charAt(0).toUpperCase() + t.slice(1)}
+            {t === 'keys' && <span className="tag" style={{ marginLeft: 6 }}>{activeKeys.length}</span>}
+            {t === 'members' && <span className="tag" style={{ marginLeft: 6 }}>{members.length}</span>}
+          </a>
+        ))}
       </nav>
       <div style={{ height: 18 }} />
 
+      {/* ── OVERVIEW ── */}
       {tab === 'overview' && (
         <>
           <div className="split-2" style={{ marginBottom: 16 }}>
             <div className="card">
               <div className="card__head">
                 <h3 className="card__title">Spend</h3>
-                <span className="card__sub">last 30 days · vs {t.budgetCap} cap</span>
+                <span className="card__sub">month-to-date{team.monthly_budget_usd != null ? ` · vs $${team.monthly_budget_usd} cap` : ''}</span>
               </div>
               <div className="card__body">
-                <svg viewBox="0 0 600 200" preserveAspectRatio="none" style={{ width: '100%', height: 200, display: 'block' }}>
+                <svg viewBox="0 0 600 180" preserveAspectRatio="none" style={{ width: '100%', height: 180, display: 'block' }}>
                   <g stroke="var(--rule)" strokeWidth="1">
-                    <line x1="36" y1="20" x2="588" y2="20"/><line x1="36" y1="65" x2="588" y2="65"/>
-                    <line x1="36" y1="110" x2="588" y2="110"/><line x1="36" y1="155" x2="588" y2="155"/>
+                    <line x1="0" y1="20" x2="600" y2="20"/>
+                    <line x1="0" y1="70" x2="600" y2="70"/>
+                    <line x1="0" y1="120" x2="600" y2="120"/>
+                    <line x1="0" y1="160" x2="600" y2="160"/>
                   </g>
-                  <line x1="36" y1="42" x2="588" y2="42" stroke="var(--bad)" strokeWidth="1" strokeDasharray="4 4"/>
-                  <text x="586" y="38" textAnchor="end" fill="var(--bad)" fontSize="10">Cap {t.budgetCap}</text>
-                  <g fill="var(--fg-3)" fontSize="10" fontFamily="var(--font-mono)">
-                    <text x="32" y="24" textAnchor="end">10k</text><text x="32" y="69" textAnchor="end">6k</text>
-                    <text x="32" y="114" textAnchor="end">3k</text><text x="32" y="159" textAnchor="end">0</text>
-                  </g>
+                  {team.monthly_budget_usd != null && (
+                    <line x1="0" y1="38" x2="600" y2="38" stroke="var(--bad)" strokeWidth="1" strokeDasharray="4 3"/>
+                  )}
                   <g fill="var(--sc-blue)">
                     {Array.from({ length: 30 }).map((_, i) => {
-                      const v = Math.min(8 + i * 0.7 + (i % 3) * 0.6, 28);
-                      const h = v * 5.5; const x = 44 + i * 18; const y = 155 - h;
-                      return <rect key={i} x={x} y={y} width="12" height={h} rx="1.5"/>;
+                      const v = Math.min(8 + i * 0.5 + (i % 4) * 0.8, 26);
+                      const h = v * 4.5; const x = 4 + i * 20; const y = 160 - h;
+                      return <rect key={i} x={x} y={y} width="14" height={h} rx="2"/>;
                     })}
                   </g>
-                  <g fill="var(--fg-3)" fontSize="10" fontFamily="var(--font-mono)">
-                    <text x="44" y="172">Apr 7</text><text x="296" y="172">Apr 22</text>
-                    <text x="588" y="172" textAnchor="end">May 6</text>
-                  </g>
                 </svg>
+                <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
+                  Decorative trend · MTD spend: <strong>{formatCost(stat?.total_cost_usd)}</strong>
+                </p>
               </div>
             </div>
 
             <div className="card">
-              <div className="card__head"><h3 className="card__title">Models used</h3><span className="card__sub">last 7d</span></div>
-              <div className="card__body" style={{ paddingTop: 8 }}>
-                <div className="barlist">
-                  {[
-                    { name: 'claude-sonnet-4.5', spend: '$3,108', bar: 0 },
-                    { name: 'gemini-2.5-pro', spend: '$1,920', bar: 38 },
-                    { name: 'claude-haiku-4.5', spend: '$891', bar: 62 },
-                    { name: 'text-embedding-3-small', spend: '$284', bar: 80 },
-                    { name: 'ollama/llama-3.1-70b', spend: '$0 (BYO)', bar: 91 },
-                  ].map(m => (
-                    <div key={m.name} className="row">
-                      <div className="lbl"><span className="name">{m.name}</span><span className="bar"><i style={{ right: `${m.bar}%` }}></i></span></div>
-                      <div className="num">{m.spend}</div>
-                    </div>
-                  ))}
+              <div className="card__head"><h3 className="card__title">Summary</h3></div>
+              <div className="card__body">
+                <div className="dl">
+                  <dt>Team ID</dt><dd className="mono" style={{ fontSize: 12 }}>{team.id}</dd>
+                  <dt>Slug</dt><dd className="mono">{team.slug}</dd>
+                  <dt>Created</dt><dd>{formatDate(team.created_at)}</dd>
+                  <dt>Monthly cap</dt><dd>{team.monthly_budget_usd != null ? `$${team.monthly_budget_usd}` : 'Unlimited'}</dd>
+                  <dt>Alert at</dt><dd>{Math.round(team.budget_alert_pct * 100)}%</dd>
+                  <dt>Over-budget action</dt><dd>{team.budget_action}</dd>
+                  <dt>Active keys</dt><dd>{activeKeys.length}</dd>
+                  <dt>Members</dt><dd>{members.length}</dd>
                 </div>
               </div>
             </div>
@@ -124,185 +332,223 @@ export default function TeamDetailPage({ params }: { params: { id: string } }) {
 
           <div className="split-3">
             <div className="card">
-              <div className="card__head"><h3 className="card__title">Cache breakdown</h3></div>
+              <div className="card__head"><h3 className="card__title">Usage</h3><span className="card__sub">all-time</span></div>
               <div className="card__body">
                 <div className="dl">
-                  <dt>Hit rate</dt><dd>42%</dd>
-                  <dt>Exact match</dt><dd>17%</dd>
-                  <dt>Semantic match</dt><dd>25%</dd>
-                  <dt>Avg similarity</dt><dd>0.939</dd>
-                  <dt>Tokens saved</dt><dd>21.8M</dd>
-                  <dt>$ saved</dt><dd>$1,084</dd>
+                  <dt>Total requests</dt><dd>{(stat?.request_count ?? 0).toLocaleString()}</dd>
+                  <dt>Total tokens</dt><dd>{(stat?.total_tokens ?? 0).toLocaleString()}</dd>
+                  <dt>Total cost</dt><dd>{formatCost(stat?.total_cost_usd)}</dd>
+                  <dt>Cache hit rate</dt><dd>{stat?.cache_hit_pct != null ? `${Math.round(stat.cache_hit_pct)}%` : '—'}</dd>
                 </div>
               </div>
             </div>
             <div className="card">
-              <div className="card__head"><h3 className="card__title">Top callers</h3><span className="card__sub">by spend</span></div>
-              <div className="card__body" style={{ padding: 0 }}>
-                <table className="tbl">
-                  <tbody>
-                    <tr><td><span className="mono">rag-indexer-v3</span></td><td className="num mono">$2,841</td></tr>
-                    <tr><td><span className="mono">pr-review-bot</span></td><td className="num mono">$1,718</td></tr>
-                    <tr><td><span className="mono">eval-runner</span></td><td className="num mono">$881</td></tr>
-                    <tr><td><span className="mono">jupyter-notebook</span></td><td className="num mono">$612</td></tr>
-                    <tr><td><span className="mono">ci-tests</span></td><td className="num mono">$108</td></tr>
-                  </tbody>
-                </table>
+              <div className="card__head"><h3 className="card__title">Budget</h3></div>
+              <div className="card__body">
+                <div className="dl">
+                  <dt>Cap</dt><dd>{team.monthly_budget_usd != null ? `$${team.monthly_budget_usd} / mo` : 'No limit'}</dd>
+                  <dt>Used</dt><dd>{budgetPct != null ? `${budgetPct}%` : '—'}</dd>
+                  <dt>Action</dt><dd>{team.budget_action}</dd>
+                  <dt>Alert threshold</dt><dd>{Math.round(team.budget_alert_pct * 100)}%</dd>
+                </div>
               </div>
             </div>
             <div className="card">
-              <div className="card__head"><h3 className="card__title">Recent errors</h3><span className="card__sub">last 24h</span></div>
-              <div className="card__body" style={{ padding: 0 }}>
-                <table className="tbl">
-                  <tbody>
-                    <tr><td className="mono">14:42</td><td><span className="pill pill--bad">429</span></td><td><span className="mono">claude-sonnet-4.5</span></td></tr>
-                    <tr><td className="mono">11:18</td><td><span className="pill pill--bad">502</span></td><td><span className="mono">gemini-2.5-pro</span></td></tr>
-                    <tr><td className="mono">09:54</td><td><span className="pill pill--warn">timeout</span></td><td><span className="mono">claude-sonnet-4.5</span></td></tr>
-                    <tr><td className="mono">06:21</td><td><span className="pill pill--bad">401</span></td><td><span className="muted">expired key</span></td></tr>
-                  </tbody>
-                </table>
+              <div className="card__head"><h3 className="card__title">Keys</h3></div>
+              <div className="card__body">
+                <div className="dl">
+                  <dt>Active</dt><dd>{activeKeys.length}</dd>
+                  <dt>Revoked</dt><dd>{keys.filter(k => k.revoked_at).length}</dd>
+                  <dt>Total</dt><dd>{keys.length}</dd>
+                </div>
+                <button className="btn btn--sm btn--primary" style={{ marginTop: 14 }} onClick={handleIssueKey}>+ Issue key</button>
               </div>
             </div>
           </div>
         </>
       )}
 
+      {/* ── KEYS ── */}
       {tab === 'keys' && (
         <div className="card">
           <div className="card__head">
             <h3 className="card__title">API keys</h3>
-            <span className="card__sub">14 active · 3 expiring within 30 days</span>
+            <span className="card__sub">{activeKeys.length} active · {keys.filter(k => k.revoked_at).length} revoked</span>
             <div className="card__actions">
-              <button className="btn btn--sm">Rotate all</button>
-              <button className="btn btn--primary btn--sm">+ Issue key</button>
+              <button className="btn btn--primary btn--sm" onClick={handleIssueKey}>+ Issue key</button>
             </div>
           </div>
           <div className="card__body" style={{ padding: 0 }}>
-            <table className="tbl">
-              <thead>
-                <tr><th>Name / scope</th><th>Key</th><th>Created by</th><th>Last used</th><th className="num">Calls (7d)</th><th>Expires</th><th>Status</th><th></th></tr>
-              </thead>
-              <tbody>
-                {t.keys.map(k => (
-                  <tr key={k.name}>
-                    <td><div className="cell-2"><strong>{k.name}</strong><span className="lo">scope: {k.scope}</span></div></td>
-                    <td><span className="mono">{k.key}</span></td>
-                    <td>{k.createdBy}</td>
-                    <td>{k.lastUsed}</td>
-                    <td className="num mono">{k.calls7d}</td>
-                    <td>{k.expires}</td>
-                    <td>
-                      {k.status === 'active' && <span className="pill pill--good"><span className="dot"></span>active</span>}
-                      {k.status === 'expiring' && <span className="pill pill--warn"><span className="dot"></span>expiring</span>}
-                      {k.status === 'revoke_pending' && <span className="pill pill--bad"><span className="dot"></span>revoke pending</span>}
-                    </td>
-                    <td><button className="btn btn--sm btn--ghost">⋯</button></td>
+            {keysQuery.isLoading ? (
+              <div style={{ padding: 24 }}><LoadingState rows={3} /></div>
+            ) : (
+              <table className="tbl">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Key hash</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th>Budget cap</th>
+                    <th></th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {keys.length === 0 ? (
+                    <tr><td colSpan={6} style={{ textAlign: 'center', padding: 32, color: 'var(--fg-3)' }}>
+                      No keys yet · <button className="btn btn--sm btn--ghost" onClick={handleIssueKey}>Issue first key</button>
+                    </td></tr>
+                  ) : keys.map(k => (
+                    <tr key={k.id}>
+                      <td><strong>{k.name}</strong></td>
+                      <td><span className="mono" style={{ fontSize: 12 }}>{k.key_hash.slice(0, 12)}…</span></td>
+                      <td>
+                        {k.revoked_at
+                          ? <span className="pill pill--bad"><span className="dot"></span>revoked</span>
+                          : <span className="pill pill--good"><span className="dot"></span>active</span>}
+                      </td>
+                      <td>{formatDate(k.created_at)}</td>
+                      <td>{k.monthly_budget_usd != null ? `$${k.monthly_budget_usd}` : '—'}</td>
+                      <td>
+                        {!k.revoked_at && (
+                          <button className="btn btn--sm btn--ghost" onClick={() => handleRevokeKey(k.id, k.name)}>
+                            Revoke
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
       )}
 
+      {/* ── POLICIES ── */}
       {tab === 'policies' && (
         <div>
           <div className="split-2" style={{ marginBottom: 16 }}>
             <div className="card">
-              <div className="card__head"><h3 className="card__title">Cache policy</h3><div className="card__actions"><button className="btn btn--sm">Edit</button></div></div>
+              <div className="card__head">
+                <h3 className="card__title">Budget policy</h3>
+                <div className="card__actions"><button className="btn btn--sm">Edit</button></div>
+              </div>
               <div className="card__body">
                 <div className="dl">
-                  <dt>Status</dt><dd><span className="pill pill--good"><span className="dot"></span>Enabled</span></dd>
-                  <dt>TTL</dt><dd>24 hours</dd>
-                  <dt>Similarity threshold</dt><dd>0.94 <span className="muted">(stricter than default 0.92)</span></dd>
-                  <dt>Embedding model</dt><dd className="mono">text-embedding-3-small</dd>
-                  <dt>Opt-out paths</dt><dd className="mono">/v1/chat/completions?stream=true (when temp&gt;0.4)</dd>
+                  <dt>Monthly cap</dt><dd>{team.monthly_budget_usd != null ? `$${team.monthly_budget_usd}` : 'No limit'}</dd>
+                  <dt>Alert threshold</dt><dd>{Math.round(team.budget_alert_pct * 100)}%</dd>
+                  <dt>Over-budget action</dt>
+                  <dd>
+                    {team.budget_action === 'block'
+                      ? <span className="pill pill--bad">block requests</span>
+                      : <span className="pill pill--warn">alert only</span>}
+                  </dd>
+                  <dt>Current spend</dt><dd>{formatCost(stat?.total_cost_usd)}</dd>
+                  <dt>Budget used</dt><dd>{budgetPct != null ? `${budgetPct}%` : '—'}</dd>
                 </div>
               </div>
             </div>
             <div className="card">
-              <div className="card__head"><h3 className="card__title">Rate limits</h3><div className="card__actions"><button className="btn btn--sm">Edit</button></div></div>
+              <div className="card__head">
+                <h3 className="card__title">Access policy</h3>
+                <div className="card__actions"><button className="btn btn--sm">Edit</button></div>
+              </div>
               <div className="card__body">
                 <div className="dl">
-                  <dt>Tier</dt><dd>Standard</dd>
-                  <dt>Requests / min</dt><dd>240 <span className="muted">(per team, all models)</span></dd>
-                  <dt>Tokens / min</dt><dd>1.2M input · 600K output</dd>
-                  <dt>Concurrent streams</dt><dd>32</dd>
-                  <dt>Burst</dt><dd>2× for 30s</dd>
+                  <dt>Status</dt><dd><span className="pill pill--good"><span className="dot"></span>Active</span></dd>
+                  <dt>Allowed models</dt><dd>All configured models</dd>
+                  <dt>Rate limit</dt><dd>Per-key default</dd>
                 </div>
-              </div>
-            </div>
-          </div>
-          <div className="split-2">
-            <div className="card">
-              <div className="card__head"><h3 className="card__title">Allowed models</h3><div className="card__actions"><button className="btn btn--sm">Edit</button></div></div>
-              <div className="card__body" style={{ padding: 0 }}>
-                <table className="tbl">
-                  <thead><tr><th>Model</th><th>Provider</th><th>Tier</th><th>Fallback</th></tr></thead>
-                  <tbody>
-                    <tr><td className="mono">claude-sonnet-4.5</td><td>Anthropic</td><td><span className="pill pill--info">prod</span></td><td className="mono">gemini-2.5-pro</td></tr>
-                    <tr><td className="mono">claude-haiku-4.5</td><td>Anthropic</td><td><span className="pill pill--info">prod</span></td><td>—</td></tr>
-                    <tr><td className="mono">gemini-2.5-pro</td><td>Google</td><td><span className="pill pill--info">prod</span></td><td className="mono">claude-sonnet-4.5</td></tr>
-                    <tr><td className="mono">text-embedding-3-small</td><td>OpenAI</td><td><span className="pill">embed</span></td><td>—</td></tr>
-                    <tr><td className="mono">ollama/llama-3.1-70b</td><td>BYO · ollama-eu-1</td><td><span className="pill">dev</span></td><td>—</td></tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-            <div className="card">
-              <div className="card__head"><h3 className="card__title">Budget &amp; alerts</h3><div className="card__actions"><button className="btn btn--sm">Edit</button></div></div>
-              <div className="card__body">
-                <div className="dl">
-                  <dt>Monthly cap</dt><dd>$9,150</dd>
-                  <dt>Soft alert at</dt><dd>70% ($6,405) <span className="pill pill--warn">tripped May 4</span></dd>
-                  <dt>Hard cap action</dt><dd>Throttle to 50% rate</dd>
-                  <dt>Notify</dt><dd>a.kowalski, platform-eng@simcorp.com</dd>
-                  <dt>Chargeback code</dt><dd className="mono">CC-4419-PLATFORM</dd>
-                </div>
+                <p className="muted" style={{ fontSize: 12, marginTop: 12 }}>
+                  Fine-grained model and rate policies can be set via the <Link href="/admin/policies" style={{ color: 'var(--sc-link)' }}>Policies page</Link>.
+                </p>
               </div>
             </div>
           </div>
         </div>
       )}
 
+      {/* ── MEMBERS ── */}
       {tab === 'members' && (
         <div className="card">
           <div className="card__head">
             <h3 className="card__title">Members</h3>
-            <span className="card__sub">18 · synced from Entra group <span className="mono">simcorp-platform-eng</span></span>
-            <div className="card__actions"><button className="btn btn--sm">Sync now</button><button className="btn btn--primary btn--sm">+ Add</button></div>
+            <span className="card__sub">{members.length} member{members.length !== 1 ? 's' : ''}</span>
+            <div className="card__actions"><button className="btn btn--primary btn--sm">+ Add member</button></div>
           </div>
           <div className="card__body" style={{ padding: 0 }}>
-            <table className="tbl">
-              <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Joined</th><th>Last active</th><th></th></tr></thead>
-              <tbody>
-                {t.members.map((m: { name: string; email: string; initials: string; color: string; role: string; joined: string; lastActive: string }) => (
-                  <tr key={m.email}>
-                    <td><div className="gap-2"><span className="avatar" style={{ background: m.color }}>{m.initials}</span> {m.name}</div></td>
-                    <td>{m.email}</td>
-                    <td>
-                      {m.role === 'Owner' ? <span className="pill pill--info">Owner</span> :
-                       m.role === 'Maintainer' ? <span className="pill">Maintainer</span> :
-                       <span className="pill">Member</span>}
-                    </td>
-                    <td>{m.joined}</td>
-                    <td>{m.lastActive}</td>
-                    <td><button className="btn btn--sm btn--ghost">⋯</button></td>
-                  </tr>
-                ))}
-                <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--fg-3)', padding: 14 }}>
-                  <a href="#" className="muted">Show 12 more members</a>
-                </td></tr>
-              </tbody>
-            </table>
+            {membersQuery.isLoading ? (
+              <div style={{ padding: 24 }}><LoadingState rows={3} /></div>
+            ) : members.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--fg-3)', fontSize: 13 }}>
+                No members yet
+              </div>
+            ) : (
+              <table className="tbl">
+                <thead>
+                  <tr><th>User ID</th><th>Role</th><th>Joined</th><th>Developer ID</th><th></th></tr>
+                </thead>
+                <tbody>
+                  {members.map(m => (
+                    <tr key={m.id}>
+                      <td><span className="mono" style={{ fontSize: 12 }}>{m.user_id ?? '—'}</span></td>
+                      <td>
+                        {m.role === 'owner'
+                          ? <span className="pill pill--info">Owner</span>
+                          : m.role === 'maintainer'
+                            ? <span className="pill">Maintainer</span>
+                            : <span className="pill">Member</span>}
+                      </td>
+                      <td>{formatDate(m.joined_at)}</td>
+                      <td><span className="mono muted" style={{ fontSize: 11 }}>{m.developer_id ? m.developer_id.slice(0, 8) + '…' : '—'}</span></td>
+                      <td><button className="btn btn--sm btn--ghost">⋯</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
       )}
 
+      {/* ── AUDIT ── */}
       {tab === 'audit' && (
         <div className="card">
-          <div className="card__body">
-            <p className="muted">Filtered audit log for {t.name}. <Link href="/admin/audit" style={{ color: 'var(--sc-link)' }}>Open full audit log →</Link></p>
+          <div className="card__head">
+            <h3 className="card__title">Audit log</h3>
+            <span className="card__sub">events for this team</span>
+            <div className="card__actions">
+              <Link href="/admin/audit" className="btn btn--sm btn--ghost">Full audit log →</Link>
+            </div>
+          </div>
+          <div className="card__body" style={{ padding: 0 }}>
+            {auditQuery.isLoading ? (
+              <div style={{ padding: 24 }}><LoadingState rows={5} /></div>
+            ) : auditRows.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--fg-3)', fontSize: 13 }}>
+                No audit events for this team yet
+              </div>
+            ) : (
+              <table className="tbl">
+                <thead>
+                  <tr><th>Time</th><th>Actor</th><th>Action</th><th>Resource</th></tr>
+                </thead>
+                <tbody>
+                  {auditRows.map(row => (
+                    <tr key={row.id}>
+                      <td><span className="mono" style={{ fontSize: 12 }}>{formatTime(row.timestamp)}</span></td>
+                      <td style={{ fontSize: 12 }}>{row.actor}</td>
+                      <td><span className="pill" style={{ fontSize: 11 }}>{row.action}</span></td>
+                      <td style={{ fontSize: 12 }}>
+                        <span className="muted">{row.resource_type}</span>
+                        {row.resource_id && <span className="mono" style={{ fontSize: 11, marginLeft: 6 }}>{row.resource_id.slice(0, 8)}…</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
       )}

@@ -7,27 +7,172 @@ import { LoadingState, ErrorState } from '../_components/PageStates';
 
 const RANGES = ['1h', '24h', '7d', '30d', '90d'];
 
-const TOP_TEAMS = [
-  { name: 'platform-research',    spend: '$842.10',  bar: 0 },
-  { name: 'agent-platform',       spend: '$648.55',  bar: 23 },
-  { name: 'client-services-ai',   spend: '$496.20',  bar: 41 },
-  { name: 'post-trade-ops',       spend: '$378.90',  bar: 55 },
-  { name: 'risk-engineering',     spend: '$311.42',  bar: 64 },
-  { name: 'data-platform',        spend: '$229.18',  bar: 73 },
-  { name: 'developer-experience', spend: '$182.04',  bar: 81 },
-  { name: 'design-systems',       spend: '$118.62',  bar: 88 },
-];
+const BASE = 'http://localhost:8005';
+
+// --- API types ---
+
+interface TeamStat {
+  team_name: string;
+  request_count: number;
+  total_tokens: number | null;
+  total_cost_usd: number | null;
+  cache_hit_pct: number | null;
+}
+
+interface ServiceHealth {
+  service: string;
+  icon: string;
+  status: string;
+  code: number;
+  latency_ms: number;
+  error: string | null;
+}
+
+interface RedisHealth {
+  status: string;
+  ping_ms: number;
+  used_memory_mb: number;
+  connected_clients: number;
+  error: string | null;
+}
+
+interface PostgresHealth {
+  status: string;
+  ping_ms: number;
+  active_connections: number;
+  error: string | null;
+}
+
+interface LitellmHealth {
+  status: string;
+  models_available: number;
+  providers_with_keys: string[];
+  error: string | null;
+}
+
+interface GatewayHealth {
+  status: string;
+  requests_last_60s: number;
+  cache_hit_rate_last_60s: number;
+  error: string | null;
+}
+
+interface SystemHealth {
+  overall: string;
+  last_updated: string;
+  services: ServiceHealth[];
+  redis: RedisHealth;
+  postgres: PostgresHealth;
+  litellm: LitellmHealth;
+  gateway: GatewayHealth;
+  recent_errors: string[];
+}
+
+interface AuditEntry {
+  id: string | number;
+  actor: string;
+  action: string;
+  resource_id: string;
+  resource_type: string;
+  details: Record<string, unknown> | string | null;
+  timestamp: string;
+}
+
+// --- helpers ---
+
+function fmtUsd(n: number | null | undefined): string {
+  if (n == null) return '$0.00';
+  if (n >= 1000) return `$${(n / 1000).toFixed(1)}k`;
+  return `$${n.toFixed(2)}`;
+}
+
+function fmtTime(ts: string): string {
+  try {
+    return new Date(ts).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  } catch {
+    return ts;
+  }
+}
+
+function statusDotClass(status: string) {
+  if (status === 'ok') return 'statusdot statusdot--good';
+  if (status === 'degraded') return 'statusdot statusdot--warn';
+  return 'statusdot statusdot--bad';
+}
+
+function statusPillClass(status: string) {
+  if (status === 'ok') return 'pill pill--good';
+  if (status === 'degraded') return 'pill pill--warn';
+  return 'pill pill--bad';
+}
+
+function statusLabel(status: string) {
+  if (status === 'ok') return 'healthy';
+  return status;
+}
 
 export default function DashboardPage() {
   const [range, setRange] = useState('24h');
 
-  const { data, isLoading, isError, error, refetch } = useQuery<Record<string, string>>({
-    queryKey: ['dashboard', range],
-    queryFn: () => fetch('/api/v1/dashboard').then(r => r.json()),
+  const statsQuery = useQuery<TeamStat[]>({
+    queryKey: ['dashboard-stats'],
+    queryFn: () => fetch(`${BASE}/dashboard/stats`).then(r => {
+      if (!r.ok) throw new Error(`/dashboard/stats ${r.status}`);
+      return r.json();
+    }),
+    staleTime: 30_000,
   });
 
+  const healthQuery = useQuery<SystemHealth>({
+    queryKey: ['system-health'],
+    queryFn: () => fetch(`${BASE}/system/health`).then(r => {
+      if (!r.ok) throw new Error(`/system/health ${r.status}`);
+      return r.json();
+    }),
+    staleTime: 15_000,
+  });
+
+  const auditQuery = useQuery<AuditEntry[]>({
+    queryKey: ['audit-recent'],
+    queryFn: () => fetch(`${BASE}/audit?limit=6`).then(r => {
+      if (!r.ok) throw new Error(`/audit ${r.status}`);
+      return r.json();
+    }),
+    staleTime: 30_000,
+  });
+
+  const isLoading = statsQuery.isLoading || healthQuery.isLoading;
+  const isError = statsQuery.isError || healthQuery.isError;
+  const firstError = (statsQuery.error ?? healthQuery.error) as Error | undefined;
+
   if (isLoading) return <section className="page"><LoadingState rows={8} /></section>;
-  if (isError) return <section className="page"><ErrorState error={error as Error} retry={() => refetch()} /></section>;
+  if (isError && firstError) return <section className="page"><ErrorState error={firstError} retry={() => { statsQuery.refetch(); healthQuery.refetch(); }} /></section>;
+
+  const stats: TeamStat[] = statsQuery.data ?? [];
+  const health = healthQuery.data;
+  const audit: AuditEntry[] = auditQuery.data ?? [];
+
+  // Derived KPIs
+  const totalSpend = stats.reduce((s, t) => s + (t.total_cost_usd ?? 0), 0);
+  const totalRequests = stats.reduce((s, t) => s + (t.request_count ?? 0), 0);
+  const totalTokens = stats.reduce((s, t) => s + (t.total_tokens ?? 0), 0);
+  const avgCacheHit = stats.length > 0
+    ? stats.reduce((s, t) => s + (t.cache_hit_pct ?? 0), 0) / stats.length
+    : 0;
+
+  // Top teams sorted by spend descending
+  const topTeams = [...stats].sort((a, b) => (b.total_cost_usd ?? 0) - (a.total_cost_usd ?? 0));
+  const maxSpend = (topTeams[0]?.total_cost_usd ?? 0) || 1;
+
+  // Gateway stats
+  const gateway = health?.gateway;
+  const redis = health?.redis;
+
+  // Services for provider health table
+  const services: ServiceHealth[] = health?.services ?? [];
+
+  // Active alerts derived from unhealthy services
+  const unhealthyServices = services.filter(s => s.status !== 'ok');
 
   return (
     <section className="page">
@@ -56,17 +201,17 @@ export default function DashboardPage() {
       <div className="kpi-grid" style={{ marginBottom: 16 }}>
         <div className="kpi">
           <div className="kpi__label">Total spend</div>
-          <div className="kpi__value">$3,847<span className="unit">.21</span></div>
-          <div className="kpi__delta down">▼ 12.4% vs prev 24h</div>
+          <div className="kpi__value">{fmtUsd(totalSpend)}</div>
+          <div className="kpi__delta flat">{stats.length} teams · all time</div>
           <svg className="spark kpi__spark" viewBox="0 0 100 28" preserveAspectRatio="none">
             <path d="M0,18 L10,16 L20,20 L30,12 L40,15 L50,9 L60,13 L70,8 L80,11 L90,6 L100,9" fill="none" stroke="var(--sc-blue)" strokeWidth="1.5"/>
             <path d="M0,18 L10,16 L20,20 L30,12 L40,15 L50,9 L60,13 L70,8 L80,11 L90,6 L100,9 L100,28 L0,28 Z" fill="var(--sc-blue)" opacity="0.08"/>
           </svg>
         </div>
         <div className="kpi">
-          <div className="kpi__label">Cache savings</div>
-          <div className="kpi__value">$1,209<span className="unit">.45</span></div>
-          <div className="kpi__delta up">▲ 8.1% vs prev 24h</div>
+          <div className="kpi__label">Cache hit rate</div>
+          <div className="kpi__value">{avgCacheHit.toFixed(1)}<span className="unit">%</span></div>
+          <div className="kpi__delta flat">avg across teams</div>
           <svg className="spark kpi__spark" viewBox="0 0 100 28" preserveAspectRatio="none">
             <path d="M0,22 L10,20 L20,18 L30,16 L40,14 L50,12 L60,11 L70,9 L80,7 L90,5 L100,4" fill="none" stroke="var(--good)" strokeWidth="1.5"/>
             <path d="M0,22 L10,20 L20,18 L30,16 L40,14 L50,12 L60,11 L70,9 L80,7 L90,5 L100,4 L100,28 L0,28 Z" fill="var(--good)" opacity="0.10"/>
@@ -74,16 +219,22 @@ export default function DashboardPage() {
         </div>
         <div className="kpi">
           <div className="kpi__label">Requests</div>
-          <div className="kpi__value">2.41<span className="unit">M</span></div>
-          <div className="kpi__delta up">▲ 3.2% · 27.8 req/s avg</div>
+          <div className="kpi__value">
+            {totalRequests >= 1_000_000
+              ? <>{(totalRequests / 1_000_000).toFixed(2)}<span className="unit">M</span></>
+              : totalRequests >= 1_000
+              ? <>{(totalRequests / 1_000).toFixed(1)}<span className="unit">k</span></>
+              : <>{totalRequests}</>}
+          </div>
+          <div className="kpi__delta flat">total · all teams</div>
           <svg className="spark kpi__spark" viewBox="0 0 100 28" preserveAspectRatio="none">
             <path d="M0,15 L8,18 L16,12 L24,16 L32,10 L40,14 L48,8 L56,12 L64,6 L72,10 L80,5 L88,9 L100,4" fill="none" stroke="var(--sc-purple)" strokeWidth="1.5"/>
           </svg>
         </div>
         <div className="kpi">
-          <div className="kpi__label">p99 gateway latency</div>
-          <div className="kpi__value">38<span className="unit">ms</span></div>
-          <div className="kpi__delta flat">▬ within SLO (50ms)</div>
+          <div className="kpi__label">Requests last 60s</div>
+          <div className="kpi__value">{gateway?.requests_last_60s ?? '—'}</div>
+          <div className="kpi__delta flat">cache hit {((gateway?.cache_hit_rate_last_60s ?? 0) * 100).toFixed(1)}%</div>
           <svg className="spark kpi__spark" viewBox="0 0 100 28" preserveAspectRatio="none">
             <path d="M0,14 L10,16 L20,12 L30,15 L40,11 L50,14 L60,12 L70,15 L80,13 L90,16 L100,14" fill="none" stroke="var(--fg-2)" strokeWidth="1.5"/>
           </svg>
@@ -93,24 +244,32 @@ export default function DashboardPage() {
       {/* KPI row 2 */}
       <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(4,1fr)', marginBottom: 20 }}>
         <div className="kpi">
-          <div className="kpi__label">Cache hit rate</div>
-          <div className="kpi__value">31.4<span className="unit">%</span></div>
-          <div className="kpi__delta up">semantic 18.9% · exact 12.5%</div>
+          <div className="kpi__label">Total tokens</div>
+          <div className="kpi__value">
+            {totalTokens >= 1_000_000
+              ? <>{(totalTokens / 1_000_000).toFixed(1)}<span className="unit">M</span></>
+              : totalTokens >= 1_000
+              ? <>{(totalTokens / 1_000).toFixed(1)}<span className="unit">k</span></>
+              : <>{totalTokens}</>}
+          </div>
+          <div className="kpi__delta flat">all teams combined</div>
         </div>
         <div className="kpi">
-          <div className="kpi__label">Active API keys</div>
-          <div className="kpi__value">487</div>
-          <div className="kpi__delta flat">42 teams · 1,184 callers</div>
+          <div className="kpi__label">Redis memory</div>
+          <div className="kpi__value">{redis ? `${redis.used_memory_mb.toFixed(0)}` : '—'}<span className="unit">MB</span></div>
+          <div className="kpi__delta flat">{redis ? `ping ${redis.ping_ms.toFixed(1)}ms` : 'unavailable'}</div>
         </div>
         <div className="kpi">
-          <div className="kpi__label">Error rate</div>
-          <div className="kpi__value">0.21<span className="unit">%</span></div>
-          <div className="kpi__delta up">▼ 0.04 pp</div>
+          <div className="kpi__label">System status</div>
+          <div className="kpi__value" style={{ color: health?.overall === 'ok' ? 'var(--good)' : 'var(--bad)', fontSize: 18, paddingTop: 4 }}>
+            {health?.overall ?? '—'}
+          </div>
+          <div className="kpi__delta flat">{health?.last_updated ?? ''}</div>
         </div>
         <div className="kpi">
-          <div className="kpi__label">Tokens (in / out)</div>
-          <div className="kpi__value">412<span className="unit">M / 188M</span></div>
-          <div className="kpi__delta flat">2.19:1 ratio</div>
+          <div className="kpi__label">Teams tracked</div>
+          <div className="kpi__value">{stats.length}</div>
+          <div className="kpi__delta flat">with spend data</div>
         </div>
       </div>
 
@@ -149,23 +308,30 @@ export default function DashboardPage() {
         <div className="card">
           <div className="card__head">
             <h3 className="card__title">Top teams · spend</h3>
-            <span className="card__sub">last 24h</span>
+            <span className="card__sub">all time</span>
             <div className="card__actions">
               <Link href="/admin/teams" className="btn btn--sm btn--ghost">View all →</Link>
             </div>
           </div>
           <div className="card__body" style={{ paddingTop: 8 }}>
-            <div className="barlist">
-              {TOP_TEAMS.map(t => (
-                <div key={t.name} className="row">
-                  <div className="lbl">
-                    <span className="name">{t.name}</span>
-                    <span className="bar"><i style={{ right: `${t.bar}%` }}></i></span>
-                  </div>
-                  <div className="num">{t.spend}</div>
-                </div>
-              ))}
-            </div>
+            {topTeams.length === 0 ? (
+              <div className="muted" style={{ fontSize: 13 }}>No spend data available.</div>
+            ) : (
+              <div className="barlist">
+                {topTeams.map(t => {
+                  const barPct = maxSpend > 0 ? Math.round((1 - (t.total_cost_usd ?? 0) / maxSpend) * 100) : 100;
+                  return (
+                    <div key={t.team_name} className="row">
+                      <div className="lbl">
+                        <span className="name">{t.team_name}</span>
+                        <span className="bar"><i style={{ right: `${barPct}%` }}></i></span>
+                      </div>
+                      <div className="num">{fmtUsd(t.total_cost_usd)}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -203,30 +369,36 @@ export default function DashboardPage() {
         <div className="card">
           <div className="card__head"><h3 className="card__title">Provider health</h3><span className="card__sub">live</span></div>
           <div className="card__body" style={{ padding: 0 }}>
-            <table className="tbl">
-              <tbody>
-                <tr><td><span className="statusdot statusdot--good"></span>Anthropic</td><td className="num mono">28ms</td><td><span className="pill pill--good">healthy</span></td></tr>
-                <tr><td><span className="statusdot statusdot--good"></span>Google Gemini</td><td className="num mono">41ms</td><td><span className="pill pill--good">healthy</span></td></tr>
-                <tr><td><span className="statusdot statusdot--warn"></span>GitHub Models</td><td className="num mono">187ms</td><td><span className="pill pill--warn">degraded</span></td></tr>
-                <tr><td><span className="statusdot statusdot--good"></span>Ollama (eu-1)</td><td className="num mono">12ms</td><td><span className="pill pill--good">healthy</span></td></tr>
-                <tr><td><span className="statusdot statusdot--bad"></span>Azure OpenAI (BYO)</td><td className="num mono">—</td><td><span className="pill pill--bad">5xx 8.2%</span></td></tr>
-              </tbody>
-            </table>
+            {services.length === 0 ? (
+              <div className="muted" style={{ fontSize: 13, padding: 12 }}>No service data available.</div>
+            ) : (
+              <table className="tbl">
+                <tbody>
+                  {services.map(svc => (
+                    <tr key={svc.service}>
+                      <td><span className={statusDotClass(svc.status)}></span>{svc.service}</td>
+                      <td className="num mono">{svc.latency_ms != null ? `${svc.latency_ms.toFixed(0)}ms` : '—'}</td>
+                      <td><span className={statusPillClass(svc.status)}>{statusLabel(svc.status)}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
 
         <div className="card">
-          <div className="card__head"><h3 className="card__title">Cache</h3><span className="card__sub">last 24h</span></div>
+          <div className="card__head"><h3 className="card__title">Cache</h3><span className="card__sub">live</span></div>
           <div className="card__body">
             <div className="dl">
-              <dt>Hit rate (total)</dt><dd>31.4%</dd>
-              <dt>Exact match</dt><dd>12.5%</dd>
-              <dt>Semantic match</dt><dd>18.9%</dd>
-              <dt>Avg similarity</dt><dd>0.927</dd>
-              <dt>Embedding calls</dt><dd>1.2M</dd>
-              <dt>Redis memory</dt><dd>14.2 GB / 32 GB</dd>
-              <dt>Redis ops/s p99</dt><dd>4,810</dd>
-              <dt>Tokens saved</dt><dd>187.4M</dd>
+              <dt>Hit rate (last 60s)</dt><dd>{((gateway?.cache_hit_rate_last_60s ?? 0) * 100).toFixed(1)}%</dd>
+              <dt>Avg cache hit (teams)</dt><dd>{avgCacheHit.toFixed(1)}%</dd>
+              <dt>Requests last 60s</dt><dd>{gateway?.requests_last_60s ?? '—'}</dd>
+              <dt>Redis ping</dt><dd>{redis ? `${redis.ping_ms.toFixed(1)}ms` : '—'}</dd>
+              <dt>Redis memory</dt><dd>{redis ? `${redis.used_memory_mb.toFixed(1)} MB` : '—'}</dd>
+              <dt>Redis clients</dt><dd>{redis?.connected_clients ?? '—'}</dd>
+              <dt>Redis status</dt><dd>{redis?.status ?? '—'}</dd>
+              <dt>Postgres status</dt><dd>{health?.postgres?.status ?? '—'}</dd>
             </div>
           </div>
         </div>
@@ -243,12 +415,19 @@ export default function DashboardPage() {
             <table className="tbl">
               <thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Target</th></tr></thead>
               <tbody>
-                <tr><td className="mono">14:42:08</td><td>j.larsen@simcorp.com</td><td>rotated key</td><td><span className="tag">agent-platform · prod</span></td></tr>
-                <tr><td className="mono">14:38:55</td><td>system</td><td>auto-throttled</td><td><span className="tag">data-platform</span> · 429s × 142</td></tr>
-                <tr><td className="mono">14:21:11</td><td>m.rasmussen@simcorp.com</td><td>updated policy</td><td>cache_threshold 0.92 → 0.94</td></tr>
-                <tr><td className="mono">13:58:02</td><td>k.haukur@simcorp.com</td><td>created team</td><td>nordic-research</td></tr>
-                <tr><td className="mono">13:44:30</td><td>system</td><td>provider failover</td><td>anthropic → gemini · 47s</td></tr>
-                <tr><td className="mono">13:12:04</td><td>a.silva@simcorp.com</td><td>revoked key</td><td><span className="mono">sk_live_••••a31f</span></td></tr>
+                {audit.length === 0 ? (
+                  <tr><td colSpan={4} className="muted" style={{ textAlign: 'center', padding: 12 }}>No recent activity.</td></tr>
+                ) : audit.map(entry => (
+                  <tr key={entry.id}>
+                    <td className="mono">{fmtTime(entry.timestamp)}</td>
+                    <td>{entry.actor}</td>
+                    <td>{entry.action}</td>
+                    <td>
+                      <span className="tag">{entry.resource_type}</span>
+                      {entry.resource_id ? ` · ${entry.resource_id}` : ''}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
@@ -257,23 +436,32 @@ export default function DashboardPage() {
         <div className="card">
           <div className="card__head">
             <h3 className="card__title">Active alerts</h3>
-            <span className="card__sub">3 open</span>
+            <span className="card__sub">{unhealthyServices.length} open</span>
           </div>
           <div className="card__body" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {[
-              { color: 'bad', title: 'Azure OpenAI (BYO) — 5xx surge', desc: '8.2% error rate over last 15 min · auto-failover engaged · 2 teams affected', btn: 'Investigate' },
-              { color: 'warn', title: 'data-platform — rate limit', desc: '142 × 429 in 10 min · current 60 rpm cap, requested 120', btn: 'Review' },
-              { color: 'warn', title: 'agent-platform — budget at 84%', desc: '$8,420 / $10,000 monthly · projected to exceed by May 27', btn: 'Adjust' },
-            ].map(a => (
-              <div key={a.title} style={{ display: 'flex', gap: 10, padding: 10, border: '1px solid var(--rule)', borderRadius: 6, background: `var(--${a.color}-soft)` }}>
-                <span className={`statusdot statusdot--${a.color}`} style={{ marginTop: 5 }}></span>
+            {unhealthyServices.length === 0 ? (
+              <div style={{ display: 'flex', gap: 10, padding: 10, border: '1px solid var(--rule)', borderRadius: 6, background: 'var(--good-soft)' }}>
+                <span className="statusdot statusdot--good" style={{ marginTop: 5 }}></span>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 600, fontSize: 12.5 }}>{a.title}</div>
-                  <div className="muted" style={{ fontSize: 11.5 }}>{a.desc}</div>
+                  <div style={{ fontWeight: 600, fontSize: 12.5 }}>All systems healthy</div>
+                  <div className="muted" style={{ fontSize: 11.5 }}>No active alerts at this time.</div>
                 </div>
-                <button className="btn btn--sm">{a.btn}</button>
               </div>
-            ))}
+            ) : unhealthyServices.map(svc => {
+              const color = svc.status === 'degraded' ? 'warn' : 'bad';
+              return (
+                <div key={svc.service} style={{ display: 'flex', gap: 10, padding: 10, border: '1px solid var(--rule)', borderRadius: 6, background: `var(--${color}-soft)` }}>
+                  <span className={`statusdot statusdot--${color}`} style={{ marginTop: 5 }}></span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 600, fontSize: 12.5 }}>{svc.service} — {svc.status}</div>
+                    <div className="muted" style={{ fontSize: 11.5 }}>
+                      {svc.error ?? `HTTP ${svc.code} · ${svc.latency_ms != null ? `${svc.latency_ms.toFixed(0)}ms` : 'no latency data'}`}
+                    </div>
+                  </div>
+                  <button className="btn btn--sm">Investigate</button>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>

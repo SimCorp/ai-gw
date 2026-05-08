@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import { MOCK_KEYS } from "../_lib/mock-data";
+import { useState, useEffect, useCallback } from "react";
+import { useTeam } from "../_lib/teamContext";
+
+const ADMIN_BASE = "http://localhost:8005";
 
 const LANG_TABS = ["curl", "python", "ts", "anthropic"] as const;
 type Lang = (typeof LANG_TABS)[number];
@@ -64,10 +66,50 @@ const msg = await client.messages.create({
 });`,
 };
 
+interface ApiKey {
+  id: string;
+  team_id: string;
+  name: string;
+  key_hash: string;
+  revoked_at: string | null;
+  monthly_budget_usd: number | null;
+  created_at: string;
+}
+
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
+
 export default function KeysPage() {
+  const { teamId, teamName } = useTeam();
   const [lang, setLang] = useState<Lang>("curl");
   const [copied, setCopied] = useState<string | null>(null);
-  const [newKey] = useState("sk_live_8a31fc02e1b4d57f0c9a2e8d4f6b1a7e3d8c5b9f2e6a4d1c7b8a3");
+  const [keys, setKeys] = useState<ApiKey[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [newKeyValue, setNewKeyValue] = useState<string | null>(null);
+  const [newKeyName, setNewKeyName] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+
+  const loadKeys = useCallback(async () => {
+    if (!teamId) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const r = await fetch(`${ADMIN_BASE}/teams/${teamId}/keys`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = await r.json();
+      setKeys(data);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setLoading(false);
+    }
+  }, [teamId]);
+
+  useEffect(() => {
+    loadKeys();
+  }, [loadKeys]);
 
   const handleCopy = (text: string, id: string) => {
     navigator.clipboard.writeText(text).then(() => {
@@ -76,97 +118,173 @@ export default function KeysPage() {
     });
   };
 
+  const handleCreateKey = async () => {
+    const name = prompt("Enter a name for the new key:");
+    if (!name?.trim() || !teamId) return;
+    setCreating(true);
+    try {
+      const r = await fetch(`${ADMIN_BASE}/teams/${teamId}/keys`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name.trim() }),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = await r.json();
+      setNewKeyValue(data.key);
+      setNewKeyName(data.name);
+      await loadKeys();
+    } catch (e) {
+      alert(`Failed to create key: ${e}`);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleRevoke = async (keyId: string, keyName: string) => {
+    if (!teamId) return;
+    if (!confirm(`Revoke key "${keyName}"? This cannot be undone.`)) return;
+    try {
+      const r = await fetch(`${ADMIN_BASE}/teams/${teamId}/keys/${keyId}`, { method: "DELETE" });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      await loadKeys();
+    } catch (e) {
+      alert(`Failed to revoke key: ${e}`);
+    }
+  };
+
+  if (!teamId) {
+    return (
+      <main className="pmain">
+        <div className="phero">
+          <div>
+            <h1>API keys</h1>
+            <p>Select a team from the sidebar to manage API keys.</p>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  const activeKeys = keys.filter((k) => !k.revoked_at);
+
   return (
     <main className="pmain">
       <div className="phero">
         <div>
           <h1>API keys</h1>
-          <p>3 of your keys · scoped to <strong>agent-platform</strong> · governed by team rate limits and budget.</p>
+          <p>
+            {loading ? "Loading…" : `${activeKeys.length} active key${activeKeys.length !== 1 ? "s" : ""}`}
+            {" · "}scoped to <strong>{teamName}</strong> · governed by team rate limits and budget.
+          </p>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button className="btn">Rotate all</button>
-          <button className="btn btn--primary">+ Issue key</button>
+          <button className="btn btn--primary" onClick={handleCreateKey} disabled={creating}>
+            {creating ? "Creating…" : "+ Issue key"}
+          </button>
         </div>
       </div>
 
       {/* New key reveal */}
-      <div
-        className="card"
-        style={{
-          borderColor: "var(--good)",
-          background: "linear-gradient(180deg,rgba(31,138,91,0.04),transparent 40%)",
-          marginBottom: 20,
-        }}
-      >
-        <div className="card__head">
-          <h3 className="card__title">
-            Your new key — <span className="mono">prod-rag-service</span>
-          </h3>
-          <span className="card__sub">copy it now · we won&apos;t show it again</span>
-        </div>
-        <div className="card__body">
-          <div className="code-block" style={{ marginBottom: 10 }}>
-            {newKey}
-            <button className="copy-btn" onClick={() => handleCopy(newKey, "newkey")}>
-              {copied === "newkey" ? "Copied!" : "Copy"}
-            </button>
-            <button className="btn btn--sm" style={{ marginLeft: 8 }}>Test</button>
+      {newKeyValue && (
+        <div
+          className="card"
+          style={{
+            borderColor: "var(--good)",
+            background: "linear-gradient(180deg,rgba(31,138,91,0.04),transparent 40%)",
+            marginBottom: 20,
+          }}
+        >
+          <div className="card__head">
+            <h3 className="card__title">
+              Your new key — <span className="mono">{newKeyName}</span>
+            </h3>
+            <span className="card__sub">copy it now · we won&apos;t show it again</span>
           </div>
-          <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 12.5, color: "var(--fg-2)" }}>
-            <span><strong style={{ color: "var(--fg-1)" }}>Scope:</strong> prod</span>
-            <span><strong style={{ color: "var(--fg-1)" }}>Models:</strong> claude-*, gemini-*</span>
-            <span><strong style={{ color: "var(--fg-1)" }}>Rate:</strong> 60 rpm</span>
-            <span><strong style={{ color: "var(--fg-1)" }}>Expires:</strong> Aug 12, 2026</span>
-            <span style={{ marginLeft: "auto", color: "var(--good)" }}>✓ stored in your clipboard</span>
+          <div className="card__body">
+            <div className="code-block" style={{ marginBottom: 10 }}>
+              {newKeyValue}
+              <button className="copy-btn" onClick={() => handleCopy(newKeyValue, "newkey")}>
+                {copied === "newkey" ? "Copied!" : "Copy"}
+              </button>
+            </div>
+            <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 12.5, color: "var(--fg-2)" }}>
+              <span style={{ color: "var(--good)" }}>✓ store this somewhere safe — it will not be shown again</span>
+              <button
+                className="btn btn--sm btn--ghost"
+                style={{ marginLeft: "auto" }}
+                onClick={() => { setNewKeyValue(null); setNewKeyName(null); }}
+              >
+                Dismiss
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
+
+      {error && (
+        <div className="card" style={{ borderColor: "var(--bad)", marginBottom: 16 }}>
+          <div className="card__body" style={{ color: "var(--bad)", fontSize: 13 }}>
+            Failed to load keys: {error}
+          </div>
+        </div>
+      )}
 
       <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 18 }}>
         {/* Keys table */}
         <div className="card">
           <div className="card__head">
             <h3 className="card__title">Your keys</h3>
-            <span className="card__sub">3 active · 1 expiring soon</span>
+            <span className="card__sub">{activeKeys.length} active</span>
           </div>
           <div className="card__body" style={{ padding: 0 }}>
-            <table className="tbl">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Key ID</th>
-                  <th>Scope</th>
-                  <th>Model</th>
-                  <th>Rate</th>
-                  <th>Last used</th>
-                  <th>Expires</th>
-                  <th>Status</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {MOCK_KEYS.map((k) => (
-                  <tr key={k.id}>
-                    <td><strong>{k.name}</strong></td>
-                    <td><span className="mono">{k.prefix}</span></td>
-                    <td>
-                      <span className={`pill ${k.scope === "prod" ? "pill--info" : ""}`}>{k.scope}</span>
-                    </td>
-                    <td>{k.model}</td>
-                    <td>{k.rate}</td>
-                    <td>{k.lastUsed}</td>
-                    <td>{k.expires}</td>
-                    <td>
-                      {k.status === "active" && <span className="pill pill--good"><span className="dot" />active</span>}
-                      {k.status === "expiring" && <span className="pill pill--warn"><span className="dot" />{k.daysToExpiry}d to expiry</span>}
-                    </td>
-                    <td>
-                      <button className="btn btn--sm btn--ghost">⋯</button>
-                    </td>
+            {loading ? (
+              <div style={{ padding: 16, fontSize: 13, color: "var(--fg-3)" }}>Loading keys…</div>
+            ) : keys.length === 0 ? (
+              <div style={{ padding: 16, fontSize: 13, color: "var(--fg-3)" }}>
+                No keys yet. Issue your first key above.
+              </div>
+            ) : (
+              <table className="tbl">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Key prefix</th>
+                    <th>Budget</th>
+                    <th>Created</th>
+                    <th>Status</th>
+                    <th />
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {keys.map((k) => (
+                    <tr key={k.id}>
+                      <td><strong>{k.name}</strong></td>
+                      <td><span className="mono">{k.key_hash.slice(0, 8)}…</span></td>
+                      <td>{k.monthly_budget_usd != null ? `$${k.monthly_budget_usd}/mo` : <span className="muted">unlimited</span>}</td>
+                      <td>{formatDate(k.created_at)}</td>
+                      <td>
+                        {k.revoked_at ? (
+                          <span className="pill pill--bad"><span className="dot" />revoked</span>
+                        ) : (
+                          <span className="pill pill--good"><span className="dot" />active</span>
+                        )}
+                      </td>
+                      <td>
+                        {!k.revoked_at && (
+                          <button
+                            className="btn btn--sm btn--ghost"
+                            style={{ color: "var(--bad)" }}
+                            onClick={() => handleRevoke(k.id, k.name)}
+                          >
+                            Revoke
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
 
@@ -179,7 +297,7 @@ export default function KeysPage() {
               <li>Set the narrowest scope you need — restrict models and rate limits.</li>
               <li>Store in <span className="mono">{"${AZ_KEY_VAULT}/aigw/<service>"}</span>, not in code.</li>
               <li>Keys auto-expire at 90 days; rotate before then.</li>
-              <li>Compromised? Revoke from ⋯ menu — takes effect within 30s.</li>
+              <li>Compromised? Revoke from this table — takes effect within 30s.</li>
             </ul>
           </div>
         </div>

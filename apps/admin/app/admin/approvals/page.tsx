@@ -1,38 +1,40 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { LoadingState, ErrorState, EmptyState } from '../_components/PageStates';
-import { APPROVALS_DATA } from '../_mocks/data';
+import { EmptyState } from '../_components/PageStates';
 
-type Approval = typeof APPROVALS_DATA[number];
+type ApprovalsRow = {
+  type: string;
+  typePill: 'bad' | 'warn' | 'default';
+  subject: string;
+  desc: string;
+  requester: string;
+  team: string;
+  age: string;
+  sla: boolean;
+  risk: 'high' | 'med' | 'low';
+};
+
+const APPROVALS_DATA: ApprovalsRow[] = [
+  { type: 'tool scope',    typePill: 'bad',     subject: 'Grant orders:write to trade-mcp',      desc: 'justification: pre-trade ticket validator agent (rc.2)',   requester: 'g.olsen@simcorp',   team: 'trading',             age: '2h 18m',  sla: false, risk: 'high' },
+  { type: 'skill publish', typePill: 'warn',    subject: 'Anomaly explainer · v2.0',              desc: 'adds Datadog tool · diff +118 / -42',                     requester: 'k.weiss@simcorp',   team: 'risk-engineering',    age: '5h 04m',  sla: false, risk: 'med'  },
+  { type: 'budget raise',  typePill: 'warn',    subject: 'research-eu · +$3,500 May cap',         desc: 'projected overrun $13.4k vs $12.75k cap',                 requester: 'r.holm@simcorp',    team: 'research-eu',         age: '7h 41m',  sla: true,  risk: 'med'  },
+  { type: 'plugin install',typePill: 'default', subject: 'Slack notifier · per-team',             desc: 'scope: agent + budget alerts → #ai-gw-trading',           requester: 'g.olsen@simcorp',   team: 'trading',             age: '12h 02m', sla: true,  risk: 'low'  },
+  { type: 'model deploy',  typePill: 'default', subject: 'sonnet-4.5 · eu-west deployment',       desc: 'capacity addition · +200 RPM',                            requester: 'n.persson@simcorp', team: 'platform-engineering',age: '14h 21m', sla: true,  risk: 'low'  },
+  { type: 'mcp register',  typePill: 'warn',    subject: 'trade-mcp · v1.0-rc.2',                desc: 'scopes: orders:read, orders:write',                        requester: 'g.olsen@simcorp',   team: 'trading',             age: '1d 03h',  sla: false, risk: 'med'  },
+  { type: 'key issue',     typePill: 'default', subject: 'Production key · client-services-eu',  desc: 'rate 600 RPM · region eu-central only',                   requester: 'm.larsen@simcorp',  team: 'client-services-ai',  age: '1d 14h',  sla: false, risk: 'low'  },
+  { type: 'team add',      typePill: 'default', subject: 'New team · nordic-research-quant',      desc: '5 members · region eu-central · cap $4,000/mo',           requester: 'a.singh@simcorp',   team: '(new)',               age: '2d 08h',  sla: false, risk: 'low'  },
+];
 
 export default function ApprovalsPage() {
   const [filter, setFilter] = useState('Pending');
-  const qc = useQueryClient();
 
-  const { data, isLoading, isError, error, refetch } = useQuery<Approval[]>({
-    queryKey: ['approvals'],
-    queryFn: () => fetch('/api/v1/approvals').then(r => r.json()),
-  });
-
-  const approve = useMutation({
-    mutationFn: (idx: number) => fetch(`/api/v1/approvals/${idx}/approve`, { method: 'POST' }).then(r => r.json()),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['approvals'] }),
-  });
-
-  const deny = useMutation({
-    mutationFn: (idx: number) => fetch(`/api/v1/approvals/${idx}/deny`, { method: 'POST' }).then(r => r.json()),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['approvals'] }),
-  });
-
-  if (isLoading) return <section className="page"><LoadingState rows={8} /></section>;
-  if (isError) return <section className="page"><ErrorState error={error as Error} retry={() => refetch()} /></section>;
-
-  const rows = data ?? APPROVALS_DATA;
+  const rows = APPROVALS_DATA;
 
   return (
     <section className="page">
+      <div className="pill pill--warn" style={{ marginBottom: 12 }}>Live data not yet available for this page · showing representative data</div>
+
       <div className="page__head">
         <div>
           <h1 className="page__title">Approvals inbox</h1>
@@ -96,9 +98,9 @@ export default function ApprovalsPage() {
                         : <span className="pill">low</span>}
                     </td>
                     <td>
-                      <button className="btn btn--sm" onClick={() => deny.mutate(i)}>Deny</button>
+                      <button className="btn btn--sm">Deny</button>
                       {' '}
-                      <button className="btn btn--sm btn--primary" onClick={() => approve.mutate(i)}>Approve</button>
+                      <button className="btn btn--sm btn--primary">Approve</button>
                     </td>
                   </tr>
                 ))}

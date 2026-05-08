@@ -1,13 +1,34 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { LoadingState, ErrorState, EmptyState } from '../_components/PageStates';
-import { SKILLS_DATA } from '../_mocks/data';
+import { EmptyState } from '../_components/PageStates';
 
-type Skill = typeof SKILLS_DATA[number];
+type SkillStatus = 'published' | 'review' | 'frozen' | 'blocked' | 'draft';
+type SkillVisibility = 'org' | 'team' | 'draft';
 
-function statusPill(s: Skill['status']) {
+type Skill = {
+  name: string;
+  desc: string;
+  owner: string;
+  version: string;
+  model: string;
+  tools: number;
+  uses7d: string;
+  visibility: SkillVisibility;
+  status: SkillStatus;
+};
+
+const SKILLS_DATA: Skill[] = [
+  { name: 'Portfolio analyst',    desc: 'portfolio rebalance + drift narrative',         owner: 'platform-research',    version: 'v3.2',      model: 'sonnet-4.5', tools: 4, uses7d: '418', visibility: 'org',   status: 'published' },
+  { name: 'PR reviewer · Python', desc: 'enforces SimCorp Python style guide',           owner: 'developer-experience', version: 'v5.1',      model: 'sonnet-4.5', tools: 3, uses7d: '284', visibility: 'org',   status: 'published' },
+  { name: 'Filing summarizer',    desc: '10-K, 10-Q, EU prospectus → 6-bullet brief',   owner: 'nordic-research',      version: 'v2.0',      model: 'haiku-4.5',  tools: 2, uses7d: '192', visibility: 'org',   status: 'published' },
+  { name: 'Trade ticket validator',desc: 'pre-submit checks against compliance rules',   owner: 'compliance-automation',version: 'v1.0',      model: 'sonnet-4.5', tools: 3, uses7d: '88',  visibility: 'team',  status: 'frozen'    },
+  { name: 'SQL → narrative',      desc: 'turns query result into 2-paragraph summary',  owner: 'data-platform',        version: 'v2.7',      model: 'haiku-4.5',  tools: 1, uses7d: '318', visibility: 'org',   status: 'published' },
+  { name: 'Anomaly explainer',    desc: 'v2.0-draft — adds Datadog tool',               owner: 'risk-engineering',     version: 'v2.0-draft', model: 'sonnet-4.5', tools: 5, uses7d: '—',  visibility: 'draft', status: 'review'    },
+  { name: 'Email drafter · client',desc: 'pulls thread for tone match — flagged: PII risk', owner: 'client-services-ai',version: 'v1.2',   model: 'sonnet-4.5', tools: 2, uses7d: '142', visibility: 'team',  status: 'blocked'   },
+];
+
+function statusPill(s: SkillStatus) {
   if (s === 'published') return <span className="pill pill--good"><span className="dot"></span>published</span>;
   if (s === 'review') return <span className="pill pill--warn"><span className="dot"></span>review</span>;
   if (s === 'frozen') return <span className="pill pill--info"><span className="dot"></span>frozen</span>;
@@ -18,18 +39,12 @@ function statusPill(s: Skill['status']) {
 export default function SkillsPage() {
   const [filter, setFilter] = useState('All');
 
-  const { data, isLoading, isError, error, refetch } = useQuery<Skill[]>({
-    queryKey: ['skills'],
-    queryFn: () => fetch('/api/v1/skills').then(r => r.json()),
-  });
-
-  if (isLoading) return <section className="page"><LoadingState rows={7} /></section>;
-  if (isError) return <section className="page"><ErrorState error={error as Error} retry={() => refetch()} /></section>;
-
-  const rows = data ?? SKILLS_DATA;
+  const rows = SKILLS_DATA;
 
   return (
     <section className="page">
+      <div className="pill pill--warn" style={{ marginBottom: 12 }}>Live data not yet available for this page · showing representative data</div>
+
       <div className="page__head">
         <div>
           <h1 className="page__title">Skills catalog</h1>

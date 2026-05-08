@@ -3,24 +3,31 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { LoadingState, ErrorState } from '../_components/PageStates';
-import { AUDIT_DATA } from '../_mocks/data';
 
-type AuditRow = typeof AUDIT_DATA[number];
-
-function outcomePill(o: AuditRow['outcome']) {
-  if (o === 'success') return <span className="pill pill--good"><span className="dot"></span>success</span>;
-  if (o === 'blocked') return <span className="pill pill--bad"><span className="dot"></span>blocked</span>;
-  if (o === 'redacted') return <span className="pill pill--warn"><span className="dot"></span>redacted</span>;
-  if (o === 'pending') return <span className="pill pill--info"><span className="dot"></span>pending</span>;
-  if (o === 'drift') return <span className="pill pill--warn"><span className="dot"></span>drift</span>;
-  return <span className="pill">{o}</span>;
+interface AuditRow {
+  id: string;
+  actor: string;
+  action: string;
+  resource_id: string;
+  resource_type: string;
+  details: Record<string, unknown>;
+  timestamp: string;
 }
 
 function actionPill(a: string) {
   if (a.startsWith('request.blocked') || a.startsWith('plugin.block')) return <span className="pill pill--bad">{a}</span>;
   if (a.startsWith('output.redacted')) return <span className="pill pill--warn">{a}</span>;
   if (a.startsWith('tool.scope.request') || a.startsWith('budget.threshold') || a.startsWith('eval.regress')) return <span className="pill pill--info">{a}</span>;
+  if (a.startsWith('set_') || a.startsWith('create_') || a.startsWith('update_')) return <span className="pill pill--good">{a}</span>;
   return <span className="pill">{a}</span>;
+}
+
+function formatTimestamp(ts: string): string {
+  try {
+    return new Date(ts).toISOString().replace('T', ' ').substring(0, 19);
+  } catch {
+    return ts;
+  }
 }
 
 export default function AuditPage() {
@@ -28,20 +35,20 @@ export default function AuditPage() {
 
   const { data, isLoading, isError, error, refetch } = useQuery<AuditRow[]>({
     queryKey: ['audit'],
-    queryFn: () => fetch('/api/v1/audit').then(r => r.json()),
+    queryFn: () => fetch('http://localhost:8005/audit?limit=50').then(r => r.json()),
   });
 
   if (isLoading) return <section className="page"><LoadingState rows={12} /></section>;
   if (isError) return <section className="page"><ErrorState error={error as Error} retry={() => refetch()} /></section>;
 
-  const rows = data ?? AUDIT_DATA;
+  const rows = data ?? [];
 
   const filtered = search
     ? rows.filter(r =>
-        r.actor.includes(search) ||
-        r.action.includes(search) ||
-        r.resource.includes(search) ||
-        r.outcome.includes(search)
+        r.actor.toLowerCase().includes(search.toLowerCase()) ||
+        r.action.toLowerCase().includes(search.toLowerCase()) ||
+        r.resource_type.toLowerCase().includes(search.toLowerCase()) ||
+        r.resource_id.toLowerCase().includes(search.toLowerCase())
       )
     : rows;
 
@@ -63,7 +70,6 @@ export default function AuditPage() {
         <button className="filter"><span className="lbl">Actor</span><span className="val">All</span><span className="caret">▾</span></button>
         <button className="filter"><span className="lbl">Action</span><span className="val">All</span><span className="caret">▾</span></button>
         <button className="filter"><span className="lbl">Resource</span><span className="val">All</span><span className="caret">▾</span></button>
-        <button className="filter"><span className="lbl">Outcome</span><span className="val">All</span><span className="caret">▾</span></button>
         <span style={{ flex: 1 }} />
         <input
           className="search"
@@ -84,26 +90,23 @@ export default function AuditPage() {
                 <th>Actor</th>
                 <th>Action</th>
                 <th>Resource</th>
-                <th>Outcome</th>
-                <th>Trace</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((row, i) => (
-                <tr key={i} tabIndex={0} style={{ cursor: 'pointer' }}>
-                  <td className="mono lo" style={{ whiteSpace: 'nowrap' }}>{row.ts}</td>
+              {filtered.map((row) => (
+                <tr key={row.id} tabIndex={0} style={{ cursor: 'pointer' }}>
+                  <td className="mono lo" style={{ whiteSpace: 'nowrap' }}>{formatTimestamp(row.timestamp)}</td>
                   <td>
                     <div className="cell-2">
                       <span style={{ fontWeight: 500 }}>{row.actor}</span>
-                      <span className="lo">{row.role}</span>
                     </div>
                   </td>
                   <td>{actionPill(row.action)}</td>
-                  <td className="mono" style={{ fontSize: 12, color: 'var(--fg-2)' }}>{row.resource}</td>
-                  <td>{outcomePill(row.outcome)}</td>
-                  <td className="mono lo" style={{ fontSize: 12 }}>{row.trace}</td>
-                  <td><button className="btn btn--sm">{row.btn}</button></td>
+                  <td className="mono" style={{ fontSize: 12, color: 'var(--fg-2)' }}>
+                    {row.resource_type}{row.resource_id ? ` · ${row.resource_id.substring(0, 8)}…` : ''}
+                  </td>
+                  <td><button className="btn btn--sm">Details</button></td>
                 </tr>
               ))}
             </tbody>
@@ -119,14 +122,10 @@ export default function AuditPage() {
           color: 'var(--fg-2)',
         }}>
           <span>
-            Showing {filtered.length} of 14,208 events &middot;{' '}
+            Showing {filtered.length} of {rows.length} events &middot;{' '}
             <span className="mono" style={{ fontSize: 11 }}>WORM-stored, integrity hash sha256:8a4f&hellip;20de</span>
           </span>
-          <span style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-            <button className="btn btn--sm">‹ Newer</button>
-            <span>Page 1 of 1,184</span>
-            <button className="btn btn--sm">Older ›</button>
-          </span>
+          <button className="btn btn--sm" onClick={() => refetch()}>Refresh</button>
         </div>
       </div>
     </section>

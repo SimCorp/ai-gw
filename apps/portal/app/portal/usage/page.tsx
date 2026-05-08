@@ -1,8 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useTeam } from "../_lib/teamContext";
 
-// Pre-computed SVG bar data from the mock (30 days, stacked Sonnet/Haiku/Gemini)
+const ADMIN_BASE = "http://localhost:8005";
+
+// Pre-computed SVG bar data — decorative time series (no time-series endpoint exists)
 const BAR_DATA = [
   [142,11.9,14.62],[37.46,12.87,15.22],[46.14,13.09,15.4],[53.39,8.65,15.14],[41.99,8.34,14.46],
   [45.41,8.4,13.43],[47.01,4.94,12.14],[47.27,6.52,10.7],[30.06,8.91,9.25],[29.77,7.66,7.9],
@@ -14,15 +17,61 @@ const BAR_DATA = [
 
 const RANGE_OPTS = ["24h", "7d", "30d", "MTD"] as const;
 
+interface TeamStat {
+  team_name: string;
+  request_count: number;
+  total_tokens: number;
+  total_cost_usd: number;
+  cache_hit_pct: number;
+}
+
 export default function UsagePage() {
+  const { teamId, teamName } = useTeam();
   const [range, setRange] = useState<string>("30d");
+  const [stat, setStat] = useState<TeamStat | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!teamId || !teamName) return;
+    setLoading(true);
+    setError(null);
+    fetch(`${ADMIN_BASE}/dashboard/stats`)
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
+      .then((data: TeamStat[]) => {
+        const match = data.find((s) => s.team_name === teamName);
+        setStat(match ?? { team_name: teamName, request_count: 0, total_tokens: 0, total_cost_usd: 0, cache_hit_pct: 0 });
+      })
+      .catch((e) => setError(String(e)))
+      .finally(() => setLoading(false));
+  }, [teamId, teamName]);
+
+  if (!teamId) {
+    return (
+      <main className="pmain">
+        <div className="phero">
+          <div>
+            <h1>Usage &amp; spend</h1>
+            <p>Select a team from the sidebar to see usage data.</p>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  const formatCost = (v: number) => `$${v.toFixed(2)}`;
+  const formatTokens = (v: number) => v >= 1_000_000 ? `${(v / 1_000_000).toFixed(1)}M` : v >= 1_000 ? `${(v / 1_000).toFixed(1)}K` : String(v);
+  const formatPct = (v: number) => `${v.toFixed(1)}%`;
 
   return (
     <main className="pmain">
       <div className="phero">
         <div>
           <h1>Usage &amp; spend</h1>
-          <p>Your activity on <strong>agent-platform</strong> · last 30 days</p>
+          <p>Your activity on <strong>{teamName}</strong> · last 30 days</p>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <div className="seg">
@@ -34,32 +83,42 @@ export default function UsagePage() {
         </div>
       </div>
 
+      {error && (
+        <div className="card" style={{ borderColor: "var(--bad)", marginBottom: 16 }}>
+          <div className="card__body" style={{ color: "var(--bad)", fontSize: 13 }}>
+            Failed to load stats: {error}
+          </div>
+        </div>
+      )}
+
       <div className="stat-strip">
         <div className="s">
-          <div className="l">Spend · 30d</div><div className="v">$284.10</div>
-          <div className="d">3.1% of team total</div>
+          <div className="l">Spend · 30d</div>
+          <div className="v">{loading ? "—" : stat ? formatCost(stat.total_cost_usd) : "—"}</div>
+          <div className="d">cumulative</div>
         </div>
         <div className="s">
-          <div className="l">Requests</div><div className="v">38,412</div>
-          <div className="d">avg 1,280 / day</div>
+          <div className="l">Requests</div>
+          <div className="v">{loading ? "—" : stat ? stat.request_count.toLocaleString() : "—"}</div>
+          <div className="d">total requests</div>
         </div>
         <div className="s">
-          <div className="l">Tokens · in / out</div>
-          <div className="v" style={{ fontSize: 18 }}>42M / 8.1M</div>
-          <div className="d">5.2:1 ratio</div>
+          <div className="l">Tokens</div>
+          <div className="v" style={{ fontSize: 18 }}>{loading ? "—" : stat ? formatTokens(stat.total_tokens) : "—"}</div>
+          <div className="d">total tokens</div>
         </div>
         <div className="s">
-          <div className="l">Cache hit · you</div>
-          <div className="v good">38%</div>
-          <div className="d">saved $98</div>
+          <div className="l">Cache hit</div>
+          <div className="v good">{loading ? "—" : stat ? formatPct(stat.cache_hit_pct) : "—"}</div>
+          <div className="d">semantic cache</div>
         </div>
       </div>
 
-      {/* Stacked bar chart */}
+      {/* Stacked bar chart — decorative (no time-series endpoint) */}
       <div className="card" style={{ marginBottom: 18 }}>
         <div className="card__head">
           <h3 className="card__title">Spend over time</h3>
-          <span className="card__sub">stacked by model</span>
+          <span className="card__sub">stacked by model · illustrative</span>
           <div className="card__actions">
             <span className="pill"><span className="dot" style={{ background: "#D97757" }} />Sonnet</span>
             <span className="pill"><span className="dot" style={{ background: "#FB9B2A" }} />Haiku</span>
@@ -85,7 +144,7 @@ export default function UsagePage() {
               {BAR_DATA.map(([sonnet, haiku, gemini], i) => {
                 const x = 48 + i * 18;
                 const totalH = sonnet + haiku + gemini;
-                const y3 = 170 - totalH; // gemini (bottom of stack, visually top)
+                const y3 = 170 - totalH;
                 const y2 = 170 - sonnet - haiku;
                 const y1 = 170 - sonnet;
                 return (
@@ -107,57 +166,49 @@ export default function UsagePage() {
       </div>
 
       <div className="split-2">
-        {/* By key */}
+        {/* Summary card */}
         <div className="card">
-          <div className="card__head"><h3 className="card__title">By API key</h3></div>
-          <div className="card__body" style={{ padding: 0 }}>
-            <table className="tbl">
-              <thead>
-                <tr>
-                  <th>Key</th>
-                  <th className="num">Calls</th>
-                  <th className="num">Tokens</th>
-                  <th className="num">Spend</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[
-                  { name: "prod-rag-service", calls: "28,210", tokens: "38.2M", spend: "$218.40" },
-                  { name: "eval-runner",       calls: "8,114",  tokens: "8.4M",  spend: "$48.20" },
-                  { name: "jupyter-notebook",  calls: "2,088",  tokens: "3.5M",  spend: "$17.50" },
-                ].map((row) => (
-                  <tr key={row.name}>
-                    <td><strong>{row.name}</strong></td>
-                    <td className="num"><span className="mono">{row.calls}</span></td>
-                    <td className="num"><span className="mono">{row.tokens}</span></td>
-                    <td className="num"><span className="mono">{row.spend}</span></td>
+          <div className="card__head"><h3 className="card__title">Team summary</h3></div>
+          <div className="card__body">
+            {loading ? (
+              <div style={{ fontSize: 13, color: "var(--fg-3)" }}>Loading…</div>
+            ) : stat ? (
+              <table className="tbl">
+                <tbody>
+                  <tr>
+                    <td>Total spend</td>
+                    <td className="num"><span className="mono">{formatCost(stat.total_cost_usd)}</span></td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                  <tr>
+                    <td>Total requests</td>
+                    <td className="num"><span className="mono">{stat.request_count.toLocaleString()}</span></td>
+                  </tr>
+                  <tr>
+                    <td>Total tokens</td>
+                    <td className="num"><span className="mono">{formatTokens(stat.total_tokens)}</span></td>
+                  </tr>
+                  <tr>
+                    <td>Cache hit rate</td>
+                    <td className="num"><span className="mono">{formatPct(stat.cache_hit_pct)}</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            ) : (
+              <div style={{ fontSize: 13, color: "var(--fg-3)" }}>No data available.</div>
+            )}
           </div>
         </div>
 
-        {/* By model */}
+        {/* Info card */}
         <div className="card">
-          <div className="card__head"><h3 className="card__title">By model</h3></div>
+          <div className="card__head"><h3 className="card__title">About these stats</h3></div>
           <div className="card__body">
-            <div className="barlist">
-              {[
-                { name: "claude-sonnet-4.5",       pct: 100, spend: "$184.20" },
-                { name: "gemini-2.5-pro",           pct: 46,  spend: "$58.10" },
-                { name: "claude-haiku-4.5",         pct: 26,  spend: "$32.80" },
-                { name: "text-embedding-3-small",   pct: 8,   spend: "$9.00" },
-              ].map((row) => (
-                <div className="row" key={row.name}>
-                  <div className="lbl">
-                    <span className="name">{row.name}</span>
-                    <span className="bar"><i style={{ right: `${100 - row.pct}%` }} /></span>
-                  </div>
-                  <div className="num">{row.spend}</div>
-                </div>
-              ))}
-            </div>
+            <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.7 }}>
+              <li>Stats are aggregate for your team — all keys combined.</li>
+              <li>Cache hit percentage reflects semantic cache effectiveness.</li>
+              <li>Cost is approximate and billed monthly.</li>
+              <li>Per-key and per-model breakdown coming soon.</li>
+            </ul>
           </div>
         </div>
       </div>
