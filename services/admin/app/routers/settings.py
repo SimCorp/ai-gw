@@ -257,3 +257,109 @@ async def test_provider(env_var: str, session: AsyncSession = Depends(get_sessio
         return {"ok": False, "error": "Request timed out after 20s"}
     except Exception as exc:
         return {"ok": False, "error": str(exc)}
+
+
+async def _fetch_provider_models(provider: dict, key: str, stored: dict[str, str]) -> list[dict]:
+    """Call the provider's model list API and return [{id, name}]."""
+    env_var = provider["env_var"]
+    name = provider["name"]
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            if "Anthropic" in name:
+                r = await client.get(
+                    "https://api.anthropic.com/v1/models",
+                    headers={"x-api-key": key, "anthropic-version": "2023-06-01"},
+                    params={"limit": 100},
+                )
+                r.raise_for_status()
+                return [{"id": m["id"], "name": m.get("display_name", m["id"])} for m in r.json().get("data", [])]
+
+            elif "OpenAI" in name:
+                r = await client.get(
+                    "https://api.openai.com/v1/models",
+                    headers={"Authorization": f"Bearer {key}"},
+                )
+                r.raise_for_status()
+                raw = [m for m in r.json().get("data", []) if "gpt" in m["id"] or m["id"].startswith("o")]
+                return [{"id": m["id"], "name": m["id"]} for m in sorted(raw, key=lambda x: x["id"])]
+
+            elif "GitHub Copilot" in name:
+                r = await client.get(
+                    "https://api.githubcopilot.com/models",
+                    headers={"Authorization": f"Bearer {key}"},
+                )
+                r.raise_for_status()
+                return [{"id": m["id"], "name": m.get("name", m["id"])} for m in r.json().get("data", r.json() if isinstance(r.json(), list) else [])]
+
+            elif "GitHub Models" in name:
+                r = await client.get(
+                    "https://models.inference.ai.azure.com/v1/models",
+                    headers={"Authorization": f"Bearer {key}"},
+                )
+                r.raise_for_status()
+                return [{"id": m["id"], "name": m.get("name", m["id"])} for m in r.json().get("data", [])]
+
+            elif "Google" in name:
+                r = await client.get(
+                    "https://generativelanguage.googleapis.com/v1beta/models",
+                    params={"key": key, "pageSize": 50},
+                )
+                r.raise_for_status()
+                return [
+                    {"id": m["name"].split("/")[-1], "name": m.get("displayName", m["name"].split("/")[-1])}
+                    for m in r.json().get("models", [])
+                    if "generateContent" in m.get("supportedGenerationMethods", [])
+                ]
+
+            elif "Azure" in name:
+                api_base = stored.get("AZURE_API_BASE") or os.environ.get("AZURE_API_BASE", "")
+                api_version = stored.get("AZURE_API_VERSION") or os.environ.get("AZURE_API_VERSION", "2024-12-01-preview")
+                if not api_base:
+                    return []
+                base = api_base.rstrip("/")
+                r = await client.get(
+                    f"{base}/openai/models",
+                    headers={"api-key": key},
+                    params={"api-version": api_version},
+                )
+                r.raise_for_status()
+                return [{"id": m["id"], "name": m.get("model", m["id"])} for m in r.json().get("data", [])]
+
+    except Exception:
+        pass
+    return []
+
+
+@router.post("/api/settings/providers/{env_var}/discover")
+async def discover_provider_models(env_var: str, session: AsyncSession = Depends(get_session)):
+    """Fetch available models from a provider using its stored API key.
+    Returns each model with whether it is already registered in model_registry."""
+    provider = next((p for p in PROVIDERS if p["env_var"] == env_var), None)
+    if not provider:
+        return {"ok": False, "error": "Unknown provider", "models": []}
+
+    stored = await _get_stored_keys(session)
+    key = stored.get(env_var) or os.environ.get(env_var)
+    if not key:
+        return {"ok": False, "error": "No API key configured", "models": []}
+
+    discovered = await _fetch_provider_models(provider, key, stored)
+    if not discovered:
+        return {"ok": False, "error": "No models returned — check key and try again", "models": []}
+
+    # Check which are already registered
+    registered_ids = {
+        r[0] for r in (await session.execute(text("SELECT model_id FROM model_registry"))).all()
+    }
+
+    return {
+        "ok": True,
+        "models": [
+            {
+                "id": m["id"],
+                "name": m["name"],
+                "registered": m["id"] in registered_ids,
+            }
+            for m in discovered
+        ],
+    }

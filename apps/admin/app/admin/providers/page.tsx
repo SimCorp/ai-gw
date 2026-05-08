@@ -35,6 +35,12 @@ interface TestResult {
   error?: string;
 }
 
+interface DiscoveredModel {
+  id: string;
+  name: string;
+  registered: boolean;
+}
+
 const PROVIDER_COLORS: Record<string, string> = {
   'Anthropic': '#D97757',
   'OpenAI': '#10A37F',
@@ -60,6 +66,12 @@ function ProviderCard({ p, onSaved }: { p: Provider; onSaved: () => void }) {
   const [saveMsg, setSaveMsg] = useState('');
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<TestResult | null>(null);
+  const [discovering, setDiscovering] = useState(false);
+  const [discoveredModels, setDiscoveredModels] = useState<DiscoveredModel[] | null>(null);
+  const [discoverError, setDiscoverError] = useState('');
+  const [selectedModels, setSelectedModels] = useState<Set<string>>(new Set());
+  const [enabling, setEnabling] = useState(false);
+  const [enableMsg, setEnableMsg] = useState('');
 
   async function saveKey() {
     if (!keyInput.trim()) return;
@@ -104,6 +116,73 @@ function ProviderCard({ p, onSaved }: { p: Provider; onSaved: () => void }) {
     } finally {
       setTesting(false);
     }
+  }
+
+  async function fetchModels() {
+    setDiscovering(true);
+    setDiscoveredModels(null);
+    setDiscoverError('');
+    setSelectedModels(new Set());
+    setEnableMsg('');
+    try {
+      const res = await fetch(`http://localhost:8005/api/settings/providers/${p.env_var}/discover`, {
+        method: 'POST',
+      });
+      const json = await res.json();
+      if (json.ok) {
+        setDiscoveredModels(json.models);
+        // Pre-select unregistered models
+        const pre = new Set<string>(json.models.filter((m: DiscoveredModel) => !m.registered).map((m: DiscoveredModel) => m.id));
+        setSelectedModels(pre);
+      } else {
+        setDiscoverError(json.error || 'Discovery failed');
+      }
+    } catch {
+      setDiscoverError('Request failed');
+    } finally {
+      setDiscovering(false);
+    }
+  }
+
+  function toggleModel(id: string) {
+    setSelectedModels(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function enableSelected() {
+    if (selectedModels.size === 0) return;
+    setEnabling(true);
+    setEnableMsg('');
+    let ok = 0;
+    let fail = 0;
+    for (const id of selectedModels) {
+      const model = discoveredModels?.find(m => m.id === id);
+      if (!model) continue;
+      try {
+        const res = await fetch('http://localhost:8005/api/models', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model_id: id,
+            name: model.name,
+            provider: p.name,
+            enabled: true,
+          }),
+        });
+        if (res.ok) ok++;
+        else fail++;
+      } catch {
+        fail++;
+      }
+    }
+    setEnableMsg(fail === 0 ? `Enabled ${ok} model${ok !== 1 ? 's' : ''}` : `${ok} enabled, ${fail} failed`);
+    // Refresh discovered list to update registered status
+    await fetchModels();
+    setEnabling(false);
   }
 
   const logoColor = getProviderColor(p.name);
@@ -167,6 +246,11 @@ function ProviderCard({ p, onSaved }: { p: Provider; onSaved: () => void }) {
               {testing ? 'Testing…' : 'Test'}
             </button>
           )}
+          {p.is_set && (
+            <button className="btn btn--sm" onClick={fetchModels} disabled={discovering}>
+              {discovering ? 'Fetching…' : 'Fetch models'}
+            </button>
+          )}
         </div>
         {saveMsg && <span style={{ fontSize: 12, color: saveMsg === 'Saved' ? 'var(--good)' : 'var(--bad)' }}>{saveMsg}</span>}
         {testResult && (
@@ -175,6 +259,63 @@ function ProviderCard({ p, onSaved }: { p: Provider; onSaved: () => void }) {
               ? `Pass · ${testResult.latency_ms}ms · ${testResult.model}`
               : `Fail: ${testResult.error}`}
           </span>
+        )}
+        {discoverError && (
+          <span style={{ fontSize: 12, color: 'var(--bad)' }}>Discovery failed: {discoverError}</span>
+        )}
+        {discoveredModels && (
+          <div className="discover-panel">
+            <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--fg-2)', marginBottom: 6 }}>
+              {discoveredModels.length} models available from {p.name}
+            </div>
+            <div className="discover-list">
+              {discoveredModels.map(m => (
+                <label key={m.id} className={`discover-item${m.registered ? ' discover-item--done' : ''}`}>
+                  <input
+                    type="checkbox"
+                    checked={selectedModels.has(m.id)}
+                    onChange={() => !m.registered && toggleModel(m.id)}
+                    disabled={m.registered}
+                    style={{ marginRight: 7, accentColor: logoColor }}
+                  />
+                  <span className="discover-model-id">{m.id}</span>
+                  {m.name !== m.id && <span style={{ fontSize: 11, color: 'var(--fg-2)', marginLeft: 6 }}>{m.name}</span>}
+                  {m.registered && <span style={{ fontSize: 10.5, color: 'var(--good)', marginLeft: 'auto' }}>Already enabled</span>}
+                </label>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
+              <button
+                className="btn btn--sm btn--primary"
+                onClick={enableSelected}
+                disabled={enabling || selectedModels.size === 0}
+              >
+                {enabling ? 'Enabling…' : `Enable ${selectedModels.size} selected`}
+              </button>
+              <button
+                className="btn btn--sm"
+                onClick={() => {
+                  const unregistered = discoveredModels.filter(m => !m.registered).map(m => m.id);
+                  setSelectedModels(new Set(unregistered));
+                }}
+                style={{ fontSize: 11 }}
+              >
+                Select all new
+              </button>
+              <button
+                className="btn btn--sm"
+                onClick={() => setSelectedModels(new Set())}
+                style={{ fontSize: 11 }}
+              >
+                Clear
+              </button>
+            </div>
+            {enableMsg && (
+              <span style={{ fontSize: 12, color: enableMsg.includes('failed') ? 'var(--bad)' : 'var(--good)', marginTop: 4 }}>
+                {enableMsg}
+              </span>
+            )}
+          </div>
         )}
         {p.docs_url && (
           <div style={{ marginTop: 2 }}>
@@ -242,6 +383,12 @@ export default function ProvidersPage() {
         .prov-card__foot { padding: 10px 16px; border-top: 1px solid var(--rule); background: var(--surface-2); display:flex; align-items:center; gap: 8px; font-size: 11.5px; color: var(--fg-2); }
         .prov-card__foot .mono { color: var(--fg-1); }
         .tag { display: inline-block; background: var(--surface-soft); border: 1px solid var(--rule); border-radius: 4px; padding: 1px 6px; font-size: 11px; font-family: var(--font-mono); }
+        .discover-panel { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 12px; margin-top: 4px; }
+        .discover-list { max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+        .discover-item { display: flex; align-items: center; padding: 4px 6px; border-radius: 4px; cursor: pointer; font-size: 12px; transition: background 0.1s; }
+        .discover-item:hover { background: var(--surface-2); }
+        .discover-item--done { opacity: 0.6; cursor: default; }
+        .discover-model-id { font-family: var(--font-mono); font-size: 11.5px; }
       `}</style>
     </section>
   );

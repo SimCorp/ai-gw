@@ -193,7 +193,6 @@ export default function DashboardPage() {
             ))}
           </div>
           <button className="btn">Export</button>
-          <button className="btn btn--primary">+ New team</button>
         </div>
       </div>
 
