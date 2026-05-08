@@ -42,6 +42,14 @@ from app.routers import (
 # Extra DDL for tables without ORM models (run idempotently via IF NOT EXISTS)
 _EXTRA_DDL = [
     "CREATE EXTENSION IF NOT EXISTS \"pgcrypto\"",
+    """CREATE TABLE IF NOT EXISTS projects (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        team_id UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        slug TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE (team_id, slug)
+    )""",
     """CREATE TABLE IF NOT EXISTS cost_records (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         team_id UUID NOT NULL REFERENCES teams(id),
@@ -173,6 +181,16 @@ async def lifespan(app: FastAPI):
                 # Non-fatal: log and continue (e.g. index already exists)
                 import logging
                 logging.getLogger(__name__).warning("DDL skipped (%s): %s", type(exc).__name__, str(exc)[:120])
+
+    # Seed a default team if none exists (dev convenience)
+    async with engine.begin() as conn:
+        team_count = (await conn.execute(text("SELECT COUNT(*) FROM teams"))).scalar()
+        if team_count == 0:
+            await conn.execute(text("""
+                INSERT INTO teams (id, name, slug)
+                VALUES (gen_random_uuid(), 'Engineering', 'engineering')
+                ON CONFLICT DO NOTHING
+            """))
 
     # Seed guardrails if table is empty
     async with engine.begin() as conn:

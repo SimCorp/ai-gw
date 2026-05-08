@@ -19,5 +19,5 @@ class Policy(Base):
     cache_opt_out: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     embedding_model: Mapped[str] = mapped_column(String, nullable=False, server_default="'text-embedding-3-small'")
     rate_limit_rpm: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1000")
-    allowed_models: Mapped[list[str]] = mapped_column(ARRAY(String), nullable=False, server_default="ARRAY[]::TEXT[]")
+    allowed_models: Mapped[list[str]] = mapped_column(ARRAY(String), nullable=False, server_default=text("ARRAY[]::TEXT[]"))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("NOW()"), onupdate=text("NOW()"))

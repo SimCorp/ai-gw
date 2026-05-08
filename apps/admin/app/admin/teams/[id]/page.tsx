@@ -33,7 +33,7 @@ interface Member {
   team_id: string;
   user_id: string;
   role: string;
-  joined_at: string | null;
+  created_at: string | null;
   developer_id: string | null;
 }
 
@@ -94,6 +94,11 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
   const { id } = use(params);
   const [tab, setTab] = useState<Tab>('overview');
   const [newKeyValue, setNewKeyValue] = useState<string | null>(null);
+  const [addMemberOpen, setAddMemberOpen] = useState(false);
+  const [addMemberUserId, setAddMemberUserId] = useState('');
+  const [addMemberRole, setAddMemberRole] = useState<'member' | 'admin'>('member');
+  const [addMemberError, setAddMemberError] = useState<string | null>(null);
+  const [addMemberBusy, setAddMemberBusy] = useState(false);
   const queryClient = useQueryClient();
 
   const teamQuery = useQuery<Team>({
@@ -180,6 +185,40 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
       return;
     }
     queryClient.invalidateQueries({ queryKey: ['team-keys', id] });
+  }
+
+  async function handleAddMember() {
+    if (!addMemberUserId.trim()) { setAddMemberError('User ID is required'); return; }
+    setAddMemberBusy(true);
+    setAddMemberError(null);
+    try {
+      const res = await fetch(`${BASE}/teams/${id}/members`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: addMemberUserId.trim(), role: addMemberRole }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setAddMemberError((err as { detail?: string }).detail ?? `Error ${res.status}`);
+        return;
+      }
+      setAddMemberOpen(false);
+      setAddMemberUserId('');
+      setAddMemberRole('member');
+      queryClient.invalidateQueries({ queryKey: ['team-members', id] });
+    } finally {
+      setAddMemberBusy(false);
+    }
+  }
+
+  async function handleRemoveMember(userId: string) {
+    if (!window.confirm(`Remove member "${userId}" from this team?`)) return;
+    const res = await fetch(`${BASE}/teams/${id}/members/${encodeURIComponent(userId)}`, { method: 'DELETE' });
+    if (!res.ok) {
+      window.alert(`Failed to remove member: ${res.status}`);
+      return;
+    }
+    queryClient.invalidateQueries({ queryKey: ['team-members', id] });
   }
 
   return (
@@ -471,45 +510,115 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
 
       {/* ── MEMBERS ── */}
       {tab === 'members' && (
-        <div className="card">
-          <div className="card__head">
-            <h3 className="card__title">Members</h3>
-            <span className="card__sub">{members.length} member{members.length !== 1 ? 's' : ''}</span>
-            <div className="card__actions"><button className="btn btn--primary btn--sm">+ Add member</button></div>
-          </div>
-          <div className="card__body" style={{ padding: 0 }}>
-            {membersQuery.isLoading ? (
-              <div style={{ padding: 24 }}><LoadingState rows={3} /></div>
-            ) : members.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--fg-3)', fontSize: 13 }}>
-                No members yet
+        <>
+          {addMemberOpen && (
+            <div style={{
+              position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 200,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }} onClick={e => { if (e.target === e.currentTarget) setAddMemberOpen(false); }}>
+              <div style={{
+                background: 'var(--surface)', border: '1px solid var(--rule)',
+                borderRadius: 12, padding: 24, width: 380, maxWidth: '90vw',
+              }}>
+                <h3 style={{ margin: '0 0 16px', fontSize: 15 }}>Add member</h3>
+                <label style={{ fontSize: 12.5, color: 'var(--fg-2)', display: 'block', marginBottom: 4 }}>
+                  User ID (email or Entra ID)
+                </label>
+                <input
+                  autoFocus
+                  value={addMemberUserId}
+                  onChange={e => setAddMemberUserId(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleAddMember()}
+                  placeholder="user@simcorp.com"
+                  style={{
+                    width: '100%', padding: '8px 10px', fontSize: 13,
+                    background: 'var(--surface-2)', border: '1px solid var(--rule)',
+                    borderRadius: 6, color: 'var(--fg-1)', fontFamily: 'inherit',
+                    marginBottom: 12,
+                  }}
+                />
+                <label style={{ fontSize: 12.5, color: 'var(--fg-2)', display: 'block', marginBottom: 4 }}>
+                  Role
+                </label>
+                <select
+                  value={addMemberRole}
+                  onChange={e => setAddMemberRole(e.target.value as 'member' | 'admin')}
+                  style={{
+                    width: '100%', padding: '8px 10px', fontSize: 13,
+                    background: 'var(--surface-2)', border: '1px solid var(--rule)',
+                    borderRadius: 6, color: 'var(--fg-1)', fontFamily: 'inherit',
+                    marginBottom: addMemberError ? 8 : 16,
+                  }}
+                >
+                  <option value="member">Member</option>
+                  <option value="admin">Admin</option>
+                </select>
+                {addMemberError && (
+                  <p style={{ color: 'var(--bad)', fontSize: 12.5, margin: '0 0 12px' }}>{addMemberError}</p>
+                )}
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                  <button className="btn btn--sm btn--ghost" onClick={() => { setAddMemberOpen(false); setAddMemberError(null); }}>
+                    Cancel
+                  </button>
+                  <button className="btn btn--sm btn--primary" onClick={handleAddMember} disabled={addMemberBusy}>
+                    {addMemberBusy ? 'Adding…' : 'Add member'}
+                  </button>
+                </div>
               </div>
-            ) : (
-              <table className="tbl">
-                <thead>
-                  <tr><th>User ID</th><th>Role</th><th>Joined</th><th>Developer ID</th><th></th></tr>
-                </thead>
-                <tbody>
-                  {members.map(m => (
-                    <tr key={m.id}>
-                      <td><span className="mono" style={{ fontSize: 12 }}>{m.user_id ?? '—'}</span></td>
-                      <td>
-                        {m.role === 'owner'
-                          ? <span className="pill pill--info">Owner</span>
-                          : m.role === 'maintainer'
-                            ? <span className="pill">Maintainer</span>
+            </div>
+          )}
+          <div className="card">
+            <div className="card__head">
+              <h3 className="card__title">Members</h3>
+              <span className="card__sub">{members.length} member{members.length !== 1 ? 's' : ''}</span>
+              <div className="card__actions">
+                <button className="btn btn--primary btn--sm" onClick={() => { setAddMemberError(null); setAddMemberOpen(true); }}>
+                  + Add member
+                </button>
+              </div>
+            </div>
+            <div className="card__body" style={{ padding: 0 }}>
+              {membersQuery.isLoading ? (
+                <div style={{ padding: 24 }}><LoadingState rows={3} /></div>
+              ) : members.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--fg-3)', fontSize: 13 }}>
+                  No members yet ·{' '}
+                  <button className="btn btn--sm btn--ghost" onClick={() => { setAddMemberError(null); setAddMemberOpen(true); }}>
+                    Add first member
+                  </button>
+                </div>
+              ) : (
+                <table className="tbl">
+                  <thead>
+                    <tr><th>User ID</th><th>Role</th><th>Added</th><th></th></tr>
+                  </thead>
+                  <tbody>
+                    {members.map(m => (
+                      <tr key={m.id}>
+                        <td><span className="mono" style={{ fontSize: 12 }}>{m.user_id ?? '—'}</span></td>
+                        <td>
+                          {m.role === 'admin'
+                            ? <span className="pill pill--info">Admin</span>
                             : <span className="pill">Member</span>}
-                      </td>
-                      <td>{formatDate(m.joined_at)}</td>
-                      <td><span className="mono muted" style={{ fontSize: 11 }}>{m.developer_id ? m.developer_id.slice(0, 8) + '…' : '—'}</span></td>
-                      <td><button className="btn btn--sm btn--ghost">⋯</button></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
+                        </td>
+                        <td>{formatDate(m.created_at)}</td>
+                        <td>
+                          <button
+                            className="btn btn--sm btn--ghost"
+                            style={{ color: 'var(--bad)' }}
+                            onClick={() => handleRemoveMember(m.user_id)}
+                          >
+                            Remove
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
           </div>
-        </div>
+        </>
       )}
 
       {/* ── AUDIT ── */}
