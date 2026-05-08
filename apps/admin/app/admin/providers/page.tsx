@@ -39,6 +39,8 @@ interface DiscoveredModel {
   id: string;
   name: string;
   registered: boolean;
+  registry_id: string | null;
+  enabled: boolean | null;
 }
 
 const PROVIDER_COLORS: Record<string, string> = {
@@ -69,9 +71,10 @@ function ProviderCard({ p, onSaved }: { p: Provider; onSaved: () => void }) {
   const [discovering, setDiscovering] = useState(false);
   const [discoveredModels, setDiscoveredModels] = useState<DiscoveredModel[] | null>(null);
   const [discoverError, setDiscoverError] = useState('');
-  const [selectedModels, setSelectedModels] = useState<Set<string>>(new Set());
-  const [enabling, setEnabling] = useState(false);
-  const [enableMsg, setEnableMsg] = useState('');
+  // action per model: 'skip' | 'enable' | 'disable' | 'keep'
+  const [modelActions, setModelActions] = useState<Record<string, string>>({});
+  const [applying, setApplying] = useState(false);
+  const [applyMsg, setApplyMsg] = useState('');
 
   async function saveKey() {
     if (!keyInput.trim()) return;
@@ -122,8 +125,8 @@ function ProviderCard({ p, onSaved }: { p: Provider; onSaved: () => void }) {
     setDiscovering(true);
     setDiscoveredModels(null);
     setDiscoverError('');
-    setSelectedModels(new Set());
-    setEnableMsg('');
+    setModelActions({});
+    setApplyMsg('');
     try {
       const res = await fetch(`http://localhost:8005/api/settings/providers/${p.env_var}/discover`, {
         method: 'POST',
@@ -131,9 +134,14 @@ function ProviderCard({ p, onSaved }: { p: Provider; onSaved: () => void }) {
       const json = await res.json();
       if (json.ok) {
         setDiscoveredModels(json.models);
-        // Pre-select unregistered models
-        const pre = new Set<string>(json.models.filter((m: DiscoveredModel) => !m.registered).map((m: DiscoveredModel) => m.id));
-        setSelectedModels(pre);
+        // Default: unregistered → 'enable', registered+enabled → 'keep', registered+disabled → 'enable'
+        const defaults: Record<string, string> = {};
+        for (const m of json.models as DiscoveredModel[]) {
+          if (!m.registered) defaults[m.id] = 'enable';
+          else if (m.enabled === false) defaults[m.id] = 'enable';
+          else defaults[m.id] = 'keep';
+        }
+        setModelActions(defaults);
       } else {
         setDiscoverError(json.error || 'Discovery failed');
       }
@@ -144,46 +152,60 @@ function ProviderCard({ p, onSaved }: { p: Provider; onSaved: () => void }) {
     }
   }
 
-  function toggleModel(id: string) {
-    setSelectedModels(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
-  async function enableSelected() {
-    if (selectedModels.size === 0) return;
-    setEnabling(true);
-    setEnableMsg('');
-    let ok = 0;
-    let fail = 0;
-    for (const id of selectedModels) {
-      const model = discoveredModels?.find(m => m.id === id);
-      if (!model) continue;
-      try {
-        const res = await fetch('http://localhost:8005/api/models', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            model_id: id,
-            name: model.name,
-            provider: p.name,
-            enabled: true,
-          }),
-        });
-        if (res.ok) ok++;
-        else fail++;
-      } catch {
-        fail++;
+  async function applyChanges() {
+    if (!discoveredModels) return;
+    setApplying(true);
+    setApplyMsg('');
+    let enabled = 0, disabled = 0, fail = 0;
+    for (const m of discoveredModels) {
+      const action = modelActions[m.id];
+      if (action === 'enable' && !m.registered) {
+        // Register new model
+        try {
+          const res = await fetch('http://localhost:8005/api/models', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model_id: m.id, name: m.name, provider: p.name, enabled: true }),
+          });
+          if (res.ok) enabled++; else fail++;
+        } catch { fail++; }
+      } else if (action === 'enable' && m.registered && m.enabled === false && m.registry_id) {
+        // Re-enable disabled model
+        try {
+          const res = await fetch(`http://localhost:8005/api/models/${m.registry_id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled: true }),
+          });
+          if (res.ok) enabled++; else fail++;
+        } catch { fail++; }
+      } else if (action === 'disable' && m.registered && m.registry_id) {
+        try {
+          const res = await fetch(`http://localhost:8005/api/models/${m.registry_id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled: false }),
+          });
+          if (res.ok) disabled++; else fail++;
+        } catch { fail++; }
       }
     }
-    setEnableMsg(fail === 0 ? `Enabled ${ok} model${ok !== 1 ? 's' : ''}` : `${ok} enabled, ${fail} failed`);
-    // Refresh discovered list to update registered status
+    const parts = [];
+    if (enabled) parts.push(`${enabled} enabled`);
+    if (disabled) parts.push(`${disabled} disabled`);
+    if (fail) parts.push(`${fail} failed`);
+    setApplyMsg(parts.join(', ') || 'No changes');
     await fetchModels();
-    setEnabling(false);
+    setApplying(false);
   }
+
+  const pendingChanges = discoveredModels?.filter(m => {
+    const action = modelActions[m.id];
+    if (action === 'enable' && !m.registered) return true;
+    if (action === 'enable' && m.registered && m.enabled === false) return true;
+    if (action === 'disable' && m.registered && m.enabled !== false) return true;
+    return false;
+  }).length ?? 0;
 
   const logoColor = getProviderColor(p.name);
 
@@ -269,50 +291,46 @@ function ProviderCard({ p, onSaved }: { p: Provider; onSaved: () => void }) {
               {discoveredModels.length} models available from {p.name}
             </div>
             <div className="discover-list">
-              {discoveredModels.map(m => (
-                <label key={m.id} className={`discover-item${m.registered ? ' discover-item--done' : ''}`}>
-                  <input
-                    type="checkbox"
-                    checked={selectedModels.has(m.id)}
-                    onChange={() => !m.registered && toggleModel(m.id)}
-                    disabled={m.registered}
-                    style={{ marginRight: 7, accentColor: logoColor }}
-                  />
-                  <span className="discover-model-id">{m.id}</span>
-                  {m.name !== m.id && <span style={{ fontSize: 11, color: 'var(--fg-2)', marginLeft: 6 }}>{m.name}</span>}
-                  {m.registered && <span style={{ fontSize: 10.5, color: 'var(--good)', marginLeft: 'auto' }}>Already enabled</span>}
-                </label>
-              ))}
+              {discoveredModels.map(m => {
+                const action = modelActions[m.id] ?? (m.registered ? 'keep' : 'enable');
+                return (
+                  <div key={m.id} className="discover-item">
+                    <span className="discover-model-id">{m.id}</span>
+                    {m.name !== m.id && <span style={{ fontSize: 11, color: 'var(--fg-2)', marginLeft: 6, flex: 1 }}>{m.name}</span>}
+                    <span style={{ flex: 1 }} />
+                    <select
+                      className="discover-action-select"
+                      value={action}
+                      onChange={e => setModelActions(prev => ({ ...prev, [m.id]: e.target.value }))}
+                    >
+                      {m.registered ? (
+                        <>
+                          <option value="keep">Keep enabled</option>
+                          <option value="disable">Disable</option>
+                        </>
+                      ) : (
+                        <>
+                          <option value="enable">Enable</option>
+                          <option value="skip">Skip</option>
+                        </>
+                      )}
+                    </select>
+                  </div>
+                );
+              })}
             </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
               <button
                 className="btn btn--sm btn--primary"
-                onClick={enableSelected}
-                disabled={enabling || selectedModels.size === 0}
+                onClick={applyChanges}
+                disabled={applying || pendingChanges === 0}
               >
-                {enabling ? 'Enabling…' : `Enable ${selectedModels.size} selected`}
-              </button>
-              <button
-                className="btn btn--sm"
-                onClick={() => {
-                  const unregistered = discoveredModels.filter(m => !m.registered).map(m => m.id);
-                  setSelectedModels(new Set(unregistered));
-                }}
-                style={{ fontSize: 11 }}
-              >
-                Select all new
-              </button>
-              <button
-                className="btn btn--sm"
-                onClick={() => setSelectedModels(new Set())}
-                style={{ fontSize: 11 }}
-              >
-                Clear
+                {applying ? 'Applying…' : `Apply ${pendingChanges} change${pendingChanges !== 1 ? 's' : ''}`}
               </button>
             </div>
-            {enableMsg && (
-              <span style={{ fontSize: 12, color: enableMsg.includes('failed') ? 'var(--bad)' : 'var(--good)', marginTop: 4 }}>
-                {enableMsg}
+            {applyMsg && (
+              <span style={{ fontSize: 12, color: applyMsg.includes('failed') ? 'var(--bad)' : 'var(--good)', marginTop: 4 }}>
+                {applyMsg}
               </span>
             )}
           </div>
@@ -385,10 +403,10 @@ export default function ProvidersPage() {
         .tag { display: inline-block; background: var(--surface-soft); border: 1px solid var(--rule); border-radius: 4px; padding: 1px 6px; font-size: 11px; font-family: var(--font-mono); }
         .discover-panel { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 12px; margin-top: 4px; }
         .discover-list { max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
-        .discover-item { display: flex; align-items: center; padding: 4px 6px; border-radius: 4px; cursor: pointer; font-size: 12px; transition: background 0.1s; }
+        .discover-item { display: flex; align-items: center; padding: 4px 6px; border-radius: 4px; font-size: 12px; gap: 4px; }
         .discover-item:hover { background: var(--surface-2); }
-        .discover-item--done { opacity: 0.6; cursor: default; }
-        .discover-model-id { font-family: var(--font-mono); font-size: 11.5px; }
+        .discover-model-id { font-family: var(--font-mono); font-size: 11.5px; white-space: nowrap; }
+        .discover-action-select { font-size: 11px; background: var(--surface); border: 1px solid var(--rule); border-radius: 4px; padding: 2px 6px; color: var(--fg-1); cursor: pointer; flex-shrink: 0; }
       `}</style>
     </section>
   );

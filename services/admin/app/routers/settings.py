@@ -347,10 +347,11 @@ async def discover_provider_models(env_var: str, session: AsyncSession = Depends
     if not discovered:
         return {"ok": False, "error": "No models returned — check key and try again", "models": []}
 
-    # Check which are already registered
-    registered_ids = {
-        r[0] for r in (await session.execute(text("SELECT model_id FROM model_registry"))).all()
-    }
+    # Fetch registry rows to get UUID + enabled state for registered models
+    rows = (await session.execute(
+        text("SELECT id::text, model_id, enabled FROM model_registry")
+    )).all()
+    registry_map = {r[1]: {"registry_id": r[0], "enabled": r[2]} for r in rows}
 
     return {
         "ok": True,
@@ -358,7 +359,9 @@ async def discover_provider_models(env_var: str, session: AsyncSession = Depends
             {
                 "id": m["id"],
                 "name": m["name"],
-                "registered": m["id"] in registered_ids,
+                "registered": m["id"] in registry_map,
+                "registry_id": registry_map[m["id"]]["registry_id"] if m["id"] in registry_map else None,
+                "enabled": registry_map[m["id"]]["enabled"] if m["id"] in registry_map else None,
             }
             for m in discovered
         ],
