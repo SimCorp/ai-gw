@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 const queryClient = new QueryClient({
@@ -11,17 +11,6 @@ const queryClient = new QueryClient({
     },
   },
 });
-
-function MSWGate({ children }: { children: React.ReactNode }) {
-  useEffect(() => {
-    if (process.env.NODE_ENV !== 'development') return;
-    import('./_mocks/browser').then(({ worker }) =>
-      worker.start({ onUnhandledRequest: 'bypass' })
-    ).catch(() => { /* service worker unavailable — MSW runs in node mode */ });
-  }, []);
-
-  return <>{children}</>;
-}
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   // Apply dark theme before first paint
@@ -34,8 +23,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   return (
     <QueryClientProvider client={queryClient}>
-      <MSWGate>
-        <div className="app">
+      <div className="app">
           <aside className="sidebar">
             <div style={{ padding: '16px 14px', borderBottom: '1px solid var(--side-rule)', marginBottom: 8 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -86,7 +74,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             {children}
           </main>
         </div>
-      </MSWGate>
     </QueryClientProvider>
   );
 }

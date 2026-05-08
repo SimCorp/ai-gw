@@ -155,10 +155,10 @@ The admin portal exposes a built-in health dashboard:
 
 | URL | Format | Notes |
 |-----|--------|-------|
-| `http://localhost:8005/system/health/ui` | HTML | Auto-refreshes every 10 seconds |
+| `http://localhost:3001/admin/dashboard` | HTML | Auto-refreshes every 10 seconds |
 | `http://localhost:8005/system/health` | JSON | Suitable for external monitoring/alerting |
 
-**Visual dashboard:** The JSON endpoint is also rendered as a rich visual dashboard at `http://localhost:8005/system/health/ui`. It polls every 10 seconds and shows: service status dots with latency bars, Redis memory, Postgres active connections, LiteLLM model count, gateway requests/minute, cache hit rate, and recent error events.
+**Visual dashboard:** The JSON endpoint is also rendered as a rich visual dashboard at `http://localhost:3001/admin/dashboard`. It polls every 10 seconds and shows: service status dots with latency bars, Redis memory, Postgres active connections, LiteLLM model count, gateway requests/minute, cache hit rate, and recent error events.
 
 The dashboard checks all of the following simultaneously:
 
@@ -373,7 +373,7 @@ docker compose -f infra/docker-compose.yml exec redis \
 
 ### 4.4 Provider API Key Missing
 
-**Symptoms:** LiteLLM returns `AuthenticationError` or `APIError`. The system health dashboard shows `models_available: 0` or a low count. The settings page at `http://localhost:8005/ui/settings` shows a provider as "not configured".
+**Symptoms:** LiteLLM returns `AuthenticationError` or `APIError`. The system health dashboard shows `models_available: 0` or a low count. The settings page at `http://localhost:3001/admin/dashboard` shows a provider as "not configured".
 
 **Diagnosis:**
 
@@ -390,7 +390,7 @@ curl -s -H "Authorization: Bearer sk-litellm-local-dev" \
 
 **Fix:**
 
-1. Navigate to `http://localhost:8005/ui/settings`.
+1. Navigate to `http://localhost:3001/admin/dashboard`.
 2. Enter the API key for the failing provider in the appropriate field.
 3. Click **Save**. The portal stores the key in `provider_keys` and immediately calls `PATCH /model/update` on LiteLLM — no restart required.
 4. Use the **Test** button on the settings page to verify connectivity. It fires a 1-token completion and reports latency.
@@ -577,8 +577,8 @@ docker compose -f infra/docker-compose.yml exec postgres \
 
 ### Via the Admin UI (preferred)
 
-1. Open the admin portal at `http://localhost:8005`.
-2. Navigate to **Settings** (or go directly to `http://localhost:8005/ui/settings`).
+1. Open the admin portal at `http://localhost:3001/admin/dashboard`.
+2. Navigate to **Settings** (or go directly to `http://localhost:3001/admin/dashboard`).
 3. Find the provider row (Anthropic, OpenAI, Google, or GitHub Models).
 4. Enter the API key in the text field for that provider.
 5. Click **Save**. The portal:

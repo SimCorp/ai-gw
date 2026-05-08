@@ -1,7 +1,7 @@
 # SimCorp AI Gateway — Developer Guide
 
 > For ~2000 SimCorp engineers who want to add AI capabilities to their projects.  
-> Updated: 2026-05-06
+> Updated: 2026-05-08
 
 ---
 
@@ -24,10 +24,10 @@
 
 ### Step 1 — Get an API key
 
-Open the self-service portal: **http://localhost:8005/portal**
+Open the self-service portal: **http://localhost:3002/portal**
 
 1. Sign up with your email and password — no admin approval required.
-2. Go to **My Keys** and click **Create key**.
+2. Go to **API keys** and click **Issue key**.
 3. Copy the key — it starts with `sk-` and is shown only once.
 
 No admin approval is needed. Keys are provisioned instantly.
@@ -231,7 +231,7 @@ Project-wide config — place a `CLAUDE.md` at your repo root and Claude Code re
 
 This project uses the SimCorp AI Gateway.
 Set ANTHROPIC_BASE_URL=http://localhost:8002/anthropic in your environment.
-API keys: http://localhost:8005/portal/keys
+API keys: http://localhost:3002/portal/keys
 ```
 
 ### LangChain
@@ -657,7 +657,7 @@ A `400 model not found` error always means the model ID string is wrong.
 
 ### 4. API key not in the `sk-` format
 
-Gateway keys must start with `sk-` (lowercase). If you accidentally paste a raw Anthropic or OpenAI key, authentication will fail with `401`. Keys are created at http://localhost:8005/portal/keys.
+Gateway keys must start with `sk-` (lowercase). If you accidentally paste a raw Anthropic or OpenAI key, authentication will fail with `401`. Keys are created at http://localhost:3002/portal/keys.
 
 ### 5. Forgetting Cache-Control when data changes
 
@@ -671,11 +671,10 @@ If your prompt text stays the same but the underlying data changes (e.g. you upd
 
 | Resource | URL |
 |---|---|
-| Developer portal (keys, usage, docs) | http://localhost:8005/portal |
+| Developer portal (keys, usage, docs) | http://localhost:3002/portal |
+| Admin portal (teams, guardrails, audit) | http://localhost:3001/admin/dashboard |
 | Gateway health status | http://localhost:8002/health |
-| Admin service health | http://localhost:8005/health |
-| Quick start guide (interactive) | http://localhost:8005/portal/guides/quickstart |
-| Agent integration guide (interactive) | http://localhost:8005/portal/guides/agents |
+| Admin API health | http://localhost:8005/health |
 
 ### Quick health check
 
@@ -697,7 +696,7 @@ resp = httpx.post(
 if resp.status_code == 200:
     print("Gateway OK:", resp.json()["choices"][0]["message"]["content"])
 elif resp.status_code == 401:
-    print("Auth failed — check your key at http://localhost:8005/portal/keys")
+    print("Auth failed — check your key at http://localhost:3002/portal/keys")
 elif resp.status_code == 429:
     print("Rate limited — Retry-After:", resp.headers.get("Retry-After"))
 else:
