@@ -123,9 +123,7 @@ function ProviderCard({ p, onSaved }: { p: Provider; onSaved: () => void }) {
 
   async function fetchModels() {
     setDiscovering(true);
-    setDiscoveredModels(null);
     setDiscoverError('');
-    setModelActions({});
     setApplyMsg('');
     try {
       const res = await fetch(`http://localhost:8005/api/settings/providers/${p.env_var}/discover`, {
@@ -134,14 +132,14 @@ function ProviderCard({ p, onSaved }: { p: Provider; onSaved: () => void }) {
       const json = await res.json();
       if (json.ok) {
         setDiscoveredModels(json.models);
-        // Default: unregistered → 'enable', registered+enabled → 'keep', registered+disabled → 'enable'
-        const defaults: Record<string, string> = {};
-        for (const m of json.models as DiscoveredModel[]) {
-          if (!m.registered) defaults[m.id] = 'enable';
-          else if (m.enabled === false) defaults[m.id] = 'enable';
-          else defaults[m.id] = 'keep';
-        }
-        setModelActions(defaults);
+        // Default all to 'disable'; preserve existing user selections
+        setModelActions(prev => {
+          const next: Record<string, string> = {};
+          for (const m of json.models as DiscoveredModel[]) {
+            next[m.id] = prev[m.id] ?? 'disable';
+          }
+          return next;
+        });
       } else {
         setDiscoverError(json.error || 'Discovery failed');
       }
@@ -158,28 +156,29 @@ function ProviderCard({ p, onSaved }: { p: Provider; onSaved: () => void }) {
     setApplyMsg('');
     let enabled = 0, disabled = 0, fail = 0;
     for (const m of discoveredModels) {
-      const action = modelActions[m.id];
-      if (action === 'enable' && !m.registered) {
-        // Register new model
-        try {
-          const res = await fetch('http://localhost:8005/api/models', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ model_id: m.id, name: m.name, provider: p.name, enabled: true }),
-          });
-          if (res.ok) enabled++; else fail++;
-        } catch { fail++; }
-      } else if (action === 'enable' && m.registered && m.enabled === false && m.registry_id) {
-        // Re-enable disabled model
-        try {
-          const res = await fetch(`http://localhost:8005/api/models/${m.registry_id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ enabled: true }),
-          });
-          if (res.ok) enabled++; else fail++;
-        } catch { fail++; }
-      } else if (action === 'disable' && m.registered && m.registry_id) {
+      const action = modelActions[m.id] ?? 'disable';
+      const isCurrentlyEnabled = m.registered && m.enabled !== false;
+      if (action === 'enable' && !isCurrentlyEnabled) {
+        if (!m.registered) {
+          try {
+            const res = await fetch('http://localhost:8005/api/models', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ model_id: m.id, name: m.name, provider: p.name, enabled: true }),
+            });
+            if (res.ok) enabled++; else fail++;
+          } catch { fail++; }
+        } else if (m.registry_id) {
+          try {
+            const res = await fetch(`http://localhost:8005/api/models/${m.registry_id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ enabled: true }),
+            });
+            if (res.ok) enabled++; else fail++;
+          } catch { fail++; }
+        }
+      } else if (action === 'disable' && isCurrentlyEnabled && m.registry_id) {
         try {
           const res = await fetch(`http://localhost:8005/api/models/${m.registry_id}`, {
             method: 'PATCH',
@@ -200,11 +199,9 @@ function ProviderCard({ p, onSaved }: { p: Provider; onSaved: () => void }) {
   }
 
   const pendingChanges = discoveredModels?.filter(m => {
-    const action = modelActions[m.id];
-    if (action === 'enable' && !m.registered) return true;
-    if (action === 'enable' && m.registered && m.enabled === false) return true;
-    if (action === 'disable' && m.registered && m.enabled !== false) return true;
-    return false;
+    const action = modelActions[m.id] ?? 'disable';
+    const isCurrentlyEnabled = m.registered && m.enabled !== false;
+    return (action === 'enable' && !isCurrentlyEnabled) || (action === 'disable' && isCurrentlyEnabled);
   }).length ?? 0;
 
   const logoColor = getProviderColor(p.name);
@@ -292,7 +289,7 @@ function ProviderCard({ p, onSaved }: { p: Provider; onSaved: () => void }) {
             </div>
             <div className="discover-list">
               {discoveredModels.map(m => {
-                const action = modelActions[m.id] ?? (m.registered ? 'keep' : 'enable');
+                const action = modelActions[m.id] ?? 'disable';
                 return (
                   <div key={m.id} className="discover-item">
                     <span className="discover-model-id">{m.id}</span>
@@ -303,17 +300,8 @@ function ProviderCard({ p, onSaved }: { p: Provider; onSaved: () => void }) {
                       value={action}
                       onChange={e => setModelActions(prev => ({ ...prev, [m.id]: e.target.value }))}
                     >
-                      {m.registered ? (
-                        <>
-                          <option value="keep">Keep enabled</option>
-                          <option value="disable">Disable</option>
-                        </>
-                      ) : (
-                        <>
-                          <option value="enable">Enable</option>
-                          <option value="skip">Skip</option>
-                        </>
-                      )}
+                      <option value="disable">Disable</option>
+                      <option value="enable">Enable</option>
                     </select>
                   </div>
                 );
