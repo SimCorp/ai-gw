@@ -2,7 +2,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,6 +11,7 @@ from app.db import get_session
 from app.models.policy import Policy
 
 router = APIRouter(prefix="/teams/{team_id}/policy", tags=["policies"])
+summary_router = APIRouter(prefix="/policies", tags=["policies"])
 
 
 class PolicyUpdate(BaseModel):
@@ -80,3 +81,49 @@ async def upsert_policy(team_id: UUID, body: PolicyUpdate, request: Request, ses
     })
 
     return result.scalar_one()
+
+
+@summary_router.get("")
+async def list_all_policies(session: AsyncSession = Depends(get_session)):
+    sql = text("""
+        SELECT
+            t.id          AS team_id,
+            t.name        AS team_name,
+            t.slug        AS team_slug,
+            p.id          AS policy_id,
+            p.cache_ttl_seconds,
+            p.cache_similarity_threshold,
+            p.cache_opt_out,
+            p.embedding_model,
+            p.rate_limit_rpm,
+            p.allowed_models,
+            p.updated_at
+        FROM teams t
+        LEFT JOIN policies p
+            ON p.team_id = t.id
+            AND p.project_id IS NULL
+        ORDER BY t.name
+    """)
+    rows = (await session.execute(sql)).mappings().all()
+
+    result = []
+    for row in rows:
+        policy = None
+        if row["policy_id"] is not None:
+            policy = {
+                "id": str(row["policy_id"]),
+                "cache_ttl_seconds": row["cache_ttl_seconds"],
+                "cache_similarity_threshold": row["cache_similarity_threshold"],
+                "cache_opt_out": row["cache_opt_out"],
+                "embedding_model": row["embedding_model"],
+                "rate_limit_rpm": row["rate_limit_rpm"],
+                "allowed_models": row["allowed_models"] or [],
+                "updated_at": row["updated_at"].isoformat() if row["updated_at"] else None,
+            }
+        result.append({
+            "team_id": str(row["team_id"]),
+            "team_name": row["team_name"],
+            "team_slug": row["team_slug"],
+            "policy": policy,
+        })
+    return result
