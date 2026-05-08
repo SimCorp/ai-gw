@@ -425,9 +425,58 @@ These are the exact model IDs defined in `services/litellm/config.yaml`. Use the
 | `claude-haiku-4-5` | Anthropic | `anthropic/claude-haiku-4-5-20251001` | Fast, low-cost |
 | `gemini-1.5-pro` | Google | `gemini/gemini-1.5-pro` | Falls back to `claude-sonnet-4-6` on failure |
 | `github-gpt-4o` | GitHub Models (Azure) | `openai/gpt-4o` via `models.inference.ai.azure.com` | Requires `GITHUB_MODELS_API_KEY` |
+| `copilot-gpt-4o` | GitHub Copilot | `openai/gpt-4o` via `api.githubcopilot.com` | Requires `GITHUB_COPILOT_API_KEY` (PAT with Copilot access) |
+| `copilot-gpt-4o-mini` | GitHub Copilot | `openai/gpt-4o-mini` via `api.githubcopilot.com` | Requires `GITHUB_COPILOT_API_KEY` |
+| `copilot-o3-mini` | GitHub Copilot | `openai/o3-mini` via `api.githubcopilot.com` | Requires `GITHUB_COPILOT_API_KEY` |
+| `copilot-claude-3.5-sonnet` | GitHub Copilot | `anthropic/claude-3-5-sonnet` via `api.githubcopilot.com` | Requires `GITHUB_COPILOT_API_KEY` |
+| `azure-gpt-4o` | Azure AI Foundry | `openai/gpt-4o` via Azure endpoint | Requires `AZURE_API_BASE` and `AZURE_API_KEY` |
+| `azure-gpt-4o-mini` | Azure AI Foundry | `openai/gpt-4o-mini` via Azure endpoint | Requires `AZURE_API_BASE` and `AZURE_API_KEY` |
+| `azure-o3-mini` | Azure AI Foundry | `openai/o3-mini` via Azure endpoint | Requires `AZURE_API_BASE` and `AZURE_API_KEY` |
+| `azure-gpt-4.1` | Azure AI Foundry | `openai/gpt-4.1` via Azure endpoint | Requires `AZURE_API_BASE` and `AZURE_API_KEY` |
 | `local` | Ollama (self-hosted) | `ollama/llama3.2` | Served at `http://ollama:11434`; available in Docker Compose only |
 
 **Fallback behaviour:** If a request to `gemini-1.5-pro` fails, the gateway automatically retries with `claude-sonnet-4-6`. LiteLLM is configured with `num_retries: 3` and `allowed_fails: 1` globally.
+
+---
+
+## 6a. Providers
+
+### GitHub Copilot
+
+**Endpoint:** `api.githubcopilot.com`
+
+Model IDs: `copilot-gpt-4o`, `copilot-gpt-4o-mini`, `copilot-o3-mini`, `copilot-claude-3.5-sonnet`
+
+**Obtaining a token:** Create a GitHub Personal Access Token (PAT) with the `copilot` scope at https://github.com/settings/tokens. Set `GITHUB_COPILOT_API_KEY` in your `.env` to this token value. An active GitHub Copilot subscription (individual or enterprise) is required.
+
+```bash
+# GitHub Copilot via gateway
+curl http://localhost:8002/v1/chat/completions \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"model": "copilot-gpt-4o", "messages": [{"role": "user", "content": "Hello"}]}'
+```
+
+### Azure AI Foundry
+
+**Endpoint:** Configured via `AZURE_API_BASE` environment variable (e.g. `https://<resource>.openai.azure.com/`).
+
+Model IDs: `azure-gpt-4o`, `azure-gpt-4o-mini`, `azure-o3-mini`, `azure-gpt-4.1`
+
+**Configuration:** Set the following in your `.env`:
+- `AZURE_API_BASE` — your Azure OpenAI resource endpoint
+- `AZURE_API_KEY` — your Azure API key from the Azure portal
+- `AZURE_API_VERSION` — API version string (e.g. `2024-02-15-preview`)
+
+See https://portal.azure.com → Azure OpenAI → Keys and Endpoint.
+
+```bash
+# Azure AI Foundry via gateway
+curl http://localhost:8002/v1/chat/completions \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"model": "azure-gpt-4o", "messages": [{"role": "user", "content": "Hello"}]}'
+```
 
 ---
 

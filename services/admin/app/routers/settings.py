@@ -44,6 +44,32 @@ PROVIDERS = [
         "models": ["github-gpt-4o"],
         "litellm_model_names": ["github-gpt-4o"],
         "test_model": "github-gpt-4o",
+        "extra_env_vars": [],
+    },
+    {
+        "name": "GitHub Copilot",
+        "icon": "⚫",
+        "env_var": "GITHUB_COPILOT_TOKEN",
+        "models": ["copilot-gpt-4o", "copilot-gpt-4o-mini", "copilot-o3-mini", "copilot-claude-3.5-sonnet"],
+        "litellm_model_names": ["copilot-gpt-4o", "copilot-gpt-4o-mini", "copilot-o3-mini", "copilot-claude-3.5-sonnet"],
+        "test_model": "copilot-gpt-4o",
+        "description": "GitHub Copilot API — requires a GitHub PAT with Copilot access (ghp_... token with copilot:read scope)",
+        "docs_url": "https://docs.github.com/en/copilot/using-github-copilot/using-github-copilot-chat-in-your-ide",
+        "extra_env_vars": [],
+    },
+    {
+        "name": "Azure AI Foundry",
+        "icon": "☁️",
+        "env_var": "AZURE_API_KEY",
+        "models": ["azure-gpt-4o", "azure-gpt-4o-mini", "azure-o3-mini", "azure-gpt-4.1"],
+        "litellm_model_names": ["azure-gpt-4o", "azure-gpt-4o-mini", "azure-o3-mini", "azure-gpt-4.1"],
+        "test_model": "azure-gpt-4o",
+        "description": "Azure AI Foundry (Azure OpenAI) — requires API key, endpoint URL, and API version",
+        "docs_url": "https://learn.microsoft.com/en-us/azure/ai-services/openai/",
+        "extra_env_vars": [
+            {"env_var": "AZURE_API_BASE", "label": "Endpoint URL", "placeholder": "https://YOUR-RESOURCE.openai.azure.com/"},
+            {"env_var": "AZURE_API_VERSION", "label": "API Version", "placeholder": "2024-12-01-preview"},
+        ],
     },
 ]
 
@@ -68,13 +94,23 @@ async def _get_stored_keys(session: AsyncSession) -> dict[str, str]:
 
 
 async def _push_to_litellm(env_var: str, key_value: str) -> bool:
-    """Patch the api_key on every LiteLLM model that reads from this env var."""
+    """Patch the api_key (and any extra params) on every LiteLLM model that reads from this env var."""
     provider = next((p for p in PROVIDERS if p["env_var"] == env_var), None)
     if not provider:
         return False
     target_models = provider.get("litellm_model_names", [])
     if not target_models:
         return False
+
+    # Build extra litellm_params from stored/env extra_env_vars (e.g. Azure api_base, api_version)
+    extra_params: dict[str, str] = {}
+    for extra in provider.get("extra_env_vars", []):
+        val = os.environ.get(extra["env_var"], "")
+        if val:
+            # Map env var names to LiteLLM param names
+            param_name = extra["env_var"].lower().replace("azure_", "").replace("_", "_")
+            extra_params[param_name] = val
+
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             # Fetch current model list to get internal model IDs
@@ -92,10 +128,12 @@ async def _push_to_litellm(env_var: str, key_value: str) -> bool:
                 model_id = m.get("model_info", {}).get("id")
                 if not model_id:
                     continue
+                litellm_params: dict[str, str] = {"api_key": key_value}
+                litellm_params.update(extra_params)
                 patch = await client.patch(
                     f"{settings.litellm_url}/model/update",
                     headers={"Authorization": f"Bearer {settings.litellm_master_key}"},
-                    json={"model_id": model_id, "litellm_params": {"api_key": key_value}},
+                    json={"model_id": model_id, "litellm_params": litellm_params},
                 )
                 results.append(patch.status_code in (200, 201))
             return all(results) if results else False
@@ -107,7 +145,10 @@ def _build_provider_list(stored: dict[str, str]) -> list[dict]:
     result = []
     for p in PROVIDERS:
         env_var = p["env_var"]
-        is_set = bool(stored.get(env_var) or os.environ.get(env_var))
+        extra = p.get("extra_env_vars", [])
+        # For providers with extra required env vars (e.g. Azure), all must be set
+        all_vars = [env_var] + [e["env_var"] for e in extra]
+        is_set = all(bool(stored.get(v) or os.environ.get(v)) for v in all_vars)
         result.append({**p, "is_set": is_set})
     return result
 
@@ -154,6 +195,22 @@ async def save_provider_keys(
             {"env_var": env_var, "val": raw},
         )
         os.environ[env_var] = raw
+
+        # Persist and apply any extra env vars for this provider (e.g. AZURE_API_BASE)
+        for extra in p.get("extra_env_vars", []):
+            extra_var = extra["env_var"]
+            extra_val = (body.get(extra_var) or "").strip()
+            if extra_val:
+                await session.execute(
+                    text("""
+                        INSERT INTO provider_keys (env_var, key_value, updated_at)
+                        VALUES (:env_var, :val, NOW())
+                        ON CONFLICT (env_var) DO UPDATE SET key_value = :val, updated_at = NOW()
+                    """),
+                    {"env_var": extra_var, "val": extra_val},
+                )
+                os.environ[extra_var] = extra_val
+
         ok = await _push_to_litellm(env_var, raw)
         push_results.append(ok)
 

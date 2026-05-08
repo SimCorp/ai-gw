@@ -4,6 +4,12 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { LoadingState, ErrorState } from '../_components/PageStates';
 
+interface ExtraEnvVar {
+  env_var: string;
+  label: string;
+  placeholder: string;
+}
+
 interface Provider {
   name: string;
   icon: string;
@@ -12,6 +18,9 @@ interface Provider {
   litellm_model_names: string[];
   test_model: string;
   is_set: boolean;
+  description?: string;
+  extra_env_vars?: ExtraEnvVar[];
+  docs_url?: string;
 }
 
 interface ProvidersResponse {
@@ -26,8 +35,27 @@ interface TestResult {
   error?: string;
 }
 
+const PROVIDER_COLORS: Record<string, string> = {
+  'Anthropic': '#D97757',
+  'OpenAI': '#10A37F',
+  'Google': '#4285F4',
+  'GitHub Copilot': '#24292F',
+  'Azure AI Foundry': '#0078D4',
+  'GitHub Models': '#1A1D31',
+};
+
+function getProviderColor(name: string): string {
+  for (const [key, color] of Object.entries(PROVIDER_COLORS)) {
+    if (name.toLowerCase().includes(key.toLowerCase())) return color;
+  }
+  return '#555';
+}
+
 function ProviderCard({ p, onSaved }: { p: Provider; onSaved: () => void }) {
   const [keyInput, setKeyInput] = useState('');
+  const [extraInputs, setExtraInputs] = useState<Record<string, string>>(
+    () => Object.fromEntries((p.extra_env_vars ?? []).map(e => [e.env_var, '']))
+  );
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
   const [testing, setTesting] = useState(false);
@@ -38,14 +66,19 @@ function ProviderCard({ p, onSaved }: { p: Provider; onSaved: () => void }) {
     setSaving(true);
     setSaveMsg('');
     try {
+      const payload: Record<string, string> = { [p.env_var]: keyInput.trim() };
+      for (const [k, v] of Object.entries(extraInputs)) {
+        if (v.trim()) payload[k] = v.trim();
+      }
       const res = await fetch('http://localhost:8005/api/settings/providers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ [p.env_var]: keyInput.trim() }),
+        body: JSON.stringify(payload),
       });
       if (res.ok) {
         setSaveMsg('Saved');
         setKeyInput('');
+        setExtraInputs(Object.fromEntries((p.extra_env_vars ?? []).map(e => [e.env_var, ''])));
         onSaved();
       } else {
         setSaveMsg('Error saving');
@@ -73,10 +106,12 @@ function ProviderCard({ p, onSaved }: { p: Provider; onSaved: () => void }) {
     }
   }
 
+  const logoColor = getProviderColor(p.name);
+
   return (
     <div className="prov-card">
       <div className="prov-card__head">
-        <div className="prov-logo" style={{ background: 'var(--surface-soft)', fontSize: 20 }}>{p.icon}</div>
+        <div className="prov-logo" style={{ background: logoColor, fontSize: 20 }}>{p.icon}</div>
         <div style={{ flex: 1 }}>
           <div style={{ fontWeight: 600, fontSize: 13.5 }}>{p.name}</div>
           <div className="muted" style={{ fontSize: 12 }}>
@@ -95,8 +130,26 @@ function ProviderCard({ p, onSaved }: { p: Provider; onSaved: () => void }) {
             {p.models.map(m => <span key={m} className="tag">{m}</span>)}
           </span>
         </div>
+        {p.description && (
+          <div className="prov-stat" style={{ gridColumn: '1 / -1' }}>
+            <span className="muted" style={{ fontSize: 11.5 }}>{p.description}</span>
+          </div>
+        )}
       </div>
       <div className="prov-card__foot" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
+        {(p.extra_env_vars ?? []).map(ev => (
+          <div key={ev.env_var} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <label style={{ fontSize: 11, color: 'var(--fg-2)', fontWeight: 500 }}>{ev.label}</label>
+            <input
+              type="text"
+              className="search"
+              placeholder={ev.placeholder}
+              value={extraInputs[ev.env_var] ?? ''}
+              onChange={e => setExtraInputs(prev => ({ ...prev, [ev.env_var]: e.target.value }))}
+              style={{ height: 30, padding: '0 10px', fontSize: 12, background: 'var(--surface-2)', border: '1px solid var(--rule)', borderRadius: 6 }}
+            />
+          </div>
+        ))}
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <input
             type="password"
@@ -122,6 +175,20 @@ function ProviderCard({ p, onSaved }: { p: Provider; onSaved: () => void }) {
               ? `Pass · ${testResult.latency_ms}ms · ${testResult.model}`
               : `Fail: ${testResult.error}`}
           </span>
+        )}
+        {p.docs_url && (
+          <div style={{ marginTop: 2 }}>
+            <a
+              href={p.docs_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ fontSize: 11.5, color: 'var(--fg-2)', textDecoration: 'none' }}
+              onMouseEnter={e => (e.currentTarget.style.color = 'var(--fg-1)')}
+              onMouseLeave={e => (e.currentTarget.style.color = 'var(--fg-2)')}
+            >
+              Docs ↗
+            </a>
+          </div>
         )}
       </div>
     </div>

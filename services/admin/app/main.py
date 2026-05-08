@@ -258,6 +258,43 @@ async def lifespan(app: FastAPI):
                     ON CONFLICT DO NOTHING
                 """), {"name": name, "slug": slug, "description": description, "color": color})
 
+    # Seed model registry — always upsert so new entries are added without wiping existing ones
+    async with engine.begin() as conn:
+        models_to_seed = [
+            # Anthropic
+            ("Claude Sonnet 4.6", "claude-sonnet-4-6", "anthropic"),
+            ("Claude Opus 4.7", "claude-opus-4-7", "anthropic"),
+            ("Claude Haiku 4.5", "claude-haiku-4-5", "anthropic"),
+            # OpenAI via LiteLLM
+            ("GPT-4o", "gpt-4o", "openai"),
+            ("GPT-4o mini", "gpt-4o-mini", "openai"),
+            # GitHub Copilot
+            ("Copilot GPT-4o", "copilot-gpt-4o", "github-copilot"),
+            ("Copilot GPT-4o mini", "copilot-gpt-4o-mini", "github-copilot"),
+            ("Copilot o3-mini", "copilot-o3-mini", "github-copilot"),
+            ("Copilot Claude 3.5 Sonnet", "copilot-claude-3.5-sonnet", "github-copilot"),
+            # Azure AI Foundry
+            ("Azure GPT-4o", "azure-gpt-4o", "azure"),
+            ("Azure GPT-4o mini", "azure-gpt-4o-mini", "azure"),
+            ("Azure o3-mini", "azure-o3-mini", "azure"),
+            ("Azure GPT-4.1", "azure-gpt-4.1", "azure"),
+            # GitHub Models
+            ("GitHub GPT-4o", "github-gpt-4o", "github-models"),
+            # Gemini
+            ("Gemini 1.5 Pro", "gemini-1.5-pro", "google"),
+            # Local
+            ("Llama 3.2 (local)", "local", "ollama"),
+        ]
+        for name, model_id, provider in models_to_seed:
+            await conn.execute(
+                text("""
+                    INSERT INTO model_registry (name, model_id, provider, enabled)
+                    VALUES (:name, :model_id, :provider, TRUE)
+                    ON CONFLICT (model_id) DO NOTHING
+                """),
+                {"name": name, "model_id": model_id, "provider": provider},
+            )
+
     app.state.redis = Redis.from_url(app_settings.redis_url, decode_responses=True)
     yield
     await app.state.redis.aclose()

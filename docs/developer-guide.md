@@ -89,17 +89,27 @@ From inside a Docker Compose network replace `localhost` with `gateway`:
 | `claude-sonnet-4-6` | Anthropic | 200k | Medium | **Recommended default.** Agents, code generation, RAG, tool calling |
 | `claude-opus-4-7` | Anthropic | 200k | High | Complex reasoning, architecture decisions, research synthesis |
 | `gemini-1.5-pro` | Google | 1M | Medium | Very long documents (entire codebases), multimodal inputs |
-| `github-gpt-4o` | GitHub (Azure) | 128k | Medium | OpenAI-native tool calling patterns, teams already using GPT-4o |
+| `github-gpt-4o` | GitHub Models | 128k | Medium | OpenAI-native tool calling patterns, teams already using GPT-4o |
+| `copilot-gpt-4o` | GitHub Copilot | 128k | Medium | GPT-4o via Copilot subscription; requires GitHub PAT with Copilot scope |
+| `copilot-gpt-4o-mini` | GitHub Copilot | 128k | Low | Fast GPT-4o-mini via Copilot; good for batch jobs and high-volume use |
+| `copilot-o3-mini` | GitHub Copilot | 128k | Medium | Reasoning tasks via Copilot; lower latency than full o3 |
+| `copilot-claude-3.5-sonnet` | GitHub Copilot | 200k | Medium | Claude 3.5 Sonnet accessed through GitHub Copilot |
+| `azure-gpt-4o` | Azure AI Foundry | 128k | Medium | GPT-4o hosted in your Azure subscription; data stays in your Azure region |
+| `azure-gpt-4o-mini` | Azure AI Foundry | 128k | Low | Low-cost Azure-hosted GPT-4o-mini |
+| `azure-o3-mini` | Azure AI Foundry | 128k | Medium | Azure-hosted o3-mini for reasoning workloads |
+| `azure-gpt-4.1` | Azure AI Foundry | 1M | Medium | Latest GPT-4.1 on Azure; 1M-token context for large document tasks |
 | `local` | Ollama (llama3.2) | varies | Free | Development and testing — data never leaves your machine |
 
 ### Decision guide
 
 - **Just want something that works?** Use `claude-sonnet-4-6`. It balances speed, cost, and capability for the vast majority of tasks.
 - **High-request-volume pipeline or batch job?** Use `claude-haiku-4-5` to keep costs low.
-- **Need to reason over a 500-page PDF or an entire repo?** Use `gemini-1.5-pro` for its 1M-token context window.
+- **Need to reason over a 500-page PDF or an entire repo?** Use `gemini-1.5-pro` or `azure-gpt-4.1` for their 1M-token context windows.
 - **Hardest reasoning problem, cost is secondary?** Use `claude-opus-4-7`.
 - **Sensitive data or offline work?** Use `local` — no data leaves the machine.
-- **Existing codebase uses OpenAI function-calling JSON schema?** `github-gpt-4o` drops in with no schema changes.
+- **Data must stay in your Azure region?** Use any `azure-*` model — traffic routes through your own Azure subscription.
+- **Team has GitHub Copilot licences?** Use `copilot-*` models to stay within your existing Copilot spend.
+- **Existing codebase uses OpenAI function-calling JSON schema?** `github-gpt-4o`, `copilot-gpt-4o`, or `azure-gpt-4o` all drop in with no schema changes.
 
 **Note on fallbacks:** The gateway is configured to fall back from `claude-sonnet-4-6` to `gemini-1.5-pro` automatically if Anthropic is unavailable. Your code needs no changes to benefit from this.
 
@@ -123,6 +133,26 @@ curl http://localhost:8002/v1/chat/completions \
     ],
     "max_tokens": 1024
   }'
+```
+
+GitHub Copilot models use the same syntax — just swap the model ID:
+
+```bash
+# GitHub Copilot via gateway
+curl http://localhost:8002/v1/chat/completions \
+  -H "Authorization: Bearer sk-YOUR-KEY-HERE" \
+  -H "Content-Type: application/json" \
+  -d '{"model": "copilot-gpt-4o", "messages": [{"role": "user", "content": "Hello"}]}'
+```
+
+Azure AI Foundry models work the same way:
+
+```bash
+# Azure AI Foundry via gateway
+curl http://localhost:8002/v1/chat/completions \
+  -H "Authorization: Bearer sk-YOUR-KEY-HERE" \
+  -H "Content-Type: application/json" \
+  -d '{"model": "azure-gpt-4o", "messages": [{"role": "user", "content": "Hello"}]}'
 ```
 
 ### Python — OpenAI SDK
@@ -650,8 +680,10 @@ Model IDs are exact strings. Common mistakes:
 | `haiku` | `claude-haiku-4-5` |
 | `claude-haiku` | `claude-haiku-4-5` |
 | `sonnet` | `claude-sonnet-4-6` |
-| `gpt-4o` | `github-gpt-4o` |
+| `gpt-4o` | `github-gpt-4o` (or `copilot-gpt-4o` / `azure-gpt-4o`) |
 | `gemini-pro` | `gemini-1.5-pro` |
+| `copilot-gpt4o` | `copilot-gpt-4o` (hyphen required) |
+| `azure-gpt4o` | `azure-gpt-4o` (hyphen required) |
 
 A `400 model not found` error always means the model ID string is wrong.
 

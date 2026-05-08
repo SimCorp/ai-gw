@@ -30,6 +30,60 @@ model_list:
       model: ollama/llama3.2
       api_base: http://ollama:11434
 
+  # GitHub Copilot (requires GITHUB_COPILOT_TOKEN — PAT with Copilot access)
+  - model_name: copilot-gpt-4o
+    litellm_params:
+      model: openai/gpt-4o
+      api_base: https://api.githubcopilot.com
+      api_key: os.environ/GITHUB_COPILOT_TOKEN
+
+  - model_name: copilot-gpt-4o-mini
+    litellm_params:
+      model: openai/gpt-4o-mini
+      api_base: https://api.githubcopilot.com
+      api_key: os.environ/GITHUB_COPILOT_TOKEN
+
+  - model_name: copilot-o3-mini
+    litellm_params:
+      model: openai/o3-mini
+      api_base: https://api.githubcopilot.com
+      api_key: os.environ/GITHUB_COPILOT_TOKEN
+
+  - model_name: copilot-claude-3.5-sonnet
+    litellm_params:
+      model: openai/claude-3.5-sonnet   # Copilot exposes it via OpenAI-compat API
+      api_base: https://api.githubcopilot.com
+      api_key: os.environ/GITHUB_COPILOT_TOKEN
+
+  # Azure AI Foundry (Azure OpenAI)
+  - model_name: azure-gpt-4o
+    litellm_params:
+      model: azure/gpt-4o
+      api_base: os.environ/AZURE_API_BASE
+      api_key: os.environ/AZURE_API_KEY
+      api_version: os.environ/AZURE_API_VERSION
+
+  - model_name: azure-gpt-4o-mini
+    litellm_params:
+      model: azure/gpt-4o-mini
+      api_base: os.environ/AZURE_API_BASE
+      api_key: os.environ/AZURE_API_KEY
+      api_version: os.environ/AZURE_API_VERSION
+
+  - model_name: azure-o3-mini
+    litellm_params:
+      model: azure/o3-mini
+      api_base: os.environ/AZURE_API_BASE
+      api_key: os.environ/AZURE_API_KEY
+      api_version: os.environ/AZURE_API_VERSION
+
+  - model_name: azure-gpt-4.1
+    litellm_params:
+      model: azure/gpt-4.1
+      api_base: os.environ/AZURE_API_BASE
+      api_key: os.environ/AZURE_API_KEY
+      api_version: os.environ/AZURE_API_VERSION
+
 litellm_settings:
   drop_params: true
   request_timeout: 600
