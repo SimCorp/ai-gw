@@ -28,7 +28,7 @@ class ValidateResponse(BaseModel):
 async def check_budget(team_id: str, key_id: str | None, redis: Redis) -> tuple[bool, str]:
     """Returns (allowed, reason). Checks key → team → org budgets.
 
-    Fail-open: if Redis is unavailable, returns (True, "") so the request is allowed.
+    Fail-closed: raises HTTP 503 if Redis is unavailable so requests are not silently permitted.
     """
     try:
         month = datetime.utcnow().strftime("%Y-%m")

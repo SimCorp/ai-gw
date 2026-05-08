@@ -42,7 +42,7 @@ services:
   ollama:
     image: ollama/ollama:latest
     ports:
-      - "11434:11434"
+      - "127.0.0.1:11434:11434"
     volumes:
       - ollama_data:/root/.ollama
     profiles:
@@ -67,7 +67,7 @@ services:
     build:
       context: ../services/litellm
     ports:
-      - "8003:8003"
+      - "127.0.0.1:8003:8003"
     env_file: ../.env
     environment:
       # LiteLLM uses Prisma which requires postgresql:// not postgresql+asyncpg://
@@ -142,7 +142,7 @@ services:
     build:
       context: ../services/admin
     ports:
-      - "8005:8005"
+      - "127.0.0.1:8005:8005"
     env_file: ../.env
     depends_on:
       db-migrate:
@@ -161,7 +161,7 @@ services:
       context: ./claude-sandbox
     profiles: [sandbox]
     ports:
-      - "2222:22"
+      - "127.0.0.1:2222:22"
     environment:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       ANTHROPIC_BASE_URL: http://cache:8002/anthropic

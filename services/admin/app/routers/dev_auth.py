@@ -39,9 +39,24 @@ _login_attempts: dict[str, list[float]] = defaultdict(list)
 _login_lock = Lock()
 
 
-def _check_auth_rate_limit(identifier: str, max_attempts: int = 30, window_seconds: int = 60) -> None:
+def _real_ip(request: Request) -> str:
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def _rate_limit_key(request: Request) -> str:
+    # In dev/test, allow a per-test unique ID so parallel tests don't share a bucket.
     if settings.dev_bypass_auth:
-        return  # skip rate limiting in dev/test mode
+        test_id = request.headers.get("X-Test-Client-ID")
+        if test_id:
+            return f"test:{test_id}"
+    return _real_ip(request)
+
+
+def _check_auth_rate_limit(identifier: str, max_attempts: int = 10, window_seconds: int = 60) -> None:
+    # Rate limiting is always active; it is independent of DEV_BYPASS_AUTH.
     now = time.time()
     with _login_lock:
         attempts = _login_attempts[identifier]
@@ -128,7 +143,7 @@ async def register(
     request: Request,
     session: AsyncSession = Depends(get_session),
 ):
-    _check_auth_rate_limit(request.client.host if request.client else "unknown")
+    _check_auth_rate_limit(_rate_limit_key(request))
 
     # Email is already validated and normalised by the schema validator
     email = body.email
@@ -172,7 +187,7 @@ async def login(
     request: Request,
     session: AsyncSession = Depends(get_session),
 ):
-    _check_auth_rate_limit(request.client.host if request.client else "unknown")
+    _check_auth_rate_limit(_rate_limit_key(request))
     email = body.email.lower().strip()
     row = (await session.execute(
         text("""
@@ -188,8 +203,8 @@ async def login(
     if not row or not _verify_password(body.password, row["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
-    if row["status"] not in ("active", "pending"):
-        raise HTTPException(status_code=403, detail="Account is disabled")
+    if row["status"] != "active":
+        raise HTTPException(status_code=403, detail="Account is not active")
 
     token = secrets.token_urlsafe(32)
     payload = {

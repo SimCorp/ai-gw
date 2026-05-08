@@ -109,9 +109,15 @@ async def gateway_client(test_api_key: str):
 
 @pytest_asyncio.fixture
 async def portal_client():
-    """httpx.AsyncClient for portal tests — cookie jar preserved, redirects not followed."""
+    """httpx.AsyncClient for portal tests — cookie jar preserved, redirects not followed.
+
+    Passes a unique X-Test-Client-ID header so each test fixture gets its own
+    rate-limit bucket (prevents 429s when many tests run from the same IP).
+    """
+    test_id = uuid.uuid4().hex
     async with httpx.AsyncClient(
         base_url=ADMIN_URL,
+        headers={"X-Test-Client-ID": test_id},
         follow_redirects=False,
         timeout=30.0,
     ) as client:

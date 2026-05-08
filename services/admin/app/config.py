@@ -52,12 +52,24 @@ class Settings(BaseSettings):
                 )
             logger.warning("SECURITY: OIDC_CLIENT_SECRET is set to the development placeholder")
 
+        if self.litellm_master_key == "sk-litellm-local-dev":
+            if is_prod:
+                raise ValueError(
+                    "LITELLM_MASTER_KEY must be changed from the default placeholder in production"
+                )
+            logger.warning("SECURITY: LITELLM_MASTER_KEY is set to the development placeholder")
+
         if self.dev_bypass_auth:
             logger.warning("SECURITY: DEV_BYPASS_AUTH is enabled — admin auth is disabled")
 
         if not self.dev_bypass_auth and not self.admin_token:
             logger.warning(
                 "SECURITY: DEV_BYPASS_AUTH=false but ADMIN_TOKEN is empty — all admin requests will return 500"
+            )
+
+        if not self.allowed_email_domains and is_prod:
+            logger.warning(
+                "SECURITY: ALLOWED_EMAIL_DOMAINS is not configured — any email address can register a developer account"
             )
 
 

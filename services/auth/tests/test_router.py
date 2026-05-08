@@ -87,8 +87,9 @@ async def test_check_budget_key_spend_below_limit():
     def _get(key):
         if key == f"budget_limit:key:{_KEY_ID}":
             return AsyncMock(return_value=json.dumps({"limit": 5.0}))()
-        # spend key
-        return AsyncMock(return_value="4.99")()
+        if key.startswith("budget:key:"):
+            return AsyncMock(return_value="4.99")()
+        return AsyncMock(return_value=None)()
 
     redis.get = _get
 
@@ -151,7 +152,9 @@ async def test_check_budget_team_alert_at_limit():
             return AsyncMock(return_value=None)()
         if key == f"budget_limit:team:{_TEAM_ID}":
             return AsyncMock(return_value=json.dumps({"limit": 50.0, "action": "alert"}))()
-        return AsyncMock(return_value="50.0")()
+        if key.startswith("budget:team:"):
+            return AsyncMock(return_value="50.0")()
+        return AsyncMock(return_value=None)()
 
     redis.get = _get
 
@@ -203,17 +206,18 @@ async def test_check_budget_org_alert_at_limit():
     assert reason == ""
 
 
-async def test_check_budget_redis_exception_fail_open():
-    """Redis raises ConnectionError → fail-open: (True, '')."""
+async def test_check_budget_redis_exception_fail_closed():
+    """Redis raises ConnectionError → fail-closed: HTTP 503."""
+    from fastapi import HTTPException
+
     from app.router import check_budget
 
     redis = _mock_redis()
     redis.get = AsyncMock(side_effect=ConnectionError("Redis down"))
 
-    allowed, reason = await check_budget(_TEAM_ID, _KEY_ID, redis)
-
-    assert allowed is True
-    assert reason == ""
+    with pytest.raises(HTTPException) as exc_info:
+        await check_budget(_TEAM_ID, _KEY_ID, redis)
+    assert exc_info.value.status_code == 503
 
 
 async def test_check_budget_key_id_none_skips_key_check():

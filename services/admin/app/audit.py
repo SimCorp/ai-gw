@@ -7,11 +7,18 @@ from app.models.audit_log import AuditLog
 
 
 def _actor(request: Request) -> str:
+    """Resolve audit actor from request state set by require_admin_auth."""
+    auth_info = getattr(request.state, "admin_auth", None)
+    if auth_info:
+        return auth_info.get("actor", "unknown")
+
+    # Fallback: check X-Admin-Token header directly (for callers that bypassed the dep)
     import hashlib
     token = request.headers.get("x-admin-token")
     if token:
         digest = hashlib.sha256(token.encode()).hexdigest()[:12]
         return f"token:{digest}"
+
     return "dev-bypass"
 
 

@@ -200,10 +200,6 @@ _EXTRA_DDL = [
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )""",
     "CREATE INDEX IF NOT EXISTS idx_admin_users_email ON admin_users(email)",
-    # Seed default admin (password: Admin1234! — bcrypt 12 rounds)
-    """INSERT INTO admin_users (email, display_name, password_hash, role) VALUES
-        ('admin@simcorp.com', 'Default Admin', '$2b$12$GwGtCW6GNoGJlD5lhF8xLeZPEZO8W5eDXr6TO7u3zm3SiHe1uZK3S', 'superadmin')
-    ON CONFLICT (email) DO NOTHING""",
 ]
 
 import json as _json
@@ -244,6 +240,18 @@ async def lifespan(app: FastAPI):
                 # Non-fatal: log and continue (e.g. index already exists)
                 import logging
                 logging.getLogger(__name__).warning("DDL skipped (%s): %s", type(exc).__name__, str(exc)[:120])
+
+    # Seed default admin account only in dev/test/ci environments.
+    # In production, admin accounts must be created explicitly via the provisioning script.
+    if os.getenv("ENVIRONMENT", "development") in ("development", "test", "ci"):
+        async with engine.begin() as conn:
+            await conn.execute(text("""
+                INSERT INTO admin_users (email, display_name, password_hash, role) VALUES
+                    ('admin@simcorp.com', 'Default Admin',
+                     '$2b$12$GwGtCW6GNoGJlD5lhF8xLeZPEZO8W5eDXr6TO7u3zm3SiHe1uZK3S',
+                     'superadmin')
+                ON CONFLICT (email) DO NOTHING
+            """))
 
     # Seed a default team if none exists (dev convenience)
     async with engine.begin() as conn:
@@ -330,18 +338,20 @@ async def lifespan(app: FastAPI):
     await app.state.redis.aclose()
 
 
+_is_dev = os.getenv("ENVIRONMENT", "development") in ("development", "test", "ci")
+
 app = FastAPI(
     title="AI Gateway — Admin Portal",
     lifespan=lifespan,
-    docs_url="/docs",
-    redoc_url="/redoc",
-    openapi_url="/openapi.json",
+    docs_url="/docs" if _is_dev else None,
+    redoc_url="/redoc" if _is_dev else None,
+    openapi_url="/openapi.json" if _is_dev else None,
 )
 app.add_middleware(
     CORSMiddleware,
     allow_origins=app_settings.cors_origins,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+    allow_headers=["Content-Type", "Authorization", "X-Admin-Token"],
     allow_credentials=True,
 )
 app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")

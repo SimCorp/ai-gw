@@ -262,8 +262,5 @@ CREATE TABLE IF NOT EXISTS admin_users (
 
 CREATE INDEX IF NOT EXISTS idx_admin_users_email ON admin_users(email);
 
--- Seed a default admin (password: Admin1234! — must be changed)
--- bcrypt hash of "Admin1234!" with 12 rounds
-INSERT INTO admin_users (email, display_name, password_hash, role) VALUES
-    ('admin@simcorp.com', 'Default Admin', '$2b$12$GwGtCW6GNoGJlD5lhF8xLeZPEZO8W5eDXr6TO7u3zm3SiHe1uZK3S', 'superadmin')
-ON CONFLICT (email) DO NOTHING;
+-- Default admin account is seeded at runtime by the admin service (dev/test/ci only).
+-- In production, provision admin accounts using the scripts/create_admin.py script.

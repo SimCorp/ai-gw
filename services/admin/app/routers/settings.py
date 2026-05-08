@@ -15,28 +15,42 @@ from app.config import settings
 from app.db import get_session
 
 
-def _get_fernet() -> Fernet:
-    key_material = settings.secret_key.encode()
+_LEGACY_SALT = b"ai-gw-provider-keys"
+_CIPHERTEXT_PREFIX = b"gAA"  # Fernet tokens start with this when base64-decoded
+
+
+def _make_fernet(salt: bytes) -> Fernet:
     kdf = PBKDF2HMAC(
         algorithm=hashes.SHA256(),
         length=32,
-        salt=b"ai-gw-provider-keys",
-        iterations=100_000,
+        salt=salt,
+        iterations=390_000,
     )
-    key = base64.urlsafe_b64encode(kdf.derive(key_material))
+    key = base64.urlsafe_b64encode(kdf.derive(settings.secret_key.encode()))
     return Fernet(key)
 
 
 def _encrypt_value(plaintext: str) -> str:
-    return _get_fernet().encrypt(plaintext.encode()).decode()
+    # Store as "v2:<b64-salt>:<fernet-ciphertext>" so each value has a unique salt.
+    import secrets as _secrets
+    salt = _secrets.token_bytes(16)
+    token = _make_fernet(salt).encrypt(plaintext.encode())
+    salt_b64 = base64.urlsafe_b64encode(salt).decode()
+    return f"v2:{salt_b64}:{token.decode()}"
 
 
-def _decrypt_value(ciphertext: str) -> str:
+def _decrypt_value(stored: str) -> str:
+    if stored.startswith("v2:"):
+        _, salt_b64, ciphertext = stored.split(":", 2)
+        salt = base64.urlsafe_b64decode(salt_b64)
+        return _make_fernet(salt).decrypt(ciphertext.encode()).decode()
+    # Legacy: try with the old fixed salt
     try:
-        return _get_fernet().decrypt(ciphertext.encode()).decode()
+        return _make_fernet(_LEGACY_SALT).decrypt(stored.encode()).decode()
     except (InvalidToken, Exception):
-        # Backwards compatibility: return as-is if value is legacy plaintext
-        return ciphertext
+        import logging
+        logging.getLogger(__name__).warning("Failed to decrypt provider key — value may be corrupted")
+        raise InvalidToken("Could not decrypt stored provider API key")
 
 router = APIRouter(tags=["settings"])
 # Provider definitions — env_var is what LiteLLM reads

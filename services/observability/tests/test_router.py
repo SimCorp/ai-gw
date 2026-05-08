@@ -1,7 +1,11 @@
 """Tests for the POST /events router endpoint."""
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
+
 import pytest
 from httpx import ASGITransport, AsyncClient
-from unittest.mock import AsyncMock
+
+_TEST_INTERNAL_KEY = "test-internal-key"
 
 
 @pytest.fixture
@@ -11,9 +15,12 @@ async def client():
     # Replace the lifespan-managed bus with a simple mock
     app.state.bus = AsyncMock()
     app.state.bus.publish = AsyncMock()
+    app.state.settings = SimpleNamespace(internal_api_key=_TEST_INTERNAL_KEY)
 
     async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+        headers={"X-Internal-Key": _TEST_INTERNAL_KEY},
     ) as c:
         yield c
 
@@ -66,6 +73,28 @@ async def test_invalid_body_missing_team_id_returns_422(client):
     """Omitting the required team_id field should yield a 422 Unprocessable Entity."""
     response = await client.post("/events", json={"model": "gpt-4"})
     assert response.status_code == 422
+
+
+async def test_missing_internal_key_returns_401(client):
+    """POST /events without X-Internal-Key must return 401."""
+    from app.main import app
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as anon:
+        response = await anon.post("/events", json={"team_id": "team-1"})
+    assert response.status_code == 401
+
+
+async def test_wrong_internal_key_returns_401(client):
+    """POST /events with wrong X-Internal-Key must return 401."""
+    from app.main import app
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+        headers={"X-Internal-Key": "wrong-key"},
+    ) as bad:
+        response = await bad.post("/events", json={"team_id": "team-1"})
+    assert response.status_code == 401
 
 
 async def test_response_body_is_accepted(client):

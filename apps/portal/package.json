@@ -15,7 +15,7 @@
     "@aigw/hooks": "workspace:*",
     "@tanstack/react-query": "^5.74.0",
     "next": "15.3.1",
-    "next-auth": "^5.0.0-beta.25",
+
     "react": "^19",
     "react-dom": "^19",
     "zustand": "^5.0.3",
