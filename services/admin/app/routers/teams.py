@@ -2,7 +2,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import audit
@@ -15,6 +15,7 @@ router = APIRouter(prefix="/teams", tags=["teams"])
 class TeamCreate(BaseModel):
     name: str
     slug: str
+    area_id: UUID | None = None
 
 
 class ProjectCreate(BaseModel):
@@ -22,31 +23,72 @@ class ProjectCreate(BaseModel):
     slug: str
 
 
+def _team_row_to_dict(row) -> dict:
+    return {
+        "id": str(row["id"]),
+        "name": row["name"],
+        "slug": row["slug"],
+        "created_at": row["created_at"].isoformat() if row["created_at"] else None,
+        "monthly_budget_usd": float(row["monthly_budget_usd"]) if row["monthly_budget_usd"] is not None else None,
+        "budget_alert_pct": row["budget_alert_pct"],
+        "budget_action": row["budget_action"],
+        "area_id": str(row["area_id"]) if row["area_id"] else None,
+        "area_name": row["area_name"],
+        "area_slug": row["area_slug"],
+        "area_color": row["area_color"],
+    }
+
+
 @router.get("")
 async def list_teams(session: AsyncSession = Depends(get_session)):
-    result = await session.execute(select(Team).order_by(Team.created_at))
-    return result.scalars().all()
+    result = await session.execute(text("""
+        SELECT t.id, t.name, t.slug, t.created_at, t.monthly_budget_usd,
+               t.budget_alert_pct, t.budget_action, t.area_id,
+               a.name AS area_name, a.slug AS area_slug, a.color AS area_color
+        FROM teams t LEFT JOIN areas a ON a.id = t.area_id
+        ORDER BY a.name NULLS LAST, t.name
+    """))
+    return [_team_row_to_dict(row) for row in result.mappings().all()]
 
 
 @router.post("", status_code=201)
 async def create_team(
     body: TeamCreate, request: Request, session: AsyncSession = Depends(get_session)
 ):
-    team = Team(name=body.name, slug=body.slug)
+    team = Team(name=body.name, slug=body.slug, area_id=body.area_id)
     session.add(team)
     await session.flush()  # get generated ID before commit
     await audit.record(session, request, "create_team", "team", resource_id=team.id)
     await session.commit()
     await session.refresh(team)
-    return team
+    return {
+        "id": str(team.id),
+        "name": team.name,
+        "slug": team.slug,
+        "created_at": team.created_at.isoformat() if team.created_at else None,
+        "monthly_budget_usd": float(team.monthly_budget_usd) if team.monthly_budget_usd is not None else None,
+        "budget_alert_pct": team.budget_alert_pct,
+        "budget_action": team.budget_action,
+        "area_id": str(team.area_id) if team.area_id else None,
+    }
 
 
 @router.get("/{team_id}")
 async def get_team(team_id: UUID, session: AsyncSession = Depends(get_session)):
-    team = await session.get(Team, team_id)
-    if not team:
+    result = await session.execute(
+        text("""
+            SELECT t.id, t.name, t.slug, t.created_at, t.monthly_budget_usd,
+                   t.budget_alert_pct, t.budget_action, t.area_id,
+                   a.name AS area_name, a.slug AS area_slug, a.color AS area_color
+            FROM teams t LEFT JOIN areas a ON a.id = t.area_id
+            WHERE t.id = :id
+        """),
+        {"id": team_id},
+    )
+    row = result.mappings().one_or_none()
+    if not row:
         raise HTTPException(status_code=404, detail="Team not found")
-    return team
+    return _team_row_to_dict(row)
 
 
 @router.put("/{team_id}")
@@ -61,13 +103,23 @@ async def update_team(
         raise HTTPException(status_code=404, detail="Team not found")
     team.name = body.name
     team.slug = body.slug
+    team.area_id = body.area_id
     await audit.record(
         session, request, "update_team", "team", resource_id=team_id,
         details={"name": body.name, "slug": body.slug},
     )
     await session.commit()
     await session.refresh(team)
-    return team
+    return {
+        "id": str(team.id),
+        "name": team.name,
+        "slug": team.slug,
+        "created_at": team.created_at.isoformat() if team.created_at else None,
+        "monthly_budget_usd": float(team.monthly_budget_usd) if team.monthly_budget_usd is not None else None,
+        "budget_alert_pct": team.budget_alert_pct,
+        "budget_action": team.budget_action,
+        "area_id": str(team.area_id) if team.area_id else None,
+    }
 
 
 @router.delete("/{team_id}", status_code=204)

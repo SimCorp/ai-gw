@@ -7,6 +7,13 @@ import { LoadingState, ErrorState, EmptyState } from '../_components/PageStates'
 
 const BASE = 'http://localhost:8005';
 
+interface Area {
+  id: string;
+  name: string;
+  slug: string;
+  color: string;
+}
+
 interface Team {
   id: string;
   slug: string;
@@ -15,6 +22,9 @@ interface Team {
   monthly_budget_usd: number | null;
   budget_alert_pct: number;
   budget_action: string;
+  area_name?: string | null;
+  area_slug?: string | null;
+  area_color?: string | null;
 }
 
 interface DashboardStat {
@@ -61,7 +71,17 @@ function formatCost(usd: number | null | undefined): string {
 
 export default function TeamsPage() {
   const [range, setRange] = useState('24h');
+  const [areaFilter, setAreaFilter] = useState<string>('all');
   const queryClient = useQueryClient();
+
+  const areasQuery = useQuery<Area[]>({
+    queryKey: ['areas'],
+    queryFn: () => fetch(`${BASE}/areas`).then(r => {
+      if (!r.ok) return [];
+      return r.json();
+    }),
+    staleTime: 60_000,
+  });
 
   const teamsQuery = useQuery<Team[]>({
     queryKey: ['teams'],
@@ -83,10 +103,20 @@ export default function TeamsPage() {
     const name = window.prompt('Team name:');
     if (!name?.trim()) return;
     const slug = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    const areas = areasQuery.data ?? [];
+    let areaId: string | null = null;
+    if (areas.length > 0) {
+      const areaChoices = areas.map((a, i) => `${i + 1}. ${a.name}`).join('\n');
+      const choice = window.prompt(`Assign to area (enter number, or leave blank for none):\n${areaChoices}`);
+      if (choice?.trim()) {
+        const idx = parseInt(choice.trim(), 10) - 1;
+        if (idx >= 0 && idx < areas.length) areaId = areas[idx].id;
+      }
+    }
     const res = await fetch(`${BASE}/teams`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: name.trim(), slug }),
+      body: JSON.stringify({ name: name.trim(), slug, area_id: areaId }),
     });
     if (!res.ok) {
       window.alert(`Failed to create team: ${res.status}`);
@@ -104,15 +134,22 @@ export default function TeamsPage() {
 
   const teams = teamsQuery.data ?? [];
   const stats = statsQuery.data ?? [];
+  const areas = areasQuery.data ?? [];
 
   if (teams.length === 0) return <section className="page"><EmptyState message="No teams found." /></section>;
 
   const statsMap = new Map<string, DashboardStat>(stats.map(s => [s.team_name, s]));
 
-  const rows: TeamRow[] = teams.map(t => ({
+  const allRows: TeamRow[] = teams.map(t => ({
     ...t,
     stat: statsMap.get(t.name) ?? null,
   }));
+
+  const rows = areaFilter === 'all'
+    ? allRows
+    : areaFilter === 'none'
+      ? allRows.filter(t => !t.area_slug)
+      : allRows.filter(t => t.area_slug === areaFilter);
 
   const totalSpend = stats.reduce((sum, s) => sum + (s.total_cost_usd ?? 0), 0);
 
@@ -134,6 +171,24 @@ export default function TeamsPage() {
         <button className="filter"><span className="lbl">Owner</span><span className="val">Any</span><span className="caret">▾</span></button>
         <button className="filter"><span className="lbl">Tier</span><span className="val">All</span><span className="caret">▾</span></button>
         <button className="filter"><span className="lbl">Spend</span><span className="val">Any</span><span className="caret">▾</span></button>
+        {areas.length > 0 && (
+          <select
+            value={areaFilter}
+            onChange={e => setAreaFilter(e.target.value)}
+            style={{
+              padding: '5px 10px', fontSize: 12.5,
+              background: 'var(--surface-2)', border: '1px solid var(--rule)',
+              borderRadius: 6, color: 'var(--fg-1)', cursor: 'pointer',
+              fontFamily: 'inherit',
+            }}
+          >
+            <option value="all">All areas</option>
+            <option value="none">No area</option>
+            {areas.map(a => (
+              <option key={a.id} value={a.slug}>{a.name}</option>
+            ))}
+          </select>
+        )}
         <span style={{ flex: 1 }} />
         <div className="seg">
           {['24h','7d','30d','MTD'].map(r => (
@@ -149,6 +204,7 @@ export default function TeamsPage() {
               <tr>
                 <th style={{ width: 30 }}><input type="checkbox" /></th>
                 <th>Team</th>
+                <th>Area</th>
                 <th>Members</th>
                 <th>API keys</th>
                 <th className="num">Requests (24h)</th>
@@ -188,6 +244,17 @@ export default function TeamsPage() {
                         </div>
                         <span className="lo mono">{t.slug}</span>
                       </div>
+                    </td>
+                    <td>
+                      {t.area_name ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{
+                            display: 'inline-block', width: 8, height: 8, borderRadius: 2,
+                            background: t.area_color ?? '#888', flexShrink: 0,
+                          }} />
+                          <span style={{ fontSize: 13 }}>{t.area_name}</span>
+                        </div>
+                      ) : <span className="muted">—</span>}
                     </td>
                     <td><span className="muted">—</span></td>
                     <td><span className="tag mono">—</span></td>

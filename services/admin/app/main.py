@@ -14,6 +14,7 @@ from app.db import Base, engine
 # Import all ORM models so their metadata is registered with Base before create_all
 from app.models import (  # noqa: F401
     api_key,
+    area as area_model,
     audit_log as audit_log_model,
     member,
     model_registry as model_registry_model,
@@ -24,10 +25,12 @@ from app.models import (  # noqa: F401
 
 from app.routers import (
     api_keys,
+    areas as areas_router,
     audit_log,
     budget,
     dashboard,
     dev_auth,
+    developers as developers_router,
     guardrails as guardrails_router,
     members,
     model_registry,
@@ -42,6 +45,18 @@ from app.routers import (
 # Extra DDL for tables without ORM models (run idempotently via IF NOT EXISTS)
 _EXTRA_DDL = [
     "CREATE EXTENSION IF NOT EXISTS \"pgcrypto\"",
+    # Areas (must come before any FK reference in teams)
+    """CREATE TABLE IF NOT EXISTS areas (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        name TEXT NOT NULL,
+        slug TEXT NOT NULL,
+        description TEXT,
+        color TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE (slug)
+    )""",
+    "ALTER TABLE teams ADD COLUMN IF NOT EXISTS area_id UUID REFERENCES areas(id) ON DELETE SET NULL",
+    "CREATE INDEX IF NOT EXISTS idx_teams_area_id ON teams(area_id)",
     """CREATE TABLE IF NOT EXISTS projects (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         team_id UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
@@ -213,6 +228,21 @@ async def lifespan(app: FastAPI):
                     },
                 )
 
+    # Seed default areas if table is empty
+    async with engine.begin() as conn:
+        count = (await conn.execute(text("SELECT COUNT(*) FROM areas"))).scalar()
+        if count == 0:
+            for name, slug, description, color in [
+                ("Engineering", "engineering", "Software engineering teams", "#0A7BD7"),
+                ("Risk & Compliance", "risk-compliance", "Risk management and compliance teams", "#EF3E4A"),
+                ("Finance", "finance", "Finance and treasury teams", "#1D958E"),
+            ]:
+                await conn.execute(text("""
+                    INSERT INTO areas (name, slug, description, color)
+                    VALUES (:name, :slug, :description, :color)
+                    ON CONFLICT DO NOTHING
+                """), {"name": name, "slug": slug, "description": description, "color": color})
+
     app.state.redis = Redis.from_url(app_settings.redis_url, decode_responses=True)
     yield
     await app.state.redis.aclose()
@@ -236,8 +266,10 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 app.include_router(dev_auth.router)  # public — no admin auth
 app.include_router(settings_router.router, dependencies=_auth)
 app.include_router(dashboard.router, dependencies=_auth)
+app.include_router(areas_router.router, dependencies=_auth)
 app.include_router(teams.router, dependencies=_auth)
 app.include_router(members.router, dependencies=_auth)
+app.include_router(developers_router.router, dependencies=_auth)
 app.include_router(api_keys.router, dependencies=_auth)
 app.include_router(policies.router, dependencies=_auth)
 app.include_router(policies.summary_router, dependencies=_auth)

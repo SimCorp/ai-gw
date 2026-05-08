@@ -19,8 +19,10 @@ class Team(Base):
     monthly_budget_usd: Mapped[Decimal | None] = mapped_column(Numeric(14, 8), nullable=True)
     budget_alert_pct: Mapped[float] = mapped_column(Float, nullable=False, server_default=text("0.8"))
     budget_action: Mapped[str] = mapped_column(String, nullable=False, server_default=text("'alert'"))
+    area_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("areas.id", ondelete="SET NULL"), nullable=True)
 
     projects: Mapped[list["Project"]] = relationship("Project", back_populates="team", cascade="all, delete-orphan")
+    area: Mapped["Area | None"] = relationship("Area")
 
 
 class Project(Base):

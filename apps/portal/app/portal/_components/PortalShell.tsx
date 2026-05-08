@@ -7,7 +7,13 @@ import { useAuth } from "../_lib/authContext";
 
 const ADMIN_BASE = "http://localhost:8005";
 
-interface Team { id: string; name: string; slug: string; }
+interface Team {
+  id: string;
+  name: string;
+  slug: string;
+  area_name?: string | null;
+  area_color?: string | null;
+}
 
 const NAV = [
   {
@@ -68,13 +74,26 @@ export default function PortalShell() {
     ? developer.display_name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()
     : "?";
 
+  const currentTeam = teams.find(t => t.id === developer?.team_id) ?? null;
+
   return (
     <aside className="psidebar">
       <div className="psidebar__brand">
         <div className="logo">AI</div>
         <div>
           <div className="name">AI Portal</div>
-          <div className="sub">{developer?.team_name ?? "no team"}</div>
+          <div className="sub" style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            {currentTeam?.area_color && (
+              <span style={{
+                width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
+                background: currentTeam.area_color,
+                display: "inline-block",
+              }} />
+            )}
+            {currentTeam?.area_name
+              ? `${currentTeam.area_name} / ${developer?.team_name}`
+              : (developer?.team_name ?? "no team")}
+          </div>
         </div>
       </div>
 
@@ -117,11 +136,13 @@ export default function PortalShell() {
           >
             <span style={{
               width: 7, height: 7, borderRadius: "50%",
-              background: developer?.team_id ? "var(--good, #1F8A5B)" : "var(--fg-3)",
+              background: currentTeam?.area_color ?? (developer?.team_id ? "var(--good, #1F8A5B)" : "var(--fg-3)"),
               flexShrink: 0,
             }} />
             <span style={{ flex: 1, textAlign: "left", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {developer?.team_name ?? "Select team"}
+              {developer?.team_name
+                ? (currentTeam?.area_name ? `${currentTeam.area_name} / ${developer.team_name}` : developer.team_name)
+                : "Select team"}
             </span>
             <span style={{ color: "var(--fg-3)", fontSize: 10 }}>▾</span>
           </button>
@@ -145,8 +166,16 @@ export default function PortalShell() {
                     cursor: "pointer", fontSize: 12.5, color: "var(--fg-1)", fontFamily: "inherit",
                   }}
                 >
-                  <div style={{ fontWeight: t.id === developer?.team_id ? 600 : 400 }}>{t.name}</div>
-                  <div style={{ fontSize: 11, color: "var(--fg-3)", marginTop: 1 }}>{t.slug}</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{
+                      width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
+                      background: t.area_color ?? "var(--fg-3)",
+                    }} />
+                    <span style={{ fontWeight: t.id === developer?.team_id ? 600 : 400 }}>{t.name}</span>
+                  </div>
+                  {t.area_name && (
+                    <div style={{ fontSize: 11, color: "var(--fg-3)", marginTop: 2, paddingLeft: 12 }}>{t.area_name}</div>
+                  )}
                 </button>
               ))}
             </div>
@@ -171,6 +200,15 @@ export default function PortalShell() {
               <div className="team" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {developer?.email ?? ""}
               </div>
+              {developer?.team_name && (
+                <div style={{
+                  fontSize: 10.5, color: "var(--fg-3)",
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  marginTop: 1,
+                }}>
+                  Team: {currentTeam?.area_name ? `${currentTeam.area_name} / ${developer.team_name}` : developer.team_name}
+                </div>
+              )}
             </div>
             <span style={{ color: "var(--fg-3)", fontSize: 10, flexShrink: 0 }}>▾</span>
           </button>

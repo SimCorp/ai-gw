@@ -7,6 +7,16 @@ import { useAuth } from "./_lib/authContext";
 
 const ADMIN_BASE = "http://localhost:8005";
 
+interface TeamDetail {
+  id: string;
+  name: string;
+  slug: string;
+  area_id: string | null;
+  area_name: string | null;
+  area_slug: string | null;
+  area_color: string | null;
+}
+
 interface ApiKey {
   id: string;
   name: string;
@@ -35,6 +45,18 @@ export default function PortalHome() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loadingKeys, setLoadingKeys] = useState(false);
   const [loadingStats, setLoadingStats] = useState(false);
+  const [teamDetail, setTeamDetail] = useState<TeamDetail | null>(null);
+  const [loadingTeamDetail, setLoadingTeamDetail] = useState(false);
+
+  useEffect(() => {
+    if (!teamId) { setTeamDetail(null); return; }
+    setLoadingTeamDetail(true);
+    fetch(`${ADMIN_BASE}/teams/${teamId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: TeamDetail | null) => setTeamDetail(data))
+      .catch(() => setTeamDetail(null))
+      .finally(() => setLoadingTeamDetail(false));
+  }, [teamId]);
 
   useEffect(() => {
     if (!teamId) return;
@@ -73,8 +95,21 @@ export default function PortalHome() {
             <p>Select a team in the sidebar to see your stats, keys, and activity.</p>
           </div>
         </div>
-        <div className="card" style={{ padding: 32, textAlign: "center", marginTop: 24 }}>
-          <p style={{ marginBottom: 16, color: "var(--fg-2)" }}>No team selected. Use the team picker in the sidebar to get started.</p>
+        <div className="card" style={{ padding: 24, marginTop: 24 }}>
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+            <div style={{
+              width: 10, height: 10, borderRadius: "50%",
+              background: "var(--fg-3)", flexShrink: 0, marginTop: 3,
+            }} />
+            <div>
+              <div style={{ fontWeight: 500, fontSize: 13 }}>No team assigned</div>
+              <div style={{ color: "var(--fg-2)", fontSize: 12.5, marginTop: 2 }}>
+                Contact your admin to be added to a team, or use the team picker in the sidebar.
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style={{ textAlign: "center", marginTop: 16 }}>
           <Link href="/portal/playground" className="btn btn--primary">Open Playground →</Link>
         </div>
       </main>
@@ -110,6 +145,32 @@ export default function PortalHome() {
           <Link href="/portal/playground" className="btn btn--primary">Open Playground</Link>
         </div>
       </div>
+
+      {/* Workspace context */}
+      {(loadingTeamDetail || teamDetail) && (
+        <div className="card" style={{ padding: "14px 20px", marginBottom: 4 }}>
+          {loadingTeamDetail ? (
+            <div style={{ color: "var(--fg-3)", fontSize: 13 }}>Loading workspace…</div>
+          ) : teamDetail ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{
+                width: 10, height: 10, borderRadius: "50%", flexShrink: 0,
+                background: teamDetail.area_color ?? "var(--fg-3)",
+              }} />
+              <div style={{ display: "flex", alignItems: "baseline", gap: 6, flexWrap: "wrap" }}>
+                {teamDetail.area_name && (
+                  <>
+                    <span style={{ fontSize: 13, color: "var(--fg-2)" }}>{teamDetail.area_name}</span>
+                    <span style={{ fontSize: 12, color: "var(--fg-3)" }}>/</span>
+                  </>
+                )}
+                <span style={{ fontSize: 13, fontWeight: 500 }}>{teamDetail.name}</span>
+              </div>
+              <div style={{ marginLeft: "auto", fontSize: 11.5, color: "var(--fg-3)" }}>Your workspace</div>
+            </div>
+          ) : null}
+        </div>
+      )}
 
       {/* Stat strip */}
       <div className="stat-strip">
