@@ -4,7 +4,7 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { LoadingState, ErrorState } from '../_components/PageStates';
 
-const ADMIN_BASE = 'http://localhost:8005';
+const ADMIN_BASE = process.env.NEXT_PUBLIC_ADMIN_API ?? 'http://localhost:8005';
 
 interface SystemHealth {
   redis: {

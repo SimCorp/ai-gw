@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { EmptyState } from '../_components/PageStates';
 
-const BASE = 'http://localhost:8005';
+const BASE = process.env.NEXT_PUBLIC_ADMIN_API ?? 'http://localhost:8005';
 
 type Period = '7d' | '30d' | '90d' | 'mtd' | 'all';
 type GroupBy = 'area' | 'team' | 'model';

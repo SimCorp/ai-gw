@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useTeam } from "../_lib/teamContext";
 
-const ADMIN_BASE = "http://localhost:8005";
+const ADMIN_BASE = process.env.NEXT_PUBLIC_ADMIN_BASE_URL ?? "http://localhost:8005";
 
 // Pre-computed SVG bar data — decorative time series (no time-series endpoint exists)
 const BAR_DATA = [

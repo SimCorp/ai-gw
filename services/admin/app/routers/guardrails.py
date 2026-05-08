@@ -181,6 +181,11 @@ async def update_guardrail(
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
 
+    _ALLOWED_GUARDRAIL_FIELDS = {"name", "description", "type", "applies_to", "action", "severity", "priority", "enabled", "config"}
+    for field in updates:
+        if field not in _ALLOWED_GUARDRAIL_FIELDS:
+            raise HTTPException(status_code=400, detail=f"Unknown field: {field}")
+
     set_clauses = []
     params: dict = {"id": guardrail_id}
     for field, value in updates.items():

@@ -2,7 +2,8 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 
-const ADMIN_BASE = "http://localhost:8005";
+// TODO: migrate to HttpOnly cookie for full XSS protection (requires backend refactor)
+const ADMIN_BASE = process.env.NEXT_PUBLIC_ADMIN_BASE_URL ?? "http://localhost:8005";
 const TOKEN_KEY = "portal_dev_token";
 
 export interface Developer {
@@ -69,7 +70,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Restore session on mount
   useEffect(() => {
-    const storedToken = localStorage.getItem(TOKEN_KEY);
+    const storedToken = sessionStorage.getItem(TOKEN_KEY);
     if (!storedToken) { setLoading(false); return; }
     fetch(`${ADMIN_BASE}/dev-auth/me`, {
       headers: { Authorization: `Bearer ${storedToken}` },
@@ -82,10 +83,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const m = await fetchMemberships(data.developer_id, storedToken);
           setMemberships(m);
         } else {
-          localStorage.removeItem(TOKEN_KEY);
+          sessionStorage.removeItem(TOKEN_KEY);
         }
       })
-      .catch(() => { localStorage.removeItem(TOKEN_KEY); })
+      .catch(() => { sessionStorage.removeItem(TOKEN_KEY); })
       .finally(() => setLoading(false));
   }, []);
 
@@ -100,7 +101,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error(body.detail ?? `Login failed (${res.status})`);
     }
     const data = await res.json();
-    localStorage.setItem(TOKEN_KEY, data.token);
+    sessionStorage.setItem(TOKEN_KEY, data.token);
     setToken(data.token);
     setDeveloper(data);
     const m = await fetchMemberships(data.developer_id, data.token);
@@ -118,7 +119,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error(body.detail ?? `Registration failed (${res.status})`);
     }
     const data = await res.json();
-    localStorage.setItem(TOKEN_KEY, data.token);
+    sessionStorage.setItem(TOKEN_KEY, data.token);
     setToken(data.token);
     setDeveloper(data);
     const m = await fetchMemberships(data.developer_id, data.token);
@@ -126,21 +127,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
-    const storedToken = localStorage.getItem(TOKEN_KEY);
+    const storedToken = sessionStorage.getItem(TOKEN_KEY);
     if (storedToken) {
       await fetch(`${ADMIN_BASE}/dev-auth/logout`, {
         method: "POST",
         headers: { Authorization: `Bearer ${storedToken}` },
       }).catch(() => {});
     }
-    localStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem(TOKEN_KEY);
     setToken(null);
     setDeveloper(null);
     setMemberships([]);
   }, []);
 
   const selectTeam = useCallback(async (teamId: string) => {
-    const storedToken = localStorage.getItem(TOKEN_KEY);
+    const storedToken = sessionStorage.getItem(TOKEN_KEY);
     if (!storedToken) return;
     const res = await fetch(`${ADMIN_BASE}/dev-auth/select-team?team_id=${encodeURIComponent(teamId)}`, {
       method: "POST",

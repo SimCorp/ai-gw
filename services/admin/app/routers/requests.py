@@ -45,7 +45,7 @@ async def list_requests(
             cr.id,
             cr.created_at,
             t.name AS team_name,
-            ak.key_hash,
+            ak.name AS key_name,
             cr.model,
             cr.tokens_input,
             cr.tokens_output,

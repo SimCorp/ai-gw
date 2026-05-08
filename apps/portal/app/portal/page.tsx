@@ -6,7 +6,7 @@ import { useTeam } from "./_lib/teamContext";
 import { useAuth } from "./_lib/authContext";
 import type { TeamMembership } from "./_lib/authContext";
 
-const ADMIN_BASE = "http://localhost:8005";
+const ADMIN_BASE = process.env.NEXT_PUBLIC_ADMIN_BASE_URL ?? "http://localhost:8005";
 
 interface TeamDetail {
   id: string;

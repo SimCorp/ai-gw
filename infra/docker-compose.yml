@@ -11,7 +11,7 @@ services:
       POSTGRES_USER: aigateway
       POSTGRES_PASSWORD: aigateway
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
@@ -24,7 +24,7 @@ services:
   redis:
     image: redis/redis-stack:7.2.0-v14
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -34,7 +34,7 @@ services:
   dex:
     image: dexidp/dex:v2.40.0
     ports:
-      - "5556:5556"
+      - "127.0.0.1:5556:5556"
     volumes:
       - ./dex/config.yaml:/etc/dex/config.yaml:ro
     command: ["dex", "serve", "/etc/dex/config.yaml"]
@@ -86,7 +86,7 @@ services:
     build:
       context: ../services/auth
     ports:
-      - "8001:8001"
+      - "127.0.0.1:8001:8001"
     env_file: ../.env
     depends_on:
       db-migrate:
@@ -106,6 +106,8 @@ services:
     ports:
       - "8002:8002"
     env_file: ../.env
+    environment:
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-change-me-internal-key}
     depends_on:
       redis:
         condition: service_healthy
@@ -122,8 +124,10 @@ services:
     build:
       context: ../services/observability
     ports:
-      - "8004:8004"
+      - "127.0.0.1:8004:8004"
     env_file: ../.env
+    environment:
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-change-me-internal-key}
     depends_on:
       db-migrate:
         condition: service_completed_successfully

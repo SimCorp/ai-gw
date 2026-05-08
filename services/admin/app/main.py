@@ -1,4 +1,6 @@
+import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,7 +19,9 @@ from app.models import (  # noqa: F401
     area as area_model,
     area_policy as area_policy_model,
     audit_log as audit_log_model,
+    mcp as mcp_model,
     member,
+    plugin as plugin_model,
     model_registry as model_registry_model,
     policy,
     pricing as pricing_model,
@@ -25,7 +29,8 @@ from app.models import (  # noqa: F401
 )
 
 from app.routers import (
-    api_keys,
+    admin_auth as admin_auth_router,
+    api_keys as api_keys_module,
     areas as areas_router,
     audit_log,
     budget,
@@ -33,7 +38,9 @@ from app.routers import (
     dev_auth,
     developers as developers_router,
     guardrails as guardrails_router,
+    mcp as mcp_router,
     members,
+    plugins as plugins_router,
     model_registry,
     policies,
     pricing,
@@ -181,6 +188,22 @@ _EXTRA_DDL = [
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         UNIQUE (area_id)
     )""",
+    # Admin portal users (separate from developer portal users)
+    """CREATE TABLE IF NOT EXISTS admin_users (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        email VARCHAR(255) NOT NULL UNIQUE,
+        display_name VARCHAR(255),
+        password_hash TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT 'admin' CHECK (role IN ('superadmin', 'admin', 'viewer')),
+        last_login_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_admin_users_email ON admin_users(email)",
+    # Seed default admin (password: Admin1234! — bcrypt 12 rounds)
+    """INSERT INTO admin_users (email, display_name, password_hash, role) VALUES
+        ('admin@simcorp.com', 'Default Admin', '$2b$12$GwGtCW6GNoGJlD5lhF8xLeZPEZO8W5eDXr6TO7u3zm3SiHe1uZK3S', 'superadmin')
+    ON CONFLICT (email) DO NOTHING""",
 ]
 
 import json as _json
@@ -203,6 +226,13 @@ _auth = [Depends(require_admin_auth)]
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Guard: DEV_BYPASS_AUTH must not be enabled outside dev/test/ci environments
+    if app_settings.dev_bypass_auth and os.getenv("ENVIRONMENT", "development") not in ("development", "test", "ci"):
+        raise RuntimeError(
+            "DEV_BYPASS_AUTH=true is not allowed outside development/test environments. "
+            "Set ENVIRONMENT=development to suppress this error."
+        )
+
     # Ensure all ORM-mapped tables exist
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -309,20 +339,22 @@ app = FastAPI(
 )
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3001", "http://localhost:3002"],
+    allow_origins=app_settings.cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
     allow_credentials=True,
 )
-app.mount("/static", StaticFiles(directory="app/static"), name="static")
+app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 app.include_router(dev_auth.router)  # public — no admin auth
+app.include_router(admin_auth_router.router)  # public — IS the auth, no token required
 app.include_router(settings_router.router, dependencies=_auth)
 app.include_router(dashboard.router, dependencies=_auth)
 app.include_router(areas_router.router, dependencies=_auth)
 app.include_router(teams.router, dependencies=_auth)
 app.include_router(members.router, dependencies=_auth)
 app.include_router(developers_router.router, dependencies=_auth)
-app.include_router(api_keys.router, dependencies=_auth)
+app.include_router(api_keys_module.router, dependencies=_auth)
+app.include_router(api_keys_module.portal_keys_router)  # portal: authenticated via dev session, no admin token
 app.include_router(policies.router, dependencies=_auth)
 app.include_router(policies.summary_router, dependencies=_auth)
 app.include_router(pricing.router, dependencies=_auth)
@@ -332,6 +364,8 @@ app.include_router(audit_log.router, dependencies=_auth)
 app.include_router(budget.router, dependencies=_auth)
 app.include_router(requests_router.router, dependencies=_auth)
 app.include_router(guardrails_router.router, dependencies=_auth)
+app.include_router(mcp_router.router, dependencies=_auth)
+app.include_router(plugins_router.router, dependencies=_auth)
 app.include_router(reports_router.router, dependencies=_auth)
 
 

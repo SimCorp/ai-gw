@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useState, useEffect, useCallback } from "react";
 import { useTeam } from "../_lib/teamContext";
+import { useAuth } from "../_lib/authContext";
 
-const ADMIN_BASE = "http://localhost:8005";
+const ADMIN_BASE = process.env.NEXT_PUBLIC_ADMIN_BASE_URL ?? "http://localhost:8005";
 
 const LANG_TABS = ["curl", "python", "ts", "anthropic"] as const;
 type Lang = (typeof LANG_TABS)[number];
@@ -82,6 +83,7 @@ function formatDate(iso: string) {
 
 export default function KeysPage() {
   const { teamId, teamName } = useTeam();
+  const { token } = useAuth();
   const [lang, setLang] = useState<Lang>("curl");
   const [copied, setCopied] = useState<string | null>(null);
   const [keys, setKeys] = useState<ApiKey[]>([]);
@@ -96,7 +98,9 @@ export default function KeysPage() {
     setLoading(true);
     setError(null);
     try {
-      const r = await fetch(`${ADMIN_BASE}/teams/${teamId}/keys`);
+      const r = await fetch(`${ADMIN_BASE}/portal/teams/${teamId}/keys`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const data = await r.json();
       setKeys(data);
@@ -105,7 +109,7 @@ export default function KeysPage() {
     } finally {
       setLoading(false);
     }
-  }, [teamId]);
+  }, [teamId, token]);
 
   useEffect(() => {
     loadKeys();
@@ -123,9 +127,12 @@ export default function KeysPage() {
     if (!name?.trim() || !teamId) return;
     setCreating(true);
     try {
-      const r = await fetch(`${ADMIN_BASE}/teams/${teamId}/keys`, {
+      const r = await fetch(`${ADMIN_BASE}/portal/teams/${teamId}/keys`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ name: name.trim() }),
       });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -144,7 +151,10 @@ export default function KeysPage() {
     if (!teamId) return;
     if (!confirm(`Revoke key "${keyName}"? This cannot be undone.`)) return;
     try {
-      const r = await fetch(`${ADMIN_BASE}/teams/${teamId}/keys/${keyId}`, { method: "DELETE" });
+      const r = await fetch(`${ADMIN_BASE}/portal/teams/${teamId}/keys/${keyId}`, {
+        method: "DELETE",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       await loadKeys();
     } catch (e) {

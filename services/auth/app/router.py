@@ -70,9 +70,11 @@ async def check_budget(team_id: str, key_id: str | None, redis: Redis) -> tuple[
                         return False, "Organisation monthly budget exhausted"
 
         return True, ""
-    except Exception:
-        # Redis unavailable — fail open
-        return True, ""
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).error("Redis unavailable during budget check, failing closed: %s", exc)
+        from fastapi import HTTPException
+        raise HTTPException(status_code=503, detail="Budget enforcement temporarily unavailable")
 
 
 @router.post("/validate", response_model=ValidateResponse)

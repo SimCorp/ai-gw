@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     embedding_base_url: str = "http://ollama:11434/v1"
     default_similarity_threshold: float = 0.95
     default_ttl_seconds: int = 3600
+    internal_api_key: str = "change-me-internal-key"
 
 
 settings = Settings()

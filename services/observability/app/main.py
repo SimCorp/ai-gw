@@ -24,6 +24,7 @@ async def lifespan(app: FastAPI):
 
     await bus.start()
     app.state.bus = bus
+    app.state.settings = settings
     yield
     await bus.stop()
     await pg_pool.close()

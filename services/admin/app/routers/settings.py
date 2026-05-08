@@ -1,14 +1,42 @@
 """Provider API key management — store keys in DB, push to LiteLLM at runtime."""
+import base64
 import os
 from typing import Any
 
 import httpx
+from cryptography.fernet import Fernet, InvalidToken
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.db import get_session
+
+
+def _get_fernet() -> Fernet:
+    key_material = settings.secret_key.encode()
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=b"ai-gw-provider-keys",
+        iterations=100_000,
+    )
+    key = base64.urlsafe_b64encode(kdf.derive(key_material))
+    return Fernet(key)
+
+
+def _encrypt_value(plaintext: str) -> str:
+    return _get_fernet().encrypt(plaintext.encode()).decode()
+
+
+def _decrypt_value(ciphertext: str) -> str:
+    try:
+        return _get_fernet().decrypt(ciphertext.encode()).decode()
+    except (InvalidToken, Exception):
+        # Backwards compatibility: return as-is if value is legacy plaintext
+        return ciphertext
 
 router = APIRouter(tags=["settings"])
 # Provider definitions — env_var is what LiteLLM reads
@@ -90,7 +118,7 @@ async def _ensure_table(session: AsyncSession) -> None:
 async def _get_stored_keys(session: AsyncSession) -> dict[str, str]:
     await _ensure_table(session)
     rows = (await session.execute(text("SELECT env_var, key_value FROM provider_keys"))).all()
-    return {r[0]: r[1] for r in rows}
+    return {r[0]: _decrypt_value(r[1]) for r in rows}
 
 
 async def _push_to_litellm(env_var: str, key_value: str) -> bool:
@@ -192,7 +220,7 @@ async def save_provider_keys(
                 VALUES (:env_var, :val, NOW())
                 ON CONFLICT (env_var) DO UPDATE SET key_value = :val, updated_at = NOW()
             """),
-            {"env_var": env_var, "val": raw},
+            {"env_var": env_var, "val": _encrypt_value(raw)},
         )
         os.environ[env_var] = raw
 
@@ -201,13 +229,20 @@ async def save_provider_keys(
             extra_var = extra["env_var"]
             extra_val = (body.get(extra_var) or "").strip()
             if extra_val:
+                if extra_var.endswith(("_BASE", "_URL", "_ENDPOINT")):
+                    from app.routers.mcp import _validate_mcp_url
+                    from fastapi import HTTPException as _HTTPException
+                    try:
+                        _validate_mcp_url(extra_val)
+                    except _HTTPException as exc:
+                        raise _HTTPException(status_code=422, detail=f"{extra_var}: {exc.detail}") from exc
                 await session.execute(
                     text("""
                         INSERT INTO provider_keys (env_var, key_value, updated_at)
                         VALUES (:env_var, :val, NOW())
                         ON CONFLICT (env_var) DO UPDATE SET key_value = :val, updated_at = NOW()
                     """),
-                    {"env_var": extra_var, "val": extra_val},
+                    {"env_var": extra_var, "val": _encrypt_value(extra_val)},
                 )
                 os.environ[extra_var] = extra_val
 

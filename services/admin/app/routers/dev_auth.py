@@ -8,21 +8,47 @@ Passwords are hashed with PBKDF2-HMAC-SHA256 (standard library, no extra deps).
 import hashlib
 import json
 import os
+import re
 import secrets
+import time
 import uuid
+from collections import defaultdict
 from datetime import UTC, datetime, timedelta
+from threading import Lock
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.db import get_session
 
 router = APIRouter(prefix="/dev-auth", tags=["developer-auth"])
 
 _SESSION_TTL = int(timedelta(days=7).total_seconds())
 _ITERATIONS = 390_000  # NIST SP 800-132 recommended minimum for PBKDF2-HMAC-SHA256
+
+_EMAIL_RE = re.compile(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$')
+
+# ---------------------------------------------------------------------------
+# Rate limiting (in-memory, per IP)
+# ---------------------------------------------------------------------------
+
+_login_attempts: dict[str, list[float]] = defaultdict(list)
+_login_lock = Lock()
+
+
+def _check_auth_rate_limit(identifier: str, max_attempts: int = 30, window_seconds: int = 60) -> None:
+    if settings.dev_bypass_auth:
+        return  # skip rate limiting in dev/test mode
+    now = time.time()
+    with _login_lock:
+        attempts = _login_attempts[identifier]
+        _login_attempts[identifier] = [t for t in attempts if now - t < window_seconds]
+        if len(_login_attempts[identifier]) >= max_attempts:
+            raise HTTPException(status_code=429, detail="Too many attempts, try again later")
+        _login_attempts[identifier].append(now)
 
 
 # ---------------------------------------------------------------------------
@@ -70,9 +96,17 @@ async def _get_current_developer(
 # ---------------------------------------------------------------------------
 
 class RegisterRequest(BaseModel):
-    email: str
-    display_name: str
-    password: str
+    email: str = Field(..., max_length=255)
+    display_name: str = Field(..., max_length=200, min_length=1)
+    password: str = Field(..., min_length=8, max_length=128)
+
+    @field_validator('email')
+    @classmethod
+    def validate_email(cls, v: str) -> str:
+        v = v.lower().strip()
+        if not _EMAIL_RE.match(v):
+            raise ValueError('Invalid email address')
+        return v
 
 
 class LoginRequest(BaseModel):
@@ -81,7 +115,7 @@ class LoginRequest(BaseModel):
 
 
 class ProfileUpdate(BaseModel):
-    display_name: str | None = None
+    display_name: str | None = Field(default=None, max_length=200)
 
 
 # ---------------------------------------------------------------------------
@@ -94,12 +128,16 @@ async def register(
     request: Request,
     session: AsyncSession = Depends(get_session),
 ):
-    # Normalise email
-    email = body.email.lower().strip()
-    if not email or "@" not in email:
-        raise HTTPException(status_code=422, detail="Invalid email address")
-    if len(body.password) < 8:
-        raise HTTPException(status_code=422, detail="Password must be at least 8 characters")
+    _check_auth_rate_limit(request.client.host if request.client else "unknown")
+
+    # Email is already validated and normalised by the schema validator
+    email = body.email
+
+    # Corporate domain restriction
+    if settings.allowed_email_domains:
+        domain = email.split("@")[1]
+        if domain not in settings.allowed_email_domains:
+            raise HTTPException(status_code=422, detail="Registration is restricted to corporate email addresses")
 
     # Check uniqueness
     exists = (await session.execute(
@@ -134,6 +172,7 @@ async def login(
     request: Request,
     session: AsyncSession = Depends(get_session),
 ):
+    _check_auth_rate_limit(request.client.host if request.client else "unknown")
     email = body.email.lower().strip()
     row = (await session.execute(
         text("""
@@ -216,6 +255,14 @@ async def select_team(
     )).mappings().first()
     if not row:
         raise HTTPException(status_code=404, detail="Team not found")
+
+    # Verify developer is a member of this team
+    member_row = (await session.execute(
+        text("SELECT id FROM team_members WHERE team_id = CAST(:team_id AS uuid) AND developer_id = :developer_id"),
+        {"team_id": team_id, "developer_id": developer["developer_id"]},
+    )).first()
+    if not member_row:
+        raise HTTPException(status_code=403, detail="You are not a member of this team")
 
     await session.execute(
         text("UPDATE developers SET team_id = CAST(:team_id AS uuid) WHERE id = CAST(:id AS uuid)"),

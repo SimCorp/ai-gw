@@ -162,3 +162,108 @@ INSERT INTO model_registry (name, model_id, provider) VALUES
     ('Gemini 1.5 Pro',      'gemini-1.5-pro',        'google'),
     ('Gemini 1.5 Flash',    'gemini-1.5-flash',      'google')
 ON CONFLICT (model_id) DO NOTHING;
+
+-- MCP Server Registry
+CREATE TABLE IF NOT EXISTS mcp_servers (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    description TEXT,
+    url TEXT NOT NULL,
+    auth_type TEXT NOT NULL DEFAULT 'none', -- none | bearer | api_key
+    auth_header TEXT,                        -- header name when auth_type = api_key
+    auth_secret TEXT,                        -- stored secret (bearer token or api key value)
+    status TEXT NOT NULL DEFAULT 'pending',  -- pending | active | error | disabled
+    last_ping_at TIMESTAMPTZ,
+    last_ping_ms INT,
+    last_error TEXT,
+    tool_count INT NOT NULL DEFAULT 0,
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (url)
+);
+
+CREATE TABLE IF NOT EXISTS mcp_tools (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    server_id UUID NOT NULL REFERENCES mcp_servers(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    description TEXT,
+    input_schema JSONB NOT NULL DEFAULT '{}',
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (server_id, name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_mcp_tools_server_id ON mcp_tools(server_id);
+
+CREATE TABLE IF NOT EXISTS mcp_server_access (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    server_id UUID NOT NULL REFERENCES mcp_servers(id) ON DELETE CASCADE,
+    team_id UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+    granted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (server_id, team_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_mcp_access_team ON mcp_server_access(team_id);
+
+-- Plugin Registry
+CREATE TABLE IF NOT EXISTS plugins (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    slug TEXT NOT NULL UNIQUE,
+    description TEXT,
+    version TEXT NOT NULL DEFAULT '0.1.0',
+    author TEXT NOT NULL DEFAULT 'community',
+    category TEXT NOT NULL DEFAULT 'tool',   -- tool | integration | data | security | workflow
+    scopes TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+    homepage_url TEXT,
+    icon_url TEXT,
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS plugin_team_overrides (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    plugin_id UUID NOT NULL REFERENCES plugins(id) ON DELETE CASCADE,
+    team_id UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (plugin_id, team_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_plugin_team_overrides_team ON plugin_team_overrides(team_id);
+
+INSERT INTO plugins (name, slug, description, version, author, category, scopes) VALUES
+    ('Web Search',       'web-search',       'Search the web using Brave or SerpAPI',                   '1.2.0', 'first-party', 'tool',        ARRAY['internet']),
+    ('Code Interpreter', 'code-interpreter', 'Execute Python code in a sandboxed environment',          '2.0.1', 'first-party', 'tool',        ARRAY['compute']),
+    ('File Reader',      'file-reader',      'Parse and extract text from PDF, DOCX, and CSV files',    '1.0.3', 'first-party', 'data',        ARRAY['files']),
+    ('GitHub',           'github',           'Read repos, issues, PRs and create comments via GitHub',  '1.5.2', 'first-party', 'integration', ARRAY['github']),
+    ('Slack',            'slack',            'Send messages and read channel history',                  '1.1.0', 'first-party', 'integration', ARRAY['slack']),
+    ('SQL Query',        'sql-query',        'Run read-only SQL queries against configured datasources','0.9.0', 'first-party', 'data',        ARRAY['database']),
+    ('PII Detector',     'pii-detector',     'Scan text for personally identifiable information',       '1.0.0', 'first-party', 'security',    ARRAY[]::TEXT[]),
+    ('Jira',             'jira',             'Create and update Jira issues from agent workflows',      '1.0.0', 'community',   'integration', ARRAY['jira']),
+    ('Confluence',       'confluence',       'Read Confluence pages and spaces',                        '1.0.0', 'community',   'integration', ARRAY['confluence'])
+ON CONFLICT (slug) DO NOTHING;
+
+-- ============================================================
+-- Admin portal users (separate from developer portal users)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS admin_users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email VARCHAR(255) NOT NULL UNIQUE,
+    display_name VARCHAR(255),
+    password_hash TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'admin' CHECK (role IN ('superadmin', 'admin', 'viewer')),
+    last_login_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_admin_users_email ON admin_users(email);
+
+-- Seed a default admin (password: Admin1234! — must be changed)
+-- bcrypt hash of "Admin1234!" with 12 rounds
+INSERT INTO admin_users (email, display_name, password_hash, role) VALUES
+    ('admin@simcorp.com', 'Default Admin', '$2b$12$GwGtCW6GNoGJlD5lhF8xLeZPEZO8W5eDXr6TO7u3zm3SiHe1uZK3S', 'superadmin')
+ON CONFLICT (email) DO NOTHING;

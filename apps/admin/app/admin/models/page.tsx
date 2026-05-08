@@ -4,6 +4,8 @@ import React, { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { LoadingState, ErrorState, EmptyState } from '../_components/PageStates';
 
+const BASE = process.env.NEXT_PUBLIC_ADMIN_API ?? 'http://localhost:8005';
+
 interface Model {
   id: string;
   model_id: string;
@@ -83,7 +85,7 @@ function RegisterModelModal({ onClose, onSaved }: RegisterModalProps) {
     setSaving(true);
     setError('');
     try {
-      const res = await fetch('http://localhost:8005/models', {
+      const res = await fetch(BASE + '/models', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
@@ -202,12 +204,12 @@ export default function ModelsPage() {
 
   const { data, isLoading, isError, error, refetch } = useQuery<Model[]>({
     queryKey: ['models'],
-    queryFn: () => fetch('http://localhost:8005/models').then(r => r.json()),
+    queryFn: () => fetch(BASE + '/models').then(r => r.json()),
   });
 
   async function toggleEnabled(m: Model) {
     try {
-      await fetch(`http://localhost:8005/models/${m.id}`, {
+      await fetch(`${BASE}/models/${m.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled: !m.enabled }),

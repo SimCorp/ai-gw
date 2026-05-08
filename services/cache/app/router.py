@@ -19,7 +19,12 @@ def _prompt_text(body: dict) -> str:
 
 async def _emit_event(client: httpx.AsyncClient, event: dict) -> None:
     try:
-        await client.post(f"{settings.observability_url}/events", json=event, timeout=2)
+        await client.post(
+            f"{settings.observability_url}/events",
+            json=event,
+            headers={"x-internal-key": settings.internal_api_key},
+            timeout=2,
+        )
     except Exception:
         pass
 

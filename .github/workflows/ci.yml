@@ -1,38 +1,65 @@
 name: CI
 
 on:
-  pull_request:
   push:
     branches: [main, master]
+    tags: ["v*.*.*"]
+  pull_request:
+    branches: [main, master]
+
+env:
+  REGISTRY: ghcr.io
+  # Lower-cased repo path for image names — GHCR requires lowercase
+  IMAGE_PREFIX: ${{ github.repository }}
+
+# Cancel in-flight runs for the same ref (saves minutes on fast-moving PRs)
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  test:
+  # ────────────────────────────────────────────────────────────────────────────
+  # Lint
+  # ────────────────────────────────────────────────────────────────────────────
+  lint:
+    name: Lint
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
-    services:
-      redis:
-        image: redis/redis-stack:7.2.0-v14
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 10
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
 
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_DB: aigateway
-          POSTGRES_USER: aigateway
-          POSTGRES_PASSWORD: aigateway
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U aigateway"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
+      - name: Python lint (ruff)
+        run: |
+          pip install --quiet ruff
+          ruff check services/
+          ruff format --check services/
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Lint admin frontend
+        working-directory: apps/admin
+        run: npm ci --quiet && npm run lint
+
+      - name: Lint portal frontend
+        working-directory: apps/portal
+        run: npm ci --quiet && npm run lint
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Unit tests — one job per service to avoid the shared `app` namespace clash
+  # ────────────────────────────────────────────────────────────────────────────
+  unit-tests:
+    name: Unit tests — ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [auth, cache, observability, admin]
 
     steps:
       - uses: actions/checkout@v4
@@ -42,23 +69,190 @@ jobs:
           python-version: "3.12"
           cache: pip
 
-      - name: Install service dependencies
-        run: |
-          pip install \
-            "services/auth[dev]" \
-            "services/cache[dev]" \
-            "services/observability[dev]" \
-            "services/admin[dev]"
+      - name: Install service dev dependencies
+        run: pip install --quiet "services/${{ matrix.service }}[dev]"
 
-      - name: Lint
-        run: |
-          pip install ruff
-          ruff check services/
-
-      - name: Test
+      - name: Run unit tests
+        working-directory: services/${{ matrix.service }}
         env:
-          DATABASE_URL: postgresql+asyncpg://aigateway:aigateway@localhost:5432/aigateway
-          REDIS_URL: redis://localhost:6379/0
           DEV_BYPASS_AUTH: "true"
           BUS_PROVIDER: memory
-        run: pytest services/ -v --tb=short
+          # Dummy values — mocked tests never reach the DB/Redis
+          DATABASE_URL: postgresql+asyncpg://aigateway:aigateway@localhost:5432/aigateway
+          REDIS_URL: redis://localhost:6379/0
+        run: python3 -m pytest tests/ -v --tb=short
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Frontend build (type-check + next build)
+  # ────────────────────────────────────────────────────────────────────────────
+  frontend-build:
+    name: Frontend build — ${{ matrix.app }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - app: admin
+            port: "3001"
+          - app: portal
+            port: "3002"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: apps/${{ matrix.app }}/package-lock.json
+
+      - name: Install dependencies
+        working-directory: apps/${{ matrix.app }}
+        run: npm ci
+
+      - name: Build
+        working-directory: apps/${{ matrix.app }}
+        env:
+          NEXT_PUBLIC_ADMIN_API: http://localhost:8005
+          NEXT_TELEMETRY_DISABLED: "1"
+        run: npm run build
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Integration tests — admin API + portal API + smoke (no real LLM calls)
+  # Tests that require provider API keys (proxy, cache HIT/MISS) are skipped;
+  # run those locally or via the `integration-full` workflow with secrets.
+  # ────────────────────────────────────────────────────────────────────────────
+  integration-tests:
+    name: Integration tests
+    runs-on: ubuntu-latest
+    needs: [lint, unit-tests]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create .env for stack
+        run: |
+          cat > .env <<'EOF'
+          SECRET_KEY=ci-secret-key-not-for-production
+          ADMIN_TOKEN=local-dev-admin-key-change-in-prod
+          DEV_BYPASS_AUTH=true
+          LITELLM_MASTER_KEY=sk-ci-litellm-master-key
+          ANTHROPIC_API_KEY=sk-ant-ci-placeholder
+          OPENAI_API_KEY=sk-ci-placeholder
+          EOF
+
+      - name: Start gateway stack
+        run: |
+          docker compose -f infra/docker-compose.yml up --build --wait --timeout 180
+        env:
+          COMPOSE_ANSI: never
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install test dependencies
+        run: pip install --quiet -r tests/requirements.txt
+
+      - name: Run integration tests (no LLM)
+        run: |
+          python3 -m pytest \
+            tests/test_smoke.py \
+            tests/test_admin.py \
+            tests/test_admin_areas.py \
+            tests/test_admin_members.py \
+            tests/test_admin_policies.py \
+            tests/test_admin_budget.py \
+            tests/test_admin_guardrails.py \
+            tests/test_admin_mcp.py \
+            tests/test_admin_plugins.py \
+            tests/test_admin_misc.py \
+            tests/test_admin_login.py \
+            tests/test_portal_api.py \
+            -v --tb=short
+        env:
+          ADMIN_URL: http://localhost:8005
+          GATEWAY_URL: http://localhost:8002
+          AUTH_URL: http://localhost:8001
+          CACHE_URL: http://localhost:8002
+          LITELLM_URL: http://localhost:8003
+          OBSERVABILITY_URL: http://localhost:8004
+          ADMIN_TOKEN: local-dev-admin-key-change-in-prod
+          DEV_BYPASS_AUTH: "true"
+
+      - name: Dump service logs on failure
+        if: failure()
+        run: docker compose -f infra/docker-compose.yml logs --tail=80
+        env:
+          COMPOSE_ANSI: never
+
+      - name: Tear down stack
+        if: always()
+        run: docker compose -f infra/docker-compose.yml down -v
+        env:
+          COMPOSE_ANSI: never
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Build & push all images to GHCR
+  # Only runs on push (not PRs). Uses GitHub Actions cache for layer reuse.
+  # ────────────────────────────────────────────────────────────────────────────
+  build-push:
+    name: Build & push — ${{ matrix.component.name }}
+    runs-on: ubuntu-latest
+    needs: [lint, unit-tests, frontend-build, integration-tests]
+    if: github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        component:
+          - name: auth
+            context: services/auth
+          - name: cache
+            context: services/cache
+          - name: admin-api
+            context: services/admin
+          - name: observability
+            context: services/observability
+          - name: admin-frontend
+            context: apps/admin
+          - name: portal-frontend
+            context: apps/portal
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}/${{ matrix.component.name }}
+          tags: |
+            type=sha,prefix=sha-,format=short
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.component.context }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.component.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.component.name }}

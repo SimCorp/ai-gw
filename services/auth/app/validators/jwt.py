@@ -1,3 +1,5 @@
+import time
+
 import httpx
 from fastapi import HTTPException
 from jose import JWTError, jwt
@@ -5,6 +7,8 @@ from jose import JWTError, jwt
 from app.config import Settings
 
 _jwks_cache: dict = {}
+_jwks_cache_expires: float = 0.0
+_JWKS_TTL = 3600  # 1 hour
 
 
 async def _fetch_jwks(settings: Settings) -> dict:
@@ -14,20 +18,30 @@ async def _fetch_jwks(settings: Settings) -> dict:
         return resp.json()
 
 
+async def _get_jwks(settings: Settings) -> dict:
+    global _jwks_cache, _jwks_cache_expires
+    now = time.monotonic()
+    if _jwks_cache and now < _jwks_cache_expires:
+        return _jwks_cache
+    _jwks_cache = await _fetch_jwks(settings)
+    _jwks_cache_expires = now + _JWKS_TTL
+    return _jwks_cache
+
+
 async def validate_jwt(token: str, settings: Settings) -> dict:
     """Fetch JWKS, verify token signature + claims, return {team_id, project_id}."""
-    global _jwks_cache
+    global _jwks_cache, _jwks_cache_expires
     try:
-        if not _jwks_cache:
-            _jwks_cache = await _fetch_jwks(settings)
+        jwks = await _get_jwks(settings)
 
         header = jwt.get_unverified_header(token)
         kid = header.get("kid")
-        key = next((k for k in _jwks_cache.get("keys", []) if k.get("kid") == kid), None)
+        key = next((k for k in jwks.get("keys", []) if k.get("kid") == kid), None)
 
         # Unknown kid — keys may have rotated; refresh once and retry.
         if key is None:
             _jwks_cache = await _fetch_jwks(settings)
+            _jwks_cache_expires = time.monotonic() + _JWKS_TTL
             key = next((k for k in _jwks_cache.get("keys", []) if k.get("kid") == kid), None)
         if key is None:
             raise HTTPException(status_code=401, detail="Unknown signing key")

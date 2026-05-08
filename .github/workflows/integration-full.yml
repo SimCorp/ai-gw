@@ -1,0 +1,66 @@
+name: Integration (full — requires provider keys)
+
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+jobs:
+  integration-full:
+    name: Full integration tests
+    runs-on: ubuntu-latest
+    environment: integration  # requires ANTHROPIC_API_KEY secret in this environment
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create .env for stack
+        run: |
+          cat > .env <<EOF
+          SECRET_KEY=ci-secret-key-not-for-production
+          ADMIN_TOKEN=local-dev-admin-key-change-in-prod
+          DEV_BYPASS_AUTH=true
+          LITELLM_MASTER_KEY=sk-ci-litellm-master-key
+          ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY || '' }}
+          EOF
+
+      - name: Start gateway stack
+        run: docker compose -f infra/docker-compose.yml up --build --wait --timeout 180
+        env:
+          COMPOSE_ANSI: never
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install test dependencies
+        run: pip install --quiet -r tests/requirements.txt
+
+      - name: Run full integration tests
+        run: |
+          python3 -m pytest tests/ \
+            --ignore=tests/test_portal.py \
+            -v --tb=short
+        env:
+          ADMIN_URL: http://localhost:8005
+          GATEWAY_URL: http://localhost:8002
+          AUTH_URL: http://localhost:8001
+          CACHE_URL: http://localhost:8002
+          LITELLM_URL: http://localhost:8003
+          OBSERVABILITY_URL: http://localhost:8004
+          ADMIN_TOKEN: local-dev-admin-key-change-in-prod
+          DEV_BYPASS_AUTH: "true"
+
+      - name: Dump service logs on failure
+        if: failure()
+        run: docker compose -f infra/docker-compose.yml logs --tail=100
+        env:
+          COMPOSE_ANSI: never
+
+      - name: Tear down stack
+        if: always()
+        run: docker compose -f infra/docker-compose.yml down -v
+        env:
+          COMPOSE_ANSI: never
