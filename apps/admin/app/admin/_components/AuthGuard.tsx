@@ -17,8 +17,15 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   }, [router]);
 
   if (!checked) {
-    // Render nothing while checking auth to avoid flash of protected content
-    return null;
+    return (
+      <div style={{
+        position: 'fixed', inset: 0,
+        background: '#0f1117',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <div style={{ color: '#666', fontSize: 13 }}>Loading…</div>
+      </div>
+    );
   }
 
   return <>{children}</>;
