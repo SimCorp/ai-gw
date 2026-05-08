@@ -29,7 +29,7 @@ async def get_policy(team_id: UUID, session: AsyncSession = Depends(get_session)
     result = await session.execute(
         select(Policy).where(Policy.team_id == team_id, Policy.project_id.is_(None))
     )
-    return result.scalar_one_or_none() or {}
+    return result.scalars().first() or {}
 
 
 @router.put("")
@@ -47,7 +47,8 @@ async def upsert_policy(team_id: UUID, body: PolicyUpdate, request: Request, ses
             allowed_models=body.allowed_models,
         )
         .on_conflict_do_update(
-            index_elements=["team_id", "project_id"],
+            index_elements=["team_id"],
+            index_where=Policy.project_id.is_(None),
             set_={
                 "cache_ttl_seconds": body.cache_ttl_seconds,
                 "cache_similarity_threshold": body.cache_similarity_threshold,
