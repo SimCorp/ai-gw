@@ -1,0 +1,324 @@
+#!/usr/bin/env bash
+# gw — AI Gateway dev CLI
+# Usage: ./gw <command> [args]
+set -euo pipefail
+
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DC="docker compose -f $REPO_DIR/infra/docker-compose.yml"
+DC_SANDBOX="$DC --profile sandbox"
+
+# Colours
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
+BLUE='\033[0;34m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
+
+info()    { echo -e "${BLUE}▸${NC} $*"; }
+success() { echo -e "${GREEN}✓${NC} $*"; }
+warn()    { echo -e "${YELLOW}⚠${NC} $*"; }
+die()     { echo -e "${RED}✗${NC} $*" >&2; exit 1; }
+
+CORE_SERVICES="postgres redis auth cache litellm observability admin"
+FRONTEND_SERVICES="admin portal"
+
+_pids_for_port() {
+  # lsof doesn't work reliably in WSL; use ss instead
+  ss -tlnp "sport = :$1" 2>/dev/null | awk 'NR>1 && /pid=/{match($0,/pid=([0-9]+)/,a); if(a[1]) print a[1]}' | head -1
+}
+
+_kill_frontend() {
+  local port=$1 name=$2
+  local pid
+  pid=$(_pids_for_port "$port")
+  if [ -n "$pid" ]; then
+    kill "$pid" 2>/dev/null && success "Stopped $name (port $port)" || true
+  else
+    warn "$name not running on :$port"
+  fi
+}
+
+_start_frontend() {
+  local dir="$REPO_DIR/apps/$1" port=$2 name=$3
+  if [ -n "$(_pids_for_port "$port")" ]; then
+    warn "$name already running on :$port"
+    return
+  fi
+  info "Starting $name on :$port…"
+  cd "$dir"
+  nohup npm run dev > "$REPO_DIR/logs/$1-dev.log" 2>&1 &
+  success "$name started (logs: logs/$1-dev.log)"
+}
+
+_ensure_logs_dir() {
+  mkdir -p "$REPO_DIR/logs"
+}
+
+# ── Commands ──────────────────────────────────────────────────────────────────
+
+cmd_up() {
+  local target=${1:-all}
+  _ensure_logs_dir
+
+  case "$target" in
+    all|services)
+      info "Starting backend services…"
+      $DC up -d $CORE_SERVICES dex
+      success "Backend up"
+      if [ "$target" = "all" ]; then
+        cmd_dev
+      fi
+      ;;
+    sandbox)
+      info "Starting Claude sandbox…"
+      $DC_SANDBOX up -d claude-sandbox
+      success "Sandbox ready — ssh claude@localhost -p 2222  (password: gateway)"
+      ;;
+    admin|portal)
+      _start_frontend "$target" "$([ "$target" = admin ] && echo 3001 || echo 3002)" "$target"
+      ;;
+    *)
+      info "Starting service: $target"
+      $DC up -d "$target"
+      ;;
+  esac
+}
+
+cmd_down() {
+  local target=${1:-all}
+
+  case "$target" in
+    all)
+      info "Stopping all backend services…"
+      $DC_SANDBOX down 2>/dev/null || $DC down
+      _kill_frontend 3001 "admin frontend"
+      _kill_frontend 3002 "portal frontend"
+      success "Everything stopped"
+      ;;
+    services)
+      info "Stopping backend services…"
+      $DC down
+      success "Backend stopped"
+      ;;
+    sandbox)
+      $DC stop claude-sandbox && success "Sandbox stopped"
+      ;;
+    admin)
+      _kill_frontend 3001 "admin frontend"
+      ;;
+    portal)
+      _kill_frontend 3002 "portal frontend"
+      ;;
+    *)
+      $DC stop "$target" && success "Stopped $target"
+      ;;
+  esac
+}
+
+cmd_restart() {
+  local target=${1:-all}
+
+  case "$target" in
+    all)
+      cmd_down all
+      cmd_up all
+      ;;
+    admin|portal)
+      _kill_frontend "$([ "$target" = admin ] && echo 3001 || echo 3002)" "$target frontend"
+      sleep 1
+      _ensure_logs_dir
+      _start_frontend "$target" "$([ "$target" = admin ] && echo 3001 || echo 3002)" "$target"
+      ;;
+    *)
+      info "Rebuilding and restarting $target…"
+      $DC build "$target"
+      $DC up -d "$target"
+      success "$target restarted"
+      ;;
+  esac
+}
+
+cmd_build() {
+  local target=${1:-}
+  if [ -z "$target" ]; then
+    info "Building all backend images…"
+    $DC build
+  else
+    info "Building $target…"
+    $DC build "$target"
+  fi
+  success "Build done"
+}
+
+cmd_dev() {
+  _ensure_logs_dir
+  _start_frontend "admin"  3001 "Admin portal"
+  _start_frontend "portal" 3002 "Developer portal"
+}
+
+cmd_logs() {
+  local target=${1:-}
+  local lines=${2:-50}
+
+  case "$target" in
+    admin-fe|admin-frontend)
+      tail -f "$REPO_DIR/logs/admin-dev.log"
+      ;;
+    portal-fe|portal-frontend)
+      tail -f "$REPO_DIR/logs/portal-dev.log"
+      ;;
+    "")
+      $DC logs --tail="$lines" -f
+      ;;
+    *)
+      $DC logs --tail="$lines" -f "$target"
+      ;;
+  esac
+}
+
+cmd_ps() {
+  echo ""
+  echo -e "${BOLD}Backend services${NC}"
+  $DC ps
+
+  echo ""
+  echo -e "${BOLD}Frontend processes${NC}"
+  local admin_pid portal_pid
+  admin_pid=$(_pids_for_port 3001)
+  portal_pid=$(_pids_for_port 3002)
+  printf "  %-20s %s\n" "admin (3001)" "$([ -n "$admin_pid" ] && echo -e "${GREEN}running${NC} (pid $admin_pid)" || echo -e "${RED}stopped${NC}")"
+  printf "  %-20s %s\n" "portal (3002)" "$([ -n "$portal_pid" ] && echo -e "${GREEN}running${NC} (pid $portal_pid)" || echo -e "${RED}stopped${NC}")"
+
+  echo ""
+  local sandbox_status
+  sandbox_status=$($DC ps -q claude-sandbox 2>/dev/null | head -1)
+  if [ -n "$sandbox_status" ] && docker inspect --format '{{.State.Running}}' "$sandbox_status" 2>/dev/null | grep -q true; then
+    printf "  %-20s %s\n" "claude-sandbox (2222)" "${GREEN}running${NC}"
+  else
+    printf "  %-20s %s\n" "claude-sandbox (2222)" "${YELLOW}stopped${NC} — ./gw up sandbox"
+  fi
+  echo ""
+}
+
+cmd_sandbox() {
+  local sandbox_id sandbox_running
+  sandbox_id=$($DC ps -q claude-sandbox 2>/dev/null | head -1)
+  sandbox_running=$([ -n "$sandbox_id" ] && docker inspect --format '{{.State.Running}}' "$sandbox_id" 2>/dev/null || echo "false")
+
+  if [ "$sandbox_running" != "true" ]; then
+    info "Sandbox not running — starting it…"
+    $DC_SANDBOX up -d claude-sandbox
+    sleep 2
+  fi
+
+  info "Connecting to claude-sandbox (password: gateway)…"
+  ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p 2222 claude@localhost
+}
+
+cmd_test() {
+  local target=${1:-}
+  cd "$REPO_DIR"
+  if [ -z "$target" ]; then
+    info "Running all service tests…"
+    pytest services/ -v
+  else
+    info "Running tests for $target…"
+    pytest "services/$target" -v
+  fi
+}
+
+cmd_create() {
+  local service=${1:-}
+  [ -z "$service" ] && die "Usage: gw create <service-name>"
+
+  warn "create is for spinning up a new named container instance from an existing service image."
+  echo "  Example: gw create admin   → builds + starts a fresh admin container"
+  echo ""
+  info "Building $service…"
+  $DC build "$service"
+  $DC up -d "$service"
+  success "$service created and started"
+}
+
+cmd_env() {
+  if [ ! -f "$REPO_DIR/.env" ]; then
+    cp "$REPO_DIR/.env.example" "$REPO_DIR/.env"
+    success "Created .env from .env.example — edit it to add real provider keys"
+  else
+    warn ".env already exists"
+    echo "  Edit $REPO_DIR/.env to configure provider keys and secrets"
+  fi
+}
+
+cmd_help() {
+  cat <<EOF
+
+${BOLD}gw${NC} — AI Gateway dev CLI
+
+${CYAN}USAGE${NC}
+  ./gw <command> [target]
+
+${CYAN}COMMANDS${NC}
+  ${BOLD}up${NC} [target]          Start services
+                     targets: all (default), services, sandbox, admin, portal, <service>
+
+  ${BOLD}down${NC} [target]        Stop services
+                     targets: all (default), services, sandbox, admin, portal, <service>
+
+  ${BOLD}restart${NC} [target]     Rebuild + restart a service (or all)
+                     targets: all, admin, portal, <service>
+
+  ${BOLD}build${NC} [service]      Build Docker image(s); omit service to build all
+
+  ${BOLD}dev${NC}                  Start Next.js dev servers (admin :3001, portal :3002)
+
+  ${BOLD}logs${NC} [target]        Tail logs
+                     targets: <service>, admin-fe, portal-fe (omit for all)
+
+  ${BOLD}ps${NC}                   Show status of all services + frontends
+
+  ${BOLD}sandbox${NC}              Start (if needed) and SSH into the Claude Code sandbox
+
+  ${BOLD}test${NC} [service]       Run pytest for services/ (or a specific service)
+
+  ${BOLD}env${NC}                  Create .env from .env.example if it doesn't exist
+
+  ${BOLD}help${NC}                 Show this help
+
+${CYAN}EXAMPLES${NC}
+  ./gw up                     # start everything
+  ./gw up sandbox             # start the Claude Code sandbox container
+  ./gw sandbox                # SSH into the sandbox (starts it if stopped)
+  ./gw restart admin          # rebuild + restart the admin API container
+  ./gw logs admin             # tail admin container logs
+  ./gw logs admin-fe          # tail admin Next.js dev server logs
+  ./gw down                   # stop everything
+  ./gw ps                     # show what's running
+
+${CYAN}SERVICE PORTS${NC}
+  admin API     http://localhost:8005   auth         http://localhost:8001
+  admin portal  http://localhost:3001   cache        http://localhost:8002
+  dev portal    http://localhost:3002   litellm      http://localhost:8003
+  sandbox SSH   localhost:2222          observability http://localhost:8004
+  postgres      localhost:5432          redis         localhost:6379
+
+EOF
+}
+
+# ── Dispatch ──────────────────────────────────────────────────────────────────
+
+CMD=${1:-help}
+shift || true
+
+case "$CMD" in
+  up)       cmd_up "$@" ;;
+  down)     cmd_down "$@" ;;
+  restart)  cmd_restart "$@" ;;
+  build)    cmd_build "$@" ;;
+  dev)      cmd_dev ;;
+  logs)     cmd_logs "$@" ;;
+  ps|status) cmd_ps ;;
+  sandbox)  cmd_sandbox ;;
+  test)     cmd_test "$@" ;;
+  create)   cmd_create "$@" ;;
+  env)      cmd_env ;;
+  help|--help|-h) cmd_help ;;
+  *) die "Unknown command: $CMD — run './gw help' for usage" ;;
+esac
