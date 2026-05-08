@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import { useTeam } from "./_lib/teamContext";
 import { useAuth } from "./_lib/authContext";
+import type { TeamMembership } from "./_lib/authContext";
 
 const ADMIN_BASE = "http://localhost:8005";
 
@@ -40,7 +41,7 @@ interface DashboardStats {
 
 export default function PortalHome() {
   const { teamId, teamName } = useTeam();
-  const { developer } = useAuth();
+  const { developer, memberships } = useAuth();
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loadingKeys, setLoadingKeys] = useState(false);
@@ -152,21 +153,62 @@ export default function PortalHome() {
           {loadingTeamDetail ? (
             <div style={{ color: "var(--fg-3)", fontSize: 13 }}>Loading workspace…</div>
           ) : teamDetail ? (
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{
-                width: 10, height: 10, borderRadius: "50%", flexShrink: 0,
-                background: teamDetail.area_color ?? "var(--fg-3)",
-              }} />
-              <div style={{ display: "flex", alignItems: "baseline", gap: 6, flexWrap: "wrap" }}>
-                {teamDetail.area_name && (
-                  <>
-                    <span style={{ fontSize: 13, color: "var(--fg-2)" }}>{teamDetail.area_name}</span>
-                    <span style={{ fontSize: 12, color: "var(--fg-3)" }}>/</span>
-                  </>
-                )}
-                <span style={{ fontSize: 13, fontWeight: 500 }}>{teamDetail.name}</span>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{
+                  width: 10, height: 10, borderRadius: "50%", flexShrink: 0,
+                  background: teamDetail.area_color ?? "var(--fg-3)",
+                }} />
+                <div style={{ display: "flex", alignItems: "baseline", gap: 6, flexWrap: "wrap" }}>
+                  {teamDetail.area_name && (
+                    <>
+                      <span style={{ fontSize: 13, color: "var(--fg-2)" }}>{teamDetail.area_name}</span>
+                      <span style={{ fontSize: 12, color: "var(--fg-3)" }}>/</span>
+                    </>
+                  )}
+                  <span style={{ fontSize: 13, fontWeight: 500 }}>{teamDetail.name}</span>
+                </div>
+                <div style={{ marginLeft: "auto", fontSize: 11.5, color: "var(--fg-3)" }}>Your workspace</div>
               </div>
-              <div style={{ marginLeft: "auto", fontSize: 11.5, color: "var(--fg-3)" }}>Your workspace</div>
+              {/* Other team memberships */}
+              {memberships.filter((m: TeamMembership) => m.team_id !== teamId).length > 0 && (
+                <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--rule)" }}>
+                  <div style={{ fontSize: 11, color: "var(--fg-3)", fontWeight: 500, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                    Also a member of
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {memberships
+                      .filter((m: TeamMembership) => m.team_id !== teamId)
+                      .map((m: TeamMembership) => (
+                        <div key={m.membership_id} style={{
+                          display: "flex", alignItems: "center", gap: 5,
+                          padding: "3px 8px",
+                          border: "1px solid var(--rule)",
+                          borderRadius: 6,
+                          fontSize: 12,
+                        }}>
+                          <span style={{
+                            width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
+                            background: m.area_color ?? "var(--fg-3)",
+                          }} />
+                          <span style={{ fontWeight: 500 }}>{m.team_name}</span>
+                          {m.area_name && (
+                            <span style={{ color: "var(--fg-3)", fontSize: 11 }}>{m.area_name}</span>
+                          )}
+                          <span style={{
+                            fontSize: 10.5, padding: "1px 4px",
+                            borderRadius: 4,
+                            background: m.role === "admin" ? "var(--accent-soft, rgba(10,123,215,0.1))" : "var(--surface-soft, rgba(0,0,0,0.06))",
+                            color: m.role === "admin" ? "var(--sc-link, #0A7BD7)" : "var(--fg-3)",
+                            fontWeight: 500,
+                          }}>
+                            {m.role}
+                          </span>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
             </div>
           ) : null}
         </div>

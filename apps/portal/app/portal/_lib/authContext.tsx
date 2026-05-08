@@ -13,10 +13,22 @@ export interface Developer {
   team_name: string | null;
 }
 
+export interface TeamMembership {
+  membership_id: string;
+  role: "member" | "admin";
+  joined_at: string;
+  team_id: string;
+  team_name: string;
+  team_slug: string;
+  area_name: string | null;
+  area_color: string | null;
+}
+
 interface AuthContextValue {
   developer: Developer | null;
   token: string | null;
   loading: boolean;
+  memberships: TeamMembership[];
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, displayName: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -28,6 +40,7 @@ const AuthContext = createContext<AuthContextValue>({
   developer: null,
   token: null,
   loading: true,
+  memberships: [],
   login: async () => {},
   register: async () => {},
   logout: async () => {},
@@ -35,10 +48,24 @@ const AuthContext = createContext<AuthContextValue>({
   setDeveloper: () => {},
 });
 
+async function fetchMemberships(developerId: string, authToken: string): Promise<TeamMembership[]> {
+  try {
+    const res = await fetch(`${ADMIN_BASE}/developers/${developerId}/teams`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [developer, setDeveloper] = useState<Developer | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [memberships, setMemberships] = useState<TeamMembership[]>([]);
 
   // Restore session on mount
   useEffect(() => {
@@ -48,10 +75,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       headers: { Authorization: `Bearer ${storedToken}` },
     })
       .then(r => r.ok ? r.json() : null)
-      .then((data: Developer | null) => {
+      .then(async (data: Developer | null) => {
         if (data) {
           setDeveloper(data);
           setToken(storedToken);
+          const m = await fetchMemberships(data.developer_id, storedToken);
+          setMemberships(m);
         } else {
           localStorage.removeItem(TOKEN_KEY);
         }
@@ -74,6 +103,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem(TOKEN_KEY, data.token);
     setToken(data.token);
     setDeveloper(data);
+    const m = await fetchMemberships(data.developer_id, data.token);
+    setMemberships(m);
   }, []);
 
   const register = useCallback(async (email: string, displayName: string, password: string) => {
@@ -90,6 +121,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem(TOKEN_KEY, data.token);
     setToken(data.token);
     setDeveloper(data);
+    const m = await fetchMemberships(data.developer_id, data.token);
+    setMemberships(m);
   }, []);
 
   const logout = useCallback(async () => {
@@ -103,6 +136,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem(TOKEN_KEY);
     setToken(null);
     setDeveloper(null);
+    setMemberships([]);
   }, []);
 
   const selectTeam = useCallback(async (teamId: string) => {
@@ -115,11 +149,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (res.ok) {
       const data = await res.json();
       setDeveloper(data);
+      // Memberships don't change on team switch, but refresh to stay consistent
+      const m = await fetchMemberships(data.developer_id, storedToken);
+      setMemberships(m);
     }
   }, []);
 
   return (
-    <AuthContext.Provider value={{ developer, token, loading, login, register, logout, selectTeam, setDeveloper }}>
+    <AuthContext.Provider value={{ developer, token, loading, memberships, login, register, logout, selectTeam, setDeveloper }}>
       {children}
     </AuthContext.Provider>
   );

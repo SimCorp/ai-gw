@@ -2,7 +2,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import audit
@@ -34,7 +34,18 @@ async def add_member(
 ):
     if body.role not in ("admin", "member"):
         raise HTTPException(status_code=422, detail="role must be 'admin' or 'member'")
-    member = TeamMember(team_id=team_id, user_id=body.user_id, role=body.role)
+
+    # Try to link developer by email if user_id looks like an email
+    developer_id = None
+    if "@" in body.user_id:
+        dev = await session.execute(
+            text("SELECT id FROM developers WHERE email = :email"),
+            {"email": body.user_id},
+        )
+        dev_row = dev.one_or_none()
+        developer_id = dev_row[0] if dev_row else None
+
+    member = TeamMember(team_id=team_id, user_id=body.user_id, role=body.role, developer_id=developer_id)
     session.add(member)
     await audit.record(
         session, request, "add_member", "team_member",

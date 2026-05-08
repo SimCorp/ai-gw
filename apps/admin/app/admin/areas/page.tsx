@@ -15,6 +15,21 @@ const PRESET_COLORS = [
   { value: '#1A7A3C', label: 'Green' },
 ];
 
+const EMBEDDING_MODELS = [
+  'text-embedding-3-small',
+  'text-embedding-3-large',
+  'text-embedding-ada-002',
+];
+
+const POLICY_DEFAULTS = {
+  cache_ttl_seconds: 3600,
+  cache_similarity_threshold: 0.95,
+  cache_opt_out: false,
+  embedding_model: 'text-embedding-3-small',
+  rate_limit_rpm: 1000,
+  allowed_models: [] as string[],
+};
+
 interface Area {
   id: string;
   name: string;
@@ -22,6 +37,7 @@ interface Area {
   description: string | null;
   color: string;
   team_count: number;
+  has_policy: boolean;
   created_at?: string;
 }
 
@@ -33,13 +49,249 @@ interface Team {
   area_name: string | null;
 }
 
+interface Model {
+  id: string;
+  name: string;
+  model_id: string;
+  provider: string;
+  enabled: boolean;
+}
+
+interface AreaPolicy {
+  cache_ttl_seconds: number;
+  cache_similarity_threshold: number;
+  cache_opt_out: boolean;
+  embedding_model: string;
+  rate_limit_rpm: number;
+  allowed_models: string[];
+  updated_at: string | null;
+}
+
 function formatDate(iso: string | null | undefined) {
   if (!iso) return '—';
   return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
+function formatTtl(secs: number) {
+  if (secs >= 86400) return `${secs / 86400}d`;
+  if (secs >= 3600) return `${secs / 3600}h`;
+  if (secs >= 60) return `${secs / 60}m`;
+  return `${secs}s`;
+}
+
 function toSlug(name: string): string {
   return name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
+// ── Policy modal ───────────────────────────────────────────────────────────
+
+interface PolicyModalProps {
+  area: Area;
+  models: Model[];
+  onClose: () => void;
+  onSaved: () => void;
+}
+
+function PolicyModal({ area, models, onClose, onSaved }: PolicyModalProps) {
+  const policyQuery = useQuery<AreaPolicy | Record<string, never>>({
+    queryKey: ['area-policy', area.id],
+    queryFn: () => fetch(`${BASE}/areas/${area.id}/policy`).then(r => r.json()),
+  });
+
+  const existing = policyQuery.data && 'cache_ttl_seconds' in policyQuery.data
+    ? policyQuery.data as AreaPolicy
+    : null;
+
+  const [form, setForm] = useState<typeof POLICY_DEFAULTS>(() => ({
+    cache_ttl_seconds: POLICY_DEFAULTS.cache_ttl_seconds,
+    cache_similarity_threshold: POLICY_DEFAULTS.cache_similarity_threshold,
+    cache_opt_out: POLICY_DEFAULTS.cache_opt_out,
+    embedding_model: POLICY_DEFAULTS.embedding_model,
+    rate_limit_rpm: POLICY_DEFAULTS.rate_limit_rpm,
+    allowed_models: [],
+  }));
+  const [formInitialized, setFormInitialized] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Pre-fill form once policy data is loaded
+  React.useEffect(() => {
+    if (!policyQuery.isLoading && !formInitialized) {
+      if (existing) {
+        setForm({
+          cache_ttl_seconds: existing.cache_ttl_seconds,
+          cache_similarity_threshold: existing.cache_similarity_threshold,
+          cache_opt_out: existing.cache_opt_out,
+          embedding_model: existing.embedding_model,
+          rate_limit_rpm: existing.rate_limit_rpm,
+          allowed_models: existing.allowed_models,
+        });
+      }
+      setFormInitialized(true);
+    }
+  }, [policyQuery.isLoading, existing, formInitialized]);
+
+  const toggleModel = (modelId: string) => {
+    setForm(f => ({
+      ...f,
+      allowed_models: f.allowed_models.includes(modelId)
+        ? f.allowed_models.filter(m => m !== modelId)
+        : [...f.allowed_models, modelId],
+    }));
+  };
+
+  const save = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`${BASE}/areas/${area.id}/policy`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setError((body as { detail?: string }).detail ?? `Error ${res.status}`);
+        return;
+      }
+      onSaved();
+      onClose();
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const field = (label: string, children: React.ReactNode) => (
+    <div style={{ marginBottom: 16 }}>
+      <label style={{ display: 'block', fontSize: 12.5, color: 'var(--fg-2)', marginBottom: 5 }}>{label}</label>
+      {children}
+    </div>
+  );
+
+  const inputStyle: React.CSSProperties = {
+    width: '100%', padding: '7px 10px', fontSize: 13,
+    background: 'var(--surface-2)', border: '1px solid var(--rule)',
+    borderRadius: 6, color: 'var(--fg-1)', fontFamily: 'inherit',
+  };
+
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div style={{
+        background: 'var(--surface)', border: '1px solid var(--rule)',
+        borderRadius: 12, padding: 28, width: 520, maxWidth: '95vw', maxHeight: '90vh', overflowY: 'auto',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: 15, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 3, background: area.color }} />
+              Policy — {area.name}
+            </h3>
+            <div style={{ fontSize: 12, color: 'var(--fg-3)', marginTop: 3 }}>
+              {policyQuery.isLoading
+                ? 'Loading…'
+                : existing
+                  ? `Last updated ${formatDate(existing.updated_at)}`
+                  : '(inherited from org defaults)'}
+            </div>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 0, cursor: 'pointer', fontSize: 18, color: 'var(--fg-3)' }}>✕</button>
+        </div>
+
+        {policyQuery.isLoading ? (
+          <LoadingState rows={5} />
+        ) : (
+          <>
+            {field('Cache TTL (seconds)', (
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input
+                  type="number" min={0} style={{ ...inputStyle, flex: 1 }}
+                  value={form.cache_ttl_seconds}
+                  onChange={e => setForm(f => ({ ...f, cache_ttl_seconds: Number(e.target.value) }))}
+                />
+                <span style={{ fontSize: 12.5, color: 'var(--fg-3)', whiteSpace: 'nowrap' }}>{formatTtl(form.cache_ttl_seconds)}</span>
+              </div>
+            ))}
+
+            {field('Semantic similarity threshold (0–1)', (
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input
+                  type="range" min={0.5} max={1} step={0.01}
+                  style={{ flex: 1 }}
+                  value={form.cache_similarity_threshold}
+                  onChange={e => setForm(f => ({ ...f, cache_similarity_threshold: Number(e.target.value) }))}
+                />
+                <span style={{ fontSize: 13, fontFamily: 'var(--font-mono, monospace)', width: 40, textAlign: 'right' }}>
+                  {form.cache_similarity_threshold.toFixed(2)}
+                </span>
+              </div>
+            ))}
+
+            {field('Rate limit (requests / minute)', (
+              <input
+                type="number" min={1} style={inputStyle}
+                value={form.rate_limit_rpm}
+                onChange={e => setForm(f => ({ ...f, rate_limit_rpm: Number(e.target.value) }))}
+              />
+            ))}
+
+            {field('Embedding model', (
+              <select
+                style={inputStyle}
+                value={form.embedding_model}
+                onChange={e => setForm(f => ({ ...f, embedding_model: e.target.value }))}
+              >
+                {EMBEDDING_MODELS.map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
+            ))}
+
+            {field('Allowed models (empty = all models permitted)', (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 180, overflowY: 'auto' }}>
+                {models.filter(m => m.enabled).map(m => (
+                  <label key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13 }}>
+                    <input
+                      type="checkbox"
+                      checked={form.allowed_models.includes(m.model_id)}
+                      onChange={() => toggleModel(m.model_id)}
+                    />
+                    <span>{m.name}</span>
+                    <span style={{ fontSize: 11.5, color: 'var(--fg-3)', fontFamily: 'monospace' }}>{m.model_id}</span>
+                  </label>
+                ))}
+                {models.filter(m => m.enabled).length === 0 && (
+                  <span style={{ fontSize: 12.5, color: 'var(--fg-3)' }}>No enabled models found</span>
+                )}
+              </div>
+            ))}
+
+            {field('Cache opt-out', (
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13 }}>
+                <input
+                  type="checkbox"
+                  checked={form.cache_opt_out}
+                  onChange={e => setForm(f => ({ ...f, cache_opt_out: e.target.checked }))}
+                />
+                Disable semantic cache for this area
+              </label>
+            ))}
+
+            {error && <p style={{ color: 'var(--bad)', fontSize: 12.5, margin: '0 0 12px' }}>{error}</p>}
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', paddingTop: 8, borderTop: '1px solid var(--rule)' }}>
+              <button className="btn btn--sm btn--ghost" onClick={onClose}>Cancel</button>
+              <button className="btn btn--sm btn--primary" onClick={save} disabled={saving}>
+                {saving ? 'Saving…' : 'Save policy'}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
 }
 
 // ── Manage teams modal ─────────────────────────────────────────────────────
@@ -457,6 +709,7 @@ export default function AreasPage() {
   const [editingArea, setEditingArea] = useState<Area | null>(null);
   const [deletingArea, setDeletingArea] = useState<Area | null>(null);
   const [managingArea, setManagingArea] = useState<Area | null>(null);
+  const [policyArea, setPolicyArea] = useState<Area | null>(null);
   const queryClient = useQueryClient();
 
   const areasQuery = useQuery<Area[]>({
@@ -467,12 +720,19 @@ export default function AreasPage() {
     }),
   });
 
+  const modelsQuery = useQuery<Model[]>({
+    queryKey: ['models'],
+    queryFn: () => fetch(`${BASE}/models`).then(r => r.json()),
+    staleTime: 120_000,
+  });
+
   const onSaved = () => queryClient.invalidateQueries({ queryKey: ['areas'] });
 
   if (areasQuery.isLoading) return <section className="page"><LoadingState rows={8} /></section>;
   if (areasQuery.isError) return <section className="page"><ErrorState error={areasQuery.error as Error} retry={() => areasQuery.refetch()} /></section>;
 
   const areas = areasQuery.data ?? [];
+  const models = modelsQuery.data ?? [];
 
   const totalTeams = areas.reduce((sum, a) => sum + a.team_count, 0);
   const avgTeams = areas.length > 0 ? (totalTeams / areas.length).toFixed(1) : '—';
@@ -498,6 +758,17 @@ export default function AreasPage() {
           area={managingArea}
           onClose={() => setManagingArea(null)}
           onChanged={onSaved}
+        />
+      )}
+      {policyArea && (
+        <PolicyModal
+          area={policyArea}
+          models={models}
+          onClose={() => setPolicyArea(null)}
+          onSaved={() => {
+            onSaved();
+            queryClient.invalidateQueries({ queryKey: ['area-policy', policyArea.id] });
+          }}
         />
       )}
 
@@ -551,12 +822,15 @@ export default function AreasPage() {
                 {areas.map(area => (
                   <tr key={area.id}>
                     <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                         <span style={{
                           display: 'inline-block', width: 10, height: 10, borderRadius: 3,
                           background: area.color, flexShrink: 0,
                         }} />
                         <span style={{ fontWeight: 500 }}>{area.name}</span>
+                        {area.has_policy
+                          ? <span className="pill pill--good">Policy set</span>
+                          : <span className="pill">Org defaults</span>}
                       </div>
                     </td>
                     <td><span className="mono" style={{ fontSize: 12.5, color: 'var(--fg-2)' }}>{area.slug}</span></td>
@@ -583,6 +857,12 @@ export default function AreasPage() {
                           onClick={() => setManagingArea(area)}
                         >
                           Teams
+                        </button>
+                        <button
+                          className="btn btn--sm btn--ghost"
+                          onClick={() => setPolicyArea(area)}
+                        >
+                          Policy
                         </button>
                         <button
                           className="btn btn--sm btn--ghost"

@@ -5,16 +5,6 @@ import { usePathname } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "../_lib/authContext";
 
-const ADMIN_BASE = "http://localhost:8005";
-
-interface Team {
-  id: string;
-  name: string;
-  slug: string;
-  area_name?: string | null;
-  area_color?: string | null;
-}
-
 const NAV = [
   {
     group: "Use",
@@ -42,8 +32,7 @@ const NAV = [
 
 export default function PortalShell() {
   const path = usePathname();
-  const { developer, logout, selectTeam } = useAuth();
-  const [teams, setTeams] = useState<Team[]>([]);
+  const { developer, logout, selectTeam, memberships } = useAuth();
   const [teamOpen, setTeamOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
   const teamRef = useRef<HTMLDivElement>(null);
@@ -51,14 +40,6 @@ export default function PortalShell() {
 
   const isActive = (href: string) =>
     href === "/portal" ? path === "/portal" : path.startsWith(href);
-
-  // Load teams list for selector
-  useEffect(() => {
-    fetch(`${ADMIN_BASE}/teams`)
-      .then(r => r.json())
-      .then((data: Team[]) => setTeams(Array.isArray(data) ? data : []))
-      .catch(() => {});
-  }, []);
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -74,7 +55,7 @@ export default function PortalShell() {
     ? developer.display_name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()
     : "?";
 
-  const currentTeam = teams.find(t => t.id === developer?.team_id) ?? null;
+  const currentTeam = memberships.find(m => m.team_id === developer?.team_id) ?? null;
 
   return (
     <aside className="psidebar">
@@ -91,7 +72,7 @@ export default function PortalShell() {
               }} />
             )}
             {currentTeam?.area_name
-              ? `${currentTeam.area_name} / ${developer?.team_name}`
+              ? `${currentTeam.area_name} / ${currentTeam.team_name}`
               : (developer?.team_name ?? "no team")}
           </div>
         </div>
@@ -140,9 +121,9 @@ export default function PortalShell() {
               flexShrink: 0,
             }} />
             <span style={{ flex: 1, textAlign: "left", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {developer?.team_name
-                ? (currentTeam?.area_name ? `${currentTeam.area_name} / ${developer.team_name}` : developer.team_name)
-                : "Select team"}
+              {currentTeam
+                ? (currentTeam.area_name ? `${currentTeam.area_name} / ${currentTeam.team_name}` : currentTeam.team_name)
+                : (developer?.team_name ?? "Select team")}
             </span>
             <span style={{ color: "var(--fg-3)", fontSize: 10 }}>▾</span>
           </button>
@@ -154,30 +135,53 @@ export default function PortalShell() {
               borderRadius: "var(--radius-3, 8px)",
               boxShadow: "0 4px 16px rgba(0,0,0,0.12)", zIndex: 100, overflow: "hidden",
             }}>
-              {teams.map(t => (
-                <button
-                  key={t.id}
-                  onClick={async () => { await selectTeam(t.id); setTeamOpen(false); }}
-                  style={{
-                    display: "block", width: "100%", textAlign: "left",
-                    padding: "9px 12px",
-                    background: t.id === developer?.team_id ? "var(--surface-soft, rgba(0,0,0,0.04))" : "transparent",
-                    border: 0, borderBottom: "1px solid var(--rule)",
-                    cursor: "pointer", fontSize: 12.5, color: "var(--fg-1)", fontFamily: "inherit",
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={{
-                      width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
-                      background: t.area_color ?? "var(--fg-3)",
-                    }} />
-                    <span style={{ fontWeight: t.id === developer?.team_id ? 600 : 400 }}>{t.name}</span>
-                  </div>
-                  {t.area_name && (
-                    <div style={{ fontSize: 11, color: "var(--fg-3)", marginTop: 2, paddingLeft: 12 }}>{t.area_name}</div>
-                  )}
-                </button>
-              ))}
+              {memberships.length === 0 ? (
+                <div style={{
+                  padding: "12px 14px",
+                  fontSize: 12.5, color: "var(--fg-3)",
+                  fontStyle: "italic",
+                }}>
+                  Not assigned to any teams — contact your admin
+                </div>
+              ) : memberships.map(m => {
+                const isActive = m.team_id === developer?.team_id;
+                return (
+                  <button
+                    key={m.membership_id}
+                    onClick={async () => { await selectTeam(m.team_id); setTeamOpen(false); }}
+                    style={{
+                      display: "block", width: "100%", textAlign: "left",
+                      padding: "9px 12px",
+                      background: isActive ? "var(--surface-soft, rgba(0,0,0,0.04))" : "transparent",
+                      border: 0, borderBottom: "1px solid var(--rule)",
+                      cursor: "pointer", fontSize: 12.5, color: "var(--fg-1)", fontFamily: "inherit",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{
+                        width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
+                        background: m.area_color ?? "var(--fg-3)",
+                      }} />
+                      <span style={{ fontWeight: isActive ? 600 : 400, flex: 1 }}>{m.team_name}</span>
+                      <span style={{
+                        fontSize: 10.5, padding: "1px 5px",
+                        borderRadius: 4,
+                        background: m.role === "admin" ? "var(--accent-soft, rgba(10,123,215,0.1))" : "var(--surface-soft, rgba(0,0,0,0.06))",
+                        color: m.role === "admin" ? "var(--sc-link, #0A7BD7)" : "var(--fg-3)",
+                        fontWeight: 500,
+                      }}>
+                        {m.role}
+                      </span>
+                      {isActive && (
+                        <span style={{ fontSize: 10, color: "var(--good, #1F8A5B)", fontWeight: 600 }}>●</span>
+                      )}
+                    </div>
+                    {m.area_name && (
+                      <div style={{ fontSize: 11, color: "var(--fg-3)", marginTop: 2, paddingLeft: 12 }}>{m.area_name}</div>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
@@ -200,13 +204,13 @@ export default function PortalShell() {
               <div className="team" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {developer?.email ?? ""}
               </div>
-              {developer?.team_name && (
+              {currentTeam && (
                 <div style={{
                   fontSize: 10.5, color: "var(--fg-3)",
                   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                   marginTop: 1,
                 }}>
-                  Team: {currentTeam?.area_name ? `${currentTeam.area_name} / ${developer.team_name}` : developer.team_name}
+                  Team: {currentTeam.area_name ? `${currentTeam.area_name} / ${currentTeam.team_name}` : currentTeam.team_name}
                 </div>
               )}
             </div>

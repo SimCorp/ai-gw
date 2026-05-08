@@ -15,6 +15,7 @@ from app.db import Base, engine
 from app.models import (  # noqa: F401
     api_key,
     area as area_model,
+    area_policy as area_policy_model,
     audit_log as audit_log_model,
     member,
     model_registry as model_registry_model,
@@ -36,6 +37,7 @@ from app.routers import (
     model_registry,
     policies,
     pricing,
+    reports as reports_router,
     requests as requests_router,
     settings as settings_router,
     system,
@@ -166,6 +168,19 @@ _EXTRA_DDL = [
     # Ensure policy upsert ON CONFLICT target is valid
     "CREATE UNIQUE INDEX IF NOT EXISTS policies_team_null_proj_uidx ON policies (team_id) WHERE project_id IS NULL",
     "CREATE UNIQUE INDEX IF NOT EXISTS policies_team_proj_uidx ON policies (team_id, project_id) WHERE project_id IS NOT NULL",
+    # Area-level policies
+    """CREATE TABLE IF NOT EXISTS area_policies (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        area_id UUID NOT NULL REFERENCES areas(id) ON DELETE CASCADE,
+        cache_ttl_seconds INT NOT NULL DEFAULT 3600,
+        cache_similarity_threshold FLOAT NOT NULL DEFAULT 0.95,
+        cache_opt_out BOOLEAN NOT NULL DEFAULT FALSE,
+        embedding_model TEXT NOT NULL DEFAULT 'text-embedding-3-small',
+        rate_limit_rpm INT NOT NULL DEFAULT 1000,
+        allowed_models TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE (area_id)
+    )""",
 ]
 
 import json as _json
@@ -280,6 +295,7 @@ app.include_router(audit_log.router, dependencies=_auth)
 app.include_router(budget.router, dependencies=_auth)
 app.include_router(requests_router.router, dependencies=_auth)
 app.include_router(guardrails_router.router, dependencies=_auth)
+app.include_router(reports_router.router, dependencies=_auth)
 
 
 
