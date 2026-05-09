@@ -298,6 +298,8 @@ Both endpoints support server-sent events (SSE) streaming. Set `"stream": true` 
 
 **Important:** Streamed responses are never cached. The gateway passes the SSE stream directly from LiteLLM to the caller without buffering. The `X-Cache` response header will always be `MISS` for streamed requests.
 
+**Token tracking:** Although streamed responses are not cached, token counts are captured for observability. The gateway parses the final SSE chunk to extract usage data and posts it to the observability service. Streaming requests no longer emit zero tokens in cost records.
+
 ### OpenAI-compatible streaming
 
 ```python
@@ -629,6 +631,26 @@ If there is no exact match, the prompt text is embedded and compared against pre
 - Only HTTP 200 responses from LiteLLM are stored.
 - Cache is bypassed entirely if the team policy sets `opt_out: true`.
 
+### Cache bypass headers
+
+To skip the semantic cache for a single request, send one of the following headers:
+
+| Header | Value | Effect |
+|---|---|---|
+| `Cache-Control` | `no-cache` | Bypasses the cache; the response is fetched from LiteLLM and stored for future requests |
+| `x-cache` | `bypass` | Same behaviour as `Cache-Control: no-cache` — bypasses cache for this call only |
+
+When the cache is bypassed, the response header will be `x-cache: BYPASS` (not `MISS`).
+
+```bash
+# Using x-cache: bypass
+curl http://localhost:8002/v1/chat/completions \
+  -H "Authorization: Bearer sk-YOUR-KEY-HERE" \
+  -H "x-cache: bypass" \
+  -H "Content-Type: application/json" \
+  -d '{"model": "claude-sonnet-4-6", "messages": [{"role": "user", "content": "What is today'\''s date?"}]}'
+```
+
 ### X-Cache response header
 
 Every response from the cache service includes an `X-Cache` header:
@@ -637,6 +659,7 @@ Every response from the cache service includes an `X-Cache` header:
 |---|---|
 | `HIT` | Response was served from cache (exact or semantic match) |
 | `MISS` | Response was fetched from LiteLLM and stored (or not stored, if streaming) |
+| `BYPASS` | Cache was explicitly bypassed via `Cache-Control: no-cache` or `x-cache: bypass` header |
 
 ```http
 HTTP/1.1 200 OK
@@ -648,11 +671,28 @@ X-Cache: HIT
 
 Cache TTL is configured per-team in Redis (`policy:{team_id}`, field `ttl_seconds`). The service default applies when no team policy is present.
 
+### Intent classification
+
+The cache service classifies each request into one of eight intent categories based on keywords in the prompt. No prompt text is stored — only the classified intent label.
+
+| Intent | Description |
+|---|---|
+| `debugging` | Diagnosing errors or unexpected behaviour |
+| `testing` | Writing or reviewing tests |
+| `refactoring` | Code restructuring without behaviour changes |
+| `code_review` | Reviewing existing code for quality or correctness |
+| `documentation` | Writing or updating docs, comments, README files |
+| `code_generation` | Writing new code from a description |
+| `question` | General questions about code or concepts |
+| `general` | Catch-all for requests that do not match the above |
+
+Intent distribution is visible in aggregate via `GET /reports/intents` on the admin API (see [Admin REST API](#10-admin-rest-api)).
+
 ### Cache opt-out
 
 To disable caching for a specific team or project, set `opt_out: true` in the team's Redis policy hash. This can be done via the admin REST API (policies endpoint) or directly via the admin portal UI.
 
-To opt out on a per-request basis in the current implementation, there is no request-level header — team-level policy is the only control.
+For per-request bypass, use the `x-cache: bypass` or `Cache-Control: no-cache` header (see [Cache bypass headers](#cache-bypass-headers) above).
 
 ---
 
@@ -810,3 +850,78 @@ Returns the health of all services. Does not require admin auth in practice (aut
 `"overall"` is `"ok"` only when every sub-check reports `"ok"`; otherwise it is `"degraded"`.
 
 Service status values: `"ok"`, `"degraded"`, `"unreachable"`.
+
+### Analytics Reports
+
+All report endpoints require the `X-Admin-Token` header. Role requirements are noted per endpoint.
+
+```
+GET /reports/developers        Developer productivity leaderboard (admin+)
+GET /reports/outcomes          Cost-per-PR / cost-per-commit per developer (admin+)
+GET /reports/model-calibration Per-developer model tier distribution (admin+)
+GET /reports/sessions          Session quality aggregate by developer (admin+)
+GET /reports/guardrails        Guardrail hit analytics, top triggering developers (superadmin only)
+GET /reports/intents           Intent distribution across sessions (no role requirement)
+GET /reports/team-efficiency   Team-level efficiency metrics (no role requirement)
+```
+
+### Developer Management
+
+```
+GET /developers                   List all developers with email and team (admin+)
+GET /developers/{id}              Individual developer profile (admin+)
+GET /developers/{id}/stats        Detailed stats; optional ?period= query param; includes by_model and by_repo breakdowns (admin+)
+GET /developers/at-risk           Developers with struggle signals (superadmin only)
+```
+
+### Budget Notifications
+
+```
+GET  /org/notifications        Get the currently configured webhook URL
+PUT  /org/notifications        Set a Slack-compatible webhook URL for budget alerts
+POST /org/notifications/test   Fire a test notification to the configured webhook
+```
+
+Budget alert webhooks send an HTTP POST to the configured URL when a team approaches or exceeds its budget. A Redis dedup key prevents duplicate alerts within the same alert window.
+
+**PUT /org/notifications — request body**
+
+```json
+{
+  "webhook_url": "https://hooks.slack.com/services/T.../B.../..."
+}
+```
+
+### GitHub Webhook
+
+```
+POST /webhooks/github
+```
+
+Receives GitHub push and pull-request events and attributes commits to developer sessions. The request must include a valid `X-Hub-Signature-256` HMAC header (computed with the `GITHUB_WEBHOOK_SECRET` env var). Configure the webhook in your GitHub repository or organisation settings to point at `http://<gateway-host>:8005/webhooks/github`.
+
+### Budget Forecast
+
+```
+GET /budget/forecast
+```
+
+Returns the projected end-of-month spend per team based on the month-to-date burn rate. No role requirement beyond a valid `X-Admin-Token`.
+
+---
+
+## 10a. Admin Role-Based Access Control
+
+The `require_admin_auth` dependency checks the `role` field on the authenticated admin session. Three roles are recognised:
+
+| Role | Access |
+|---|---|
+| `viewer` | Read-only access to aggregate stats, cost reports by team / area / model. Cannot access any endpoint that returns individual developer PII (email, per-developer breakdowns). |
+| `admin` | Full read access including developer email lists, individual stats, and model calibration reports. Can manage teams, API keys, and policies. |
+| `superadmin` | All `admin` capabilities plus access to `/developers/at-risk` and `/reports/guardrails` (individually-identified behavioural data). Required for all destructive operations (team deletion, key revocation at scale). |
+
+Role is stored on the admin user record. In local development with `DEV_BYPASS_AUTH=true`, all requests are treated as `superadmin`.
+
+---
+
+*Last updated: 2026-05-09*
