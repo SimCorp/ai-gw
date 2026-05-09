@@ -2,11 +2,11 @@ import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from redis.asyncio import Redis
+from app.redis_utils import make_redis
 from sqlalchemy import text
 
 from app.auth import require_admin_auth
@@ -116,6 +116,71 @@ _EXTRA_DDL = [
     # Track which key was used on each cost record
     "ALTER TABLE cost_records ADD COLUMN IF NOT EXISTS api_key_id UUID REFERENCES api_keys(id) ON DELETE SET NULL",
     "CREATE INDEX IF NOT EXISTS idx_cost_records_api_key_id ON cost_records(api_key_id, created_at DESC)",
+    # Developer attribution + enhanced telemetry on cost records
+    "ALTER TABLE cost_records ADD COLUMN IF NOT EXISTS developer_id UUID REFERENCES developers(id) ON DELETE SET NULL",
+    "CREATE INDEX IF NOT EXISTS idx_cost_records_developer_id ON cost_records(developer_id, created_at DESC)",
+    "ALTER TABLE cost_records ADD COLUMN IF NOT EXISTS session_trace_id TEXT",
+    "ALTER TABLE cost_records ADD COLUMN IF NOT EXISTS tool_invocation_count INT NOT NULL DEFAULT 0",
+    "ALTER TABLE cost_records ADD COLUMN IF NOT EXISTS retry_count INT NOT NULL DEFAULT 0",
+    "ALTER TABLE cost_records ADD COLUMN IF NOT EXISTS request_error_type TEXT",
+    "ALTER TABLE cost_records ADD COLUMN IF NOT EXISTS cache_namespace TEXT",
+    "ALTER TABLE cost_records ADD COLUMN IF NOT EXISTS repo TEXT",
+    "ALTER TABLE cost_records ADD COLUMN IF NOT EXISTS session_purpose TEXT",
+    # Daily developer activity rollup
+    """CREATE TABLE IF NOT EXISTS developer_activity_log (
+        developer_id UUID NOT NULL REFERENCES developers(id) ON DELETE CASCADE,
+        date DATE NOT NULL,
+        request_count INT NOT NULL DEFAULT 0,
+        tokens_input BIGINT NOT NULL DEFAULT 0,
+        tokens_output BIGINT NOT NULL DEFAULT 0,
+        cost_usd NUMERIC(12,6) NOT NULL DEFAULT 0,
+        cache_hits INT NOT NULL DEFAULT 0,
+        tool_invocations INT NOT NULL DEFAULT 0,
+        error_count INT NOT NULL DEFAULT 0,
+        PRIMARY KEY (developer_id, date)
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_dev_activity_developer_date ON developer_activity_log(developer_id, date DESC)",
+    "CREATE INDEX IF NOT EXISTS idx_dev_activity_date ON developer_activity_log(date DESC)",
+    # GitHub output events
+    """CREATE TABLE IF NOT EXISTS developer_output_events (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        developer_id UUID REFERENCES developers(id) ON DELETE SET NULL,
+        repo TEXT NOT NULL,
+        event_type TEXT NOT NULL,
+        github_user TEXT,
+        commit_count INT NOT NULL DEFAULT 0,
+        lines_added INT NOT NULL DEFAULT 0,
+        lines_removed INT NOT NULL DEFAULT 0,
+        pr_number INT,
+        occurred_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        raw JSONB
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_dev_output_developer ON developer_output_events(developer_id, occurred_at DESC)",
+    # Session-level quality tracking
+    """CREATE TABLE IF NOT EXISTS sessions (
+        session_trace_id TEXT PRIMARY KEY,
+        developer_id UUID REFERENCES developers(id) ON DELETE SET NULL,
+        team_id TEXT NOT NULL,
+        first_request_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        last_request_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        turn_count INT NOT NULL DEFAULT 1,
+        total_tokens BIGINT NOT NULL DEFAULT 0,
+        total_cost NUMERIC(12,8) NOT NULL DEFAULT 0,
+        retry_count INT NOT NULL DEFAULT 0,
+        error_count INT NOT NULL DEFAULT 0,
+        tool_invocations INT NOT NULL DEFAULT 0,
+        session_purpose TEXT,
+        repo TEXT,
+        primary_model TEXT,
+        quality_score INT,
+        avg_inter_request_s FLOAT,
+        produced_commit BOOLEAN,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_sessions_developer ON sessions(developer_id, first_request_at DESC)",
+    "CREATE INDEX IF NOT EXISTS idx_sessions_team ON sessions(team_id, first_request_at DESC)",
+    "CREATE INDEX IF NOT EXISTS idx_sessions_first_request ON sessions(first_request_at DESC)",
+    "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS dominant_intent TEXT",
     # Link team_members to developers
     "ALTER TABLE team_members ADD COLUMN IF NOT EXISTS developer_id UUID REFERENCES developers(id) ON DELETE CASCADE",
     "CREATE INDEX IF NOT EXISTS idx_team_members_developer_id ON team_members(developer_id)",
@@ -128,6 +193,7 @@ _EXTRA_DDL = [
     "INSERT INTO org_settings (key, value) VALUES ('monthly_budget_usd', '0') ON CONFLICT (key) DO NOTHING",
     "INSERT INTO org_settings (key, value) VALUES ('budget_alert_pct', '0.8') ON CONFLICT (key) DO NOTHING",
     "INSERT INTO org_settings (key, value) VALUES ('budget_action', 'alert') ON CONFLICT (key) DO NOTHING",
+    "INSERT INTO org_settings (key, value) VALUES ('notification_webhook_url', '') ON CONFLICT (key) DO NOTHING",
     # Guardrails
     """CREATE TABLE IF NOT EXISTS guardrails (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -222,11 +288,20 @@ _auth = [Depends(require_admin_auth)]
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Guard: DEV_BYPASS_AUTH must not be enabled outside dev/test/ci environments
-    if app_settings.dev_bypass_auth and os.getenv("ENVIRONMENT", "development") not in ("development", "test", "ci"):
-        raise RuntimeError(
-            "DEV_BYPASS_AUTH=true is not allowed outside development/test environments. "
-            "Set ENVIRONMENT=development to suppress this error."
+    # Guard: DEV_BYPASS_AUTH must not be enabled outside dev/test/ci environments.
+    # Default to "production" so that an unset ENVIRONMENT var triggers the guard
+    # rather than silently suppressing it.
+    env = os.getenv("ENVIRONMENT", "production")
+    if app_settings.dev_bypass_auth:
+        if env not in ("development", "test", "ci"):
+            raise RuntimeError(
+                "DEV_BYPASS_AUTH=true is not allowed outside development/test environments. "
+                f"Current ENVIRONMENT={env!r}. Set ENVIRONMENT=development to suppress."
+            )
+        import logging as _logging
+        _logging.getLogger(__name__).warning(
+            "DEV_BYPASS_AUTH is active — all admin auth checks are skipped. "
+            "Never enable this in staging or production."
         )
 
     # Ensure all ORM-mapped tables exist
@@ -243,7 +318,7 @@ async def lifespan(app: FastAPI):
 
     # Seed default admin account only in dev/test/ci environments.
     # In production, admin accounts must be created explicitly via the provisioning script.
-    if os.getenv("ENVIRONMENT", "development") in ("development", "test", "ci"):
+    if os.getenv("ENVIRONMENT", "production") in ("development", "test", "ci"):
         async with engine.begin() as conn:
             await conn.execute(text("""
                 INSERT INTO admin_users (email, display_name, password_hash, role) VALUES
@@ -333,12 +408,12 @@ async def lifespan(app: FastAPI):
                 {"name": name, "model_id": model_id, "provider": provider},
             )
 
-    app.state.redis = Redis.from_url(app_settings.redis_url, decode_responses=True)
+    app.state.redis = make_redis(app_settings.redis_url)
     yield
     await app.state.redis.aclose()
 
 
-_is_dev = os.getenv("ENVIRONMENT", "development") in ("development", "test", "ci")
+_is_dev = os.getenv("ENVIRONMENT", "production") in ("development", "test", "ci")
 
 app = FastAPI(
     title="AI Gateway — Admin Portal",
@@ -387,4 +462,26 @@ async def root():
 
 @app.get("/health", tags=["health"])
 async def health():
+    """Liveness probe — returns 200 if the process is running."""
     return {"status": "ok"}
+
+
+@app.get("/ready", tags=["health"])
+async def ready(request: Request):
+    """Readiness probe — checks Redis and Postgres before accepting traffic."""
+    errors: dict[str, str] = {}
+
+    try:
+        await request.app.state.redis.ping()
+    except Exception as exc:
+        errors["redis"] = str(exc)
+
+    try:
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+    except Exception as exc:
+        errors["postgres"] = str(exc)
+
+    if errors:
+        return JSONResponse({"status": "not_ready", "errors": errors}, status_code=503)
+    return {"status": "ready"}

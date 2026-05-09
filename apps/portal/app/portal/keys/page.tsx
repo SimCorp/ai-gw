@@ -16,7 +16,7 @@ curl https://aigw.simcorp.internal/v1/chat/completions \\
   -H "authorization: Bearer $AIGW_KEY" \\
   -H "content-type: application/json" \\
   -d '{
-    "model": "claude-sonnet-4.5",
+    "model": "claude-sonnet-4-6",
     "messages": [{"role":"user","content":"Hello from agent-platform"}],
     "stream": true
   }'`,
@@ -30,7 +30,7 @@ client = OpenAI(
 )
 
 resp = client.chat.completions.create(
-    model="claude-sonnet-4.5",
+    model="claude-sonnet-4-6",
     messages=[{"role": "user", "content": "Summarise Q1 EM debt flows"}],
     temperature=0.3,
 )
@@ -44,7 +44,7 @@ const client = new OpenAI({
 });
 
 const resp = await client.chat.completions.create({
-  model: "claude-sonnet-4.5",
+  model: "claude-sonnet-4-6",
   messages: [{ role: "user", content: "Hello" }],
   stream: true,
 });
@@ -61,7 +61,7 @@ const client = new Anthropic({
 });
 
 const msg = await client.messages.create({
-  model: "claude-sonnet-4.5",
+  model: "claude-sonnet-4-6",
   max_tokens: 1024,
   messages: [{ role: "user", content: "Hello" }],
 });`,

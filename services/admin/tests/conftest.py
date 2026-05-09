@@ -16,6 +16,7 @@ import os
 
 # Must be set before any app import so pydantic-settings picks it up.
 os.environ.setdefault("DEV_BYPASS_AUTH", "true")
+os.environ.setdefault("ENVIRONMENT", "development")
 
 import uuid
 

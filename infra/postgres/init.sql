@@ -128,6 +128,78 @@ ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS monthly_budget_usd NUMERIC(12,4);
 ALTER TABLE cost_records ADD COLUMN IF NOT EXISTS api_key_id UUID REFERENCES api_keys(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS idx_cost_records_api_key_id ON cost_records(api_key_id, created_at DESC);
 
+-- Developer attribution on cost records
+ALTER TABLE cost_records ADD COLUMN IF NOT EXISTS developer_id UUID REFERENCES developers(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_cost_records_developer_id ON cost_records(developer_id, created_at DESC);
+
+-- Enhanced telemetry columns
+ALTER TABLE cost_records ADD COLUMN IF NOT EXISTS session_trace_id TEXT;
+ALTER TABLE cost_records ADD COLUMN IF NOT EXISTS tool_invocation_count INT NOT NULL DEFAULT 0;
+ALTER TABLE cost_records ADD COLUMN IF NOT EXISTS retry_count INT NOT NULL DEFAULT 0;
+ALTER TABLE cost_records ADD COLUMN IF NOT EXISTS request_error_type TEXT;
+ALTER TABLE cost_records ADD COLUMN IF NOT EXISTS cache_namespace TEXT;
+ALTER TABLE cost_records ADD COLUMN IF NOT EXISTS repo TEXT;
+ALTER TABLE cost_records ADD COLUMN IF NOT EXISTS session_purpose TEXT;
+
+-- Daily rollup for developer productivity metrics
+CREATE TABLE IF NOT EXISTS developer_activity_log (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    developer_id UUID NOT NULL REFERENCES developers(id) ON DELETE CASCADE,
+    date DATE NOT NULL,
+    request_count INT NOT NULL DEFAULT 0,
+    tokens_input BIGINT NOT NULL DEFAULT 0,
+    tokens_output BIGINT NOT NULL DEFAULT 0,
+    cost_usd NUMERIC(12,6) NOT NULL DEFAULT 0,
+    cache_hits INT NOT NULL DEFAULT 0,
+    tool_invocations INT NOT NULL DEFAULT 0,
+    error_count INT NOT NULL DEFAULT 0,
+    PRIMARY KEY (developer_id, date)
+);
+CREATE INDEX IF NOT EXISTS idx_dev_activity_developer_date ON developer_activity_log(developer_id, date DESC);
+CREATE INDEX IF NOT EXISTS idx_dev_activity_date ON developer_activity_log(date DESC);
+
+-- Session-level aggregation (DX "Agent Experience" framework)
+CREATE TABLE IF NOT EXISTS sessions (
+    session_trace_id TEXT PRIMARY KEY,
+    developer_id UUID REFERENCES developers(id) ON DELETE SET NULL,
+    team_id TEXT NOT NULL,
+    first_request_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_request_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    turn_count INT NOT NULL DEFAULT 1,
+    total_tokens BIGINT NOT NULL DEFAULT 0,
+    total_cost NUMERIC(12,8) NOT NULL DEFAULT 0,
+    retry_count INT NOT NULL DEFAULT 0,
+    error_count INT NOT NULL DEFAULT 0,
+    tool_invocations INT NOT NULL DEFAULT 0,
+    session_purpose TEXT,
+    repo TEXT,
+    primary_model TEXT,
+    quality_score INT,           -- 1-5 derived score
+    avg_inter_request_s FLOAT,   -- average seconds between turns
+    produced_commit BOOLEAN,     -- updated by GitHub webhook correlation
+    dominant_intent TEXT,        -- most frequent classified intent in session
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_sessions_developer ON sessions(developer_id, first_request_at DESC);
+CREATE INDEX IF NOT EXISTS idx_sessions_team ON sessions(team_id, first_request_at DESC);
+CREATE INDEX IF NOT EXISTS idx_sessions_first_request ON sessions(first_request_at DESC);
+
+-- GitHub output events (Tier 3)
+CREATE TABLE IF NOT EXISTS developer_output_events (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    developer_id UUID REFERENCES developers(id) ON DELETE SET NULL,
+    repo TEXT NOT NULL,
+    event_type TEXT NOT NULL,  -- push | pr_opened | pr_merged | review
+    github_user TEXT,
+    commit_count INT NOT NULL DEFAULT 0,
+    lines_added INT NOT NULL DEFAULT 0,
+    lines_removed INT NOT NULL DEFAULT 0,
+    pr_number INT,
+    occurred_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    raw JSONB
+);
+CREATE INDEX IF NOT EXISTS idx_dev_output_developer ON developer_output_events(developer_id, occurred_at DESC);
+
 -- Link team_members to developers
 ALTER TABLE team_members ADD COLUMN IF NOT EXISTS developer_id UUID REFERENCES developers(id) ON DELETE CASCADE;
 CREATE INDEX IF NOT EXISTS idx_team_members_developer_id ON team_members(developer_id);

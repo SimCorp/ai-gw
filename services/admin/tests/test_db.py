@@ -28,6 +28,7 @@ sys.path.insert(0, str(Path(__file__).parents[1]))
 
 # Bypass auth so importing app.main doesn't raise on missing settings
 os.environ.setdefault("DEV_BYPASS_AUTH", "true")
+os.environ.setdefault("ENVIRONMENT", "development")
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://placeholder/placeholder")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
 os.environ.setdefault("SECRET_KEY", "test-secret-key-not-real")
