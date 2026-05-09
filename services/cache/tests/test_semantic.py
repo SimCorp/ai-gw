@@ -5,7 +5,20 @@ from unittest.mock import AsyncMock, call, patch
 
 import pytest
 
-from app.semantic import _cosine, get, set as sem_set
+from app.semantic import (
+    _cosine,
+    get,
+    record_embedding_failure,
+    reset_circuit,
+    set as sem_set,
+)
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+TEAM = "team1"
+PROJECT = "proj1"
 
 
 # ---------------------------------------------------------------------------
@@ -48,11 +61,14 @@ class TestCosine:
 # ---------------------------------------------------------------------------
 
 class TestSemanticGet:
+    def setup_method(self):
+        reset_circuit()
+
     async def test_no_keys_returns_none(self):
         redis = AsyncMock()
         redis.keys = AsyncMock(return_value=[])
 
-        result = await get([0.1, 0.2], threshold=0.9, redis=redis)
+        result = await get([0.1, 0.2], threshold=0.9, redis=redis, team_id=TEAM, project_id=PROJECT)
 
         assert result is None
 
@@ -62,16 +78,16 @@ class TestSemanticGet:
         cached_resp = {"choices": [{"message": {"content": "cached"}}]}
 
         redis = AsyncMock()
-        redis.keys = AsyncMock(return_value=["sem:abc:emb"])
+        redis.keys = AsyncMock(return_value=[f"sem:{TEAM}:{PROJECT}:abc:emb"])
         # First get → embedding bytes; second get → response bytes
         redis.get = AsyncMock(
             side_effect=[
-                json.dumps(stored_emb),       # "sem:abc:emb"
-                json.dumps(cached_resp),       # "sem:abc:resp"
+                json.dumps(stored_emb),       # "sem:team1:proj1:abc:emb"
+                json.dumps(cached_resp),       # "sem:team1:proj1:abc:resp"
             ]
         )
 
-        result = await get(query_emb, threshold=0.9, redis=redis)
+        result = await get(query_emb, threshold=0.9, redis=redis, team_id=TEAM, project_id=PROJECT)
 
         assert result == cached_resp
 
@@ -80,10 +96,10 @@ class TestSemanticGet:
         query_emb = [1.0, 0.0]
 
         redis = AsyncMock()
-        redis.keys = AsyncMock(return_value=["sem:abc:emb"])
+        redis.keys = AsyncMock(return_value=[f"sem:{TEAM}:{PROJECT}:abc:emb"])
         redis.get = AsyncMock(return_value=json.dumps(stored_emb))
 
-        result = await get(query_emb, threshold=0.9, redis=redis)
+        result = await get(query_emb, threshold=0.9, redis=redis, team_id=TEAM, project_id=PROJECT)
 
         assert result is None
 
@@ -94,20 +110,23 @@ class TestSemanticGet:
         best_resp = {"choices": [{"message": {"content": "best"}}]}
 
         redis = AsyncMock()
-        redis.keys = AsyncMock(return_value=["sem:poor:emb", "sem:best:emb"])
+        redis.keys = AsyncMock(return_value=[
+            f"sem:{TEAM}:{PROJECT}:poor:emb",
+            f"sem:{TEAM}:{PROJECT}:best:emb",
+        ])
 
         async def _get(key):
-            if key == "sem:poor:emb":
+            if key == f"sem:{TEAM}:{PROJECT}:poor:emb":
                 return json.dumps(poor_match)
-            if key == "sem:best:emb":
+            if key == f"sem:{TEAM}:{PROJECT}:best:emb":
                 return json.dumps(good_match)
-            if key == "sem:best:resp":
+            if key == f"sem:{TEAM}:{PROJECT}:best:resp":
                 return json.dumps(best_resp)
             return None
 
         redis.get = AsyncMock(side_effect=_get)
 
-        result = await get(query, threshold=0.9, redis=redis)
+        result = await get(query, threshold=0.9, redis=redis, team_id=TEAM, project_id=PROJECT)
 
         assert result == best_resp
 
@@ -117,17 +136,17 @@ class TestSemanticGet:
         query_emb = [1.0, 0.0]
 
         redis = AsyncMock()
-        redis.keys = AsyncMock(return_value=["sem:abc:emb"])
+        redis.keys = AsyncMock(return_value=[f"sem:{TEAM}:{PROJECT}:abc:emb"])
 
         async def _get(key):
-            if key == "sem:abc:emb":
+            if key == f"sem:{TEAM}:{PROJECT}:abc:emb":
                 return json.dumps(stored_emb)
             # :resp key has already expired
             return None
 
         redis.get = AsyncMock(side_effect=_get)
 
-        result = await get(query_emb, threshold=0.9, redis=redis)
+        result = await get(query_emb, threshold=0.9, redis=redis, team_id=TEAM, project_id=PROJECT)
 
         assert result is None
 
@@ -137,15 +156,18 @@ class TestSemanticGet:
 # ---------------------------------------------------------------------------
 
 class TestSemanticSet:
+    def setup_method(self):
+        reset_circuit()
+
     async def test_writes_emb_and_resp_keys_with_ttl(self):
         redis = AsyncMock()
         redis.setex = AsyncMock()
 
         embedding = [0.1, 0.2, 0.3]
         response = {"choices": []}
-        ttl = 1800
+        base_ttl = 1800
 
-        await sem_set(embedding, response, ttl, redis)
+        await sem_set(embedding, response, base_ttl, redis, team_id=TEAM, project_id=PROJECT)
 
         assert redis.setex.await_count == 2
         calls = redis.setex.call_args_list
@@ -159,19 +181,24 @@ class TestSemanticSet:
 
         assert len(emb_keys) == 1, "Expected exactly one :emb key"
         assert len(resp_keys) == 1, "Expected exactly one :resp key"
-        assert all(t == ttl for t in ttls_written), "Both keys must use the supplied TTL"
+
+        # With jitter, TTL may vary ±10%; just check it's in reasonable range
+        for t in ttls_written:
+            assert base_ttl * 0.9 - 1 <= t <= base_ttl * 1.1 + 1, (
+                f"TTL {t} out of ±10% range for base {base_ttl}"
+            )
 
     async def test_emb_and_resp_share_same_uuid(self):
         redis = AsyncMock()
         redis.setex = AsyncMock()
 
-        await sem_set([1.0, 2.0], {"choices": []}, 600, redis)
+        await sem_set([1.0, 2.0], {"choices": []}, 600, redis, team_id=TEAM, project_id=PROJECT)
 
         calls = redis.setex.call_args_list
         keys = [c[0][0] for c in calls]
-        # Extract the UUID portion: "sem:{uuid}:emb" / "sem:{uuid}:resp"
-        prefixed = [k.split(":") for k in keys]
-        uuids = {parts[1] for parts in prefixed}
+        # Extract the UUID portion: "sem:{team}:{project}:{uuid}:emb" / "sem:{team}:{project}:{uuid}:resp"
+        # Split: ["sem", team, project, uuid, suffix]
+        uuids = {k.split(":")[3] for k in keys}
         assert len(uuids) == 1, "Both keys must share the same entry UUID"
 
     async def test_stored_embedding_is_json_serialisable(self):
@@ -184,7 +211,130 @@ class TestSemanticSet:
         redis.setex = AsyncMock(side_effect=_setex)
 
         emb = [0.5, 0.6, 0.7]
-        await sem_set(emb, {"choices": []}, 60, redis)
+        await sem_set(emb, {"choices": []}, 60, redis, team_id=TEAM, project_id=PROJECT)
 
         emb_key = next(k for k in stored_values if ":emb" in k)
         assert json.loads(stored_values[emb_key]) == emb
+
+
+# ---------------------------------------------------------------------------
+# Team namespace isolation
+# ---------------------------------------------------------------------------
+
+class TestTeamNamespace:
+    def setup_method(self):
+        reset_circuit()
+
+    async def test_different_teams_use_different_key_prefix(self):
+        """Two teams scanning Redis must use different key patterns."""
+        scanned_patterns = []
+
+        async def _keys(pattern):
+            scanned_patterns.append(pattern)
+            return []
+
+        redis = AsyncMock()
+        redis.keys = AsyncMock(side_effect=_keys)
+
+        await get([1.0, 0.0], threshold=0.9, redis=redis, team_id="teamA", project_id="proj1")
+        await get([1.0, 0.0], threshold=0.9, redis=redis, team_id="teamB", project_id="proj1")
+
+        assert len(scanned_patterns) == 2
+        assert scanned_patterns[0] != scanned_patterns[1]
+        assert "teamA" in scanned_patterns[0]
+        assert "teamB" in scanned_patterns[1]
+
+
+# ---------------------------------------------------------------------------
+# TTL jitter
+# ---------------------------------------------------------------------------
+
+class TestTTLJitter:
+    def setup_method(self):
+        reset_circuit()
+
+    async def test_ttl_jitter_applied(self):
+        """TTL passed to setex must be within ±10% of the base TTL."""
+        base_ttl = 100
+        redis = AsyncMock()
+        redis.setex = AsyncMock()
+
+        await sem_set([0.1, 0.2], {"choices": []}, base_ttl, redis, team_id=TEAM, project_id=PROJECT)
+
+        calls = redis.setex.call_args_list
+        ttls_used = [c[0][1] for c in calls]
+
+        for t in ttls_used:
+            assert base_ttl * 0.9 <= t <= base_ttl * 1.1, (
+                f"TTL {t} is outside ±10% range of base TTL {base_ttl}"
+            )
+
+
+# ---------------------------------------------------------------------------
+# Circuit breaker
+# ---------------------------------------------------------------------------
+
+class TestCircuitBreaker:
+    def setup_method(self):
+        reset_circuit()
+
+    async def test_circuit_breaker_skips_get_when_open(self):
+        """After 5 failures, get() returns None without touching Redis."""
+        for _ in range(5):
+            record_embedding_failure()
+
+        redis = AsyncMock()
+        redis.keys = AsyncMock()
+
+        result = await get([1.0, 0.0], threshold=0.9, redis=redis, team_id=TEAM, project_id=PROJECT)
+
+        assert result is None
+        redis.keys.assert_not_called()
+
+    async def test_circuit_breaker_skips_set_when_open(self):
+        """After 5 failures, set() does not call redis.setex."""
+        for _ in range(5):
+            record_embedding_failure()
+
+        redis = AsyncMock()
+        redis.setex = AsyncMock()
+
+        await sem_set([0.1], {"choices": []}, 60, redis, team_id=TEAM, project_id=PROJECT)
+
+        redis.setex.assert_not_called()
+
+    async def test_reset_circuit_re_enables_operations(self):
+        """After reset_circuit(), set() works again."""
+        for _ in range(5):
+            record_embedding_failure()
+
+        reset_circuit()
+
+        redis = AsyncMock()
+        redis.setex = AsyncMock()
+
+        await sem_set([0.1, 0.2], {"choices": []}, 60, redis, team_id=TEAM, project_id=PROJECT)
+
+        assert redis.setex.await_count == 2
+
+    async def test_circuit_opens_at_exactly_5_failures(self):
+        """Circuit should open at 5 failures, not before."""
+        redis = AsyncMock()
+        redis.keys = AsyncMock(return_value=[])
+
+        # 4 failures — circuit still closed
+        for _ in range(4):
+            record_embedding_failure()
+
+        result = await get([1.0, 0.0], threshold=0.9, redis=redis, team_id=TEAM, project_id=PROJECT)
+        assert result is None  # miss, but Redis was still called
+        redis.keys.assert_called_once()
+
+        redis.keys.reset_mock()
+
+        # 5th failure — circuit opens
+        record_embedding_failure()
+
+        result = await get([1.0, 0.0], threshold=0.9, redis=redis, team_id=TEAM, project_id=PROJECT)
+        assert result is None
+        redis.keys.assert_not_called()

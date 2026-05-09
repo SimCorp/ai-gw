@@ -102,3 +102,54 @@ class TestGetPolicy:
         policy = await get_policy("any-team", None, redis)
 
         assert isinstance(policy, CachePolicy)
+
+    async def test_conversation_turn_limit_default_is_3(self):
+        redis = _redis_with({})
+
+        policy = await get_policy("team-1", None, redis)
+
+        assert policy.conversation_turn_limit == 3
+
+    async def test_conversation_turn_limit_parsed_from_redis(self):
+        redis = _redis_with({"conversation_turn_limit": "5"})
+
+        policy = await get_policy("team-1", None, redis)
+
+        assert policy.conversation_turn_limit == 5
+        assert isinstance(policy.conversation_turn_limit, int)
+
+    async def test_budget_hard_cap_default_is_zero(self):
+        redis = _redis_with({})
+
+        policy = await get_policy("team-1", None, redis)
+
+        assert policy.budget_hard_cap == 0.0
+
+    async def test_budget_hard_cap_parsed_as_float(self):
+        redis = _redis_with({"budget_hard_cap": "75.50"})
+
+        policy = await get_policy("team-1", None, redis)
+
+        assert policy.budget_hard_cap == pytest.approx(75.50)
+        assert isinstance(policy.budget_hard_cap, float)
+
+    async def test_embedding_circuit_open_default_false(self):
+        redis = _redis_with({})
+
+        policy = await get_policy("team-1", None, redis)
+
+        assert policy.embedding_circuit_open is False
+
+    async def test_embedding_circuit_open_true_string(self):
+        redis = _redis_with({"embedding_circuit_open": "true"})
+
+        policy = await get_policy("team-1", None, redis)
+
+        assert policy.embedding_circuit_open is True
+
+    async def test_embedding_circuit_open_false_string(self):
+        redis = _redis_with({"embedding_circuit_open": "False"})
+
+        policy = await get_policy("team-1", None, redis)
+
+        assert policy.embedding_circuit_open is False

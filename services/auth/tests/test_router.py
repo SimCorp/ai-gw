@@ -206,11 +206,29 @@ async def test_check_budget_org_alert_at_limit():
     assert reason == ""
 
 
-async def test_check_budget_redis_exception_fail_closed():
-    """Redis raises ConnectionError → fail-closed: HTTP 503."""
+async def test_check_budget_redis_exception_fail_open(monkeypatch):
+    """Redis raises ConnectionError → fail-open by default (BUDGET_REDIS_FAILOPEN=true)."""
+    import os
+
+    from app.router import check_budget
+
+    monkeypatch.setenv("BUDGET_REDIS_FAILOPEN", "true")
+
+    redis = _mock_redis()
+    redis.get = AsyncMock(side_effect=ConnectionError("Redis down"))
+
+    allowed, reason = await check_budget(_TEAM_ID, _KEY_ID, redis)
+    assert allowed is True
+    assert reason == ""
+
+
+async def test_check_budget_redis_exception_fail_closed(monkeypatch):
+    """Redis raises ConnectionError → fail-closed when BUDGET_REDIS_FAILOPEN=false."""
     from fastapi import HTTPException
 
     from app.router import check_budget
+
+    monkeypatch.setenv("BUDGET_REDIS_FAILOPEN", "false")
 
     redis = _mock_redis()
     redis.get = AsyncMock(side_effect=ConnectionError("Redis down"))
