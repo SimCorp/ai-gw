@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthGuard } from './_components/AuthGuard';
 import { getAdminToken, clearAdminToken } from '../../lib/adminAuth';
+import AiHelpWidget from './_components/AiHelpWidget';
 
 const ADMIN_API = process.env.NEXT_PUBLIC_ADMIN_API ?? 'http://localhost:8005';
 
@@ -132,6 +133,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               {children}
             </main>
           </div>
+          <AiHelpWidget />
       </AuthGuard>
     </QueryClientProvider>
   );

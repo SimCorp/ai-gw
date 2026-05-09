@@ -30,6 +30,7 @@ from app.models import (  # noqa: F401
 
 from app.routers import (
     admin_auth as admin_auth_router,
+    ai_help as ai_help_router,
     api_keys as api_keys_module,
     areas as areas_router,
     audit_log,
@@ -452,7 +453,7 @@ app.include_router(guardrails_router.router, dependencies=_auth)
 app.include_router(mcp_router.router, dependencies=_auth)
 app.include_router(plugins_router.router, dependencies=_auth)
 app.include_router(reports_router.router, dependencies=_auth)
-
+app.include_router(ai_help_router.router)  # own auth per endpoint (admin or dev session)
 
 
 @app.get("/", include_in_schema=False)
