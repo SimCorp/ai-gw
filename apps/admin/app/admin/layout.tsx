@@ -121,6 +121,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 <NavSection label="Operate">
                   <NavItem href="/admin/reports" label="Cost reports" />
                   <NavItem href="/admin/alerts" label="Alerts" />
+                  <NavItem href="/admin/devops" label="DevOps Agent ✦" />
                 </NavSection>
               </div>
 
