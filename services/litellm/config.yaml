@@ -55,7 +55,8 @@ model_list:
       api_base: https://api.githubcopilot.com
       api_key: os.environ/GITHUB_COPILOT_TOKEN
 
-  # Azure AI Foundry (Azure OpenAI)
+  # ── Azure OpenAI (Azure AI Foundry — OpenAI models) ────────────────────────
+  # Requires: AZURE_API_BASE, AZURE_API_KEY, AZURE_API_VERSION in .env
   - model_name: azure-gpt-4o
     litellm_params:
       model: azure/gpt-4o
@@ -83,6 +84,65 @@ model_list:
       api_base: os.environ/AZURE_API_BASE
       api_key: os.environ/AZURE_API_KEY
       api_version: os.environ/AZURE_API_VERSION
+
+  # ── Azure AI Foundry — Microsoft Phi ────────────────────────────────────────
+  # Serverless inference via Azure AI Services unified endpoint.
+  # Requires: AZURE_AI_FOUNDRY_ENDPOINT, AZURE_AI_FOUNDRY_KEY in .env
+  # Get these from: Azure AI Foundry portal → your project → Overview → Endpoints
+  - model_name: phi-4
+    litellm_params:
+      model: azure_ai/Phi-4
+      api_base: os.environ/AZURE_AI_FOUNDRY_ENDPOINT
+      api_key: os.environ/AZURE_AI_FOUNDRY_KEY
+
+  - model_name: phi-4-mini
+    litellm_params:
+      model: azure_ai/Phi-4-mini-instruct
+      api_base: os.environ/AZURE_AI_FOUNDRY_ENDPOINT
+      api_key: os.environ/AZURE_AI_FOUNDRY_KEY
+
+  - model_name: phi-3.5-mini
+    litellm_params:
+      model: azure_ai/Phi-3.5-mini-instruct
+      api_base: os.environ/AZURE_AI_FOUNDRY_ENDPOINT
+      api_key: os.environ/AZURE_AI_FOUNDRY_KEY
+
+  - model_name: phi-3.5-moe
+    litellm_params:
+      model: azure_ai/Phi-3.5-MoE-instruct
+      api_base: os.environ/AZURE_AI_FOUNDRY_ENDPOINT
+      api_key: os.environ/AZURE_AI_FOUNDRY_KEY
+
+  # ── Azure AI Foundry — Open models ──────────────────────────────────────────
+  - model_name: llama-3.3-70b
+    litellm_params:
+      model: azure_ai/Meta-Llama-3.3-70B-Instruct
+      api_base: os.environ/AZURE_AI_FOUNDRY_ENDPOINT
+      api_key: os.environ/AZURE_AI_FOUNDRY_KEY
+
+  - model_name: llama-3.1-405b
+    litellm_params:
+      model: azure_ai/Meta-Llama-3.1-405B-Instruct
+      api_base: os.environ/AZURE_AI_FOUNDRY_ENDPOINT
+      api_key: os.environ/AZURE_AI_FOUNDRY_KEY
+
+  - model_name: mistral-large-2
+    litellm_params:
+      model: azure_ai/Mistral-Large-2411
+      api_base: os.environ/AZURE_AI_FOUNDRY_ENDPOINT
+      api_key: os.environ/AZURE_AI_FOUNDRY_KEY
+
+  - model_name: deepseek-r1
+    litellm_params:
+      model: azure_ai/DeepSeek-R1
+      api_base: os.environ/AZURE_AI_FOUNDRY_ENDPOINT
+      api_key: os.environ/AZURE_AI_FOUNDRY_KEY
+
+  - model_name: cohere-command-r-plus
+    litellm_params:
+      model: azure_ai/Cohere-command-r-plus-08-2024
+      api_base: os.environ/AZURE_AI_FOUNDRY_ENDPOINT
+      api_key: os.environ/AZURE_AI_FOUNDRY_KEY
 
 litellm_settings:
   drop_params: true

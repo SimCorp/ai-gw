@@ -409,11 +409,22 @@ async def lifespan(app: FastAPI):
             ("Copilot GPT-4o mini", "copilot-gpt-4o-mini", "github-copilot"),
             ("Copilot o3-mini", "copilot-o3-mini", "github-copilot"),
             ("Copilot Claude 3.5 Sonnet", "copilot-claude-3.5-sonnet", "github-copilot"),
-            # Azure AI Foundry
+            # Azure OpenAI (via Azure AI Foundry)
             ("Azure GPT-4o", "azure-gpt-4o", "azure"),
             ("Azure GPT-4o mini", "azure-gpt-4o-mini", "azure"),
             ("Azure o3-mini", "azure-o3-mini", "azure"),
             ("Azure GPT-4.1", "azure-gpt-4.1", "azure"),
+            # Azure AI Foundry — Microsoft Phi
+            ("Phi-4", "phi-4", "azure-ai-foundry"),
+            ("Phi-4 mini", "phi-4-mini", "azure-ai-foundry"),
+            ("Phi-3.5 mini", "phi-3.5-mini", "azure-ai-foundry"),
+            ("Phi-3.5 MoE", "phi-3.5-moe", "azure-ai-foundry"),
+            # Azure AI Foundry — Open models
+            ("Llama 3.3 70B", "llama-3.3-70b", "azure-ai-foundry"),
+            ("Llama 3.1 405B", "llama-3.1-405b", "azure-ai-foundry"),
+            ("Mistral Large 2", "mistral-large-2", "azure-ai-foundry"),
+            ("DeepSeek R1", "deepseek-r1", "azure-ai-foundry"),
+            ("Cohere Command R+", "cohere-command-r-plus", "azure-ai-foundry"),
             # GitHub Models
             ("GitHub GPT-4o", "github-gpt-4o", "github-models"),
             # Gemini
