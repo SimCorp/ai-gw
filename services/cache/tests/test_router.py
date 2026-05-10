@@ -287,3 +287,115 @@ class TestChatCompletions:
         # Verify the stored body is the LiteLLM response (second positional arg)
         stored_body = mock_exact_set.call_args[0][1]
         assert stored_body["choices"][0]["message"]["content"] == "stored!"
+
+
+# ---------------------------------------------------------------------------
+# Streaming cache hits (stream: true)
+# ---------------------------------------------------------------------------
+
+STREAM_BODY = {"model": "gpt-4", "messages": [{"role": "user", "content": "ping"}], "stream": True}
+
+_CACHED_RESPONSE = {
+    "id": "chatcmpl-cached",
+    "model": "gpt-4",
+    "choices": [{"message": {"role": "assistant", "content": "cached!"}, "finish_reason": "stop"}],
+    "usage": {"prompt_tokens": 5, "completion_tokens": 3},
+}
+
+
+class TestStreamingCacheHits:
+    async def test_exact_hit_stream_returns_sse_content_type(self, app_and_client):
+        """stream:true + exact cache hit → text/event-stream response."""
+        app, client = app_and_client
+        app.state.http.post = AsyncMock(return_value=_auth_response_ok())
+
+        with patch("app.exact.get", new=AsyncMock(return_value=_CACHED_RESPONSE)):
+            resp = await client.post(
+                "/v1/chat/completions",
+                json=STREAM_BODY,
+                headers={"Authorization": "Bearer valid"},
+            )
+
+        assert resp.status_code == 200
+        assert "text/event-stream" in resp.headers.get("content-type", "")
+        assert resp.headers.get("x-cache", "").upper() == "HIT"
+
+    async def test_exact_hit_stream_body_contains_sse_chunks(self, app_and_client):
+        """stream:true + exact cache hit → body is valid SSE with data: lines."""
+        app, client = app_and_client
+        app.state.http.post = AsyncMock(return_value=_auth_response_ok())
+
+        with patch("app.exact.get", new=AsyncMock(return_value=_CACHED_RESPONSE)):
+            resp = await client.post(
+                "/v1/chat/completions",
+                json=STREAM_BODY,
+                headers={"Authorization": "Bearer valid"},
+            )
+
+        body = resp.text
+        assert "data: " in body
+        assert "data: [DONE]" in body
+        # At least one chunk must carry the cached content
+        import json as _j
+        content_found = any(
+            _j.loads(line[6:]).get("choices", [{}])[0].get("delta", {}).get("content") == "cached!"
+            for line in body.splitlines()
+            if line.startswith("data: ") and line != "data: [DONE]"
+        )
+        assert content_found
+
+    async def test_exact_hit_stream_x_cache_stage_exact(self, app_and_client):
+        """Exact SSE hit must carry X-Cache-Stage: exact."""
+        app, client = app_and_client
+        app.state.http.post = AsyncMock(return_value=_auth_response_ok())
+
+        with patch("app.exact.get", new=AsyncMock(return_value=_CACHED_RESPONSE)):
+            resp = await client.post(
+                "/v1/chat/completions",
+                json=STREAM_BODY,
+                headers={"Authorization": "Bearer valid"},
+            )
+
+        assert resp.headers.get("x-cache-stage", "").lower() == "exact"
+
+    async def test_semantic_hit_stream_returns_sse(self, app_and_client):
+        """stream:true + semantic cache hit → text/event-stream, X-Cache: HIT."""
+        app, client = app_and_client
+
+        async def _post_side_effect(url, **kwargs):
+            if "validate" in url:
+                return _auth_response_ok()
+            raise AssertionError("LiteLLM must not be called on semantic hit")
+
+        app.state.http.post = AsyncMock(side_effect=_post_side_effect)
+
+        with patch("app.exact.get", new=AsyncMock(return_value=None)), \
+             patch("app.semantic.embed", new=AsyncMock(return_value=[0.1, 0.2, 0.3])), \
+             patch("app.semantic.get", new=AsyncMock(return_value=_CACHED_RESPONSE)):
+            resp = await client.post(
+                "/v1/chat/completions",
+                json=STREAM_BODY,
+                headers={"Authorization": "Bearer valid"},
+            )
+
+        assert resp.status_code == 200
+        assert "text/event-stream" in resp.headers.get("content-type", "")
+        assert resp.headers.get("x-cache", "").upper() == "HIT"
+        assert resp.headers.get("x-cache-stage", "").lower() == "semantic"
+        assert "data: [DONE]" in resp.text
+
+    async def test_nonstreaming_exact_hit_returns_json(self, app_and_client):
+        """Without stream:true an exact hit must still return plain JSON."""
+        app, client = app_and_client
+        app.state.http.post = AsyncMock(return_value=_auth_response_ok())
+
+        with patch("app.exact.get", new=AsyncMock(return_value=_CACHED_RESPONSE)):
+            resp = await client.post(
+                "/v1/chat/completions",
+                json=CHAT_BODY,
+                headers={"Authorization": "Bearer valid"},
+            )
+
+        assert resp.status_code == 200
+        assert "application/json" in resp.headers.get("content-type", "")
+        assert resp.json()["id"] == "chatcmpl-cached"

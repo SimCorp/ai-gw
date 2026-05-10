@@ -6,6 +6,7 @@ from app.router import (
     _classify_intent,
     _parse_sse_usage_anthropic,
     _parse_sse_usage_openai,
+    _replay_as_sse,
 )
 
 
@@ -185,3 +186,102 @@ def test_classify_intent_first_match_wins():
 def test_classify_intent_case_insensitive():
     assert _classify_intent("WRITE A FUNCTION") == "code_generation"
     assert _classify_intent("Why Is This Broken") == "debugging"
+
+
+# ---------------------------------------------------------------------------
+# _replay_as_sse
+# ---------------------------------------------------------------------------
+
+async def _collect(gen) -> list[dict]:
+    """Drain an async generator and parse each SSE data line as JSON (skip [DONE])."""
+    chunks = []
+    async for raw in gen:
+        for line in raw.decode().splitlines():
+            if line.startswith("data: ") and line != "data: [DONE]":
+                chunks.append(json.loads(line[6:]))
+    return chunks
+
+
+async def _raw_bytes(gen) -> bytes:
+    parts = []
+    async for chunk in gen:
+        parts.append(chunk)
+    return b"".join(parts)
+
+
+async def test_replay_as_sse_ends_with_done_sentinel():
+    cached = {"choices": [{"message": {"content": "hi"}, "finish_reason": "stop"}]}
+    raw = await _raw_bytes(_replay_as_sse(cached))
+    assert raw.endswith(b"data: [DONE]\n\n")
+
+
+async def test_replay_as_sse_basic_content():
+    cached = {
+        "id": "chatcmpl-abc",
+        "model": "gpt-4",
+        "choices": [{"message": {"role": "assistant", "content": "Hello!"}, "finish_reason": "stop"}],
+    }
+    chunks = await _collect(_replay_as_sse(cached))
+
+    # first chunk: role delta
+    assert chunks[0]["choices"][0]["delta"] == {"role": "assistant", "content": ""}
+    # second chunk: content
+    content_chunk = next(c for c in chunks if c["choices"][0]["delta"].get("content"))
+    assert content_chunk["choices"][0]["delta"]["content"] == "Hello!"
+    # finish chunk
+    finish_chunk = next(c for c in chunks if c["choices"][0].get("finish_reason"))
+    assert finish_chunk["choices"][0]["finish_reason"] == "stop"
+
+
+async def test_replay_as_sse_preserves_id_and_model():
+    cached = {
+        "id": "chatcmpl-xyz",
+        "model": "claude-sonnet-4-6",
+        "choices": [{"message": {"content": "ok"}, "finish_reason": "stop"}],
+    }
+    chunks = await _collect(_replay_as_sse(cached))
+    for chunk in chunks:
+        assert chunk["id"] == "chatcmpl-xyz"
+        assert chunk["model"] == "claude-sonnet-4-6"
+        assert chunk["object"] == "chat.completion.chunk"
+
+
+async def test_replay_as_sse_includes_usage_in_finish_chunk():
+    usage = {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}
+    cached = {
+        "choices": [{"message": {"content": "hi"}, "finish_reason": "stop"}],
+        "usage": usage,
+    }
+    chunks = await _collect(_replay_as_sse(cached))
+    finish_chunk = next(c for c in chunks if c["choices"][0].get("finish_reason"))
+    assert finish_chunk.get("usage") == usage
+
+
+async def test_replay_as_sse_with_tool_calls():
+    tool_calls = [{"id": "call_1", "type": "function", "function": {"name": "get_time", "arguments": "{}"}}]
+    cached = {
+        "choices": [{"message": {"content": "", "tool_calls": tool_calls}, "finish_reason": "tool_calls"}],
+    }
+    chunks = await _collect(_replay_as_sse(cached))
+    tool_chunk = next((c for c in chunks if c["choices"][0]["delta"].get("tool_calls")), None)
+    assert tool_chunk is not None
+    assert tool_chunk["choices"][0]["delta"]["tool_calls"] == tool_calls
+
+
+async def test_replay_as_sse_empty_choices():
+    """No choices → only role chunk + finish chunk + [DONE], no crash."""
+    cached = {"choices": []}
+    raw = await _raw_bytes(_replay_as_sse(cached))
+    assert b"data: [DONE]" in raw
+    chunks = await _collect(_replay_as_sse(cached))
+    # Role delta chunk and finish chunk
+    assert len(chunks) == 2
+    assert chunks[0]["choices"][0]["delta"] == {"role": "assistant", "content": ""}
+    assert chunks[1]["choices"][0]["finish_reason"] == "stop"
+
+
+async def test_replay_as_sse_generates_id_when_missing():
+    """When cached response has no 'id', one is auto-generated."""
+    cached = {"choices": [{"message": {"content": "x"}, "finish_reason": "stop"}]}
+    chunks = await _collect(_replay_as_sse(cached))
+    assert all(c["id"].startswith("chatcmpl-") for c in chunks)
