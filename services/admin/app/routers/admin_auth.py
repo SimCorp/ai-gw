@@ -14,10 +14,7 @@ Passwords are hashed with bcrypt (12 rounds).
 import json
 import re
 import secrets
-import time
-from collections import defaultdict
 from datetime import timedelta
-from threading import Lock
 
 import bcrypt
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
@@ -35,21 +32,16 @@ _SESSION_TTL_REMEMBER = int(timedelta(days=30).total_seconds())
 _EMAIL_RE = re.compile(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$')
 
 # ---------------------------------------------------------------------------
-# Rate limiting (in-memory, per IP — same pattern as dev_auth)
+# Rate limiting — Redis-backed so all replicas share the counter
 # ---------------------------------------------------------------------------
 
-_login_attempts: dict[str, list[float]] = defaultdict(list)
-_login_lock = Lock()
-
-
-def _check_rate_limit(identifier: str, max_attempts: int = 10, window_seconds: int = 60) -> None:
-    now = time.time()
-    with _login_lock:
-        attempts = _login_attempts[identifier]
-        _login_attempts[identifier] = [t for t in attempts if now - t < window_seconds]
-        if len(_login_attempts[identifier]) >= max_attempts:
-            raise HTTPException(status_code=429, detail="Too many attempts, try again later")
-        _login_attempts[identifier].append(now)
+async def _check_rate_limit(redis, identifier: str, max_attempts: int = 10, window_seconds: int = 60) -> None:
+    key = f"login_rl:{identifier}"
+    count = await redis.incr(key)
+    if count == 1:
+        await redis.expire(key, window_seconds)
+    if count > max_attempts:
+        raise HTTPException(status_code=429, detail="Too many attempts, try again later")
 
 
 # ---------------------------------------------------------------------------
@@ -152,7 +144,7 @@ async def login(
     session: AsyncSession = Depends(get_session),
 ):
     """Authenticate an admin user and return a session token."""
-    _check_rate_limit(request.client.host if request.client else "unknown")
+    await _check_rate_limit(request.app.state.redis, request.client.host if request.client else "unknown")
 
     row = (await session.execute(
         text("""

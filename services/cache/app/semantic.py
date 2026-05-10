@@ -1,3 +1,4 @@
+import asyncio
 import json
 import random
 import uuid
@@ -9,28 +10,39 @@ from redis.asyncio import Redis
 from app.config import settings as _settings
 
 _PREFIX = "sem:"
+_CIRCUIT_KEY = "embedding:circuit_open"
+_CIRCUIT_COOLDOWN = 120  # seconds before auto-reset
 
 _client = AsyncOpenAI(
     api_key=_settings.embedding_api_key,
     base_url=_settings.embedding_base_url,
 )
 
-# Circuit breaker state — module-level so it survives across requests.
+# In-process failure counter — used to decide when to trip the breaker.
+# The open/closed state is written to Redis so all replicas share it.
 _circuit_failures: int = 0
-_circuit_open: bool = False
 
 
-def record_embedding_failure() -> None:
-    global _circuit_failures, _circuit_open
+def record_embedding_failure(redis: Redis | None = None) -> None:
+    global _circuit_failures
     _circuit_failures += 1
-    if _circuit_failures >= 5:
-        _circuit_open = True
+    if _circuit_failures >= 5 and redis is not None:
+        asyncio.create_task(_open_circuit(redis))
 
 
-def reset_circuit() -> None:
-    global _circuit_failures, _circuit_open
+async def _open_circuit(redis: Redis) -> None:
+    await redis.set(_CIRCUIT_KEY, "1", ex=_CIRCUIT_COOLDOWN)
+
+
+async def is_circuit_open(redis: Redis) -> bool:
+    return bool(await redis.exists(_CIRCUIT_KEY))
+
+
+async def reset_circuit(redis: Redis | None = None) -> None:
+    global _circuit_failures
     _circuit_failures = 0
-    _circuit_open = False
+    if redis is not None:
+        await redis.delete(_CIRCUIT_KEY)
 
 
 def _cosine(a: list[float], b: list[float]) -> float:
@@ -54,7 +66,7 @@ async def get(
     team_id: str = "",
     project_id: str = "",
 ) -> dict | None:
-    if _circuit_open:
+    if await is_circuit_open(redis):
         return None
 
     pattern = f"{_PREFIX}{team_id}:{project_id}:*:emb"
@@ -85,7 +97,7 @@ async def set(
     team_id: str = "",
     project_id: str = "",
 ) -> None:
-    if _circuit_open:
+    if await is_circuit_open(redis):
         return
 
     # ±10% jitter prevents thundering-herd expiry

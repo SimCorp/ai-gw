@@ -1,4 +1,5 @@
-from dataclasses import dataclass
+import json as _json
+from dataclasses import dataclass, field
 
 from redis.asyncio import Redis
 
@@ -16,6 +17,7 @@ class CachePolicy:
     conversation_turn_limit: int = 3
     budget_hard_cap: float = 0.0
     embedding_circuit_open: bool = False
+    allowed_models: list[str] = field(default_factory=list)
 
 
 async def get_policy(team_id: str, project_id: str | None, redis: Redis) -> CachePolicy:
@@ -25,6 +27,11 @@ async def get_policy(team_id: str, project_id: str | None, redis: Redis) -> Cach
         key = f"{key}:{project_id}"
 
     raw = await redis.hgetall(key)
+    raw_allowed = raw.get("allowed_models", "[]")
+    try:
+        allowed_models = _json.loads(raw_allowed) if raw_allowed else []
+    except Exception:
+        allowed_models = []
     return CachePolicy(
         ttl_seconds=int(raw.get("ttl_seconds", _defaults.default_ttl_seconds)),
         similarity_threshold=float(raw.get("similarity_threshold", _defaults.default_similarity_threshold)),
@@ -33,4 +40,5 @@ async def get_policy(team_id: str, project_id: str | None, redis: Redis) -> Cach
         conversation_turn_limit=int(raw.get("conversation_turn_limit", _defaults.conversation_turn_limit)),
         budget_hard_cap=float(raw.get("budget_hard_cap", 0.0)),
         embedding_circuit_open=raw.get("embedding_circuit_open", "false").lower() == "true",
+        allowed_models=allowed_models,
     )

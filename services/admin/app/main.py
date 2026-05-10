@@ -435,12 +435,12 @@ async def lifespan(app: FastAPI):
 
     # Start background optimization worker (runs every 6 hours)
     import asyncpg as _asyncpg
-    from app.workers.optimization_worker import optimization_loop as _opt_loop
+    from app.workers.optimization_worker import start_optimization_worker as _opt_worker
     _pg_dsn = app_settings.database_url.replace(
         "postgresql+asyncpg://", "postgresql://"
     )
     _pool = await _asyncpg.create_pool(_pg_dsn, min_size=1, max_size=3)
-    _worker_task = asyncio.create_task(_opt_loop(_pool))
+    _worker_task = asyncio.create_task(_opt_worker(_pool))
 
     yield
 
@@ -469,6 +469,17 @@ app.add_middleware(
     allow_headers=["Content-Type", "Authorization", "X-Admin-Token"],
     allow_credentials=True,
 )
+
+
+@app.middleware("http")
+async def _security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("X-XSS-Protection", "1; mode=block")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+    return response
 app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 app.include_router(dev_auth.router)  # public — no admin auth
 app.include_router(admin_auth_router.router)  # public — IS the auth, no token required

@@ -73,12 +73,14 @@ async def upsert_policy(team_id: UUID, body: PolicyUpdate, request: Request, ses
     cache_key = f"policy:{team_id}"
     if body.project_id:
         cache_key = f"{cache_key}:{body.project_id}"
+    import json as _json
     await redis.hset(cache_key, mapping={
         "ttl_seconds": body.cache_ttl_seconds,
         "similarity_threshold": body.cache_similarity_threshold,
         "opt_out": str(body.cache_opt_out).lower(),
         "embedding_model": body.embedding_model,
         "rate_limit_rpm": body.rate_limit_rpm,
+        "allowed_models": _json.dumps(body.allowed_models or []),
     })
 
     return result.scalar_one()

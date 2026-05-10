@@ -630,3 +630,17 @@ async def optimization_loop(pool):
             _log.exception("Optimization worker: run failed: %s", exc)
 
         await asyncio.sleep(_INTERVAL)
+
+
+async def start_optimization_worker(pool):
+    """Supervisor wrapper — restarts optimization_loop if it crashes unexpectedly."""
+    while True:
+        try:
+            await optimization_loop(pool)
+            return  # clean exit (CancelledError propagated out of loop)
+        except asyncio.CancelledError:
+            _log.info("Optimization worker supervisor: shutdown")
+            raise
+        except Exception:
+            _log.exception("Optimization worker supervisor: unexpected crash, restarting in 60s")
+            await asyncio.sleep(60)

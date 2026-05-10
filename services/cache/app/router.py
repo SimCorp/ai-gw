@@ -199,6 +199,85 @@ async def _validate_token(
         return None
 
 
+_GUARDRAIL_CACHE_TTL = 60  # seconds between guardrail refreshes
+
+async def _load_guardrails(redis, team_id: str) -> list[dict]:
+    """Load enabled guardrails from Redis, keyed by admin service on create/update."""
+    import json as _j
+    results = []
+    for key in (f"guardrails:{team_id}", "guardrails:global"):
+        raw = await redis.get(key)
+        if raw:
+            try:
+                results.extend(_j.loads(raw))
+            except Exception:
+                pass
+    return results
+
+
+async def _check_guardrails(
+    redis,
+    team_id: str,
+    key_id: str | None,
+    request_id: str,
+    prompt_text: str,
+    model: str | None,
+    http,
+) -> None:
+    """Run enabled guardrails against the prompt text. Fires hits async; blocks on block action."""
+    import re as _re, json as _j
+    rules = await _load_guardrails(redis, team_id)
+    for rule in rules:
+        if not rule.get("enabled", True):
+            continue
+        applies_to = rule.get("applies_to", "input")
+        if applies_to not in ("input", "both"):
+            continue
+        patterns = rule.get("config", {}).get("patterns", [])
+        matched = False
+        for pat in patterns:
+            try:
+                if _re.search(pat, prompt_text, _re.IGNORECASE):
+                    matched = True
+                    break
+            except Exception:
+                continue
+        if not matched:
+            continue
+        action = rule.get("action", "flag")
+        asyncio.create_task(_emit_guardrail_hit(http, {
+            "guardrail_id": rule.get("id"),
+            "guardrail_type": rule.get("type"),
+            "team_id": team_id,
+            "api_key_id": key_id,
+            "request_id": request_id,
+            "model": model,
+            "input_or_output": "input",
+            "action_taken": action,
+            "severity": rule.get("severity", "high"),
+        }))
+        if action == "block":
+            from fastapi.responses import JSONResponse as _JR
+            raise _BlockedByGuardrail(rule.get("name", "guardrail"))
+
+
+class _BlockedByGuardrail(Exception):
+    def __init__(self, rule_name: str):
+        self.rule_name = rule_name
+
+
+async def _emit_guardrail_hit(http, hit: dict) -> None:
+    try:
+        await http.post(
+            f"{settings.observability_url}/guardrail-hits",
+            json=hit,
+            headers={"x-internal-key": settings.internal_api_key},
+            timeout=2,
+        )
+    except Exception:
+        pass
+
+
 async def _check_budget(redis, team_id: str, key_id: str | None, cap: float) -> bool:
     """Return True if request is allowed (under budget or cap disabled)."""
     if cap <= 0.0 or not settings.budget_check_enabled:
@@ -245,6 +324,13 @@ async def chat_completions(request: Request):
         return result
     team_id, project_id, key_id = result
 
+    # Propagate or generate request-id for distributed tracing
+    request_id = (
+        request.headers.get("x-request-id")
+        or request.headers.get("x-correlation-id")
+        or str(__import__("uuid").uuid4())
+    )
+
     # Claude Code / agentic context headers
     session_trace_id = request.headers.get("x-session-trace-id")
     session_purpose = request.headers.get("x-session-purpose")
@@ -263,9 +349,29 @@ async def chat_completions(request: Request):
             embedding_model=settings.embedding_model,
         )
 
+    # Allowed models gate — empty list means all models permitted
+    requested_model = body.get("model", "")
+    if policy.allowed_models and requested_model and requested_model not in policy.allowed_models:
+        return JSONResponse(
+            {"error": "model_not_permitted",
+             "message": f"Model '{requested_model}' is not in your team's allowed model list"},
+            status_code=403,
+            headers={"x-request-id": request_id},
+        )
+
+    # Guardrails — run lightweight enforcement on input before forwarding
+    try:
+        await _check_guardrails(redis, team_id, key_id, request_id, _prompt_text(body), body.get("model"), http)
+    except _BlockedByGuardrail as exc:
+        return JSONResponse(
+            {"error": "blocked_by_guardrail", "message": f"Request blocked by guardrail: {exc.rule_name}"},
+            status_code=400,
+            headers={"x-request-id": request_id},
+        )
+
     # Hard budget gate — fail open (allow) if Redis is unavailable
     if not await _check_budget(redis, team_id, key_id, policy.budget_hard_cap):
-        return JSONResponse({"error": "Budget cap exceeded"}, status_code=429)
+        return JSONResponse({"error": "Budget cap exceeded"}, status_code=429, headers={"x-request-id": request_id})
 
     start = time.monotonic()
 
@@ -302,7 +408,7 @@ async def chat_completions(request: Request):
                         "session_purpose": session_purpose, "repo": repo,
                     })
                 )
-                return JSONResponse(cached, headers={"X-Cache": "HIT", "X-Cache-Stage": "exact"})
+                return JSONResponse(cached, headers={"X-Cache": "HIT", "X-Cache-Stage": "exact", "x-request-id": request_id})
         except Exception:
             pass  # Redis failure → fail open
 
@@ -324,9 +430,9 @@ async def chat_completions(request: Request):
                         "session_purpose": session_purpose, "repo": repo,
                     })
                 )
-                return JSONResponse(cached, headers={"X-Cache": "HIT", "X-Cache-Stage": "semantic"})
+                return JSONResponse(cached, headers={"X-Cache": "HIT", "X-Cache-Stage": "semantic", "x-request-id": request_id})
         except Exception:
-            semantic.record_embedding_failure()
+            semantic.record_embedding_failure(redis)
             emb = None  # embedding failure → treat as miss
 
     # 3. Forward to LiteLLM
@@ -335,6 +441,7 @@ async def chat_completions(request: Request):
         if k.lower() not in ("host", "content-length", "authorization")
     }
     fwd_headers["Authorization"] = f"Bearer {settings.litellm_master_key}"
+    fwd_headers["x-request-id"] = request_id
 
     # Inject Anthropic prefix-cache header so provider-side caching compounds with ours.
     # This is a no-op for non-Anthropic providers.
@@ -367,7 +474,7 @@ async def chat_completions(request: Request):
             _tracked_stream(upstream, _emit_after_stream, _parse_sse_usage_openai),
             status_code=upstream.status_code,
             media_type=upstream.headers.get("content-type", "text/event-stream"),
-            headers={"X-Cache": "MISS"},
+            headers={"X-Cache": "MISS", "x-request-id": request_id},
         )
 
     try:
@@ -379,7 +486,7 @@ async def chat_completions(request: Request):
         return JSONResponse(
             {"error": "upstream_unavailable", "message": "LLM provider temporarily unavailable"},
             status_code=503,
-            headers={"Retry-After": "30"},
+            headers={"Retry-After": "30", "x-request-id": request_id},
         )
     response_body = resp.json()
 
@@ -412,7 +519,7 @@ async def chat_completions(request: Request):
     )
     return Response(
         content=resp.content, status_code=resp.status_code, media_type="application/json",
-        headers={"X-Cache": "MISS"},
+        headers={"X-Cache": "MISS", "x-request-id": request_id},
     )
 
 

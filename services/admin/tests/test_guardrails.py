@@ -220,10 +220,13 @@ async def test_patch_guardrail_not_found_returns_404(client, mock_session):
 
 async def test_delete_guardrail_found_returns_204(client, mock_session):
     guardrail_id = str(uuid.uuid4())
-    # delete_guardrail uses result.first() directly (not mappings)
+    # First execute: SELECT team_id (mappings().first() returns a row with team_id=None)
+    pre_result = _mappings_first({"team_id": None})
+    # Second execute: DELETE (no return value needed)
+    # Third execute: _sync_guardrails_to_redis SELECT (mappings().all() returns [])
+    sync_result = _mappings_all([])
     delete_result = MagicMock()
-    delete_result.first.return_value = (uuid.UUID(guardrail_id),)
-    mock_session.execute.return_value = delete_result
+    mock_session.execute.side_effect = [pre_result, delete_result, sync_result]
 
     resp = await client.delete(f"/guardrails/{guardrail_id}")
 
@@ -232,9 +235,9 @@ async def test_delete_guardrail_found_returns_204(client, mock_session):
 
 async def test_delete_guardrail_not_found_returns_404(client, mock_session):
     guardrail_id = str(uuid.uuid4())
-    delete_result = MagicMock()
-    delete_result.first.return_value = None
-    mock_session.execute.return_value = delete_result
+    # First execute: SELECT team_id returns no row → 404
+    pre_result = _mappings_first(None)
+    mock_session.execute.side_effect = [pre_result]
 
     resp = await client.delete(f"/guardrails/{guardrail_id}")
 

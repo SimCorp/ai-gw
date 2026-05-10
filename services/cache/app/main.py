@@ -22,6 +22,16 @@ app = FastAPI(title="AI Gateway — Cache Service", lifespan=lifespan)
 app.include_router(router)
 
 
+@app.middleware("http")
+async def _security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("X-XSS-Protection", "1; mode=block")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    return response
+
+
 @app.get("/health")
 async def health():
     """Liveness probe — returns 200 if the process is running."""

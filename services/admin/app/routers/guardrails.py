@@ -1,7 +1,8 @@
+import json as _json
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -137,12 +138,58 @@ async def recent_hits(
 
 
 # ---------------------------------------------------------------------------
+# Redis sync helper
+# ---------------------------------------------------------------------------
+
+async def _sync_guardrails_to_redis(session: AsyncSession, redis, team_id: str | None) -> None:
+    """Rebuild the guardrail cache key for the given team_id (or global) in Redis."""
+    if team_id:
+        rows = (await session.execute(
+            text("""
+                SELECT id, name, type, applies_to, action, severity, priority, config, enabled, team_id
+                FROM guardrails
+                WHERE team_id = CAST(:tid AS uuid)
+                ORDER BY priority ASC
+            """),
+            {"tid": team_id},
+        )).mappings().all()
+        redis_key = f"guardrails:{team_id}"
+    else:
+        rows = (await session.execute(
+            text("""
+                SELECT id, name, type, applies_to, action, severity, priority, config, enabled, team_id
+                FROM guardrails
+                WHERE team_id IS NULL
+                ORDER BY priority ASC
+            """),
+        )).mappings().all()
+        redis_key = "guardrails:global"
+
+    rules = [
+        {
+            "id": str(r["id"]),
+            "name": r["name"],
+            "type": r["type"],
+            "applies_to": r["applies_to"],
+            "action": r["action"],
+            "severity": r["severity"],
+            "priority": r["priority"],
+            "config": r["config"] if isinstance(r["config"], dict) else {},
+            "enabled": r["enabled"],
+        }
+        for r in rows
+    ]
+    await redis.set(redis_key, _json.dumps(rules), ex=300)
+
+
+# ---------------------------------------------------------------------------
 # CRUD
 # ---------------------------------------------------------------------------
 
 @router.post("", status_code=201)
 async def create_guardrail(
     body: GuardrailCreate,
+    request: Request,
     session: AsyncSession = Depends(get_session),
 ):
     import json
@@ -167,13 +214,16 @@ async def create_guardrail(
         },
     )
     await session.commit()
-    return dict(result.mappings().first())
+    row = dict(result.mappings().first())
+    await _sync_guardrails_to_redis(session, request.app.state.redis, body.team_id)
+    return row
 
 
 @router.patch("/{guardrail_id}")
 async def update_guardrail(
     guardrail_id: str,
     body: GuardrailUpdate,
+    request: Request,
     session: AsyncSession = Depends(get_session),
 ):
     import json
@@ -210,21 +260,33 @@ async def update_guardrail(
     if not row:
         raise HTTPException(status_code=404, detail="Guardrail not found")
     await session.commit()
-    return dict(row)
+    row_dict = dict(row)
+    # team_id may be a UUID or None
+    sync_team_id = str(row_dict["team_id"]) if row_dict.get("team_id") else None
+    await _sync_guardrails_to_redis(session, request.app.state.redis, sync_team_id)
+    return row_dict
 
 
 @router.delete("/{guardrail_id}", status_code=204)
 async def delete_guardrail(
     guardrail_id: str,
+    request: Request,
     session: AsyncSession = Depends(get_session),
 ):
-    result = await session.execute(
-        text("DELETE FROM guardrails WHERE id = CAST(:id AS uuid) RETURNING id"),
+    # Fetch team_id before deleting so we know which Redis key to refresh
+    pre = (await session.execute(
+        text("SELECT team_id FROM guardrails WHERE id = CAST(:id AS uuid)"),
+        {"id": guardrail_id},
+    )).mappings().first()
+    if not pre:
+        raise HTTPException(status_code=404, detail="Guardrail not found")
+    deleted_team_id = str(pre["team_id"]) if pre["team_id"] else None
+    await session.execute(
+        text("DELETE FROM guardrails WHERE id = CAST(:id AS uuid)"),
         {"id": guardrail_id},
     )
-    if not result.first():
-        raise HTTPException(status_code=404, detail="Guardrail not found")
     await session.commit()
+    await _sync_guardrails_to_redis(session, request.app.state.redis, deleted_team_id)
 
 
 # ---------------------------------------------------------------------------

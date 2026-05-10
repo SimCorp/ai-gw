@@ -10,11 +10,8 @@ import json
 import os
 import re
 import secrets
-import time
 import uuid
-from collections import defaultdict
 from datetime import UTC, datetime, timedelta
-from threading import Lock
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
@@ -32,12 +29,8 @@ _ITERATIONS = 390_000  # NIST SP 800-132 recommended minimum for PBKDF2-HMAC-SHA
 _EMAIL_RE = re.compile(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$')
 
 # ---------------------------------------------------------------------------
-# Rate limiting (in-memory, per IP)
+# Rate limiting — Redis-backed so all replicas share the counter
 # ---------------------------------------------------------------------------
-
-_login_attempts: dict[str, list[float]] = defaultdict(list)
-_login_lock = Lock()
-
 
 def _real_ip(request: Request) -> str:
     forwarded = request.headers.get("X-Forwarded-For")
@@ -55,15 +48,14 @@ def _rate_limit_key(request: Request) -> str:
     return _real_ip(request)
 
 
-def _check_auth_rate_limit(identifier: str, max_attempts: int = 10, window_seconds: int = 60) -> None:
+async def _check_auth_rate_limit(redis, identifier: str, max_attempts: int = 10, window_seconds: int = 60) -> None:
     # Rate limiting is always active; it is independent of DEV_BYPASS_AUTH.
-    now = time.time()
-    with _login_lock:
-        attempts = _login_attempts[identifier]
-        _login_attempts[identifier] = [t for t in attempts if now - t < window_seconds]
-        if len(_login_attempts[identifier]) >= max_attempts:
-            raise HTTPException(status_code=429, detail="Too many attempts, try again later")
-        _login_attempts[identifier].append(now)
+    key = f"login_rl:{identifier}"
+    count = await redis.incr(key)
+    if count == 1:
+        await redis.expire(key, window_seconds)
+    if count > max_attempts:
+        raise HTTPException(status_code=429, detail="Too many attempts, try again later")
 
 
 # ---------------------------------------------------------------------------
@@ -143,7 +135,7 @@ async def register(
     request: Request,
     session: AsyncSession = Depends(get_session),
 ):
-    _check_auth_rate_limit(_rate_limit_key(request))
+    await _check_auth_rate_limit(request.app.state.redis, _rate_limit_key(request))
 
     # Email is already validated and normalised by the schema validator
     email = body.email
@@ -187,7 +179,7 @@ async def login(
     request: Request,
     session: AsyncSession = Depends(get_session),
 ):
-    _check_auth_rate_limit(_rate_limit_key(request))
+    await _check_auth_rate_limit(request.app.state.redis, _rate_limit_key(request))
     email = body.email.lower().strip()
     row = (await session.execute(
         text("""
