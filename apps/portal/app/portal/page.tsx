@@ -6,6 +6,25 @@ import { useTeam } from "./_lib/teamContext";
 import { useAuth } from "./_lib/authContext";
 import type { TeamMembership } from "./_lib/authContext";
 
+interface AiInsight {
+  id: string;
+  category: string;
+  severity: "critical" | "warning" | "info";
+  title: string;
+  description: string;
+  action: string | null;
+  team_name: string | null;
+}
+
+const _INSIGHT_COLOR = {
+  critical: "var(--bad, #EF3E4A)",
+  warning: "var(--warn, #F59E0B)",
+  info: "var(--sc-link, #0A7BD7)",
+};
+const _INSIGHT_ICON: Record<string, string> = {
+  cache: "⚡", model: "🤖", budget: "💰", error: "🚨", health: "🩺", usage: "📊",
+};
+
 const ADMIN_BASE = process.env.NEXT_PUBLIC_ADMIN_BASE_URL ?? "http://localhost:8005";
 
 interface TeamDetail {
@@ -41,13 +60,15 @@ interface DashboardStats {
 
 export default function PortalHome() {
   const { teamId, teamName } = useTeam();
-  const { developer, memberships } = useAuth();
+  const { developer, memberships, token } = useAuth();
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loadingKeys, setLoadingKeys] = useState(false);
   const [loadingStats, setLoadingStats] = useState(false);
   const [teamDetail, setTeamDetail] = useState<TeamDetail | null>(null);
   const [loadingTeamDetail, setLoadingTeamDetail] = useState(false);
+  const [insights, setInsights] = useState<AiInsight[]>([]);
+  const [dismissedInsights, setDismissedInsights] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!teamId) { setTeamDetail(null); return; }
@@ -71,6 +92,17 @@ export default function PortalHome() {
       .catch(() => setKeys([]))
       .finally(() => setLoadingKeys(false));
   }, [teamId]);
+
+  // Fetch AI recommendations for this developer
+  useEffect(() => {
+    if (!token) return;
+    fetch(`${ADMIN_BASE}/insights/developer/me`, {
+      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } as Record<string, string>,
+    })
+      .then(r => r.ok ? r.json() : [])
+      .then((data: AiInsight[]) => setInsights(Array.isArray(data) ? data.slice(0, 5) : []))
+      .catch(() => setInsights([]));
+  }, [token]);
 
   useEffect(() => {
     if (!teamName) return;
@@ -236,6 +268,55 @@ export default function PortalHome() {
           {p99Display && <div className="d">{p99Display}</div>}
         </div>
       </div>
+
+      {/* AI Recommendations */}
+      {insights.filter(i => !dismissedInsights.has(i.id)).length > 0 && (
+        <div className="card" style={{ padding: "14px 16px", marginBottom: 4 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+            <span style={{ fontSize: 14 }}>✦</span>
+            <span style={{ fontWeight: 600, fontSize: 13 }}>AI Recommendations</span>
+            <span style={{ fontSize: 11.5, color: "var(--fg-3)" }}>for your team · refreshed every 6h</span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {insights
+              .filter(i => !dismissedInsights.has(i.id))
+              .map(ins => {
+                const color = _INSIGHT_COLOR[ins.severity] ?? "var(--sc-link)";
+                const icon = _INSIGHT_ICON[ins.category] ?? "✦";
+                return (
+                  <div key={ins.id} style={{
+                    display: "flex", gap: 10, alignItems: "flex-start",
+                    padding: "10px 12px",
+                    background: "var(--surface-soft, rgba(0,0,0,0.03))",
+                    borderLeft: `3px solid ${color}`,
+                    borderRadius: "0 8px 8px 0",
+                  }}>
+                    <span style={{ fontSize: 16, flexShrink: 0 }}>{icon}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 500, fontSize: 13, color: "var(--fg-1)" }}>{ins.title}</div>
+                      <div style={{ fontSize: 12.5, color: "var(--fg-2)", marginTop: 2, lineHeight: 1.5 }}>{ins.description}</div>
+                      {ins.action && (
+                        <div style={{ fontSize: 12, color: "var(--sc-link)", marginTop: 4, fontStyle: "italic" }}>
+                          → {ins.action}
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => setDismissedInsights(prev => new Set([...prev, ins.id]))}
+                      style={{
+                        background: "none", border: "none", cursor: "pointer",
+                        color: "var(--fg-3)", fontSize: 16, padding: 2, flexShrink: 0,
+                      }}
+                      title="Dismiss"
+                    >
+                      ×
+                    </button>
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+      )}
 
       {/* Quick actions */}
       <div className="qg">
