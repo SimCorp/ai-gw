@@ -442,3 +442,144 @@ async def budget_status(session: AsyncSession = Depends(get_session)) -> dict[st
             if t["pct_used"] is not None and t["pct_used"] >= t["budget_alert_pct"]
         ),
     }
+
+
+# ---------------------------------------------------------------------------
+# Budget alert notification webhook
+# ---------------------------------------------------------------------------
+
+class NotificationWebhookBody(BaseModel):
+    webhook_url: str = Field(default="", description="Slack-compatible webhook URL; empty string to disable")
+
+
+@router.get("/org/notifications")
+async def get_notification_settings(session: AsyncSession = Depends(get_session)) -> dict[str, Any]:
+    """Return the current budget alert webhook URL (if configured)."""
+    settings = await _read_org_settings(session)
+    url = settings.get("notification_webhook_url", "")
+    return {"webhook_url": url, "enabled": bool(url)}
+
+
+@router.put("/org/notifications")
+async def set_notification_webhook(
+    body: NotificationWebhookBody,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    """Configure (or clear) the Slack-compatible budget alert webhook URL."""
+    await session.execute(
+        text(
+            "INSERT INTO org_settings (key, value, updated_at) VALUES (:key, :value, NOW()) "
+            "ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()"
+        ),
+        {"key": "notification_webhook_url", "value": body.webhook_url},
+    )
+    await audit.record(
+        session, request, "set_notification_webhook", "org_settings", resource_id=None,
+        details={"webhook_url": body.webhook_url[:80] if body.webhook_url else ""},
+    )
+    await session.commit()
+    return {"webhook_url": body.webhook_url, "enabled": bool(body.webhook_url)}
+
+
+@router.post("/org/notifications/test")
+async def test_notification_webhook(
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    """Fire a test POST to the configured webhook URL. Returns success/error."""
+    import httpx as _httpx
+
+    settings = await _read_org_settings(session)
+    url = settings.get("notification_webhook_url", "").strip()
+    if not url:
+        raise HTTPException(status_code=400, detail="No webhook URL configured")
+
+    test_payload = {"text": ":white_check_mark: *Budget Alert Test* — AI Gateway notifications are working."}
+    try:
+        async with _httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.post(url, json=test_payload)
+            resp.raise_for_status()
+        return {"ok": True, "status_code": resp.status_code}
+    except _httpx.HTTPStatusError as exc:
+        raise HTTPException(status_code=502, detail=f"Webhook returned {exc.response.status_code}")
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Webhook request failed: {exc}")
+
+
+# ---------------------------------------------------------------------------
+# Cost forecasting — project end-of-month spend from current burn rate
+# ---------------------------------------------------------------------------
+
+@router.get("/budget/forecast")
+async def budget_forecast(session: AsyncSession = Depends(get_session)) -> dict:
+    """
+    Project end-of-month spend for org and each team.
+    Uses current month MTD spend ÷ elapsed days × days in month.
+    Also returns days remaining and whether teams are on track vs their budget.
+    """
+    import calendar as _cal
+    from datetime import date as _date
+
+    today = _date.today()
+    days_elapsed = today.day
+    days_in_month = _cal.monthrange(today.year, today.month)[1]
+    days_remaining = days_in_month - days_elapsed
+    burn_factor = days_in_month / max(1, days_elapsed)
+
+    # Org MTD spend
+    org_mtd = (await session.execute(text(
+        "SELECT COALESCE(SUM(cost_usd), 0) AS spend FROM cost_records "
+        "WHERE created_at >= date_trunc('month', NOW())"
+    ))).scalar()
+    org_mtd = float(org_mtd or 0)
+    org_projected = round(org_mtd * burn_factor, 4)
+
+    org_settings = await _read_org_settings(session)
+    raw_org_limit = float(org_settings.get("monthly_budget_usd", "0"))
+    org_limit: float | None = raw_org_limit if raw_org_limit > 0.0 else None
+
+    # Team MTD spend + budget
+    team_rows = (await session.execute(text("""
+        SELECT t.id, t.name, t.slug, t.monthly_budget_usd,
+               COALESCE(SUM(cr.cost_usd), 0) AS mtd_spend
+        FROM teams t
+        LEFT JOIN cost_records cr ON cr.team_id = t.id
+          AND cr.created_at >= date_trunc('month', NOW())
+        GROUP BY t.id, t.name, t.slug, t.monthly_budget_usd
+        ORDER BY mtd_spend DESC
+    """))).mappings().all()
+
+    teams_forecast = []
+    for row in team_rows:
+        mtd = float(row["mtd_spend"])
+        projected = round(mtd * burn_factor, 4)
+        limit = float(row["monthly_budget_usd"]) if row["monthly_budget_usd"] is not None else None
+        on_track = None
+        if limit is not None and limit > 0:
+            on_track = projected <= limit
+        teams_forecast.append({
+            "team_id": str(row["id"]),
+            "name": row["name"],
+            "slug": row["slug"],
+            "mtd_spend_usd": mtd,
+            "projected_month_end_usd": projected,
+            "monthly_budget_usd": limit,
+            "on_track": on_track,
+            "overage_usd": round(projected - limit, 4) if limit is not None and projected > limit else None,
+        })
+
+    return {
+        "as_of_date": today.isoformat(),
+        "days_elapsed": days_elapsed,
+        "days_remaining": days_remaining,
+        "days_in_month": days_in_month,
+        "org": {
+            "mtd_spend_usd": org_mtd,
+            "projected_month_end_usd": org_projected,
+            "monthly_budget_usd": org_limit,
+            "on_track": (org_projected <= org_limit) if org_limit else None,
+            "overage_usd": round(org_projected - org_limit, 4) if org_limit and org_projected > org_limit else None,
+        },
+        "teams": teams_forecast,
+    }

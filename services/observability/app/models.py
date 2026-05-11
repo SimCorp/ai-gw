@@ -15,3 +15,14 @@ class GatewayEvent(BaseModel):
     latency_ms: int | None = None
     error: str | None = None
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    # Enhanced telemetry (Tier 2)
+    session_trace_id: str | None = None
+    tool_invocation_count: int = 0
+    retry_count: int = 0
+    request_error_type: str | None = None
+    cache_namespace: str | None = None
+    # Claude Code context headers (Tier 3)
+    repo: str | None = None
+    session_purpose: str | None = None
+    # Lightweight intent classification (no prompt stored)
+    request_intent: str | None = None

@@ -11,7 +11,7 @@ services:
       POSTGRES_USER: aigateway
       POSTGRES_PASSWORD: aigateway
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
@@ -24,17 +24,92 @@ services:
   redis:
     image: redis/redis-stack:7.2.0-v14
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 10
 
+  # ── Redis Sentinel (HA profile) ───────────────────────────────────────────────
+  # Enable with: docker compose --profile sentinel up
+  # Services use REDIS_URL=redis+sentinel://sentinel-1:26379,sentinel-2:26379,sentinel-3:26379/mymaster/0
+  # or REDIS_SENTINEL_HOSTS=sentinel-1:26379,sentinel-2:26379,sentinel-3:26379
+
+  redis-master:
+    image: redis:7.2-alpine
+    profiles: [sentinel]
+    command: redis-server --save 60 1 --loglevel warning
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - redis_master_data:/data
+
+  redis-replica:
+    image: redis:7.2-alpine
+    profiles: [sentinel]
+    command: redis-server --replicaof redis-master 6379 --save "" --loglevel warning
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis-sentinel-1:
+    image: redis:7.2-alpine
+    profiles: [sentinel]
+    command: >
+      sh -c "echo 'sentinel monitor mymaster redis-master 6379 2
+      sentinel down-after-milliseconds mymaster 5000
+      sentinel failover-timeout mymaster 10000
+      sentinel parallel-syncs mymaster 1' > /tmp/sentinel.conf
+      && redis-sentinel /tmp/sentinel.conf"
+    ports:
+      - "127.0.0.1:26379:26379"
+    depends_on:
+      redis-master:
+        condition: service_healthy
+
+  redis-sentinel-2:
+    image: redis:7.2-alpine
+    profiles: [sentinel]
+    command: >
+      sh -c "echo 'sentinel monitor mymaster redis-master 6379 2
+      sentinel down-after-milliseconds mymaster 5000
+      sentinel failover-timeout mymaster 10000
+      sentinel parallel-syncs mymaster 1' > /tmp/sentinel.conf
+      && redis-sentinel /tmp/sentinel.conf"
+    ports:
+      - "127.0.0.1:26380:26379"
+    depends_on:
+      redis-master:
+        condition: service_healthy
+
+  redis-sentinel-3:
+    image: redis:7.2-alpine
+    profiles: [sentinel]
+    command: >
+      sh -c "echo 'sentinel monitor mymaster redis-master 6379 2
+      sentinel down-after-milliseconds mymaster 5000
+      sentinel failover-timeout mymaster 10000
+      sentinel parallel-syncs mymaster 1' > /tmp/sentinel.conf
+      && redis-sentinel /tmp/sentinel.conf"
+    ports:
+      - "127.0.0.1:26381:26379"
+    depends_on:
+      redis-master:
+        condition: service_healthy
+
   dex:
     image: dexidp/dex:v2.40.0
     ports:
-      - "5556:5556"
+      - "127.0.0.1:5556:5556"
     volumes:
       - ./dex/config.yaml:/etc/dex/config.yaml:ro
     command: ["dex", "serve", "/etc/dex/config.yaml"]
@@ -42,7 +117,7 @@ services:
   ollama:
     image: ollama/ollama:latest
     ports:
-      - "11434:11434"
+      - "127.0.0.1:11434:11434"
     volumes:
       - ollama_data:/root/.ollama
     profiles:
@@ -51,13 +126,16 @@ services:
   # ── AI Gateway services ───────────────────────────────────────────────────────
 
   db-migrate:
-    image: postgres:16
+    # Runs Alembic against the admin service's migrations (services/admin/migrations).
+    # Replaces the legacy `psql -f init.sql` path; the baseline migration
+    # (0001_baseline.py) captures the union of init.sql + _EXTRA_DDL.
+    build:
+      context: ../services/admin
     environment:
-      PGPASSWORD: aigateway
-    volumes:
-      - ./postgres/init.sql:/init.sql:ro
-    command: >
-      psql -h postgres -U aigateway -d aigateway -f /init.sql
+      # asyncpg URL because app/db.py creates an async engine at module import time
+      # (env.py rewrites to psycopg2 internally for Alembic's sync operations)
+      DATABASE_URL: "postgresql+asyncpg://aigateway:aigateway@postgres:5432/aigateway"
+    command: ["alembic", "-c", "/app/alembic.ini", "upgrade", "head"]
     depends_on:
       postgres:
         condition: service_healthy
@@ -67,7 +145,7 @@ services:
     build:
       context: ../services/litellm
     ports:
-      - "8003:8003"
+      - "127.0.0.1:8003:8003"
     env_file: ../.env
     environment:
       # LiteLLM uses Prisma which requires postgresql:// not postgresql+asyncpg://
@@ -86,7 +164,7 @@ services:
     build:
       context: ../services/auth
     ports:
-      - "8001:8001"
+      - "127.0.0.1:8001:8001"
     env_file: ../.env
     depends_on:
       db-migrate:
@@ -94,7 +172,8 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8001/health')\" 2>/dev/null || exit 1"]
+      # Uses /ready so Docker only marks the service healthy when Redis + Postgres are reachable
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8001/ready')\" 2>/dev/null || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -104,15 +183,17 @@ services:
     build:
       context: ../services/cache
     ports:
-      - "8002:8002"
+      - "127.0.0.1:8002:8002"
     env_file: ../.env
+    environment:
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-change-me-internal-key}
     depends_on:
       redis:
         condition: service_healthy
       litellm:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8002/health')\" 2>/dev/null || exit 1"]
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8002/ready')\" 2>/dev/null || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -122,8 +203,10 @@ services:
     build:
       context: ../services/observability
     ports:
-      - "8004:8004"
+      - "127.0.0.1:8004:8004"
     env_file: ../.env
+    environment:
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-change-me-internal-key}
     depends_on:
       db-migrate:
         condition: service_completed_successfully
@@ -138,8 +221,10 @@ services:
     build:
       context: ../services/admin
     ports:
-      - "8005:8005"
+      - "127.0.0.1:8005:8005"
     env_file: ../.env
+    environment:
+      ENVIRONMENT: development
     depends_on:
       db-migrate:
         condition: service_completed_successfully
@@ -152,12 +237,65 @@ services:
       retries: 10
       start_period: 30s
 
+  admin-portal:
+    image: node:20-alpine
+    working_dir: /app/apps/admin
+    command: npm run dev
+    volumes:
+      - ..:/app
+    ports:
+      - "127.0.0.1:3001:3001"
+    environment:
+      NEXT_TELEMETRY_DISABLED: "1"
+      NEXT_PUBLIC_ADMIN_API: "http://localhost:8005"
+    depends_on:
+      admin:
+        condition: service_healthy
+
+  portal:
+    image: node:20-alpine
+    working_dir: /app/apps/portal
+    command: npm run dev
+    volumes:
+      - ..:/app
+    ports:
+      - "127.0.0.1:3002:3002"
+    environment:
+      NEXT_TELEMETRY_DISABLED: "1"
+      NEXT_PUBLIC_ADMIN_BASE_URL: "http://localhost:8005"
+      NEXT_PUBLIC_CACHE_BASE_URL: "http://localhost:8002"
+    depends_on:
+      admin:
+        condition: service_healthy
+
+  workflow-worker:
+    build:
+      context: ../services/workflow-worker
+    environment:
+      DATABASE_URL: "postgresql://aigateway:aigateway@postgres:5432/aigateway"
+      REDIS_URL: "redis://redis:6379/0"
+      WORKER_CONCURRENCY: "5"
+      WORKER_ID: "wf-worker-1"
+      # Host-side path for per-run input/output files. Worker writes here at
+      # /worker-runs; agent containers mount the SAME host path at /run.
+      HOST_RUNS_PATH: "/tmp/aigw-runs"
+      AGENT_CONTAINER_NETWORK: "aigateway"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /tmp/aigw-runs:/worker-runs
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
   claude-sandbox:
     build:
       context: ./claude-sandbox
     profiles: [sandbox]
     ports:
-      - "2222:22"
+      - "127.0.0.1:2222:22"
     environment:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       ANTHROPIC_BASE_URL: http://cache:8002/anthropic
@@ -173,6 +311,7 @@ services:
 volumes:
   postgres_data:
   ollama_data:
+  redis_master_data:
 
 networks:
   default:

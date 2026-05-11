@@ -1,7 +1,7 @@
 # SimCorp AI Gateway — Developer Guide
 
 > For ~2000 SimCorp engineers who want to add AI capabilities to their projects.  
-> Updated: 2026-05-08
+> Updated: 2026-05-09
 
 ---
 
@@ -12,6 +12,7 @@
 3. [Integration examples](#3-integration-examples)
 4. [Interactive sandbox (Claude Code via SSH)](#4-interactive-sandbox-claude-code-via-ssh)
 5. [Testing your integration](#5-testing-your-integration)
+5a. [Session context headers and self-service stats](#5a-session-context-headers-and-self-service-stats)
 6. [Streaming](#6-streaming)
 7. [Understanding the cache](#7-understanding-the-cache)
 8. [Rate limits](#8-rate-limits)
@@ -496,9 +497,58 @@ DEV_BYPASS_AUTH=true make test-smoke
 
 ---
 
+## 5a. Session context headers and self-service stats
+
+### Enriching your requests with session context
+
+You can attach optional headers to any inference request to improve analytics attribution and enable richer reporting:
+
+| Header | Description |
+|---|---|
+| `X-Session-Trace-Id` | Your own session identifier (UUID or opaque string). Groups related requests into a logical session. |
+| `X-Repo` | Repository slug (e.g. `simcorp/investment-engine`). Enables per-repo cost and usage breakdowns. |
+| `X-Session-Purpose` | Free-text description of what this session is doing (e.g. `PR review for #1234`). |
+
+No prompt text is stored from these headers — they are used only for grouping and attribution in the analytics pipeline. Sessions are tracked per `X-Session-Trace-Id` and aggregated with a quality score (1–5) based on session signals.
+
+```bash
+curl http://localhost:8002/v1/chat/completions \
+  -H "Authorization: Bearer sk-YOUR-KEY-HERE" \
+  -H "X-Session-Trace-Id: my-session-abc123" \
+  -H "X-Repo: simcorp/investment-engine" \
+  -H "X-Session-Purpose: refactor auth module" \
+  -H "Content-Type: application/json" \
+  -d '{"model": "claude-sonnet-4-6", "messages": [{"role": "user", "content": "..."}]}'
+```
+
+### Self-service stats
+
+Developers can query their own usage and cost metrics without admin access:
+
+```
+GET http://localhost:8005/dev-auth/me/stats
+Authorization: Bearer <portal-session-token>
+```
+
+The response includes:
+
+| Field | Description |
+|---|---|
+| `cost_breakdown` | Spend by model and by repository |
+| `cost_per_pr` | Estimated AI cost attributed to merged pull requests |
+| `cost_per_commit` | Estimated AI cost attributed to commits |
+| `session_quality_score` | Average session quality score (1–5) for the current period |
+| `efficiency_percentile` | Your efficiency rank within your team (e.g. `72` means more efficient than 72% of teammates) |
+| `budget_visibility` | Your team's remaining budget for the period |
+| `optimization_hints` | Suggestions to reduce cost or improve efficiency (e.g. "Switch batch jobs to claude-haiku-4-5") |
+
+---
+
 ## 6. Streaming
 
 All models support streaming via both endpoints. Tokens are flushed as they are generated.
+
+**Token tracking:** Streaming responses now capture token counts for observability. The gateway parses the final SSE chunk from LiteLLM to extract usage data and records it in cost_records. Streaming requests no longer appear with zero tokens in your usage stats or cost reports.
 
 ```python
 from openai import OpenAI
@@ -555,6 +605,7 @@ Check the response headers:
 ```
 x-cache: HIT    — served from cache, no provider call made
 x-cache: MISS   — went to the provider, response now cached
+x-cache: BYPASS — cache explicitly skipped via bypass header
 ```
 
 ### When caching helps
@@ -565,12 +616,25 @@ x-cache: MISS   — went to the provider, response now cached
 
 ### When to bypass the cache
 
-If you need a fresh response — for example, when the underlying data has changed but the prompt text has not — add `Cache-Control: no-cache` to your request:
+If you need a fresh response — for example, when the underlying data has changed but the prompt text has not — you can bypass the cache per request using either of two headers:
+
+- `Cache-Control: no-cache` — standard HTTP cache bypass
+- `x-cache: bypass` — gateway-specific shorthand; identical effect
+
+The response will carry `x-cache: BYPASS` (instead of `MISS`) to confirm the bypass was applied.
 
 ```bash
+# Option 1 — Cache-Control
 curl http://localhost:8002/v1/chat/completions \
   -H "Authorization: Bearer sk-YOUR-KEY-HERE" \
   -H "Cache-Control: no-cache" \
+  -H "Content-Type: application/json" \
+  -d '{"model": "claude-sonnet-4-6", "messages": [{"role": "user", "content": "What is today'\''s date?"}]}'
+
+# Option 2 — x-cache: bypass
+curl http://localhost:8002/v1/chat/completions \
+  -H "Authorization: Bearer sk-YOUR-KEY-HERE" \
+  -H "x-cache: bypass" \
   -H "Content-Type: application/json" \
   -d '{"model": "claude-sonnet-4-6", "messages": [{"role": "user", "content": "What is today'\''s date?"}]}'
 ```
@@ -579,10 +643,11 @@ curl http://localhost:8002/v1/chat/completions \
 from openai import OpenAI
 import httpx
 
+# Using x-cache: bypass
 client = OpenAI(
     api_key="sk-YOUR-KEY-HERE",
     base_url="http://localhost:8002/v1",
-    http_client=httpx.Client(headers={"Cache-Control": "no-cache"}),
+    http_client=httpx.Client(headers={"x-cache": "bypass"}),
 )
 ```
 
@@ -691,9 +756,9 @@ A `400 model not found` error always means the model ID string is wrong.
 
 Gateway keys must start with `sk-` (lowercase). If you accidentally paste a raw Anthropic or OpenAI key, authentication will fail with `401`. Keys are created at http://localhost:3002/portal/keys.
 
-### 5. Forgetting Cache-Control when data changes
+### 5. Forgetting to bypass the cache when data changes
 
-If your prompt text stays the same but the underlying data changes (e.g. you updated a document and are asking the model to summarise it again), you will get the stale cached response. Always pass `Cache-Control: no-cache` when freshness matters.
+If your prompt text stays the same but the underlying data changes (e.g. you updated a document and are asking the model to summarise it again), you will get the stale cached response. Always pass `Cache-Control: no-cache` or `x-cache: bypass` when freshness matters.
 
 ---
 

@@ -13,3 +13,10 @@ venv/
 # MemPalace per-project files (issue #185)
 mempalace.yaml
 entities.json
+
+# Frontend
+node_modules/
+.next/
+.turbo/
+dist/
+storybook-static/

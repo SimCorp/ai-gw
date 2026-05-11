@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
-const BASE = 'http://localhost:8005';
+const BASE = process.env.NEXT_PUBLIC_ADMIN_API ?? 'http://localhost:8005';
 
 interface RequestRow {
   id: string;

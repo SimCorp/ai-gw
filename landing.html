@@ -302,28 +302,30 @@
     </div>
   </a>
 
+  <a class="card" href="http://localhost:8002/docs" target="_blank" data-accent="teal">
+    <div class="card__arrow">↗</div>
+    <div class="card__icon" style="background: rgba(20,184,166,0.15);">🗄️</div>
+    <div>
+      <div class="card__title">Cache service</div>
+      <div class="card__desc">Semantic + exact cache proxy. FastAPI docs with cache hit, invalidation, and stats endpoints.</div>
+      <div class="card__url">localhost:8002/docs</div>
+    </div>
+  </a>
+
+  <a class="card" href="http://localhost:8004/docs" target="_blank" data-accent="blue">
+    <div class="card__arrow">↗</div>
+    <div class="card__icon" style="background: rgba(59,130,246,0.15);">📡</div>
+    <div>
+      <div class="card__title">Observability</div>
+      <div class="card__desc">Async event ingestion for request logs, token usage, and latency telemetry. FastAPI docs.</div>
+      <div class="card__url">localhost:8004/docs</div>
+    </div>
+  </a>
+
 </div>
 
 <h2>Infrastructure</h2>
 <div class="grid grid--services">
-
-  <div class="scard">
-    <div class="scard__dot"></div>
-    <div class="scard__body">
-      <div class="scard__name">Cache service</div>
-      <div class="scard__desc">Semantic + exact cache proxy</div>
-      <div class="scard__port">localhost:8002</div>
-    </div>
-  </div>
-
-  <div class="scard">
-    <div class="scard__dot"></div>
-    <div class="scard__body">
-      <div class="scard__name">Observability</div>
-      <div class="scard__desc">Async event ingestion</div>
-      <div class="scard__port">localhost:8004</div>
-    </div>
-  </div>
 
   <div class="scard">
     <div class="scard__dot"></div>
@@ -356,7 +358,7 @@
     <div class="scard__dot"></div>
     <div class="scard__body">
       <div class="scard__name">Ollama</div>
-      <div class="scard__desc">Local model serving</div>
+      <div class="scard__desc">Local model serving (opt-in)</div>
       <div class="scard__port">localhost:11434</div>
     </div>
   </div>

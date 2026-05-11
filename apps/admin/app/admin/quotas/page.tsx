@@ -27,7 +27,7 @@ interface BudgetStatus {
   teams_over_threshold?: number;
 }
 
-const BASE = 'http://localhost:8005';
+const BASE = process.env.NEXT_PUBLIC_ADMIN_API ?? 'http://localhost:8005';
 
 function fmtUsd(v: number | null | undefined) {
   if (v == null) return '—';

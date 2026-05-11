@@ -12,6 +12,7 @@ const NAV = [
       { href: "/portal",            label: "Home",        icon: <HomeIcon /> },
       { href: "/portal/playground", label: "Playground",  icon: <PlayIcon />, kbd: "⌘P" },
       { href: "/portal/agents",     label: "Agents",      icon: <AgentIcon /> },
+      { href: "/portal/workflows",  label: "Workflows",   icon: <WorkflowIcon /> },
       { href: "/portal/keys",       label: "API keys",    icon: <KeyIcon /> },
       { href: "/portal/models",     label: "Models",      icon: <CubeIcon /> },
       { href: "/portal/prompts",    label: "Prompts",     icon: <PromptIcon /> },
@@ -301,6 +302,16 @@ function AgentIcon() {
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
       <rect x="3" y="5" width="10" height="8" rx="2"/>
       <path d="M8 2v3M5.5 9h0M10.5 9h0"/>
+    </svg>
+  );
+}
+function WorkflowIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <circle cx="3" cy="8" r="2"/>
+      <circle cx="13" cy="4" r="2"/>
+      <circle cx="13" cy="12" r="2"/>
+      <path d="M5 8h3l2-4M5 8h3l2 4"/>
     </svg>
   );
 }

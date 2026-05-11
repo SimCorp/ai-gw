@@ -1,0 +1,17 @@
+{
+  "slug": "echo-agent",
+  "name": "Echo Agent",
+  "description": "Returns its inputs verbatim under an `echoed` key. Use for smoke tests and as a workflow-designer canvas template.",
+  "image": "ai-gateway-echo-agent:dev",
+  "category": "utility",
+  "managed": true,
+  "inputs_schema": {"type": "object"},
+  "outputs_schema": {
+    "type": "object",
+    "properties": {
+      "echoed": {"type": "object"},
+      "agent": {"const": "echo-agent"}
+    },
+    "required": ["echoed", "agent"]
+  }
+}

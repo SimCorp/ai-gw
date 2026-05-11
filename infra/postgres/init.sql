@@ -128,6 +128,78 @@ ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS monthly_budget_usd NUMERIC(12,4);
 ALTER TABLE cost_records ADD COLUMN IF NOT EXISTS api_key_id UUID REFERENCES api_keys(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS idx_cost_records_api_key_id ON cost_records(api_key_id, created_at DESC);
 
+-- Developer attribution on cost records
+ALTER TABLE cost_records ADD COLUMN IF NOT EXISTS developer_id UUID REFERENCES developers(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_cost_records_developer_id ON cost_records(developer_id, created_at DESC);
+
+-- Enhanced telemetry columns
+ALTER TABLE cost_records ADD COLUMN IF NOT EXISTS session_trace_id TEXT;
+ALTER TABLE cost_records ADD COLUMN IF NOT EXISTS tool_invocation_count INT NOT NULL DEFAULT 0;
+ALTER TABLE cost_records ADD COLUMN IF NOT EXISTS retry_count INT NOT NULL DEFAULT 0;
+ALTER TABLE cost_records ADD COLUMN IF NOT EXISTS request_error_type TEXT;
+ALTER TABLE cost_records ADD COLUMN IF NOT EXISTS cache_namespace TEXT;
+ALTER TABLE cost_records ADD COLUMN IF NOT EXISTS repo TEXT;
+ALTER TABLE cost_records ADD COLUMN IF NOT EXISTS session_purpose TEXT;
+
+-- Daily rollup for developer productivity metrics
+CREATE TABLE IF NOT EXISTS developer_activity_log (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    developer_id UUID NOT NULL REFERENCES developers(id) ON DELETE CASCADE,
+    date DATE NOT NULL,
+    request_count INT NOT NULL DEFAULT 0,
+    tokens_input BIGINT NOT NULL DEFAULT 0,
+    tokens_output BIGINT NOT NULL DEFAULT 0,
+    cost_usd NUMERIC(12,6) NOT NULL DEFAULT 0,
+    cache_hits INT NOT NULL DEFAULT 0,
+    tool_invocations INT NOT NULL DEFAULT 0,
+    error_count INT NOT NULL DEFAULT 0,
+    PRIMARY KEY (developer_id, date)
+);
+CREATE INDEX IF NOT EXISTS idx_dev_activity_developer_date ON developer_activity_log(developer_id, date DESC);
+CREATE INDEX IF NOT EXISTS idx_dev_activity_date ON developer_activity_log(date DESC);
+
+-- Session-level aggregation (DX "Agent Experience" framework)
+CREATE TABLE IF NOT EXISTS sessions (
+    session_trace_id TEXT PRIMARY KEY,
+    developer_id UUID REFERENCES developers(id) ON DELETE SET NULL,
+    team_id TEXT NOT NULL,
+    first_request_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_request_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    turn_count INT NOT NULL DEFAULT 1,
+    total_tokens BIGINT NOT NULL DEFAULT 0,
+    total_cost NUMERIC(12,8) NOT NULL DEFAULT 0,
+    retry_count INT NOT NULL DEFAULT 0,
+    error_count INT NOT NULL DEFAULT 0,
+    tool_invocations INT NOT NULL DEFAULT 0,
+    session_purpose TEXT,
+    repo TEXT,
+    primary_model TEXT,
+    quality_score INT,           -- 1-5 derived score
+    avg_inter_request_s FLOAT,   -- average seconds between turns
+    produced_commit BOOLEAN,     -- updated by GitHub webhook correlation
+    dominant_intent TEXT,        -- most frequent classified intent in session
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_sessions_developer ON sessions(developer_id, first_request_at DESC);
+CREATE INDEX IF NOT EXISTS idx_sessions_team ON sessions(team_id, first_request_at DESC);
+CREATE INDEX IF NOT EXISTS idx_sessions_first_request ON sessions(first_request_at DESC);
+
+-- GitHub output events (Tier 3)
+CREATE TABLE IF NOT EXISTS developer_output_events (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    developer_id UUID REFERENCES developers(id) ON DELETE SET NULL,
+    repo TEXT NOT NULL,
+    event_type TEXT NOT NULL,  -- push | pr_opened | pr_merged | review
+    github_user TEXT,
+    commit_count INT NOT NULL DEFAULT 0,
+    lines_added INT NOT NULL DEFAULT 0,
+    lines_removed INT NOT NULL DEFAULT 0,
+    pr_number INT,
+    occurred_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    raw JSONB
+);
+CREATE INDEX IF NOT EXISTS idx_dev_output_developer ON developer_output_events(developer_id, occurred_at DESC);
+
 -- Link team_members to developers
 ALTER TABLE team_members ADD COLUMN IF NOT EXISTS developer_id UUID REFERENCES developers(id) ON DELETE CASCADE;
 CREATE INDEX IF NOT EXISTS idx_team_members_developer_id ON team_members(developer_id);
@@ -162,3 +234,105 @@ INSERT INTO model_registry (name, model_id, provider) VALUES
     ('Gemini 1.5 Pro',      'gemini-1.5-pro',        'google'),
     ('Gemini 1.5 Flash',    'gemini-1.5-flash',      'google')
 ON CONFLICT (model_id) DO NOTHING;
+
+-- MCP Server Registry
+CREATE TABLE IF NOT EXISTS mcp_servers (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    description TEXT,
+    url TEXT NOT NULL,
+    auth_type TEXT NOT NULL DEFAULT 'none', -- none | bearer | api_key
+    auth_header TEXT,                        -- header name when auth_type = api_key
+    auth_secret TEXT,                        -- stored secret (bearer token or api key value)
+    status TEXT NOT NULL DEFAULT 'pending',  -- pending | active | error | disabled
+    last_ping_at TIMESTAMPTZ,
+    last_ping_ms INT,
+    last_error TEXT,
+    tool_count INT NOT NULL DEFAULT 0,
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (url)
+);
+
+CREATE TABLE IF NOT EXISTS mcp_tools (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    server_id UUID NOT NULL REFERENCES mcp_servers(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    description TEXT,
+    input_schema JSONB NOT NULL DEFAULT '{}',
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (server_id, name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_mcp_tools_server_id ON mcp_tools(server_id);
+
+CREATE TABLE IF NOT EXISTS mcp_server_access (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    server_id UUID NOT NULL REFERENCES mcp_servers(id) ON DELETE CASCADE,
+    team_id UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+    granted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (server_id, team_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_mcp_access_team ON mcp_server_access(team_id);
+
+-- Plugin Registry
+CREATE TABLE IF NOT EXISTS plugins (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    slug TEXT NOT NULL UNIQUE,
+    description TEXT,
+    version TEXT NOT NULL DEFAULT '0.1.0',
+    author TEXT NOT NULL DEFAULT 'community',
+    category TEXT NOT NULL DEFAULT 'tool',   -- tool | integration | data | security | workflow
+    scopes TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+    homepage_url TEXT,
+    icon_url TEXT,
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS plugin_team_overrides (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    plugin_id UUID NOT NULL REFERENCES plugins(id) ON DELETE CASCADE,
+    team_id UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (plugin_id, team_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_plugin_team_overrides_team ON plugin_team_overrides(team_id);
+
+INSERT INTO plugins (name, slug, description, version, author, category, scopes) VALUES
+    ('Web Search',       'web-search',       'Search the web using Brave or SerpAPI',                   '1.2.0', 'first-party', 'tool',        ARRAY['internet']),
+    ('Code Interpreter', 'code-interpreter', 'Execute Python code in a sandboxed environment',          '2.0.1', 'first-party', 'tool',        ARRAY['compute']),
+    ('File Reader',      'file-reader',      'Parse and extract text from PDF, DOCX, and CSV files',    '1.0.3', 'first-party', 'data',        ARRAY['files']),
+    ('GitHub',           'github',           'Read repos, issues, PRs and create comments via GitHub',  '1.5.2', 'first-party', 'integration', ARRAY['github']),
+    ('Slack',            'slack',            'Send messages and read channel history',                  '1.1.0', 'first-party', 'integration', ARRAY['slack']),
+    ('SQL Query',        'sql-query',        'Run read-only SQL queries against configured datasources','0.9.0', 'first-party', 'data',        ARRAY['database']),
+    ('PII Detector',     'pii-detector',     'Scan text for personally identifiable information',       '1.0.0', 'first-party', 'security',    ARRAY[]::TEXT[]),
+    ('Jira',             'jira',             'Create and update Jira issues from agent workflows',      '1.0.0', 'community',   'integration', ARRAY['jira']),
+    ('Confluence',       'confluence',       'Read Confluence pages and spaces',                        '1.0.0', 'community',   'integration', ARRAY['confluence'])
+ON CONFLICT (slug) DO NOTHING;
+
+-- ============================================================
+-- Admin portal users (separate from developer portal users)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS admin_users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email VARCHAR(255) NOT NULL UNIQUE,
+    display_name VARCHAR(255),
+    password_hash TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'admin' CHECK (role IN ('superadmin', 'admin', 'viewer')),
+    last_login_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_admin_users_email ON admin_users(email);
+
+-- Default admin account is seeded at runtime by the admin service (dev/test/ci only).
+-- In production, provision admin accounts using the scripts/create_admin.py script.

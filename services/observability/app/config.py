@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     azure_service_bus_topic: str = "gateway-events"
     azure_service_bus_subscription: str = "gateway-workers"
     appinsights_connection_string: str = ""
+    internal_api_key: str = "change-me-internal-key"
 
 
 settings = Settings()

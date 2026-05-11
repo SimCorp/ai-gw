@@ -7,7 +7,7 @@ import { LoadingState, ErrorState } from '../_components/PageStates';
 
 const RANGES = ['1h', '24h', '7d', '30d', '90d'];
 
-const BASE = 'http://localhost:8005';
+const BASE = process.env.NEXT_PUBLIC_ADMIN_API ?? 'http://localhost:8005';
 
 // --- API types ---
 

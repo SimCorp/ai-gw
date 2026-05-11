@@ -1,14 +1,56 @@
 """Provider API key management — store keys in DB, push to LiteLLM at runtime."""
+import base64
 import os
 from typing import Any
 
 import httpx
+from cryptography.fernet import Fernet, InvalidToken
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.db import get_session
+
+
+_LEGACY_SALT = b"ai-gw-provider-keys"
+_CIPHERTEXT_PREFIX = b"gAA"  # Fernet tokens start with this when base64-decoded
+
+
+def _make_fernet(salt: bytes) -> Fernet:
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=salt,
+        iterations=390_000,
+    )
+    key = base64.urlsafe_b64encode(kdf.derive(settings.secret_key.encode()))
+    return Fernet(key)
+
+
+def _encrypt_value(plaintext: str) -> str:
+    # Store as "v2:<b64-salt>:<fernet-ciphertext>" so each value has a unique salt.
+    import secrets as _secrets
+    salt = _secrets.token_bytes(16)
+    token = _make_fernet(salt).encrypt(plaintext.encode())
+    salt_b64 = base64.urlsafe_b64encode(salt).decode()
+    return f"v2:{salt_b64}:{token.decode()}"
+
+
+def _decrypt_value(stored: str) -> str:
+    if stored.startswith("v2:"):
+        _, salt_b64, ciphertext = stored.split(":", 2)
+        salt = base64.urlsafe_b64decode(salt_b64)
+        return _make_fernet(salt).decrypt(ciphertext.encode()).decode()
+    # Legacy: try with the old fixed salt
+    try:
+        return _make_fernet(_LEGACY_SALT).decrypt(stored.encode()).decode()
+    except (InvalidToken, Exception):
+        import logging
+        logging.getLogger(__name__).warning("Failed to decrypt provider key — value may be corrupted")
+        raise InvalidToken("Could not decrypt stored provider API key")
 
 router = APIRouter(tags=["settings"])
 # Provider definitions — env_var is what LiteLLM reads
@@ -90,7 +132,7 @@ async def _ensure_table(session: AsyncSession) -> None:
 async def _get_stored_keys(session: AsyncSession) -> dict[str, str]:
     await _ensure_table(session)
     rows = (await session.execute(text("SELECT env_var, key_value FROM provider_keys"))).all()
-    return {r[0]: r[1] for r in rows}
+    return {r[0]: _decrypt_value(r[1]) for r in rows}
 
 
 async def _push_to_litellm(env_var: str, key_value: str) -> bool:
@@ -192,7 +234,7 @@ async def save_provider_keys(
                 VALUES (:env_var, :val, NOW())
                 ON CONFLICT (env_var) DO UPDATE SET key_value = :val, updated_at = NOW()
             """),
-            {"env_var": env_var, "val": raw},
+            {"env_var": env_var, "val": _encrypt_value(raw)},
         )
         os.environ[env_var] = raw
 
@@ -201,13 +243,20 @@ async def save_provider_keys(
             extra_var = extra["env_var"]
             extra_val = (body.get(extra_var) or "").strip()
             if extra_val:
+                if extra_var.endswith(("_BASE", "_URL", "_ENDPOINT")):
+                    from app.routers.mcp import _validate_mcp_url
+                    from fastapi import HTTPException as _HTTPException
+                    try:
+                        _validate_mcp_url(extra_val)
+                    except _HTTPException as exc:
+                        raise _HTTPException(status_code=422, detail=f"{extra_var}: {exc.detail}") from exc
                 await session.execute(
                     text("""
                         INSERT INTO provider_keys (env_var, key_value, updated_at)
                         VALUES (:env_var, :val, NOW())
                         ON CONFLICT (env_var) DO UPDATE SET key_value = :val, updated_at = NOW()
                     """),
-                    {"env_var": extra_var, "val": extra_val},
+                    {"env_var": extra_var, "val": _encrypt_value(extra_val)},
                 )
                 os.environ[extra_var] = extra_val
 

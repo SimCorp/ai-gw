@@ -2,7 +2,7 @@
 
 **Audience:** Platform engineers and on-call responders  
 **System:** Enterprise AI gateway serving ~2,000 SimCorp engineers  
-**Last updated:** 2026-05-06
+**Last updated:** 2026-05-09
 
 ---
 
@@ -56,7 +56,10 @@ admin         :8005  — Team management, API keys, provider key config, system 
 
 - **Authentication:** caller sends `Authorization: Bearer sk-<key>`. Auth service hashes the key, looks it up in `api_keys`, loads the team's policy from `policies`, checks the Redis rate limit counter at `ratelimit:{team_id}:{model}`, then forwards with `X-Litellm-Master-Key` injected.
 - **Caching:** cache service computes a semantic embedding of the request and checks Redis for a similar past response. Hits skip litellm entirely. Misses are forwarded and the response is stored.
-- **Observability:** after each completion, a structured event is posted to `:8004/events`. The service writes a `cost_records` row and, for notable events, an `audit_log` row.
+- **Observability:** after each completion, a structured event is posted to `:8004/events`. The service writes a `cost_records` row, updates (or creates) a `sessions` row keyed on `session_trace_id`, and for notable events writes an `audit_log` row. Streaming responses include token counts extracted from the final SSE chunk, so cost_records entries are accurate for both streaming and non-streaming requests.
+- **Session tracking:** the `sessions` table aggregates per-session signals (model used, repos, intent classifications, quality score 1–5) for the developer productivity reports. Sessions are keyed by the `X-Session-Trace-Id` request header; requests without this header are bucketed under an anonymous session for that API key.
+- **Budget alert loop:** the admin service runs a background task that periodically checks each team's MTD spend against its budget threshold. When a threshold is crossed, an HTTP POST is fired to the team's configured Slack-compatible webhook URL (stored in `org_notifications`). A Redis dedup key (`budget_alert:{team_id}:{window}`) prevents duplicate notifications within the same alert window.
+- **GitHub webhook background task:** `POST /webhooks/github` is handled by a background task that correlates GitHub push and PR events with developer sessions by matching commit authors to developer records. Requires the `GITHUB_WEBHOOK_SECRET` env var for HMAC signature validation.
 - **Provider keys:** stored in the `provider_keys` table. On save, the admin portal calls `PATCH /model/update` on LiteLLM to inject the key at runtime — no restart required.
 
 ---
@@ -508,6 +511,7 @@ docker compose -f infra/docker-compose.yml exec postgres \
 |-------|--------------|-------------------|
 | `cost_records` | One row per AI completion | Archive or delete rows older than 90 days |
 | `audit_log` | One row per notable event | Archive or delete rows older than 90 days |
+| `sessions` | One row per session_trace_id; updated on each request in the session | Archive or delete rows older than 90 days |
 | `api_keys` | Accumulates revoked keys | Safe to delete rows where `revoked_at < NOW() - INTERVAL '1 year'` |
 | `developers` | Self-service portal users (email, PBKDF2 password hash, linked team_id) | Retain; remove only on explicit account deletion |
 
@@ -827,6 +831,7 @@ All services read from the `.env` file at the project root via `env_file: ../.en
 | `CACHE_URL` | `http://cache:8002` | Cache service URL (for health checks) |
 | `LITELLM_URL` | `http://litellm:8003` | LiteLLM URL (for health checks and key push) |
 | `OBSERVABILITY_URL` | `http://observability:8004` | Observability service URL (for health checks) |
+| `GITHUB_WEBHOOK_SECRET` | _(empty)_ | HMAC secret for validating `X-Hub-Signature-256` on `POST /webhooks/github`. Set to match the secret configured in your GitHub repository or organisation webhook settings. Required for GitHub commit-to-session attribution. |
 
 ### Provider API Keys (stored in DB, also readable from env)
 

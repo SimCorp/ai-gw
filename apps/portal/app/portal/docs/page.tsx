@@ -14,12 +14,20 @@ const TOC = [
   { id: "next",      label: "Next steps" },
 ];
 
+// Local dev base URL (goes through cache → auth → litellm)
+const LOCAL_BASE = "http://localhost:8002/v1";
+const PROD_BASE  = "https://aigw.simcorp.internal/v1";
+
 export default function DocsPage() {
   const [sdkLang, setSdkLang] = useState(0);
+  const [env, setEnv] = useState<"local" | "prod">("local");
   const [activeSection, setActiveSection] = useState("install");
   const [copied, setCopied] = useState<string | null>(null);
 
-  const handleCopy = (id: string) => {
+  const baseUrl = env === "local" ? LOCAL_BASE : PROD_BASE;
+
+  const copy = (id: string, text: string) => {
+    navigator.clipboard.writeText(text).catch(() => {});
     setCopied(id);
     setTimeout(() => setCopied(null), 2000);
   };
@@ -40,12 +48,15 @@ export default function DocsPage() {
         .doc p { margin:0 0 12px; }
         .doc ul { padding-left:20px; margin:0 0 14px; }
         .doc code:not(.code-block code) { background:var(--surface-soft); padding:1px 6px; border-radius:3px; font-size:12.5px; font-family:var(--font-mono); }
+        .env-switch { display:inline-flex; border:1px solid var(--rule); border-radius:6px; overflow:hidden; margin-bottom:20px; }
+        .env-switch button { padding:5px 14px; font-size:12px; font-weight:500; background:none; border:0; cursor:pointer; color:var(--fg-2); }
+        .env-switch button.is-active { background:var(--sc-blue); color:#fff; }
       `}</style>
 
       <div className="phero">
         <div>
           <h1>Quickstart</h1>
-          <p>From zero to first call in five minutes. All examples use the OpenAI-compatible base URL.</p>
+          <p>From zero to first call in five minutes. All examples use the OpenAI-compatible endpoint.</p>
         </div>
       </div>
 
@@ -65,10 +76,16 @@ export default function DocsPage() {
         </aside>
 
         <article className="doc">
+          {/* Environment toggle */}
+          <div className="env-switch">
+            <button className={env === "local" ? "is-active" : ""} onClick={() => setEnv("local")}>Local dev</button>
+            <button className={env === "prod" ? "is-active" : ""} onClick={() => setEnv("prod")}>Production</button>
+          </div>
+
           <h2 id="install">1. Install the SDK</h2>
           <p>
-            The gateway speaks the OpenAI protocol, so any OpenAI client works. We publish a thin wrapper
-            to the internal package registry that handles auth and retries.
+            The gateway is OpenAI-protocol compatible — use the official OpenAI SDK and point it at the gateway base URL.
+            No custom package required.
           </p>
           <div className="tabs-pills">
             {["Python", "TypeScript", "Go"].map((l, i) => (
@@ -76,12 +93,10 @@ export default function DocsPage() {
             ))}
           </div>
           <div className="code-block">
-            {sdkLang === 0 && (
-              <><span className="c"># Internal package registry — already configured in your dev image</span>{"\npip install simcorp-aigw"}</>
-            )}
-            {sdkLang === 1 && "npm install simcorp-aigw"}
-            {sdkLang === 2 && "go get simcorp.internal/aigw"}
-            <button className="copy-btn" onClick={() => handleCopy("install")}>
+            {sdkLang === 0 && "pip install openai"}
+            {sdkLang === 1 && "npm install openai"}
+            {sdkLang === 2 && "go get github.com/openai/openai-go"}
+            <button className="copy-btn" onClick={() => copy("install", ["pip install openai", "npm install openai", "go get github.com/openai/openai-go"][sdkLang])}>
               {copied === "install" ? "Copied!" : "Copy"}
             </button>
           </div>
@@ -89,17 +104,17 @@ export default function DocsPage() {
           <h2 id="auth">2. Get an API key</h2>
           <p>
             Head to <Link href="/portal/keys" style={{ color: "var(--sc-blue)" }}>API keys</Link> and
-            click <strong>+ Issue key</strong>. Give it a name like <code>my-laptop</code> and pick
-            the <strong>dev</strong> scope while you&apos;re prototyping.
+            click <strong>+ Issue key</strong>. Give it a name like <code>my-laptop</code>.
+            Copy the key immediately — it is only shown once.
           </p>
           <div className="callout">
-            <strong>Don&apos;t paste keys into code.</strong> Export them to your shell, or use Azure Key Vault refs
-            in deployed services. Keys are revoked within 30s if you ever leak one.
+            <strong>Never paste keys into code.</strong> Use environment variables or a secrets manager.
+            Keys are revocable from the portal immediately.
           </div>
           <div className="code-block">
             {"export AIGW_KEY="}
-            <span className="s">&quot;sk_test_...&quot;</span>
-            <button className="copy-btn" onClick={() => handleCopy("auth")}>
+            <span className="s">&quot;sk-…&quot;</span>
+            <button className="copy-btn" onClick={() => copy("auth", 'export AIGW_KEY="sk-…"')}>
               {copied === "auth" ? "Copied!" : "Copy"}
             </button>
           </div>
@@ -107,71 +122,136 @@ export default function DocsPage() {
           <h2 id="first">3. Your first call</h2>
           <p>
             Same shape as OpenAI — just a different <code>base_url</code>.
+            Current base URL: <code style={{ fontSize: 11 }}>{baseUrl}</code>.
             Pick any model from the <Link href="/portal/models" style={{ color: "var(--sc-blue)" }}>catalog</Link>.
           </p>
-          <div className="code-block">
-            <pre style={{ margin: 0, fontFamily: "var(--font-mono)", fontSize: 13, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{`from simcorp_aigw import Client
+          <div className="tabs-pills">
+            {["Python", "TypeScript"].map((l, i) => (
+              <button key={l} className={sdkLang === i ? "is-active" : ""} onClick={() => setSdkLang(i)}>{l}</button>
+            ))}
+          </div>
+          {sdkLang === 0 && (
+            <div className="code-block">
+              <pre style={{ margin: 0, fontFamily: "var(--font-mono)", fontSize: 13, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{`import os
+from openai import OpenAI
 
-client = Client()  # reads AIGW_KEY from env
+client = OpenAI(
+    base_url="${baseUrl}",
+    api_key=os.environ["AIGW_KEY"],
+)
 
 resp = client.chat.completions.create(
-    model="claude-sonnet-4.5",
+    model="claude-sonnet-4-6",
     messages=[
-        {"role": "system", "content": "You're concise."},
-        {"role": "user", "content": "What's the cap rate on a 4.5% yield, 8x EBITDA?"},
+        {"role": "system", "content": "You are concise."},
+        {"role": "user", "content": "What is a DORA metric?"},
     ],
 )
 print(resp.choices[0].message.content)`}</pre>
-            <button className="copy-btn" onClick={() => handleCopy("first")}>
-              {copied === "first" ? "Copied!" : "Copy"}
-            </button>
-          </div>
+              <button className="copy-btn" onClick={() => copy("first-py", `import os\nfrom openai import OpenAI\n\nclient = OpenAI(\n    base_url="${baseUrl}",\n    api_key=os.environ["AIGW_KEY"],\n)\n\nresp = client.chat.completions.create(\n    model="claude-sonnet-4-6",\n    messages=[{"role": "user", "content": "What is a DORA metric?"}],\n)\nprint(resp.choices[0].message.content)`)}>
+                {copied === "first-py" ? "Copied!" : "Copy"}
+              </button>
+            </div>
+          )}
+          {sdkLang === 1 && (
+            <div className="code-block">
+              <pre style={{ margin: 0, fontFamily: "var(--font-mono)", fontSize: 13, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{`import OpenAI from "openai";
+
+const client = new OpenAI({
+  baseURL: "${baseUrl}",
+  apiKey: process.env.AIGW_KEY,
+});
+
+const resp = await client.chat.completions.create({
+  model: "claude-sonnet-4-6",
+  messages: [{ role: "user", content: "What is a DORA metric?" }],
+});
+console.log(resp.choices[0].message.content);`}</pre>
+              <button className="copy-btn" onClick={() => copy("first-ts", `import OpenAI from "openai";\n\nconst client = new OpenAI({\n  baseURL: "${baseUrl}",\n  apiKey: process.env.AIGW_KEY,\n});\n\nconst resp = await client.chat.completions.create({\n  model: "claude-sonnet-4-6",\n  messages: [{ role: "user", content: "What is a DORA metric?" }],\n});\nconsole.log(resp.choices[0].message.content);`)}>
+                {copied === "first-ts" ? "Copied!" : "Copy"}
+              </button>
+            </div>
+          )}
 
           <h2 id="streaming">4. Streaming</h2>
           <p>Set <code>stream=True</code> for token-by-token output. The gateway proxies SSE without buffering.</p>
           <div className="code-block">
-            {"stream = client.chat.completions."}<span className="f">create</span>{"(\n"}
-            {"    model="}<span className="s">&quot;claude-sonnet-4.5&quot;</span>{",\n"}
-            {"    messages=[...],\n    stream="}<span className="k">True</span>{",\n)\n"}
-            <span className="k">for</span>{" chunk "}<span className="k">in</span>{" stream:\n"}
-            {"    "}<span className="k">if</span>{" chunk.choices["}<span className="v">0</span>{"].delta.content:\n"}
-            {"        "}<span className="f">print</span>{"(chunk.choices["}<span className="v">0</span>{"].delta.content, end="}<span className="s">&quot;&quot;</span>{")"}
-            <button className="copy-btn" onClick={() => handleCopy("streaming")}>
+            <pre style={{ margin: 0, fontFamily: "var(--font-mono)", fontSize: 13, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{`stream = client.chat.completions.create(
+    model="claude-sonnet-4-6",
+    messages=[{"role": "user", "content": "Explain CRDT in one paragraph"}],
+    stream=True,
+)
+for chunk in stream:
+    if chunk.choices[0].delta.content:
+        print(chunk.choices[0].delta.content, end="")`}</pre>
+            <button className="copy-btn" onClick={() => copy("streaming", "")}>
               {copied === "streaming" ? "Copied!" : "Copy"}
             </button>
           </div>
 
           <h2 id="tools">5. Tool use</h2>
-          <p>Pass standard OpenAI <code>tools</code> definitions. The gateway fans out to the right provider&apos;s tool-call format and normalises the response.</p>
+          <p>Pass standard OpenAI <code>tools</code> definitions. The gateway normalises tool-call format across providers.</p>
           <div className="code-block">
-            {"tools = [{\n    "}<span className="s">&quot;type&quot;</span>{": "}<span className="s">&quot;function&quot;</span>{",\n    "}<span className="s">&quot;function&quot;</span>{": {\n        "}<span className="s">&quot;name&quot;</span>{": "}<span className="s">&quot;get_position&quot;</span>{",\n    },\n}]\nresp = client.chat.completions."}<span className="f">create</span>{"(\n    model="}<span className="s">&quot;claude-sonnet-4.5&quot;</span>{",\n    messages=messages,\n    tools=tools,\n)"}
-            <button className="copy-btn" onClick={() => handleCopy("tools")}>
+            <pre style={{ margin: 0, fontFamily: "var(--font-mono)", fontSize: 13, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{`tools = [{
+    "type": "function",
+    "function": {
+        "name": "get_repo_stats",
+        "description": "Return commit count for a repo",
+        "parameters": {
+            "type": "object",
+            "properties": {"repo": {"type": "string"}},
+            "required": ["repo"],
+        },
+    },
+}]
+resp = client.chat.completions.create(
+    model="claude-sonnet-4-6",
+    messages=messages,
+    tools=tools,
+)`}</pre>
+            <button className="copy-btn" onClick={() => copy("tools", "")}>
               {copied === "tools" ? "Copied!" : "Copy"}
             </button>
           </div>
 
           <h2 id="cache">6. Cache hints</h2>
-          <p>The semantic cache is on by default. To bypass it for a single call, set the <code>x-cache</code> header:</p>
+          <p>
+            The semantic cache is on by default. Repeated or semantically-similar prompts return in milliseconds.
+            To bypass it for a single call, set the <code>x-cache</code> header:
+          </p>
           <div className="code-block">
-            {"resp = client.chat.completions."}<span className="f">create</span>{"(\n    model="}<span className="s">&quot;claude-sonnet-4.5&quot;</span>{",\n    messages=[...],\n    extra_headers={"}<span className="s">&quot;x-cache&quot;</span>{": "}<span className="s">&quot;bypass&quot;</span>{"}\n)\n"}<span className="f">print</span>{"(resp.headers["}<span className="s">&quot;x-cache&quot;</span>{"])  "}<span className="c"># HIT | MISS | BYPASS</span>
-            <button className="copy-btn" onClick={() => handleCopy("cache")}>
+            <pre style={{ margin: 0, fontFamily: "var(--font-mono)", fontSize: 13, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{`resp = client.chat.completions.create(
+    model="claude-sonnet-4-6",
+    messages=[...],
+    extra_headers={"x-cache": "bypass"},
+)
+# Response header x-cache: HIT | MISS | BYPASS`}</pre>
+            <button className="copy-btn" onClick={() => copy("cache", "")}>
               {copied === "cache" ? "Copied!" : "Copy"}
             </button>
           </div>
 
           <h2 id="errors">7. Error handling</h2>
           <ul>
-            <li><code>429</code> — you hit a team rate limit. Back off using the <code>retry-after</code> header.</li>
-            <li><code>402</code> — team budget cap hit. Talk to your team owner.</li>
+            <li><code>401</code> — missing or invalid API key. Check <Link href="/portal/keys" style={{ color: "var(--sc-blue)" }}>your keys</Link>.</li>
+            <li><code>429</code> — rate limit hit. Back off using the <code>Retry-After</code> header.</li>
+            <li><code>402</code> — team monthly budget cap reached. Contact your team owner.</li>
             <li><code>403</code> — model not in your team&apos;s allow-list. Check the <Link href="/portal/models" style={{ color: "var(--sc-blue)" }}>catalog</Link>.</li>
-            <li><code>5xx</code> — upstream provider issue; the gateway will retry once before bubbling up.</li>
+            <li><code>5xx</code> — upstream provider error; the gateway retries once before surfacing.</li>
           </ul>
+          <div className="callout" style={{ marginTop: 16 }}>
+            <strong>Local dev tip:</strong> Start all services with{" "}
+            <code>docker compose -f infra/docker-compose.yml up</code> before making requests.
+            The playground at <Link href="/portal/playground" style={{ color: "var(--sc-blue)" }}>Playground</Link> is
+            the fastest way to verify your key works.
+          </div>
 
           <h2 id="next">Next steps</h2>
           <ul>
-            <li><Link href="/portal/playground" style={{ color: "var(--sc-blue)" }}>Open the Playground</Link> to iterate on prompts before you ship.</li>
-            <li><Link href="/portal/agents" style={{ color: "var(--sc-blue)" }}>Build an agent</Link> with tools and scheduled runs.</li>
-            <li><Link href="/portal/prompts" style={{ color: "var(--sc-blue)" }}>Browse the prompt library</Link> for vetted starters.</li>
+            <li><Link href="/portal/playground" style={{ color: "var(--sc-blue)" }}>Open the Playground</Link> — iterate on prompts in the browser before writing code.</li>
+            <li><Link href="/portal/agents" style={{ color: "var(--sc-blue)" }}>Build an agent</Link> — compose tool-using agents with MCP servers.</li>
+            <li><Link href="/portal/usage" style={{ color: "var(--sc-blue)" }}>View your usage</Link> — cost breakdown by model, session, and day.</li>
+            <li><Link href="/portal/models" style={{ color: "var(--sc-blue)" }}>Browse the model catalog</Link> — see available models and their capabilities.</li>
           </ul>
         </article>
       </div>

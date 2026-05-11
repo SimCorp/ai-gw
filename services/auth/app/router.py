@@ -1,4 +1,6 @@
 import json
+import logging
+import os
 from datetime import datetime
 
 from fastapi import APIRouter, Request
@@ -10,6 +12,8 @@ from app.config import settings
 from app.rate_limiter import check_rate_limit
 from app.validators.api_key import validate_api_key
 from app.validators.jwt import validate_jwt
+
+_log = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -28,7 +32,8 @@ class ValidateResponse(BaseModel):
 async def check_budget(team_id: str, key_id: str | None, redis: Redis) -> tuple[bool, str]:
     """Returns (allowed, reason). Checks key → team → org budgets.
 
-    Fail-open: if Redis is unavailable, returns (True, "") so the request is allowed.
+    Fails open by default (BUDGET_REDIS_FAILOPEN=true) so agents are never blocked by
+    Redis infra outages. Set BUDGET_REDIS_FAILOPEN=false for strict fail-closed behaviour.
     """
     try:
         month = datetime.utcnow().strftime("%Y-%m")
@@ -70,9 +75,13 @@ async def check_budget(team_id: str, key_id: str | None, redis: Redis) -> tuple[
                         return False, "Organisation monthly budget exhausted"
 
         return True, ""
-    except Exception:
-        # Redis unavailable — fail open
-        return True, ""
+    except Exception as exc:
+        if os.getenv("BUDGET_REDIS_FAILOPEN", "true").lower() != "false":
+            _log.warning("Redis unavailable during budget check — failing open: %s", exc)
+            return True, ""
+        _log.error("Redis unavailable during budget check — failing closed: %s", exc)
+        from fastapi import HTTPException
+        raise HTTPException(status_code=503, detail="Budget enforcement temporarily unavailable")
 
 
 @router.post("/validate", response_model=ValidateResponse)
@@ -86,9 +95,9 @@ async def validate(body: ValidateRequest, request: Request):
         raise HTTPException(status_code=401, detail="Missing token")
 
     if token.startswith("sk-"):
-        identity = await validate_api_key(token, db)
+        identity = await validate_api_key(token, db, redis)
     else:
-        identity = await validate_jwt(token, settings)
+        identity = await validate_jwt(token, settings, redis)
 
     rpm_limit = settings.rate_limit_default_rpm
     try:

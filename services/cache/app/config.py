@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     embedding_base_url: str = "http://ollama:11434/v1"
     default_similarity_threshold: float = 0.95
     default_ttl_seconds: int = 3600
+    internal_api_key: str = "sk-internal-local"
+    conversation_turn_limit: int = 3
+    budget_check_enabled: bool = True
 
 
 settings = Settings()

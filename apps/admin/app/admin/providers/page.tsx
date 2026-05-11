@@ -4,6 +4,8 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { LoadingState, ErrorState } from '../_components/PageStates';
 
+const BASE = process.env.NEXT_PUBLIC_ADMIN_API ?? 'http://localhost:8005';
+
 interface ExtraEnvVar {
   env_var: string;
   label: string;
@@ -85,7 +87,7 @@ function ProviderCard({ p, onSaved }: { p: Provider; onSaved: () => void }) {
       for (const [k, v] of Object.entries(extraInputs)) {
         if (v.trim()) payload[k] = v.trim();
       }
-      const res = await fetch('http://localhost:8005/api/settings/providers', {
+      const res = await fetch(BASE + '/api/settings/providers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -109,7 +111,7 @@ function ProviderCard({ p, onSaved }: { p: Provider; onSaved: () => void }) {
     setTesting(true);
     setTestResult(null);
     try {
-      const res = await fetch(`http://localhost:8005/ui/settings/test/${p.env_var}`, {
+      const res = await fetch(`${BASE}/ui/settings/test/${p.env_var}`, {
         method: 'POST',
       });
       const json: TestResult = await res.json();
@@ -126,7 +128,7 @@ function ProviderCard({ p, onSaved }: { p: Provider; onSaved: () => void }) {
     setDiscoverError('');
     setApplyMsg('');
     try {
-      const res = await fetch(`http://localhost:8005/api/settings/providers/${p.env_var}/discover`, {
+      const res = await fetch(`${BASE}/api/settings/providers/${p.env_var}/discover`, {
         method: 'POST',
       });
       const json = await res.json();
@@ -161,7 +163,7 @@ function ProviderCard({ p, onSaved }: { p: Provider; onSaved: () => void }) {
       if (action === 'enable' && !isCurrentlyEnabled) {
         if (!m.registered) {
           try {
-            const res = await fetch('http://localhost:8005/api/models', {
+            const res = await fetch(BASE + '/api/models', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ model_id: m.id, name: m.name, provider: p.name, enabled: true }),
@@ -170,7 +172,7 @@ function ProviderCard({ p, onSaved }: { p: Provider; onSaved: () => void }) {
           } catch { fail++; }
         } else if (m.registry_id) {
           try {
-            const res = await fetch(`http://localhost:8005/api/models/${m.registry_id}`, {
+            const res = await fetch(`${BASE}/api/models/${m.registry_id}`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ enabled: true }),
@@ -180,7 +182,7 @@ function ProviderCard({ p, onSaved }: { p: Provider; onSaved: () => void }) {
         }
       } else if (action === 'disable' && isCurrentlyEnabled && m.registry_id) {
         try {
-          const res = await fetch(`http://localhost:8005/api/models/${m.registry_id}`, {
+          const res = await fetch(`${BASE}/api/models/${m.registry_id}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ enabled: false }),
@@ -345,7 +347,7 @@ function ProviderCard({ p, onSaved }: { p: Provider; onSaved: () => void }) {
 export default function ProvidersPage() {
   const { data, isLoading, isError, error, refetch } = useQuery<ProvidersResponse>({
     queryKey: ['providers'],
-    queryFn: () => fetch('http://localhost:8005/api/settings/providers').then(r => r.json()),
+    queryFn: () => fetch(BASE + '/api/settings/providers').then(r => r.json()),
   });
 
   if (isLoading) return <section className="page"><LoadingState rows={6} /></section>;

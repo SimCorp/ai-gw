@@ -5,7 +5,7 @@ import { useState, useEffect } from "react";
 
 const LITELLM_BASE = "http://localhost:8003";
 const LITELLM_KEY = "sk-litellm-local-dev";
-const ADMIN_BASE = "http://localhost:8005";
+const ADMIN_BASE = process.env.NEXT_PUBLIC_ADMIN_BASE_URL ?? "http://localhost:8005";
 
 interface LiteLLMModel {
   id: string;

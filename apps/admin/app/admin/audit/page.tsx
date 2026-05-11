@@ -4,6 +4,8 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { LoadingState, ErrorState } from '../_components/PageStates';
 
+const BASE = process.env.NEXT_PUBLIC_ADMIN_API ?? 'http://localhost:8005';
+
 interface AuditRow {
   id: string;
   actor: string;
@@ -35,7 +37,7 @@ export default function AuditPage() {
 
   const { data, isLoading, isError, error, refetch } = useQuery<AuditRow[]>({
     queryKey: ['audit'],
-    queryFn: () => fetch('http://localhost:8005/audit?limit=50').then(r => r.json()),
+    queryFn: () => fetch(BASE + '/audit?limit=50').then(r => r.json()),
   });
 
   if (isLoading) return <section className="page"><LoadingState rows={12} /></section>;
