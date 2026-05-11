@@ -11,6 +11,7 @@ from fastapi import APIRouter, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from app import exact, semantic
+from app.autoroute import record_request as _autoroute_record, select_best_model
 from app.config import settings
 from app.policy import CachePolicy, get_policy
 
@@ -363,9 +364,8 @@ async def list_models(request: Request):
     return Response(content=resp.content, status_code=resp.status_code, media_type="application/json")
 
 
-@router.post("/v1/chat/completions")
-async def chat_completions(request: Request):
-    body = await request.json()
+async def _handle_chat_completions(request: Request, body: dict):
+    """Core chat completions handler — shared by the normal and Auto-Drive endpoints."""
     redis = request.app.state.redis
     http = request.app.state.http
 
@@ -441,7 +441,6 @@ async def chat_completions(request: Request):
     )
 
     emb: list[float] | None = None
-    similarity_score: float | None = None
     cache_stage = "bypass" if bypass_cache else "miss"
 
     cache_namespace = f"{team_id}:{project_id or ''}"
@@ -452,15 +451,19 @@ async def chat_completions(request: Request):
             cached = await exact.get(body, redis, team_id=team_id, project_id=project_id or "")
             if cached:
                 cache_stage = "exact_hit"
+                latency_ms = int((time.monotonic() - start) * 1000)
                 asyncio.create_task(
                     _emit_event(http, {
                         "team_id": team_id, "project_id": project_id, "key_id": key_id,
                         "model": body.get("model"), "cache_hit": True, "cache_stage": cache_stage,
-                        "latency_ms": int((time.monotonic() - start) * 1000),
+                        "latency_ms": latency_ms,
                         "cache_namespace": cache_namespace,
                         "session_trace_id": session_trace_id,
                         "session_purpose": session_purpose, "repo": repo,
                     })
+                )
+                asyncio.create_task(
+                    _autoroute_record(redis, body.get("model", ""), latency_ms, cache_hit=True, error=False)
                 )
                 _hit_headers = {"X-Cache": "HIT", "X-Cache-Stage": "exact", "x-request-id": request_id}
                 if body.get("stream"):
@@ -480,16 +483,20 @@ async def chat_completions(request: Request):
             cached = await semantic.get(emb, policy.similarity_threshold, redis, team_id=team_id, project_id=project_id or "")
             if cached:
                 cache_stage = "semantic_hit"
+                latency_ms = int((time.monotonic() - start) * 1000)
                 asyncio.create_task(
                     _emit_event(http, {
                         "team_id": team_id, "project_id": project_id, "key_id": key_id,
                         "model": body.get("model"), "cache_hit": True, "cache_stage": cache_stage,
                         "embedding_latency_ms": int((time.monotonic() - emb_start) * 1000),
-                        "latency_ms": int((time.monotonic() - start) * 1000),
+                        "latency_ms": latency_ms,
                         "cache_namespace": cache_namespace,
                         "session_trace_id": session_trace_id,
                         "session_purpose": session_purpose, "repo": repo,
                     })
+                )
+                asyncio.create_task(
+                    _autoroute_record(redis, body.get("model", ""), latency_ms, cache_hit=True, error=False)
                 )
                 _hit_headers = {"X-Cache": "HIT", "X-Cache-Stage": "semantic", "x-request-id": request_id}
                 if body.get("stream"):
@@ -525,7 +532,8 @@ async def chat_completions(request: Request):
         )
         upstream = await http.send(req, stream=True)
         latency_ms = int((time.monotonic() - start) * 1000)
-        err = None if upstream.status_code == 200 else str(upstream.status_code)
+        is_error = upstream.status_code != 200
+        err = None if not is_error else str(upstream.status_code)
 
         base_event = {
             "team_id": team_id, "project_id": project_id, "key_id": key_id,
@@ -534,9 +542,16 @@ async def chat_completions(request: Request):
             "cache_namespace": cache_namespace, "session_trace_id": session_trace_id,
             "session_purpose": session_purpose, "repo": repo, "request_intent": request_intent,
         }
+        _autoroute_model = body.get("model", "")
+        _autoroute_latency = latency_ms
+        _autoroute_is_error = is_error
 
         async def _emit_after_stream(tokens_in: int, tokens_out: int) -> None:
             await _emit_event(http, {**base_event, "tokens_input": tokens_in, "tokens_output": tokens_out})
+            await _autoroute_record(
+                redis, _autoroute_model, _autoroute_latency,
+                cache_hit=False, error=_autoroute_is_error,
+            )
 
         return StreamingResponse(
             _tracked_stream(upstream, _emit_after_stream, _parse_sse_usage_openai),
@@ -569,7 +584,9 @@ async def chat_completions(request: Request):
             except Exception:
                 pass
 
+    final_latency_ms = int((time.monotonic() - start) * 1000)
     usage = response_body.get("usage", {})
+    is_error = resp.status_code != 200
     asyncio.create_task(
         _emit_event(http, {
             "team_id": team_id, "project_id": project_id, "key_id": key_id,
@@ -577,18 +594,47 @@ async def chat_completions(request: Request):
             "tokens_input": usage.get("prompt_tokens", 0),
             "tokens_output": usage.get("completion_tokens", 0),
             "cache_hit": False, "cache_stage": cache_stage,
-            "latency_ms": int((time.monotonic() - start) * 1000),
-            "error": None if resp.status_code == 200 else str(resp.status_code),
+            "latency_ms": final_latency_ms,
+            "error": None if not is_error else str(resp.status_code),
             "cache_namespace": cache_namespace,
             "session_trace_id": session_trace_id,
             "session_purpose": session_purpose, "repo": repo,
             "request_intent": request_intent,
         })
     )
+    asyncio.create_task(
+        _autoroute_record(redis, body.get("model", ""), final_latency_ms, cache_hit=False, error=is_error)
+    )
     return Response(
         content=resp.content, status_code=resp.status_code, media_type="application/json",
         headers={"X-Cache": "MISS", "x-request-id": request_id},
     )
+
+
+@router.post("/v1/chat/completions")
+async def chat_completions(request: Request):
+    body = await request.json()
+    return await _handle_chat_completions(request, body)
+
+
+@router.post("/v1/chat/completions/auto")
+async def chat_completions_auto(request: Request):
+    """Auto-Drive endpoint — selects the best model based on rolling performance stats.
+
+    The ``model`` field in the request body is ignored; instead the gateway picks
+    the highest-scoring model from ``settings.autoroute_models``.  All other
+    behaviour (auth, guardrails, budget, cache) is identical to the normal
+    ``/v1/chat/completions`` endpoint.
+    """
+    body = await request.json()
+    redis = request.app.state.redis
+
+    candidates = [m.strip() for m in settings.autoroute_models.split(",") if m.strip()]
+    chosen_model = await select_best_model(redis, candidates)
+
+    # Overwrite the model field so the rest of the pipeline uses our choice
+    body = {**body, "model": chosen_model}
+    return await _handle_chat_completions(request, body)
 
 
 @router.post("/anthropic/{path:path}")

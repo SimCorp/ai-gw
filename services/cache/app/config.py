@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     internal_api_key: str = "sk-internal-local"
     conversation_turn_limit: int = 3
     budget_check_enabled: bool = True
+    autoroute_enabled: bool = False
+    autoroute_models: str = "claude-haiku-4-5,gpt-4o-mini"
 
 
 settings = Settings()

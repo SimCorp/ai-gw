@@ -35,6 +35,7 @@ from app.models import (  # noqa: F401
 from app.routers import (
     admin_auth as admin_auth_router,
     ai_help as ai_help_router,
+    config_api as config_api_router,
     devops_agent as devops_agent_router,
     insights as insights_router,
     api_keys as api_keys_module,
@@ -270,6 +271,7 @@ app.include_router(model_registry.router, dependencies=_auth)
 app.include_router(system.router, dependencies=_auth)
 app.include_router(audit_log.router, dependencies=_auth)
 app.include_router(budget.router, dependencies=_auth)
+app.include_router(config_api_router.router, dependencies=_auth)
 app.include_router(requests_router.router, dependencies=_auth)
 app.include_router(guardrails_router.router, dependencies=_auth)
 app.include_router(workflows_router.router, dependencies=_auth)

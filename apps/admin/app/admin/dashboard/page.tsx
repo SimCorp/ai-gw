@@ -5,6 +5,82 @@ import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { LoadingState, ErrorState } from '../_components/PageStates';
 
+// ---------------------------------------------------------------------------
+// Arc gauge — pure SVG, no extra deps
+// ---------------------------------------------------------------------------
+
+interface GaugeProps {
+  /** Value in [0, 1] */
+  value: number;
+  label: string;
+  sublabel?: string;
+  color?: string;
+  size?: number;
+}
+
+function ArcGauge({ value, label, sublabel, color = 'var(--sc-blue)', size = 100 }: GaugeProps) {
+  const r = 38;
+  // Arc spans 220 degrees (from -200 to 40 in SVG angle terms, starting at bottom-left)
+  const arcLen = 2 * Math.PI * r;
+  const sweep = 220 / 360; // fraction of full circle used for the arc
+  const filled = Math.max(0, Math.min(1, value)) * sweep * arcLen;
+  const gap = arcLen - filled;
+  // Offset: arc starts at 160 degrees from 3-o'clock (i.e. bottom-left)
+  const startAngle = 160;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+      <svg width={size} height={size * 0.75} viewBox="0 0 100 78" style={{ overflow: 'visible' }}>
+        {/* Track */}
+        <circle
+          cx="50" cy="58" r={r}
+          fill="none"
+          stroke="var(--rule)"
+          strokeWidth="10"
+          strokeDasharray={`${sweep * arcLen} ${arcLen}`}
+          strokeDashoffset={0}
+          transform={`rotate(${startAngle} 50 58)`}
+          strokeLinecap="round"
+        />
+        {/* Fill */}
+        <circle
+          cx="50" cy="58" r={r}
+          fill="none"
+          stroke={color}
+          strokeWidth="10"
+          strokeDasharray={`${filled} ${gap + (1 - sweep) * arcLen}`}
+          strokeDashoffset={0}
+          transform={`rotate(${startAngle} 50 58)`}
+          strokeLinecap="round"
+          style={{ transition: 'stroke-dasharray 0.5s ease' }}
+        />
+        {/* Center label */}
+        <text x="50" y="54" textAnchor="middle" fill="var(--fg-1)" fontSize="14" fontWeight="600" fontFamily="var(--font-mono)">
+          {Math.round(value * 100)}%
+        </text>
+      </svg>
+      <div style={{ textAlign: 'center' }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg-1)' }}>{label}</div>
+        {sublabel && <div style={{ fontSize: 11, color: 'var(--fg-3)' }}>{sublabel}</div>}
+      </div>
+    </div>
+  );
+}
+
+interface GatewayInfo {
+  version: string;
+  features: string[];
+  models: string[];
+  config_version: number;
+  autoroute: {
+    enabled: boolean;
+    current_model?: string | null;
+    score?: number | null;
+    candidates?: string[];
+  };
+  workflow_runs_today: number;
+}
+
 const RANGES = ['1h', '24h', '7d', '30d', '90d'];
 
 const BASE = process.env.NEXT_PUBLIC_ADMIN_API ?? 'http://localhost:8005';
@@ -141,6 +217,15 @@ export default function DashboardPage() {
     staleTime: 30_000,
   });
 
+  const gatewayInfoQuery = useQuery<GatewayInfo>({
+    queryKey: ['gateway-info'],
+    queryFn: () => fetch(`${BASE}/gateway-info`).then(r => {
+      if (!r.ok) throw new Error(`/gateway-info ${r.status}`);
+      return r.json();
+    }),
+    staleTime: 30_000,
+  });
+
   const isLoading = statsQuery.isLoading || healthQuery.isLoading;
   const isError = statsQuery.isError || healthQuery.isError;
   const firstError = (statsQuery.error ?? healthQuery.error) as Error | undefined;
@@ -167,6 +252,7 @@ export default function DashboardPage() {
   // Gateway stats
   const gateway = health?.gateway;
   const redis = health?.redis;
+  const gwInfo = gatewayInfoQuery.data;
 
   // Services for provider health table
   const services: ServiceHealth[] = health?.services ?? [];
@@ -269,6 +355,71 @@ export default function DashboardPage() {
           <div className="kpi__label">Teams tracked</div>
           <div className="kpi__value">{stats.length}</div>
           <div className="kpi__delta flat">with spend data</div>
+        </div>
+      </div>
+
+      {/* System Performance gauges */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card__head">
+          <h3 className="card__title">System performance</h3>
+          <span className="card__sub">5-min rolling · live</span>
+        </div>
+        <div className="card__body">
+          <div style={{ display: 'flex', gap: 32, flexWrap: 'wrap', justifyContent: 'space-around', padding: '8px 0' }}>
+
+            {/* Gauge 1 — Cache hit rate */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, minWidth: 140 }}>
+              <ArcGauge
+                value={(gateway?.cache_hit_rate_last_60s ?? 0)}
+                label="Cache hit rate"
+                sublabel={`${((gateway?.cache_hit_rate_last_60s ?? 0) * 100).toFixed(1)}% · last 60s`}
+                color="var(--sc-teal)"
+              />
+            </div>
+
+            {/* Gauge 2 — Auto-Drive */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, minWidth: 160 }}>
+              <ArcGauge
+                value={gwInfo?.autoroute?.score ?? 0}
+                label="Auto-Drive"
+                sublabel={
+                  gwInfo?.autoroute?.enabled
+                    ? (gwInfo.autoroute.current_model ?? gwInfo.autoroute.candidates?.[0] ?? 'selecting…')
+                    : 'disabled'
+                }
+                color={gwInfo?.autoroute?.enabled ? 'var(--sc-blue)' : 'var(--fg-3)'}
+              />
+              {gwInfo?.autoroute?.enabled && (
+                <span className="pill pill--good" style={{ fontSize: 10 }}>active</span>
+              )}
+              {gwInfo && !gwInfo.autoroute?.enabled && (
+                <span className="pill" style={{ fontSize: 10 }}>off</span>
+              )}
+            </div>
+
+            {/* Gauge 3 — Workflow runs today */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, minWidth: 140 }}>
+              {/* Workflow runs expressed as fraction of a soft daily cap (100 runs) for the arc */}
+              <ArcGauge
+                value={Math.min(1, (gwInfo?.workflow_runs_today ?? 0) / 100)}
+                label="Workflow runs today"
+                sublabel={gwInfo != null ? `${gwInfo.workflow_runs_today} run${gwInfo.workflow_runs_today !== 1 ? 's' : ''}` : '—'}
+                color="var(--sc-purple)"
+              />
+            </div>
+
+          </div>
+
+          {/* Config version badge */}
+          {gwInfo && (
+            <div style={{ marginTop: 12, borderTop: '1px solid var(--rule)', paddingTop: 10, display: 'flex', gap: 16, fontSize: 11.5, color: 'var(--fg-3)', flexWrap: 'wrap' }}>
+              <span>Gateway <span className="mono">v{gwInfo.version}</span></span>
+              <span>Config version <span className="mono">#{gwInfo.config_version}</span></span>
+              {gwInfo.features.map(f => (
+                <span key={f} className="tag">{f}</span>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
