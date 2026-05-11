@@ -39,6 +39,7 @@ from app.routers import (
     codemate as codemate_router,
     copilot_catalog as copilot_catalog_router,
     devops_agent as devops_agent_router,
+    identity as identity_router,
     insights as insights_router,
     api_keys as api_keys_module,
     areas as areas_router,
@@ -208,6 +209,11 @@ async def lifespan(app: FastAPI):
 
     app.state.redis = make_redis(app_settings.redis_url)
 
+    # Pre-generate the RSA identity signing key on startup so the first JWKS
+    # request is served without a generation delay.
+    from app.identity_signing import get_or_create_signing_key as _get_signing_key
+    await _get_signing_key(app.state.redis)
+
     # Start Awesome Copilot catalog background sync (first sync + every 6h)
     from app.routers.copilot_catalog import start_background_sync as _start_catalog_sync
     _start_catalog_sync(app)
@@ -309,6 +315,8 @@ app.include_router(reports_router.router, dependencies=_auth)
 app.include_router(ai_help_router.router)       # own auth per endpoint (admin or dev session)
 app.include_router(devops_agent_router.router)  # own auth: require_admin_auth
 app.include_router(insights_router.router)      # own auth per endpoint (admin or dev session)
+app.include_router(identity_router.router, dependencies=_auth)  # POST /identity/tokens, POST /identity/verify
+app.include_router(identity_router.public_router)  # GET /identity/jwks — no auth required
 
 
 @app.get("/", include_in_schema=False)

@@ -47,6 +47,12 @@ CREATE TABLE IF NOT EXISTS agent_identities (
 );
 """
 
+# Migration: add token_verified column if it doesn't exist yet (idempotent)
+_ALTER_TOKEN_VERIFIED = """
+ALTER TABLE agent_identities
+    ADD COLUMN IF NOT EXISTS token_verified BOOLEAN NOT NULL DEFAULT FALSE;
+"""
+
 # ---------------------------------------------------------------------------
 # Pydantic models
 # ---------------------------------------------------------------------------
@@ -62,6 +68,7 @@ class AgentIdentity(BaseModel):
     team_id: UUID | None
     managed: bool
     online: bool
+    token_verified: bool = False
     registered_at: datetime
     last_seen: datetime
 
@@ -74,6 +81,14 @@ class RegisterRequest(BaseModel):
     endpoint: str = ""
     team_id: UUID | None = None
     managed: bool = False
+    identity_token: str | None = None  # optional DID-style signed JWT for verification
+
+
+class AgentIdentitySummary(BaseModel):
+    slug: str
+    token_verified: bool
+    capabilities: list[str]
+    online: bool
 
 
 class EndpointResponse(BaseModel):
@@ -110,6 +125,65 @@ async def _to_identity(row: asyncpg.Record, redis: Redis) -> AgentIdentity:
 # ---------------------------------------------------------------------------
 # Seed from admin service on startup
 # ---------------------------------------------------------------------------
+
+
+async def _verify_identity_token(token: str, admin_url: str) -> bool:
+    """Verify a DID-style identity JWT against the admin service JWKS.
+
+    Fetches the JWKS from ``{admin_url}/identity/jwks`` and verifies the
+    token's RS256 signature.  Returns True on success, False on any failure
+    (network error, bad signature, expiry, etc.).
+    """
+    try:
+        import jwt as _jwt
+        from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
+
+        async with httpx.AsyncClient(timeout=5) as client:
+            resp = await client.get(f"{admin_url}/identity/jwks")
+            if resp.status_code != 200:
+                log.warning("JWKS fetch returned %s", resp.status_code)
+                return False
+            jwks_data = resp.json()
+
+        keys = jwks_data.get("keys", [])
+        if not keys:
+            log.warning("JWKS response contained no keys")
+            return False
+
+        # Try each key until one verifies successfully
+        from cryptography.hazmat.primitives.asymmetric import rsa as _rsa
+        import base64 as _b64
+
+        def _decode_b64url(s: str) -> int:
+            # Add padding if needed
+            padded = s + "=" * (-len(s) % 4)
+            return int.from_bytes(_b64.urlsafe_b64decode(padded), "big")
+
+        for jwk in keys:
+            if jwk.get("kty") != "RSA":
+                continue
+            try:
+                from cryptography.hazmat.primitives.asymmetric.rsa import (
+                    RSAPublicNumbers,
+                )
+                pub_numbers = RSAPublicNumbers(
+                    e=_decode_b64url(jwk["e"]),
+                    n=_decode_b64url(jwk["n"]),
+                )
+                pub_key = pub_numbers.public_key()
+                _jwt.decode(
+                    token,
+                    pub_key,  # type: ignore[arg-type]
+                    algorithms=["RS256"],
+                    options={"require": ["sub", "iss", "iat", "exp"]},
+                )
+                return True
+            except _jwt.PyJWTError:
+                continue
+        return False
+    except Exception as exc:  # noqa: BLE001
+        log.warning("Identity token verification failed: %s", exc)
+        return False
 
 
 async def _seed_from_admin(pool: asyncpg.Pool, admin_url: str) -> None:
@@ -172,6 +246,7 @@ async def lifespan(app: FastAPI):
 
     async with pool.acquire() as conn:
         await conn.execute(_CREATE_TABLE)
+        await conn.execute(_ALTER_TOKEN_VERIFIED)
 
     asyncio.create_task(_seed_from_admin(pool, settings.admin_url))
 
@@ -261,6 +336,28 @@ async def get_agent(slug: str, request: Request):
     return await _to_identity(row, _redis(request))
 
 
+# ── Identity summary ──────────────────────────────────────────────────────────
+
+
+@app.get("/agents/{slug}/identity", response_model=AgentIdentitySummary)
+async def get_agent_identity(slug: str, request: Request):
+    """Return a lightweight identity summary: verification status, capabilities, online."""
+    async with _pool(request).acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT slug, token_verified, capabilities FROM agent_identities WHERE slug = $1",
+            slug,
+        )
+    if not row:
+        raise HTTPException(status_code=404, detail=f"Agent '{slug}' not found")
+    online = await _is_online(_redis(request), slug)
+    return AgentIdentitySummary(
+        slug=row["slug"],
+        token_verified=row["token_verified"],
+        capabilities=row["capabilities"],
+        online=online,
+    )
+
+
 # ── Endpoint lookup ───────────────────────────────────────────────────────────
 
 
@@ -303,20 +400,30 @@ async def heartbeat(slug: str, request: Request):
 
 @app.post("/agents/register", response_model=AgentIdentity, status_code=201)
 async def register_agent(body: RegisterRequest, request: Request):
+    # Verify the optional identity token against the admin JWKS
+    token_verified = False
+    if body.identity_token:
+        token_verified = await _verify_identity_token(
+            body.identity_token, settings.admin_url
+        )
+        if not token_verified:
+            log.warning("Agent '%s' supplied an invalid identity token during registration", body.slug)
+
     async with _pool(request).acquire() as conn:
         row = await conn.fetchrow(
             """
             INSERT INTO agent_identities
-                (slug, name, category, capabilities, endpoint, team_id, managed)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+                (slug, name, category, capabilities, endpoint, team_id, managed, token_verified)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             ON CONFLICT (slug) DO UPDATE
-                SET name         = EXCLUDED.name,
-                    category     = EXCLUDED.category,
-                    capabilities = EXCLUDED.capabilities,
-                    endpoint     = EXCLUDED.endpoint,
-                    team_id      = EXCLUDED.team_id,
-                    managed      = EXCLUDED.managed,
-                    last_seen    = NOW()
+                SET name           = EXCLUDED.name,
+                    category       = EXCLUDED.category,
+                    capabilities   = EXCLUDED.capabilities,
+                    endpoint       = EXCLUDED.endpoint,
+                    team_id        = EXCLUDED.team_id,
+                    managed        = EXCLUDED.managed,
+                    token_verified = EXCLUDED.token_verified,
+                    last_seen      = NOW()
             RETURNING *
             """,
             body.slug,
@@ -326,8 +433,10 @@ async def register_agent(body: RegisterRequest, request: Request):
             body.endpoint,
             body.team_id,
             body.managed,
+            token_verified,
         )
-    return await _to_identity(row, _redis(request))
+    result = await _to_identity(row, _redis(request))
+    return result
 
 
 # ── Deregister ────────────────────────────────────────────────────────────────
