@@ -269,6 +269,23 @@ services:
       admin:
         condition: service_healthy
 
+  agent-relay:
+    build:
+      context: ../services/agent-relay
+    ports:
+      - "127.0.0.1:8007:8007"
+    environment:
+      REDIS_URL: "redis://redis:6379/0"
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8007/health')\" 2>/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
   workflow-worker:
     build:
       context: ../services/workflow-worker
@@ -281,6 +298,7 @@ services:
       # /worker-runs; agent containers mount the SAME host path at /run.
       HOST_RUNS_PATH: "/tmp/aigw-runs"
       AGENT_CONTAINER_NETWORK: "aigateway"
+      AGENT_RELAY_URL: "http://agent-relay:8007"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp/aigw-runs:/worker-runs
