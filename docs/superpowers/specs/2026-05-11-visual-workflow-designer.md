@@ -43,56 +43,70 @@ shippable and demoable.
 | Local execution | In-cluster v0.1 + v0.5; laptop relay in v1.0 |
 | Build/buy | Build in-house; React Flow (xyflow) as the canvas *library* only |
 | Persona | Engineers + analysts (simple + advanced canvas modes) |
+| Identity scope | **Team + project** (consistent with 2026-05-05 v1 design) |
+| Event pipeline | **Unified with existing observability bus** — workflow events publish to Service Bus (prod) / in-memory bus (local); SSE is a consumer-group subscriber. No separate `run_events` table. |
+| Agent → LLM calls | **Must route through the gateway.** Each run is issued a short-lived scoped API key; agent containers receive it via env and call `cache:8002` like any other caller. Inherits auth, cache, cost attribution, audit. |
+| Quotas | **Redis-counter rate limit per team** on `POST /runs` (e.g. 100 runs/hour/team, configurable per team like other rate limits). Per-run cost ceiling deferred to v0.5. |
+| Local container spawn | **Worker mounts host docker socket** (`/var/run/docker.sock`). Worker uses host docker to spawn sibling agent containers on the same `aigateway` network. |
 
 ---
 
 ## Target Architecture
 
 ```
-                                      ┌──────────────────────────────┐
-                                      │   Portal (Next.js)           │
-                                      │   - Canvas (React Flow)      │
-                                      │   - Run viewer (SSE client)  │
-                                      └──────────┬───────────────────┘
-                                                 │ HTTPS + SSE
-                                                 ↓
-[Auth (8001)] ── ── ── ── ── ── ── ── ── ── ──── [Admin (8005)]
-                                                 │   - /agents       (registry)
-                                                 │   - /workflows    (definitions, versions)
-                                                 │   - /runs         (submit, list, stream)
-                                                 │   - /runs/{id}/stream (SSE event firehose)
-                                                 ↓
-                                       ┌─────────────────────┐
-                                       │   Postgres          │
-                                       │  - agents           │
-                                       │  - workflows        │
-                                       │  - workflow_runs    │
-                                       │  - run_nodes        │
-                                       │  - run_events       │
-                                       │  - work_queue       │← claim-based
-                                       └──────────┬──────────┘
-                                                  │ SELECT … FOR UPDATE SKIP LOCKED
-                                                  ↓
-                                       ┌─────────────────────┐
-                                       │  workflow-worker    │ (new service)
-                                       │  - claims jobs      │
-                                       │  - runs containers  │
-                                       │  - writes events    │
-                                       └──────────┬──────────┘
-                                                  │ docker (local) / K8s Job (AKS)
-                                                  ↓
-                                       ┌─────────────────────┐
-                                       │  agent containers   │  ← user-built images
-                                       │  (registered images)│     conforming to manifest
-                                       └─────────────────────┘
-                                                  │
-                                                  │  v1.0: also routes through
-                                                  ↓
-                                       ┌─────────────────────┐
-                                       │  agent-relay (v1.0) │
-                                       │  - WS to laptops    │
-                                       │  - proxies /run     │
-                                       └─────────────────────┘
+                            ┌──────────────────────────────┐
+                            │   Portal (Next.js)           │
+                            │   - Canvas (React Flow)      │
+                            │   - Run viewer (SSE client)  │
+                            └──────────┬───────────────────┘
+                                       │ HTTPS + SSE
+                                       ↓
+                      ┌──────────────────────────────────────┐
+                      │            Admin (8005)              │
+                      │ /agents /workflows /runs             │
+                      │ /runs/{id}/stream (SSE) ──┐          │
+                      └────┬────────────────────┬─┘          │
+                           │                    │            │
+                           │                    │ subscribes consumer-group
+                           │                    ↓            │
+                           │           ┌─────────────────────┴───┐
+                           │           │ Observability Bus       │
+                           │           │ (Service Bus / in-mem)  │← workflow events
+                           │           └─────────────────────────┘
+                           ↓
+                      ┌────────────────┐    publishes events
+                      │   Postgres     │←─────────────────────┐
+                      │ - agents       │                      │
+                      │ - workflows    │                      │
+                      │ - workflow_runs│                      │
+                      │ - run_nodes    │                      │
+                      │ - work_queue   │← claim-based         │
+                      └────────┬───────┘                      │
+                               │ SELECT … FOR UPDATE          │
+                               │ SKIP LOCKED                  │
+                               ↓                              │
+                      ┌────────────────┐                      │
+                      │ workflow-worker│──────────────────────┘
+                      │  - claims jobs │
+                      │  - issues scoped API key per run
+                      │  - runs containers via host docker
+                      │  - publishes events to obs bus
+                      └────────┬───────┘
+                               │ docker.sock (local) / K8s Job (AKS)
+                               ↓
+                      ┌────────────────┐
+                      │ agent          │  user-built images
+                      │ containers     │  env: AIGW_API_KEY, AIGW_BASE_URL=http://cache:8002
+                      │                │  LLM calls flow back through auth→cache→litellm
+                      └────────────────┘
+                               │
+                               │  v1.0: also routes through
+                               ↓
+                      ┌────────────────┐
+                      │ agent-relay    │  (v1.0)
+                      │  - WS to       │
+                      │    laptops     │
+                      └────────────────┘
 ```
 
 **Key principles:**
@@ -117,30 +131,32 @@ shippable and demoable.
 ```sql
 -- Agent registry (extends MCP/Plugin pattern from services/admin/app/models/)
 CREATE TABLE agents (
-  id            UUID PRIMARY KEY,
-  slug          TEXT UNIQUE NOT NULL,        -- e.g. "summarizer"
-  name          TEXT NOT NULL,
-  description   TEXT,
-  image         TEXT NOT NULL,               -- e.g. "registry.simcorp/agents/summarizer:1.2.0"
-  manifest      JSONB NOT NULL,              -- inputs/outputs schema, env, resources
-  category      TEXT,                        -- for the canvas palette
-  managed       BOOLEAN NOT NULL DEFAULT false,
-  owner_team_id UUID,
-  enabled       BOOLEAN NOT NULL DEFAULT true,
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  id              UUID PRIMARY KEY,
+  slug            TEXT UNIQUE NOT NULL,        -- e.g. "summarizer"
+  name            TEXT NOT NULL,
+  description     TEXT,
+  image           TEXT NOT NULL,               -- e.g. "registry.simcorp/agents/summarizer:1.2.0"
+  manifest        JSONB NOT NULL,              -- inputs/outputs schema, env, resources, declared LLM models
+  category        TEXT,                        -- for the canvas palette
+  managed         BOOLEAN NOT NULL DEFAULT false,
+  owner_team_id   UUID,
+  owner_project_id UUID,                       -- nullable; some agents are team-wide
+  enabled         BOOLEAN NOT NULL DEFAULT true,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- Workflow definitions (versioned, immutable per version)
 CREATE TABLE workflows (
-  id            UUID PRIMARY KEY,
-  slug          TEXT NOT NULL,
-  team_id       UUID NOT NULL,
-  name          TEXT NOT NULL,
-  description   TEXT,
+  id             UUID PRIMARY KEY,
+  slug           TEXT NOT NULL,
+  team_id        UUID NOT NULL REFERENCES teams(id),
+  project_id     UUID REFERENCES projects(id),      -- nullable, matching api_keys/policies pattern
+  name           TEXT NOT NULL,
+  description    TEXT,
   latest_version INT NOT NULL DEFAULT 1,
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (team_id, slug)
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (team_id, project_id, slug)
 );
 
 CREATE TABLE workflow_versions (
@@ -163,8 +179,10 @@ CREATE TABLE workflow_runs (
   inputs        JSONB,
   outputs       JSONB,
   error         TEXT,
-  triggered_by  UUID NOT NULL,
-  team_id       UUID NOT NULL,
+  triggered_by  UUID NOT NULL,                -- user UUID or API-key UUID
+  team_id       UUID NOT NULL REFERENCES teams(id),
+  project_id    UUID REFERENCES projects(id),      -- nullable, inherited from workflow
+  scoped_api_key_id UUID REFERENCES api_keys(id),  -- short-lived key issued for this run's agents
   started_at    TIMESTAMPTZ,
   finished_at   TIMESTAMPTZ,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -184,15 +202,6 @@ CREATE TABLE run_nodes (
   PRIMARY KEY (run_id, node_id, iteration)
 );
 
--- Append-only event log; backing store for SSE
-CREATE TABLE run_events (
-  id            BIGSERIAL PRIMARY KEY,
-  run_id        UUID NOT NULL REFERENCES workflow_runs(id),
-  ts            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  kind          TEXT NOT NULL,               -- 'run.started', 'node.started', 'node.token', 'node.finished', 'run.finished'
-  payload       JSONB
-);
-
 -- Claim-based work queue (no Redis dependency for queueing)
 CREATE TABLE work_queue (
   id            BIGSERIAL PRIMARY KEY,
@@ -207,6 +216,8 @@ CREATE TABLE work_queue (
 CREATE INDEX work_queue_available_idx ON work_queue (available_at) WHERE claimed_by IS NULL;
 ```
 
+**Note: no `run_events` table.** Workflow state transitions publish to the existing observability bus (Azure Service Bus in prod, in-memory bus locally). The SSE endpoint subscribes to that bus with a `workflow_run` filter and a consumer group per connected client. Persistence/replay of run history is served by joining `workflow_runs` + `run_nodes` (the source of truth for terminal state); event-level history for forensics is in the observability sink (Application Insights + structured logs).
+
 ---
 
 ## Worker Service
@@ -216,7 +227,12 @@ New service: `services/workflow-worker/`. FastAPI not required — pure asyncio 
 Worker loop (pseudo):
 
 ```
-while running:
+on run start (called from admin /runs POST handler):
+    issue scoped API key: row in api_keys with team_id+project_id, ttl=run-duration+5m,
+        scope='workflow-run', stored as workflow_runs.scoped_api_key_id
+    publish bus event 'workflow.run.started' {run_id, team_id, project_id, ...}
+
+while running:                            # workflow-worker main loop
     job = SELECT * FROM work_queue
           WHERE claimed_by IS NULL AND available_at <= NOW()
           ORDER BY available_at
@@ -225,17 +241,32 @@ while running:
     if not job: sleep(short); continue
 
     UPDATE work_queue SET claimed_by=$worker_id, claim_expires=NOW()+'2m'
-    emit run_event 'node.started'
+    publish bus event 'workflow.node.started'
     pull image (cached)
-    run container with inputs.json mounted; stream stdout → run_events as 'node.token'
+    docker run -e AIGW_API_KEY=<scoped key> \
+               -e AIGW_BASE_URL=http://cache:8002 \
+               -v inputs.json:/run/inputs.json \
+               --network aigateway \
+               <image>
+    # any LLM call the agent makes lands on cache:8002 with the scoped key —
+    # inherits auth, cache, cost attribution, audit automatically
+    stream stdout → publish bus events 'workflow.node.log'
     on exit:
-        write outputs to run_nodes; emit 'node.finished'
+        write outputs to run_nodes; publish 'workflow.node.finished'
         evaluate DAG: enqueue successor nodes whose preds are satisfied
-        if no more nodes: mark run finished, emit 'run.finished'
-    delete work_queue row
+        if no more nodes: mark run finished, publish 'workflow.run.finished',
+            revoke scoped api key
 
-# stale claims (worker crashed) are reclaimed by a sweeper task that resets claim_expires
+# stale claims (worker crashed) reclaimed by sweeper that resets expired claim_expires
 ```
+
+**Container spawning:** workflow-worker is itself a container in compose; it mounts
+`/var/run/docker.sock` so it can use the host's docker daemon to spawn sibling agent
+containers on the same `aigateway` network. In AKS, the worker runs as a Deployment with
+RBAC to create Pods/Jobs in its namespace; the docker.sock pattern is replaced with the
+Kubernetes API. Spawning mechanism is abstracted behind a `ContainerRuntime` port
+(`runtime.run(image, env, mounts) -> stdout_stream, exit_code`) with two implementations:
+`DockerRuntime` and `KubernetesRuntime`.
 
 DAG evaluation handles:
 - Linear, branching (edges have JSONPath conditions)
@@ -255,7 +286,7 @@ DAG evaluation handles:
 | `POST` | `/workflows` | Create new workflow (slug+team unique) |
 | `POST` | `/workflows/{id}/versions` | Save new version of DAG |
 | `GET`  | `/workflows/{id}/versions/{v}` | Fetch DAG |
-| `POST` | `/runs` | Submit run (`workflow_id`, `version`, `inputs`) |
+| `POST` | `/runs` | Submit run (`workflow_id`, `version`, `inputs`). Rate-limited per team via Redis counters; default 100 runs/hour/team, overridable per team like other rate limits. Returns 429 + `Retry-After` on excess. |
 | `GET`  | `/runs/{id}` | Fetch run + node status |
 | `GET`  | `/runs/{id}/stream` | **SSE** firehose of events for live observability |
 | `POST` | `/runs/{id}/cancel` | Cooperative cancel |
@@ -301,7 +332,11 @@ Toggle stored per-user.
 - A user can `POST /runs` with a hand-written 3-node workflow JSON; worker picks up jobs;
   portal run viewer shows nodes transitioning idle→running→done; final output visible
 - Kill worker mid-run → restart → run resumes (claim expiry reclaim works)
-- Full integration test in `services/workflow-worker/tests/` runs the above end-to-end against a real Postgres + Docker
+- Rate-limit enforcement: 101st run in an hour returns 429
+- Example agent makes an LLM call; cost record appears in observability tied to the workflow run
+  (verifies scoped API key + gateway routing path end-to-end)
+- Full integration test in `services/workflow-worker/tests/` runs the above end-to-end against
+  a real Postgres + Docker + admin + cache + litellm stack
 
 ### v0.5 — Full features (in-cluster)
 **Goal:** make it usable.
@@ -376,17 +411,27 @@ Toggle stored per-user.
 |---|---|
 | Container cold-start dominates run latency | Image pre-pull on worker boot; consider warm pool in v0.5 |
 | Image registry: where do agent images live? | **Open question** — use existing ACR? Add private Harbor? Decide before v0.1 |
-| Loops as DoS vector | Mandatory `max_iterations` + cost ceiling per run |
-| SSE doesn't fan out — 100 viewers on a hot run | v0.1 accepts; v1.0 introduces Redis pubsub fan-out |
+| Loops as DoS vector | Mandatory `max_iterations` + per-team rate limit (v0.1) + cost ceiling (v0.5) |
+| docker.sock mount privilege footprint | Worker runs as non-root with explicit allowlist of agent images it can spawn; production AKS path uses K8s RBAC instead of socket |
+| SSE consumer-group fan-out cost on bus | v0.1 in-memory bus accepts; production Service Bus has built-in fan-out; verify cost at v0.5 |
 | Laptop relay auth | mTLS via short-lived certs issued by admin service; punted to v1.0 spec deep-dive |
 | Workflow-version migration | DAG schema validated against versioned JSON schema in repo; old runs immutable |
-| Permissions on write-capable agents | Manifest declares `write_capable: true`; admin must approve agent for team |
+| Permissions on write-capable agents | Manifest declares `write_capable: true`; admin must approve agent for team+project |
+| Scoped API key lifecycle | Key TTL = run duration + 5m grace; revoked on run terminal state; key scope cannot exceed parent caller's scope |
+| Project boundary on existing tables | `teams` and `projects` tables must exist with `project_id` FK before this work — verify v1 has these |
 
 **Open questions to resolve before v0.1 implementation:**
-1. Image registry choice (ACR vs internal Harbor vs none)
-2. Worker concurrency model (one container per worker process, or one worker per pool of containers)
-3. Whether `triggered_by` in `workflow_runs` accepts API-key callers or only user JWTs
-4. Quota model: token cost vs container seconds vs both
+1. **Image registry choice** (ACR vs internal Harbor vs Docker Hub for managed images)
+2. **Worker concurrency model** — one container per worker process, or one worker process orchestrating N concurrent containers
+3. **API-key callers triggering runs** — does `POST /runs` accept service-account API keys, or only user JWTs? (affects automation use cases)
+4. **DB migration tooling** — current repo uses raw `init.sql`. Adding 6 new tables is a good prompt to introduce Alembic. Decide before v0.1.
+**Resolved (via 2026-05-11 review):**
+- ~~Identity scope~~ → team + project (consistent with 2026-05-05); `project_id` nullable to match `api_keys`/`policies` pattern
+- ~~Event pipeline~~ → unified on existing observability bus; no `run_events` table
+- ~~Agent → LLM call path~~ → must route through gateway via scoped API key
+- ~~Quotas~~ → Redis rate limit per team on `POST /runs` (v0.1); cost ceiling deferred to v0.5
+- ~~Local container spawn~~ → mount host docker.sock; abstract behind `ContainerRuntime` port
+- ~~`projects` table exists~~ → confirmed in `services/admin/app/models/team.py:Project`; reuses existing FK pattern
 
 ---
 
