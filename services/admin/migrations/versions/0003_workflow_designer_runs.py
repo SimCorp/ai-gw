@@ -1,7 +1,8 @@
 """workflow_runs + run_nodes + work_queue
 
-Adds the run state machine tables. Includes a partial index on work_queue
-matching the spec's SELECT … FOR UPDATE SKIP LOCKED claim pattern.
+Adds the run state machine tables. Status uses a plain String column with
+a CHECK constraint (mirroring the codebase convention in team_members.role
+and guardrails.severity); avoids the Postgres enum type lifecycle headaches.
 
 Revision ID: 0003
 Revises: 0002
@@ -21,16 +22,16 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
-def upgrade() -> None:
-    # Enum type (idempotent guard for the rare re-run-on-existing-DB case)
-    op.execute("DO $$ BEGIN CREATE TYPE run_status AS ENUM ('pending','running','succeeded','failed','cancelled'); EXCEPTION WHEN duplicate_object THEN null; END $$")
+_STATUS_CHECK = "status IN ('pending','running','succeeded','failed','cancelled')"
 
+
+def upgrade() -> None:
     op.create_table(
         "workflow_runs",
         sa.Column("id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
         sa.Column("workflow_id", UUID(as_uuid=True), sa.ForeignKey("workflows.id", ondelete="CASCADE"), nullable=False),
         sa.Column("version", sa.Integer(), nullable=False),
-        sa.Column("status", sa.Enum("pending", "running", "succeeded", "failed", "cancelled", name="run_status", create_type=False), nullable=False, server_default=sa.text("'pending'")),
+        sa.Column("status", sa.String(), nullable=False, server_default=sa.text("'pending'")),
         sa.Column("inputs", JSONB, nullable=True),
         sa.Column("outputs", JSONB, nullable=True),
         sa.Column("error", sa.String(), nullable=True),
@@ -42,6 +43,7 @@ def upgrade() -> None:
         sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("finished_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("NOW()")),
+        sa.CheckConstraint(_STATUS_CHECK, name="workflow_runs_status_check"),
     )
     op.create_index("idx_workflow_runs_team_created", "workflow_runs", ["team_id", sa.text("created_at DESC")])
     op.create_index("idx_workflow_runs_status", "workflow_runs", ["status"])
@@ -51,7 +53,7 @@ def upgrade() -> None:
         sa.Column("run_id", UUID(as_uuid=True), sa.ForeignKey("workflow_runs.id", ondelete="CASCADE"), nullable=False),
         sa.Column("node_id", sa.String(), nullable=False),
         sa.Column("iteration", sa.Integer(), nullable=False, server_default=sa.text("0")),
-        sa.Column("status", sa.Enum("pending", "running", "succeeded", "failed", "cancelled", name="run_status", create_type=False), nullable=False, server_default=sa.text("'pending'")),
+        sa.Column("status", sa.String(), nullable=False, server_default=sa.text("'pending'")),
         sa.Column("agent_id", UUID(as_uuid=True), sa.ForeignKey("agents.id", ondelete="SET NULL"), nullable=True),
         sa.Column("inputs", JSONB, nullable=True),
         sa.Column("outputs", JSONB, nullable=True),
@@ -59,6 +61,7 @@ def upgrade() -> None:
         sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("finished_at", sa.DateTime(timezone=True), nullable=True),
         sa.PrimaryKeyConstraint("run_id", "node_id", "iteration", name="run_nodes_pk"),
+        sa.CheckConstraint(_STATUS_CHECK, name="run_nodes_status_check"),
     )
 
     op.create_table(
@@ -84,4 +87,3 @@ def downgrade() -> None:
     op.drop_index("idx_workflow_runs_status", table_name="workflow_runs")
     op.drop_index("idx_workflow_runs_team_created", table_name="workflow_runs")
     op.drop_table("workflow_runs")
-    op.execute("DROP TYPE IF EXISTS run_status")
