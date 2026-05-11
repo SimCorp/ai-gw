@@ -68,8 +68,14 @@ export default function WorkflowsPage() {
               <div style={{ fontSize: 12, color: 'var(--fg-3)', marginTop: 2 }}>{wf.slug} · v{wf.latest_version}</div>
               {wf.description && <div style={{ fontSize: 12, color: 'var(--fg-2)', marginTop: 4 }}>{wf.description}</div>}
             </div>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <span style={{ fontSize: 11, color: 'var(--fg-3)' }}>{new Date(wf.created_at).toLocaleDateString()}</span>
+              <Link
+                href={`/portal/workflows/${wf.id}/designer`}
+                style={{ fontSize: 12, color: 'var(--fg-2)', textDecoration: 'none', padding: '3px 8px', border: '1px solid var(--rule)', borderRadius: 5 }}
+              >
+                Design
+              </Link>
               <Link
                 href={`/portal/workflows/${wf.id}/runs/new`}
                 style={{ fontSize: 12, color: 'var(--blue)', textDecoration: 'none', padding: '3px 8px', border: '1px solid var(--blue)', borderRadius: 5 }}

@@ -22,7 +22,7 @@ import asyncpg
 from redis.asyncio import Redis
 
 from app.config import Settings
-from app.dag import ready_successors, is_terminal, node as dag_node
+from app.dag import ready_successors, is_terminal, node as dag_node, should_loop
 from app.events import node_started, node_log, node_finished, run_finished
 from app.runtime.docker import DockerRuntime
 
@@ -128,6 +128,20 @@ async def _enqueue_successor(pool: asyncpg.Pool, run_id: uuid.UUID, node_id: str
             await conn.execute(
                 "INSERT INTO work_queue (run_id, node_id) VALUES ($1, $2)",
                 run_id, node_id,
+            )
+
+
+async def _enqueue_loop_iteration(pool: asyncpg.Pool, run_id: uuid.UUID, node_id: str, iteration: int) -> None:
+    """Re-enqueue the same node for the next loop iteration."""
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            await conn.execute(
+                "INSERT INTO run_nodes (run_id, node_id, iteration, status) VALUES ($1, $2, $3, 'pending') ON CONFLICT DO NOTHING",
+                run_id, node_id, iteration,
+            )
+            await conn.execute(
+                "INSERT INTO work_queue (run_id, node_id, iteration) VALUES ($1, $2, $3)",
+                run_id, node_id, iteration,
             )
 
 
@@ -333,14 +347,22 @@ async def _handle_job(
     await _finalize_node(pool, queue_id, run_id, node_id, iteration, "succeeded", result.outputs, None)
     await node_finished(redis, run_id, node_id, iteration, "succeeded", outputs=result.outputs)
 
+    outputs = result.outputs or {}
+
+    # Loop check: re-enqueue same node if loop condition met
+    if should_loop(nspec, outputs, iteration):
+        await _enqueue_loop_iteration(pool, run_id, node_id, iteration + 1)
+        return
+
     # Advance DAG: enqueue successors whose predecessors are all succeeded
+    # and whose edge conditions are satisfied by this node's outputs.
     state = await _run_node_state(pool, run_id)
-    next_nodes = ready_successors(dag, node_id, state)
+    next_nodes = ready_successors(dag, node_id, state, outputs=outputs)
     if next_nodes:
         for nxt in next_nodes:
             await _enqueue_successor(pool, run_id, nxt)
     elif is_terminal(dag, node_id):
-        # Check if all DAG nodes have succeeded (linear v0.1 ⇒ if no successors, run is done)
+        # No successors: run is complete when all nodes have succeeded
         all_done = all(
             state.get(n["id"]) == "succeeded"
             for n in dag.get("nodes", [])
