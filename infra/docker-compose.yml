@@ -126,13 +126,16 @@ services:
   # ── AI Gateway services ───────────────────────────────────────────────────────
 
   db-migrate:
-    image: postgres:16
+    # Runs Alembic against the admin service's migrations (services/admin/migrations).
+    # Replaces the legacy `psql -f init.sql` path; the baseline migration
+    # (0001_baseline.py) captures the union of init.sql + _EXTRA_DDL.
+    build:
+      context: ../services/admin
     environment:
-      PGPASSWORD: aigateway
-    volumes:
-      - ./postgres/init.sql:/init.sql:ro
-    command: >
-      psql -h postgres -U aigateway -d aigateway -f /init.sql
+      # asyncpg URL because app/db.py creates an async engine at module import time
+      # (env.py rewrites to psycopg2 internally for Alembic's sync operations)
+      DATABASE_URL: "postgresql+asyncpg://aigateway:aigateway@postgres:5432/aigateway"
+    command: ["alembic", "-c", "/app/alembic.ini", "upgrade", "head"]
     depends_on:
       postgres:
         condition: service_healthy
