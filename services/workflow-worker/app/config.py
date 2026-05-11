@@ -17,6 +17,8 @@ class Settings:
     sweeper_interval_s: float
     host_runs_path: str
     container_network: str
+    relay_url: str
+    admin_url: str
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -33,4 +35,6 @@ class Settings:
             # same host path is bind-mounted into agent containers at /run.
             host_runs_path=os.getenv("HOST_RUNS_PATH", "/tmp/aigw-runs"),
             container_network=os.getenv("AGENT_CONTAINER_NETWORK", "aigateway"),
+            relay_url=os.getenv("AGENT_RELAY_URL", "http://agent-relay:8007"),
+            admin_url=os.getenv("ADMIN_URL", "http://admin:8005"),
         )

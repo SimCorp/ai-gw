@@ -1,0 +1,16 @@
+{
+  "servers": {
+    "codematetools": {
+      "type": "http",
+      "url": "https://mcp.prod.codemate.az.scdom.net/tools/api/mcp"
+    },
+    "ai-gateway": {
+      "type": "http",
+      "url": "http://localhost:8005/mcp/copilot-catalog"
+    },
+    "ai-librarian": {
+      "type": "http",
+      "url": "http://localhost:8008/mcp"
+    }
+  }
+}

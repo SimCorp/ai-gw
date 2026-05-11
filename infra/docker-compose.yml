@@ -264,9 +264,28 @@ services:
       NEXT_TELEMETRY_DISABLED: "1"
       NEXT_PUBLIC_ADMIN_BASE_URL: "http://localhost:8005"
       NEXT_PUBLIC_CACHE_BASE_URL: "http://localhost:8002"
+      NEXT_PUBLIC_IDENTITY_BASE_URL: "http://localhost:8006"
+      NEXT_PUBLIC_LIBRARIAN_BASE_URL: "http://localhost:8008"
     depends_on:
       admin:
         condition: service_healthy
+
+  agent-relay:
+    build:
+      context: ../services/agent-relay
+    ports:
+      - "127.0.0.1:8007:8007"
+    environment:
+      REDIS_URL: "redis://redis:6379/0"
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8007/health')\" 2>/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
 
   workflow-worker:
     build:
@@ -280,6 +299,7 @@ services:
       # /worker-runs; agent containers mount the SAME host path at /run.
       HOST_RUNS_PATH: "/tmp/aigw-runs"
       AGENT_CONTAINER_NETWORK: "aigateway"
+      AGENT_RELAY_URL: "http://agent-relay:8007"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp/aigw-runs:/worker-runs
@@ -289,6 +309,53 @@ services:
       redis:
         condition: service_healthy
     restart: unless-stopped
+
+  identity:
+    build:
+      context: ../services/identity
+    ports:
+      - "127.0.0.1:8006:8006"
+    environment:
+      DATABASE_URL: "postgresql+asyncpg://aigateway:aigateway@postgres:5432/aigateway"
+      REDIS_URL: "redis://redis:6379/0"
+      ADMIN_URL: "http://admin:8005"
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      admin:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8006/health')\" 2>/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  librarian:
+    build:
+      context: ../services/librarian
+    ports:
+      - "127.0.0.1:8008:8008"
+    environment:
+      DATABASE_URL: "postgresql+asyncpg://aigateway:aigateway@postgres:5432/aigateway"
+      REDIS_URL: "redis://redis:6379/0"
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-sk-local-placeholder}
+      EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:-http://ollama:11434/v1}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
+      CACHE_URL: "http://cache:8002"
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8008/health')\" 2>/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
 
   claude-sandbox:
     build:

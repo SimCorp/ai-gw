@@ -19,12 +19,14 @@ import uuid
 from typing import Any
 
 import asyncpg
+import httpx
 from redis.asyncio import Redis
 
 from app.config import Settings
-from app.dag import ready_successors, is_terminal, node as dag_node
+from app.dag import ready_successors, is_terminal, node as dag_node, should_loop
 from app.events import node_started, node_log, node_finished, run_finished
 from app.runtime.docker import DockerRuntime
+from app.runtime.relay import RelayRuntime
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 _log = logging.getLogger("workflow-worker")
@@ -131,6 +133,20 @@ async def _enqueue_successor(pool: asyncpg.Pool, run_id: uuid.UUID, node_id: str
             )
 
 
+async def _enqueue_loop_iteration(pool: asyncpg.Pool, run_id: uuid.UUID, node_id: str, iteration: int) -> None:
+    """Re-enqueue the same node for the next loop iteration."""
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            await conn.execute(
+                "INSERT INTO run_nodes (run_id, node_id, iteration, status) VALUES ($1, $2, $3, 'pending') ON CONFLICT DO NOTHING",
+                run_id, node_id, iteration,
+            )
+            await conn.execute(
+                "INSERT INTO work_queue (run_id, node_id, iteration) VALUES ($1, $2, $3)",
+                run_id, node_id, iteration,
+            )
+
+
 async def _cleanup_run_key(redis: Redis, run_id: uuid.UUID) -> None:
     try:
         await redis.delete(f"workflow:scoped_key:{run_id}")
@@ -205,6 +221,8 @@ async def _handle_job(
     redis: Redis,
     runtime: DockerRuntime,
     cache_base_url: str,
+    relay_url: str,
+    admin_url: str,
 ) -> None:
     run_id: uuid.UUID = job["run_id"]
     node_id: str = job["node_id"]
@@ -294,10 +312,16 @@ async def _handle_job(
     await _mark_node_running(pool, run_id, node_id, iteration, agent["id"])
     await node_started(redis, run_id, node_id, iteration, agent["id"])
 
+    # Choose runtime: RelayRuntime for relay:// agents, DockerRuntime otherwise
+    image: str = agent["image"]
+    active_runtime: DockerRuntime | RelayRuntime = (
+        RelayRuntime(relay_url) if image.startswith("relay://") else runtime
+    )
+
     on_log = functools.partial(_forward_log, redis, run_id, node_id)
     try:
-        result = await runtime.run(
-            image=agent["image"],
+        result = await active_runtime.run(
+            image=image,
             env=env,
             inputs=inputs,
             run_id=str(run_id),
@@ -333,14 +357,27 @@ async def _handle_job(
     await _finalize_node(pool, queue_id, run_id, node_id, iteration, "succeeded", result.outputs, None)
     await node_finished(redis, run_id, node_id, iteration, "succeeded", outputs=result.outputs)
 
+    outputs = result.outputs or {}
+
+    # Autonomous agent: fire-and-forget sub-workflow spawn if _spawn key present
+    spawn_payload = outputs.get("_spawn")
+    if spawn_payload and isinstance(spawn_payload, dict):
+        asyncio.create_task(_fire_spawn(admin_url, spawn_payload))
+
+    # Loop check: re-enqueue same node if loop condition met
+    if should_loop(nspec, outputs, iteration):
+        await _enqueue_loop_iteration(pool, run_id, node_id, iteration + 1)
+        return
+
     # Advance DAG: enqueue successors whose predecessors are all succeeded
+    # and whose edge conditions are satisfied by this node's outputs.
     state = await _run_node_state(pool, run_id)
-    next_nodes = ready_successors(dag, node_id, state)
+    next_nodes = ready_successors(dag, node_id, state, outputs=outputs)
     if next_nodes:
         for nxt in next_nodes:
             await _enqueue_successor(pool, run_id, nxt)
     elif is_terminal(dag, node_id):
-        # Check if all DAG nodes have succeeded (linear v0.1 ⇒ if no successors, run is done)
+        # No successors: run is complete when all nodes have succeeded
         all_done = all(
             state.get(n["id"]) == "succeeded"
             for n in dag.get("nodes", [])
@@ -353,6 +390,23 @@ async def _handle_job(
                 await redis.delete(f"workflow:scoped_key:{run_id}")
             except Exception:
                 pass
+
+
+async def _fire_spawn(admin_url: str, spawn_payload: dict) -> None:
+    """Fire-and-forget: POST sub-workflow spawn to admin service."""
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                f"{admin_url.rstrip('/')}/runs",
+                json=spawn_payload,
+                timeout=10.0,
+            )
+        if not resp.is_success:
+            _log.warning("sub-workflow spawn failed (%s): %s", resp.status_code, resp.text[:200])
+        else:
+            _log.info("sub-workflow spawned: %s", spawn_payload.get("workflow_id"))
+    except Exception as exc:
+        _log.warning("sub-workflow spawn error: %s", exc)
 
 
 async def _forward_log(redis: Redis, run_id: uuid.UUID, node_id: str, line: str) -> None:
@@ -379,6 +433,8 @@ async def _main() -> None:
         container_network=cfg.container_network,
     )
     cache_base_url = "http://cache:8002"
+    relay_url = cfg.relay_url
+    admin_url = cfg.admin_url
 
     stop_event = asyncio.Event()
     sem = asyncio.Semaphore(cfg.concurrency)
@@ -395,7 +451,15 @@ async def _main() -> None:
     async def _worker_for(job: dict) -> None:
         async with sem:
             try:
-                await _handle_job(job=job, pool=pool, redis=redis, runtime=runtime, cache_base_url=cache_base_url)
+                await _handle_job(
+                    job=job,
+                    pool=pool,
+                    redis=redis,
+                    runtime=runtime,
+                    cache_base_url=cache_base_url,
+                    relay_url=relay_url,
+                    admin_url=admin_url,
+                )
             except Exception as exc:
                 _log.exception("unhandled error in job handler: %s", exc)
 
