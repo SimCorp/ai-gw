@@ -116,6 +116,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   <NavItem href="/admin/models" label="Model registry" />
                   <NavItem href="/admin/cache" label="Semantic cache" />
                   <NavItem href="/admin/providers" label="Providers" />
+                  <NavItem href="/admin/providers#auto-drive" label="Auto-Drive" />
                 </NavSection>
 
                 <NavSection label="Operate">
