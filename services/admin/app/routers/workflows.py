@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import require_admin_auth
 from app.db import get_session
-from app.api_keys import issue_scoped_key, revoke_key
+from app.api_keys import delete_scoped_key_from_redis, issue_scoped_key, revoke_key
 from app.events import workflow as wf_events
 
 _log = logging.getLogger(__name__)
@@ -310,26 +310,33 @@ async def submit_run(
         raise HTTPException(404, "workflow version not found")
     dag = dag_row
 
-    # Issue a scoped API key tied to the caller's identity
+    # Pre-generate run_id so we can tie the scoped key to it in Redis
+    run_id_val = uuid.uuid4()
+
+    # Issue a scoped API key; plaintext stored in Redis so the worker can
+    # inject it as AIGW_API_KEY when launching agent containers.
     plaintext_key, key_id = await issue_scoped_key(
         session,
         team_id=uuid.UUID(body.team_id),
         project_id=uuid.UUID(body.project_id) if body.project_id else None,
         name=f"workflow-run:{body.workflow_id}",
         ttl_seconds=3600,
+        run_id=run_id_val,
+        redis=redis,
     )
 
-    # Insert the run row
+    # Insert the run row using the pre-generated id
     run_id = (await session.execute(
         text(
             """
-            INSERT INTO workflow_runs (workflow_id, version, status, inputs, triggered_by, triggered_by_kind,
+            INSERT INTO workflow_runs (id, workflow_id, version, status, inputs, triggered_by, triggered_by_kind,
                                        team_id, project_id, scoped_api_key_id)
-            VALUES (:wid, :v, 'pending', CAST(:inputs AS jsonb), :tb, :tbk, :team, :project, :key_id)
+            VALUES (:id, :wid, :v, 'pending', CAST(:inputs AS jsonb), :tb, :tbk, :team, :project, :key_id)
             RETURNING id
             """
         ),
         {
+            "id": run_id_val,
             "wid": body.workflow_id,
             "v": version,
             "inputs": json.dumps(body.inputs),
@@ -457,6 +464,7 @@ async def cancel_run(
             await wf_events.run_finished(redis, uuid.UUID(run_id), "cancelled")
         except Exception:
             pass
+        await delete_scoped_key_from_redis(redis, uuid.UUID(run_id))
     return {"status": "cancelled"}
 
 

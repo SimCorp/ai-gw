@@ -131,6 +131,13 @@ async def _enqueue_successor(pool: asyncpg.Pool, run_id: uuid.UUID, node_id: str
             )
 
 
+async def _cleanup_run_key(redis: Redis, run_id: uuid.UUID) -> None:
+    try:
+        await redis.delete(f"workflow:scoped_key:{run_id}")
+    except Exception:
+        pass
+
+
 async def _mark_run_finished(pool: asyncpg.Pool, run_id: uuid.UUID, status: str, outputs: dict | None = None, error: str | None = None) -> None:
     async with pool.acquire() as conn:
         await conn.execute(
@@ -218,6 +225,7 @@ async def _handle_job(
         await node_finished(redis, run_id, node_id, iteration, "failed", error=f"node {node_id} not in DAG")
         await _mark_run_finished(pool, run_id, "failed", error=f"node {node_id} not in DAG")
         await run_finished(redis, run_id, "failed")
+        await _cleanup_run_key(redis, run_id)
         return
 
     agent_slug = nspec.get("agent_slug")
@@ -228,6 +236,7 @@ async def _handle_job(
         await node_finished(redis, run_id, node_id, iteration, "failed", error=msg)
         await _mark_run_finished(pool, run_id, "failed", error=msg)
         await run_finished(redis, run_id, "failed")
+        await _cleanup_run_key(redis, run_id)
         return
 
     # Collect inputs: defaults from node, override with predecessor outputs and run inputs
@@ -265,20 +274,20 @@ async def _handle_job(
     if pred_outputs:
         inputs["_predecessors"] = pred_outputs
 
-    # Fetch the scoped key plaintext is impossible (we only store hash); the worker
-    # passes the key_id so the agent can call cache:8002 with header X-API-Key-Id?
-    # Actually agents need plaintext. v0.1 trade-off: store plaintext alongside hash
-    # is insecure; instead we generate a NEW scoped key here. Simpler v0.1: pass
-    # nothing and require agents to authenticate via a different mechanism.
-    #
-    # For v0.1 honesty: pass a placeholder env var (REAL impl: admin keeps plaintext
-    # in memory until run.finished, or uses a HSM/Vault-issued one-time material).
+    # Retrieve the plaintext scoped API key from Redis. Admin stored it there
+    # during run submission (workflow:scoped_key:{run_id}) so the worker can
+    # inject it into each agent container as AIGW_API_KEY.
+    scoped_key = ""
+    try:
+        scoped_key = await redis.get(f"workflow:scoped_key:{run_id}") or ""
+    except Exception as exc:
+        _log.warning("could not read scoped key for run %s: %s", run_id, exc)
+
     env = {
         "AIGW_RUN_ID": str(run_id),
         "AIGW_NODE_ID": node_id,
         "AIGW_BASE_URL": cache_base_url,
-        # AIGW_API_KEY: see comment above; left empty in v0.1.
-        "AIGW_API_KEY": "",
+        "AIGW_API_KEY": scoped_key,
     }
 
     # Mark running + publish event
@@ -301,6 +310,7 @@ async def _handle_job(
         await node_finished(redis, run_id, node_id, iteration, "failed", error="timeout")
         await _mark_run_finished(pool, run_id, "failed", error="timeout")
         await run_finished(redis, run_id, "failed")
+        await _cleanup_run_key(redis, run_id)
         return
     except Exception as exc:
         msg = f"runtime error: {exc}"
@@ -308,6 +318,7 @@ async def _handle_job(
         await node_finished(redis, run_id, node_id, iteration, "failed", error=msg)
         await _mark_run_finished(pool, run_id, "failed", error=msg)
         await run_finished(redis, run_id, "failed")
+        await _cleanup_run_key(redis, run_id)
         return
 
     if result.exit_code != 0:
@@ -316,6 +327,7 @@ async def _handle_job(
         await node_finished(redis, run_id, node_id, iteration, "failed", error=msg)
         await _mark_run_finished(pool, run_id, "failed", error=msg)
         await run_finished(redis, run_id, "failed")
+        await _cleanup_run_key(redis, run_id)
         return
 
     await _finalize_node(pool, queue_id, run_id, node_id, iteration, "succeeded", result.outputs, None)
@@ -337,6 +349,10 @@ async def _handle_job(
         if all_done:
             await _mark_run_finished(pool, run_id, "succeeded", outputs=result.outputs)
             await run_finished(redis, run_id, "succeeded")
+            try:
+                await redis.delete(f"workflow:scoped_key:{run_id}")
+            except Exception:
+                pass
 
 
 async def _forward_log(redis: Redis, run_id: uuid.UUID, node_id: str, line: str) -> None:
