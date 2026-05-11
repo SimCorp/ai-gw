@@ -210,11 +210,11 @@ async def _emit_event(client: httpx.AsyncClient, event: dict) -> None:
 
 async def _validate_token(
     client: httpx.AsyncClient, token: str, model: str | None
-) -> tuple[str, str | None, str | None] | Response | None:
+) -> tuple[str, str | None, str | None, str | None] | Response | None:
     """Validate token with auth service.
 
     Returns:
-      (team_id, project_id, key_id) on success
+      (team_id, project_id, key_id, scope) on success
       Response on 429 (budget/rate-limit) — forward to caller as-is
       None on auth failure (401, network error, etc.)
 
@@ -231,7 +231,12 @@ async def _validate_token(
         )
         if resp.status_code == 200:
             data = resp.json()
-            result = data["team_id"], data.get("project_id"), data.get("key_id")
+            result = (
+                data["team_id"],
+                data.get("project_id"),
+                data.get("key_id"),
+                data.get("scope"),
+            )
             # Populate identity cache on every successful validation
             _identity_cache[token_key] = _CachedIdentity(
                 team_id=result[0],
@@ -250,7 +255,8 @@ async def _validate_token(
         cached = _identity_cache.get(token_key)
         if cached and time.monotonic() < cached.expires_at:
             _log.warning("Auth service unreachable, using cached identity (team=%s): %s", cached.team_id, exc)
-            return cached.team_id, cached.project_id, cached.key_id
+            # Scope is not stored in the cache; treat as standard on fallback
+            return cached.team_id, cached.project_id, cached.key_id, None
         return None
 
 
@@ -355,7 +361,7 @@ async def list_models(request: Request):
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
     if isinstance(result, Response):
         return result
-    _team_id, _project_id, _key_id = result
+    _team_id, _project_id, _key_id, _scope = result
     resp = await http.get(
         f"{settings.litellm_url}/v1/models",
         headers={"Authorization": f"Bearer {settings.litellm_master_key}"},
@@ -376,7 +382,14 @@ async def _handle_chat_completions(request: Request, body: dict):
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
     if isinstance(result, Response):
         return result
-    team_id, project_id, key_id = result
+    team_id, project_id, key_id, scope = result
+
+    # Enforce scope: workflow-run keys may only call /v1/chat/completions
+    if scope == "workflow-run" and not request.url.path.startswith("/v1/chat/completions"):
+        return JSONResponse(
+            {"error": "workflow-run scoped keys may only call /v1/chat/completions"},
+            status_code=403,
+        )
 
     # Propagate or generate request-id for distributed tracing
     request_id = (
@@ -659,7 +672,7 @@ async def anthropic_proxy(path: str, request: Request):
         return JSONResponse({"error": {"type": "authentication_error", "message": "Invalid API key"}}, status_code=401)
     if isinstance(result, Response):
         return result
-    team_id, project_id, key_id = result
+    team_id, project_id, key_id, _scope = result
 
     fwd_headers = {
         k: v for k, v in request.headers.items()

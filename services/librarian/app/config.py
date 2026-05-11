@@ -23,5 +23,9 @@ class Settings(BaseSettings):
     # to allow all origins (operator's explicit choice).
     cors_origins: str = "http://localhost:3002"
 
+    # Service token for /ingest and /mcp/tools/ingest endpoints.
+    # Leave empty to allow unauthenticated access in dev mode (fail open).
+    librarian_service_token: str = ""  # LIBRARIAN_SERVICE_TOKEN
+
 
 settings = Settings()

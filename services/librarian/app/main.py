@@ -13,6 +13,7 @@ Architecture notes (per advisor review):
 import asyncio
 import json
 import logging
+import re
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -73,6 +74,57 @@ async def get_redis() -> Redis:
     if _redis is None:
         raise RuntimeError("Redis not initialised")
     return _redis
+
+
+# ---------------------------------------------------------------------------
+# Ingest auth + content validation helpers
+# ---------------------------------------------------------------------------
+
+_SOURCE_URL_PATTERN = re.compile(r"^https?://", re.IGNORECASE)
+_MAX_CONTENT_LEN = 50_000
+_MAX_TAGS = 20
+_MAX_TAG_LEN = 50
+
+
+def _check_ingest_token(request: Request) -> None:
+    """Verify X-Service-Token header for ingest endpoints.
+
+    Fails open when LIBRARIAN_SERVICE_TOKEN is not configured (dev mode).
+    """
+    if not settings.librarian_service_token:
+        return
+    provided = request.headers.get("X-Service-Token", "")
+    if provided != settings.librarian_service_token:
+        raise HTTPException(status_code=401, detail="Invalid or missing X-Service-Token")
+
+
+def _validate_ingest_content(
+    content: str,
+    source_url: str | None,
+    tags: list[str],
+) -> None:
+    """Validate ingest payload fields and raise 422 on violation."""
+    if len(content) > _MAX_CONTENT_LEN:
+        raise HTTPException(
+            status_code=422,
+            detail=f"content exceeds maximum length of {_MAX_CONTENT_LEN} characters",
+        )
+    if source_url is not None and not _SOURCE_URL_PATTERN.match(source_url):
+        raise HTTPException(
+            status_code=422,
+            detail="source_url must start with http:// or https://",
+        )
+    if len(tags) > _MAX_TAGS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"tags list exceeds maximum of {_MAX_TAGS} items",
+        )
+    for tag in tags:
+        if len(tag) > _MAX_TAG_LEN:
+            raise HTTPException(
+                status_code=422,
+                detail=f"each tag must be at most {_MAX_TAG_LEN} characters",
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -512,7 +564,9 @@ class ResearchTopicCreate(BaseModel):
 # ---------------------------------------------------------------------------
 
 @app.post("/ingest", status_code=201)
-async def ingest(body: IngestRequest):
+async def ingest(body: IngestRequest, request: Request):
+    _check_ingest_token(request)
+    _validate_ingest_content(body.content, body.source_url, body.tags)
     pool = await get_pool()
     redis = await get_redis()
     doc_id = await ingest_document(
@@ -783,11 +837,15 @@ async def mcp_search(body: dict):
 
 
 @app.post("/mcp/tools/ingest")
-async def mcp_ingest(body: dict):
+async def mcp_ingest(body: dict, request: Request):
+    _check_ingest_token(request)
     title = body.get("title", "")
     content = body.get("content", "")
     if not title or not content:
         raise HTTPException(status_code=422, detail="title and content are required")
+
+    tags = body.get("tags") or []
+    _validate_ingest_content(content, body.get("source_url"), tags)
 
     pool = await get_pool()
     redis = await get_redis()
@@ -797,7 +855,7 @@ async def mcp_ingest(body: dict):
         title=title,
         content=content,
         topic=body.get("topic"),
-        tags=body.get("tags") or [],
+        tags=tags,
     )
     return {"id": doc_id}
 

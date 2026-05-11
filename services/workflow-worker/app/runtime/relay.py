@@ -19,8 +19,9 @@ _log = logging.getLogger(__name__)
 
 
 class RelayRuntime:
-    def __init__(self, relay_url: str) -> None:
+    def __init__(self, relay_url: str, relay_secret: str = "") -> None:
         self._relay_url = relay_url.rstrip("/")
+        self._relay_secret = relay_secret
 
     async def run(
         self,
@@ -40,6 +41,10 @@ class RelayRuntime:
         slug = image.removeprefix("relay://")
         _log.info("relay dispatch: slug=%s run_id=%s node_id=%s", slug, run_id, node_id)
 
+        headers: dict[str, str] = {}
+        if self._relay_secret:
+            headers["X-Relay-Secret"] = self._relay_secret
+
         async with httpx.AsyncClient() as client:
             try:
                 resp = await client.post(
@@ -50,6 +55,7 @@ class RelayRuntime:
                         "run_id": run_id,
                         "node_id": node_id,
                     },
+                    headers=headers,
                     timeout=timeout_s,
                 )
             except httpx.TimeoutException:

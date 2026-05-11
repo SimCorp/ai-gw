@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     litellm_url: str = "http://litellm:8003"
     observability_url: str = "http://observability:8004"
 
+    # Secret used to encrypt the RSA identity signing key stored in Redis.
+    # Use a long random string in production (e.g. openssl rand -hex 32).
+    identity_key_secret: str = "dev-identity-key-secret-change-in-prod"
+
     # CORS — override in production to restrict allowed origins
     cors_origins: list[str] = ["http://localhost:3001", "http://localhost:3002"]
 

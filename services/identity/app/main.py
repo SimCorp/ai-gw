@@ -272,6 +272,19 @@ def _redis(request: Request) -> Redis:
     return request.app.state.redis
 
 
+def _check_service_token(request: Request) -> None:
+    """Verify X-Service-Token header if identity_service_token is configured.
+
+    Fails open (allows) when identity_service_token is empty — dev mode.
+    Raises HTTP 401 when the token is configured but missing or wrong.
+    """
+    if not settings.identity_service_token:
+        return  # dev mode — no auth required
+    provided = request.headers.get("X-Service-Token", "")
+    if provided != settings.identity_service_token:
+        raise HTTPException(status_code=401, detail="Invalid or missing X-Service-Token")
+
+
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
@@ -389,6 +402,25 @@ async def heartbeat(slug: str, request: Request):
         raise HTTPException(status_code=404, detail=f"Agent '{slug}' not found")
 
     redis = _redis(request)
+
+    # Soft relay-token check — fail open to avoid breaking managed agents that
+    # don't supply a token.  If a relay token is registered for this slug in
+    # Redis (written by agent-relay on /register), the caller must present it.
+    relay_token_key = f"relay:agent:{slug}:token"
+    try:
+        stored_token = await redis.get(relay_token_key)
+        if stored_token:
+            provided = request.headers.get("X-Relay-Token", "")
+            if provided != stored_token:
+                raise HTTPException(
+                    status_code=401,
+                    detail="Invalid or missing X-Relay-Token for heartbeat",
+                )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        log.warning("heartbeat relay-token check failed (fail open) slug=%s: %s", slug, exc)
+
     await redis.setex(_heartbeat_key(slug), _HEARTBEAT_TTL, "1")
 
     async with _pool(request).acquire() as conn:
@@ -403,6 +435,7 @@ async def heartbeat(slug: str, request: Request):
 
 @app.post("/agents/register", response_model=AgentIdentity, status_code=201)
 async def register_agent(body: RegisterRequest, request: Request):
+    _check_service_token(request)
     # Verify the optional identity token against the admin JWKS
     token_verified = False
     if body.identity_token:
@@ -447,6 +480,7 @@ async def register_agent(body: RegisterRequest, request: Request):
 
 @app.delete("/agents/{slug}", status_code=204)
 async def deregister_agent(slug: str, request: Request):
+    _check_service_token(request)
     async with _pool(request).acquire() as conn:
         deleted = await conn.fetchval(
             "DELETE FROM agent_identities WHERE slug = $1 RETURNING id", slug

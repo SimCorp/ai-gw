@@ -20,6 +20,8 @@ class Settings:
     relay_url: str
     admin_url: str
     agent_runtime: str
+    relay_secret: str
+    admin_internal_token: str
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -39,4 +41,6 @@ class Settings:
             relay_url=os.getenv("AGENT_RELAY_URL", "http://agent-relay:8007"),
             admin_url=os.getenv("ADMIN_URL", "http://admin:8005"),
             agent_runtime=os.getenv("AGENT_CONTAINER_RUNTIME", "docker"),
+            relay_secret=os.getenv("AGENT_RELAY_SECRET", ""),
+            admin_internal_token=os.getenv("ADMIN_INTERNAL_TOKEN", ""),
         )
