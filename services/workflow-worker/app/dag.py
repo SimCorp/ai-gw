@@ -104,6 +104,10 @@ def evaluate_condition(condition: str | None, outputs: dict) -> bool:
         return True
 
     cond = condition.strip()
+    # Strip leading "outputs." prefix — conditions are evaluated against the
+    # outputs dict directly, so "outputs.field" and "field" are equivalent.
+    if cond.startswith("outputs."):
+        cond = cond[len("outputs."):]
     m = _COND_RE.match(cond)
     if not m:
         # Non-parseable condition: treat as path truthiness check
@@ -133,6 +137,9 @@ def should_loop(node_spec: dict, outputs: dict, current_iteration: int) -> bool:
     - outputs contains _loop_continue: True
     """
     loop = node_spec.get('loop') or {}
+    # Handle both "loop": true and "loop": {"enabled": true, "max_iterations": N}
+    if isinstance(loop, bool):
+        loop = {"enabled": loop, "max_iterations": 10}
     if not loop.get('enabled', False):
         return False
     max_iter = int(loop.get('max_iterations', 10))

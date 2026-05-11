@@ -423,7 +423,13 @@ async def _forward_log(redis: Redis, run_id: uuid.UUID, node_id: str, line: str)
 
 async def _main() -> None:
     cfg = Settings.from_env()
-    _log.info("workflow-worker starting (id=%s concurrency=%d)", cfg.worker_id, cfg.concurrency)
+    _runtime_label = (
+        cfg.agent_runtime if cfg.agent_runtime != "kubernetes" else "kubernetes (not yet configured)"
+    )
+    _log.info(
+        "workflow-worker starting (id=%s concurrency=%d runtime=%s)",
+        cfg.worker_id, cfg.concurrency, _runtime_label,
+    )
 
     pool = await asyncpg.create_pool(cfg.database_url, min_size=2, max_size=10)
     redis = Redis.from_url(cfg.redis_url, decode_responses=True)

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { LoadingState, ErrorState } from '../_components/PageStates';
 
@@ -344,6 +344,229 @@ function ProviderCard({ p, onSaved }: { p: Provider; onSaved: () => void }) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Auto-Drive Routing section
+// ---------------------------------------------------------------------------
+
+interface GatewayInfo {
+  autoroute: {
+    enabled: boolean;
+    candidates?: string[];
+    current_model?: string | null;
+    score?: number | null;
+  };
+}
+
+interface ModelScore {
+  model: string;
+  score: number;
+}
+
+function AutoDriveSection() {
+  const [gatewayInfo, setGatewayInfo] = useState<GatewayInfo | null>(null);
+  const [scores, setScores] = useState<ModelScore[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [toggleBusy, setToggleBusy] = useState(false);
+  const [candidatesInput, setCandidatesInput] = useState('');
+  const [savingCandidates, setSavingCandidates] = useState(false);
+  const [saveMsg, setSaveMsg] = useState('');
+
+  async function loadGatewayInfo() {
+    try {
+      const res = await fetch(BASE + '/gateway-info');
+      if (res.ok) {
+        const json: GatewayInfo = await res.json();
+        setGatewayInfo(json);
+        if (json.autoroute?.candidates?.length) {
+          setCandidatesInput(json.autoroute.candidates.join(', '));
+        }
+      }
+    } catch {
+      // ignore — show empty state
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadScores() {
+    try {
+      const res = await fetch(BASE + '/config');
+      if (res.ok) {
+        const cfg = await res.json();
+        // config blob may have a model_scores map
+        const raw = cfg?.model_scores;
+        if (raw && typeof raw === 'object') {
+          setScores(
+            Object.entries(raw as Record<string, number>).map(([model, score]) => ({ model, score }))
+          );
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  useEffect(() => {
+    loadGatewayInfo();
+    loadScores();
+  }, []);
+
+  async function toggleAutoroute() {
+    if (!gatewayInfo) return;
+    const newVal = !gatewayInfo.autoroute.enabled;
+    setToggleBusy(true);
+    try {
+      await fetch(BASE + '/config/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: 'autoroute_enabled', value: String(newVal) }),
+      });
+      setGatewayInfo(prev =>
+        prev ? { ...prev, autoroute: { ...prev.autoroute, enabled: newVal } } : prev
+      );
+    } catch {
+      // silently fail
+    } finally {
+      setToggleBusy(false);
+    }
+  }
+
+  async function saveCandidates() {
+    setSavingCandidates(true);
+    setSaveMsg('');
+    try {
+      const res = await fetch(BASE + '/config/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: 'autoroute_models', value: candidatesInput.trim() }),
+      });
+      if (res.ok) {
+        setSaveMsg('Saved');
+      } else {
+        setSaveMsg('Error saving');
+      }
+    } catch {
+      setSaveMsg('Error saving');
+    } finally {
+      setSavingCandidates(false);
+      setTimeout(() => setSaveMsg(''), 3000);
+    }
+  }
+
+  const isEnabled = gatewayInfo?.autoroute?.enabled ?? false;
+
+  return (
+    <div style={{ marginTop: 40 }}>
+      <div style={{
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        marginBottom: 16, paddingBottom: 12, borderBottom: '1px solid var(--rule)',
+      }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Auto-Drive Routing</h2>
+          <p style={{ margin: '4px 0 0', fontSize: 12.5, color: 'var(--fg-2)' }}>
+            Automatically route requests to the best-performing model based on rolling quality scores.
+          </p>
+        </div>
+        {loading ? (
+          <span style={{ fontSize: 12, color: 'var(--fg-3)' }}>Loading…</span>
+        ) : (
+          <button
+            className={`btn btn--sm ${isEnabled ? 'btn--primary' : 'btn--ghost'}`}
+            onClick={toggleAutoroute}
+            disabled={toggleBusy}
+            style={{ minWidth: 90 }}
+          >
+            {toggleBusy ? 'Updating…' : isEnabled ? 'Enabled' : 'Disabled'}
+          </button>
+        )}
+      </div>
+
+      <div style={{
+        display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16,
+        background: 'var(--surface)', border: '1px solid var(--rule)',
+        borderRadius: 'var(--radius-3)', padding: 20,
+      }}>
+        {/* Candidate models input */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg-2)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            Candidate models
+          </label>
+          <textarea
+            value={candidatesInput}
+            onChange={e => setCandidatesInput(e.target.value)}
+            placeholder="gpt-4o, claude-3-5-sonnet, gemini-1.5-pro"
+            rows={4}
+            style={{
+              padding: '8px 10px', fontSize: 12.5,
+              background: 'var(--surface-2)', border: '1px solid var(--rule)',
+              borderRadius: 6, color: 'var(--fg-1)', outline: 'none',
+              resize: 'vertical', fontFamily: 'var(--font-mono)',
+            }}
+          />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button
+              className="btn btn--sm btn--primary"
+              onClick={saveCandidates}
+              disabled={savingCandidates || !candidatesInput.trim()}
+            >
+              {savingCandidates ? 'Saving…' : 'Save candidates'}
+            </button>
+            {saveMsg && (
+              <span style={{ fontSize: 12, color: saveMsg === 'Saved' ? 'var(--good)' : 'var(--bad)' }}>
+                {saveMsg}
+              </span>
+            )}
+          </div>
+          <p style={{ margin: 0, fontSize: 11.5, color: 'var(--fg-3)' }}>
+            Comma-separated list of model IDs eligible for auto-routing.
+          </p>
+        </div>
+
+        {/* Model score gauges */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg-2)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            Model scores
+          </div>
+          {scores.length === 0 ? (
+            <div style={{
+              padding: '20px 14px', border: '1px solid var(--rule)', borderRadius: 6,
+              background: 'var(--surface-2)', fontSize: 12.5, color: 'var(--fg-3)',
+              textAlign: 'center',
+            }}>
+              Pending data — scores will appear once Auto-Drive collects request history.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {scores.map(({ model, score }) => (
+                <div key={model} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--fg-1)' }}>{model}</span>
+                    <span style={{ fontSize: 11.5, color: 'var(--fg-2)', fontVariantNumeric: 'tabular-nums' }}>
+                      {(score * 100).toFixed(1)}%
+                    </span>
+                  </div>
+                  <div style={{
+                    height: 6, borderRadius: 3, background: 'var(--surface-2)',
+                    border: '1px solid var(--rule)', overflow: 'hidden',
+                  }}>
+                    <div style={{
+                      height: '100%',
+                      width: `${Math.min(100, score * 100)}%`,
+                      background: score >= 0.8 ? 'var(--green)' : score >= 0.5 ? 'var(--teal)' : 'var(--blue)',
+                      borderRadius: 3,
+                      transition: 'width 0.4s ease',
+                    }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ProvidersPage() {
   const { data, isLoading, isError, error, refetch } = useQuery<ProvidersResponse>({
     queryKey: ['providers'],
@@ -373,6 +596,8 @@ export default function ProvidersPage() {
           <ProviderCard key={p.env_var} p={p} onSaved={() => refetch()} />
         ))}
       </div>
+
+      <AutoDriveSection />
 
       <style>{`
         .prov {

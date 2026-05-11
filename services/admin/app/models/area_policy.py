@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import ARRAY, Boolean, DateTime, Float, ForeignKey, Integer, String, text
+from sqlalchemy import ARRAY, Boolean, DateTime, Float, ForeignKey, Integer, Text, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -16,7 +16,7 @@ class AreaPolicy(Base):
     cache_ttl_seconds: Mapped[int] = mapped_column(Integer, nullable=False, server_default="3600")
     cache_similarity_threshold: Mapped[float] = mapped_column(Float, nullable=False, server_default="0.95")
     cache_opt_out: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
-    embedding_model: Mapped[str] = mapped_column(String, nullable=False, server_default="'text-embedding-3-small'")
+    embedding_model: Mapped[str] = mapped_column(Text, nullable=False, server_default="'text-embedding-3-small'")
     rate_limit_rpm: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1000")
-    allowed_models: Mapped[list[str]] = mapped_column(ARRAY(String), nullable=False, server_default=text("ARRAY[]::TEXT[]"))
+    allowed_models: Mapped[list[str]] = mapped_column(ARRAY(Text()), nullable=False, server_default=text("ARRAY[]::TEXT[]"))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("NOW()"), onupdate=text("NOW()"))
