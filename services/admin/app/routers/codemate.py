@@ -159,3 +159,6 @@ _mcp_server.add_tool(
 @router.post("")
 async def mcp_jsonrpc(body: dict, request: Request):
     return await _mcp_server.handle(body, request)
+
+
+router.get("/sse")(_mcp_server.sse_endpoint())

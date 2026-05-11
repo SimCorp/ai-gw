@@ -17,8 +17,10 @@ import json
 import logging
 from typing import Any, Callable, Awaitable
 
+import asyncio
+
 from fastapi import Request
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 
 _log = logging.getLogger(__name__)
 
@@ -171,3 +173,75 @@ class MCPServer:
 
         _log.debug("MCP unknown method: %s", method)
         return self._error(request_id, -32601, f"Method not found: {method}")
+
+    # ------------------------------------------------------------------
+    # HTTP+SSE transport
+    # ------------------------------------------------------------------
+
+    def sse_endpoint(self):
+        """Return a FastAPI route handler for the HTTP+SSE MCP transport.
+
+        The SSE transport is used by clients that don't support plain HTTP POST
+        (e.g. some versions of Claude Desktop, certain IDE extensions). The
+        client GETs the SSE endpoint; the server sends:
+          1. An ``endpoint`` event pointing back to the POST URL
+          2. Responds to client-sent messages forwarded via a side-channel
+
+        Minimal SSE handshake per MCP spec draft:
+          - Server sends: ``event: endpoint\\ndata: <post_url>\\n\\n``
+          - Client reads it and uses <post_url> for JSON-RPC POSTs
+          - Server sends: ``event: message\\ndata: <json-rpc-response>\\n\\n``
+
+        This implementation uses an asyncio.Queue to bridge POST → SSE.
+        """
+        server = self  # capture for the closure
+
+        async def _sse_handler(request: Request) -> StreamingResponse:
+            queue: asyncio.Queue[str | None] = asyncio.Queue()
+
+            # Store queue in app state keyed by connection id (best-effort)
+            conn_id = id(queue)
+            sse_sessions = getattr(request.app.state, "_mcp_sse_sessions", {})
+            sse_sessions[conn_id] = queue
+            request.app.state._mcp_sse_sessions = sse_sessions
+
+            # Derive the POST URL from the current request
+            base = str(request.base_url).rstrip("/")
+            path = request.url.path.replace("/sse", "")
+            post_url = f"{base}{path}"
+
+            async def _stream():
+                yield f"event: endpoint\ndata: {post_url}\n\n"
+                try:
+                    while True:
+                        try:
+                            item = await asyncio.wait_for(queue.get(), timeout=15.0)
+                        except asyncio.TimeoutError:
+                            yield ": keepalive\n\n"
+                            continue
+                        if item is None:
+                            break
+                        yield f"event: message\ndata: {item}\n\n"
+                finally:
+                    sse_sessions.pop(conn_id, None)
+
+            return StreamingResponse(_stream(), media_type="text/event-stream")
+
+        return _sse_handler
+
+    async def handle_and_push_sse(self, body: dict, request: Request) -> Any:
+        """Handle a JSON-RPC request and push the response to any active SSE sessions.
+
+        Used when the client posts to the HTTP endpoint associated with an SSE
+        stream — response is sent both as the HTTP reply AND via the SSE queue.
+        """
+        response = await self.handle(body, request)
+        sse_sessions = getattr(request.app.state, "_mcp_sse_sessions", {})
+        if sse_sessions and not isinstance(response, Response):
+            payload = json.dumps(response)
+            for q in list(sse_sessions.values()):
+                try:
+                    q.put_nowait(payload)
+                except asyncio.QueueFull:
+                    pass
+        return response

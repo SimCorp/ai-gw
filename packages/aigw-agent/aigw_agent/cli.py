@@ -130,6 +130,19 @@ async def _serve_loop(
 
     stop = asyncio.Event()
 
+    async def _heartbeat_loop(identity_url: str, hb_slug: str, interval: float = 30.0) -> None:
+        """Ping the identity service so the agent shows as 'online'."""
+        while not stop.is_set():
+            try:
+                async with httpx.AsyncClient(timeout=5) as c:
+                    await c.post(f"{identity_url.rstrip('/')}/agents/{hb_slug}/heartbeat")
+            except Exception:
+                pass  # identity service optional — never block serve
+            try:
+                await asyncio.wait_for(stop.wait(), timeout=interval)
+            except asyncio.TimeoutError:
+                pass
+
     def _handle_sigint():
         console.print("\n[yellow]Shutting down ...[/yellow]")
         stop.set()
@@ -142,6 +155,10 @@ async def _serve_loop(
 
     async with websockets.connect(ws_endpoint) as ws:
         console.print(f"[bold green]Connected.[/bold green] Waiting for invocations. Press Ctrl+C to stop.\n")
+        # Ping identity service every 30s so this agent shows as online
+        identity_url = relay_url.replace(":8007", ":8006")  # best-effort; override via IDENTITY_URL env
+        identity_url = __import__("os").environ.get("IDENTITY_URL", identity_url)
+        asyncio.create_task(_heartbeat_loop(identity_url, slug))
         with Live(_make_table(), refresh_per_second=4, console=console) as live:
             while not stop.is_set():
                 try:

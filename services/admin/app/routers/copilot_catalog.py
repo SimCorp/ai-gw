@@ -395,4 +395,8 @@ _mcp_server.add_tool(
 # send JSON-RPC 2.0 bodies here.
 @router.post("")
 async def mcp_jsonrpc(body: dict, request: Request):
-    return await _mcp_server.handle(body, request)
+    return await _mcp_server.handle_and_push_sse(body, request)
+
+
+# GET /mcp/copilot-catalog/sse — HTTP+SSE transport for clients that require it
+router.get("/sse")(_mcp_server.sse_endpoint())
