@@ -19,6 +19,7 @@ class Settings:
     container_network: str
     relay_url: str
     admin_url: str
+    agent_runtime: str
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -37,4 +38,5 @@ class Settings:
             container_network=os.getenv("AGENT_CONTAINER_NETWORK", "aigateway"),
             relay_url=os.getenv("AGENT_RELAY_URL", "http://agent-relay:8007"),
             admin_url=os.getenv("ADMIN_URL", "http://admin:8005"),
+            agent_runtime=os.getenv("AGENT_CONTAINER_RUNTIME", "docker"),
         )
