@@ -18,11 +18,14 @@ Usage:
 from __future__ import annotations
 
 import base64
+import hashlib
 import logging
+import os
 import secrets
 from datetime import datetime, timedelta, timezone
 
 import jwt
+from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey, RSAPublicKey
@@ -33,6 +36,21 @@ _REDIS_KEY = "identity:signing_key"
 _REDIS_KID_KEY = "identity:signing_kid"
 _KEY_TTL = 90 * 24 * 3600  # 90 days in seconds
 _ISSUER = "ai-gateway"
+
+_DEV_SECRET = "dev-identity-key-secret-change-in-prod"
+
+
+def _fernet(secret: str) -> Fernet:
+    """Derive a Fernet key from an arbitrary secret string using SHA-256."""
+    digest = hashlib.sha256(secret.encode()).digest()
+    fernet_key = base64.urlsafe_b64encode(digest)
+    return Fernet(fernet_key)
+
+
+def _get_identity_secret() -> str:
+    """Return the IDENTITY_KEY_SECRET env var, falling back to the dev placeholder."""
+    from app.config import settings
+    return settings.identity_key_secret or _DEV_SECRET
 
 
 # ---------------------------------------------------------------------------
@@ -51,18 +69,21 @@ async def get_or_create_signing_key(redis) -> tuple[RSAPrivateKey, str]:
         (private_key, key_id) — the RSAPrivateKey object and the opaque kid
         string used to identify the key in JWKS responses.
     """
-    pem_bytes: bytes | None = await redis.get(_REDIS_KEY)
+    secret = _get_identity_secret()
+    f = _fernet(secret)
+
+    raw: bytes | str | None = await redis.get(_REDIS_KEY)
     kid_str: str | None = await redis.get(_REDIS_KID_KEY)
 
-    if pem_bytes and kid_str:
+    if raw and kid_str:
         try:
-            private_key = serialization.load_pem_private_key(
-                pem_bytes if isinstance(pem_bytes, bytes) else pem_bytes.encode(),
-                password=None,
-            )
+            # raw may be bytes or str depending on Redis client decode_responses setting
+            raw_bytes = raw if isinstance(raw, bytes) else raw.encode()
+            pem_bytes = f.decrypt(raw_bytes)
+            private_key = serialization.load_pem_private_key(pem_bytes, password=None)
             return private_key, kid_str  # type: ignore[return-value]
         except Exception as exc:
-            log.warning("Failed to load stored signing key, regenerating: %s", exc)
+            log.warning("Failed to load/decrypt stored signing key, regenerating: %s", exc)
 
     # Generate a new RSA-2048 key pair
     private_key = rsa.generate_private_key(
@@ -76,7 +97,8 @@ async def get_or_create_signing_key(redis) -> tuple[RSAPrivateKey, str]:
     )
     kid = secrets.token_urlsafe(16)
 
-    await redis.setex(_REDIS_KEY, _KEY_TTL, pem)
+    encrypted_pem = f.encrypt(pem)
+    await redis.setex(_REDIS_KEY, _KEY_TTL, encrypted_pem)
     await redis.setex(_REDIS_KID_KEY, _KEY_TTL, kid)
 
     log.info("Generated new RSA-2048 identity signing key (kid=%s)", kid)

@@ -20,6 +20,29 @@
 
 ---
 
+## 0. Security Configuration
+
+The following environment variables must be set in production. They have no insecure defaults — omitting them disables the corresponding protection or causes the service to refuse to start.
+
+| Variable | Service(s) | Purpose |
+|----------|------------|---------|
+| `AGENT_RELAY_SECRET` | `agent-relay`, `workflow-worker` | Shared secret for relay-to-worker authentication. The relay validates this on `POST /register`; the worker sends it as `X-Relay-Secret` on `POST /invoke`. Without this, any process that can reach the relay can register as an agent. |
+| `ADMIN_INTERNAL_TOKEN` | `workflow-worker`, `admin` | Bearer token the worker uses for internal calls to the admin service (e.g. sub-workflow spawns via `POST /runs`). The admin service checks `X-Internal-Token`. Without this, any internal service can trigger workflow runs. |
+| `IDENTITY_KEY_SECRET` | `identity` | Encryption key for the DID signing key stored in Redis (`identity:signing_key`). Without this, the signing key is stored in plaintext and can be exfiltrated by anyone with Redis access. |
+| `IDENTITY_SERVICE_TOKEN` | `identity` | Bearer token that gates the `POST /agents/register` endpoint. Without this, any process on the internal network can register arbitrary agent identities. |
+| `LIBRARIAN_SERVICE_TOKEN` | `librarian` | Bearer token that gates the `POST /ingest` and `POST /research/topics` endpoints. Without this, any process on the internal network can inject arbitrary documents into the knowledge base. |
+
+### Generating secrets
+
+```bash
+# Generate a suitable 32-byte random secret (base64-encoded)
+python3 -c "import secrets, base64; print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())"
+```
+
+Set each value in `.env` before starting the stack. All five variables should be treated as credentials — do not commit them to version control.
+
+---
+
 ## 1. Architecture Overview
 
 ### Service Map

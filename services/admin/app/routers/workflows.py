@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import uuid
 from datetime import datetime, timezone
 from typing import Any
@@ -62,12 +63,27 @@ async def list_agents(
     return {"agents": [dict(r) | {"id": str(r["id"])} for r in rows]}
 
 
+_IMAGE_PATTERN = re.compile(r"^[a-z0-9][a-z0-9._/\-]*:[a-z0-9._\-]+$")
+# relay:// images are also valid — they are not Docker images
+_RELAY_IMAGE_PATTERN = re.compile(r"^relay://[a-z0-9][a-z0-9._/-]*$")
+
+
 @router.post("/agents", status_code=201)
 async def create_agent(
     body: AgentCreateBody,
     session: AsyncSession = Depends(get_session),
     _auth: dict = Depends(require_admin_auth),
 ) -> dict:
+    # Validate image string against safe pattern to prevent injection via docker.sock
+    if not _IMAGE_PATTERN.match(body.image) and not _RELAY_IMAGE_PATTERN.match(body.image):
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "image must match pattern ^[a-z0-9][a-z0-9._/-]*:[a-z0-9._-]+$ "
+                "or be a relay:// URI"
+            ),
+        )
+
     row = (await session.execute(
         text(
             """

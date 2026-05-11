@@ -18,8 +18,14 @@ class Settings(BaseSettings):
     # How often (seconds) the background research loop polls for stale topics
     research_interval_seconds: int = 3600
 
-    # CORS origins allowed to call the librarian directly from the browser
-    cors_origins: str = "http://localhost:3002,http://localhost:3001"
+    # CORS origins allowed to call the librarian directly from the browser.
+    # Default is the portal origin only; set CORS_ORIGINS=* only if you need
+    # to allow all origins (operator's explicit choice).
+    cors_origins: str = "http://localhost:3002"
+
+    # Service token for /ingest and /mcp/tools/ingest endpoints.
+    # Leave empty to allow unauthenticated access in dev mode (fail open).
+    librarian_service_token: str = ""  # LIBRARIAN_SERVICE_TOKEN
 
 
 settings = Settings()

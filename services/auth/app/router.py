@@ -27,6 +27,7 @@ class ValidateResponse(BaseModel):
     team_id: str
     project_id: str | None = None
     key_id: str | None = None
+    scope: str | None = None
 
 
 async def check_budget(team_id: str, key_id: str | None, redis: Redis) -> tuple[bool, str]:
