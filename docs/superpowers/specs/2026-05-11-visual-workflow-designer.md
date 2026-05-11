@@ -1,7 +1,7 @@
 # Visual Workflow Designer + Async Task Handoff
 
 **Date:** 2026-05-11
-**Status:** Draft — awaiting approval
+**Status:** Approved (all open questions resolved; ready to spec v0.1 implementation tickets)
 **Supersedes:** Adds a new layer to the 2026-05-05 AI Gateway Design (does not change v1 components)
 **Owner:** TBD
 
@@ -48,6 +48,10 @@ shippable and demoable.
 | Agent → LLM calls | **Must route through the gateway.** Each run is issued a short-lived scoped API key; agent containers receive it via env and call `cache:8002` like any other caller. Inherits auth, cache, cost attribution, audit. |
 | Quotas | **Redis-counter rate limit per team** on `POST /runs` (e.g. 100 runs/hour/team, configurable per team like other rate limits). Per-run cost ceiling deferred to v0.5. |
 | Local container spawn | **Worker mounts host docker socket** (`/var/run/docker.sock`). Worker uses host docker to spawn sibling agent containers on the same `aigateway` network. |
+| Image registry | **ACR for managed/curated agents** (same registry as v1 services); user-submitted agents may declare any registry in the manifest with admin approval. Local dev allows local-only tags (e.g. `ai-gateway-echo-agent:dev`). |
+| Worker concurrency | **Single async worker process, configurable concurrent-container limit** (default 5, governed by an `asyncio.Semaphore`). Horizontal scale by adding worker replicas. |
+| Run triggers | **Both user JWTs and service-account API keys** can trigger runs. Auth layer already returns identical `{team_id, project_id, key_id}` for both; `workflow_runs.triggered_by` stores the caller UUID and `triggered_by_kind` (`user` / `api_key`) for audit. |
+| Schema migrations | **Alembic** (already a declared dep in `services/admin/pyproject.toml`, not yet wired). One baseline migration captures today's `infra/postgres/init.sql`; new migrations add the 6 designer tables. Companion task before v0.1 implementation. |
 
 ---
 
@@ -180,6 +184,7 @@ CREATE TABLE workflow_runs (
   outputs       JSONB,
   error         TEXT,
   triggered_by  UUID NOT NULL,                -- user UUID or API-key UUID
+  triggered_by_kind TEXT NOT NULL,            -- 'user' | 'api_key' (audit)
   team_id       UUID NOT NULL REFERENCES teams(id),
   project_id    UUID REFERENCES projects(id),      -- nullable, inherited from workflow
   scoped_api_key_id UUID REFERENCES api_keys(id),  -- short-lived key issued for this run's agents
@@ -328,15 +333,21 @@ Toggle stored per-user.
 
 **Out:** canvas editing, branching, loops, templates UI, AKS deploy.
 
+**Prereq (Alembic companion task):**
+- `alembic upgrade head` against an empty DB produces a schema byte-identical to today's `init.sql` (verified by `pg_dump --schema-only` diff)
+- `db-migrate` compose service runs `alembic upgrade head` instead of `psql -f init.sql`
+
 **Acceptance:**
-- A user can `POST /runs` with a hand-written 3-node workflow JSON; worker picks up jobs;
+- A user (JWT) can `POST /runs` with a hand-written 3-node workflow JSON; worker picks up jobs;
   portal run viewer shows nodes transitioning idle→running→done; final output visible
+- A service-account API key can `POST /runs`; `workflow_runs.triggered_by_kind = 'api_key'`
 - Kill worker mid-run → restart → run resumes (claim expiry reclaim works)
-- Rate-limit enforcement: 101st run in an hour returns 429
-- Example agent makes an LLM call; cost record appears in observability tied to the workflow run
-  (verifies scoped API key + gateway routing path end-to-end)
-- Full integration test in `services/workflow-worker/tests/` runs the above end-to-end against
-  a real Postgres + Docker + admin + cache + litellm stack
+- Rate-limit enforcement: 101st run in an hour returns 429 with `Retry-After`
+- Example agent makes an LLM call via `cache:8002` with its scoped API key; cost record appears
+  in observability tied to the workflow run (verifies scoped key + gateway path end-to-end)
+- Worker can run 5 containers concurrently against the same run (parallel fan-out path)
+- Full integration test in `services/workflow-worker/tests/test_e2e.py` runs the above end-to-end
+  against a real Postgres + Docker + admin + cache + litellm stack
 
 ### v0.5 — Full features (in-cluster)
 **Goal:** make it usable.
@@ -420,18 +431,20 @@ Toggle stored per-user.
 | Scoped API key lifecycle | Key TTL = run duration + 5m grace; revoked on run terminal state; key scope cannot exceed parent caller's scope |
 | Project boundary on existing tables | `teams` and `projects` tables must exist with `project_id` FK before this work — verify v1 has these |
 
-**Open questions to resolve before v0.1 implementation:**
-1. **Image registry choice** (ACR vs internal Harbor vs Docker Hub for managed images)
-2. **Worker concurrency model** — one container per worker process, or one worker process orchestrating N concurrent containers
-3. **API-key callers triggering runs** — does `POST /runs` accept service-account API keys, or only user JWTs? (affects automation use cases)
-4. **DB migration tooling** — current repo uses raw `init.sql`. Adding 6 new tables is a good prompt to introduce Alembic. Decide before v0.1.
-**Resolved (via 2026-05-11 review):**
+**All open questions resolved (2026-05-11 review):**
 - ~~Identity scope~~ → team + project (consistent with 2026-05-05); `project_id` nullable to match `api_keys`/`policies` pattern
 - ~~Event pipeline~~ → unified on existing observability bus; no `run_events` table
 - ~~Agent → LLM call path~~ → must route through gateway via scoped API key
 - ~~Quotas~~ → Redis rate limit per team on `POST /runs` (v0.1); cost ceiling deferred to v0.5
 - ~~Local container spawn~~ → mount host docker.sock; abstract behind `ContainerRuntime` port
-- ~~`projects` table exists~~ → confirmed in `services/admin/app/models/team.py:Project`; reuses existing FK pattern
+- ~~`projects` table exists~~ → confirmed in `services/admin/app/models/team.py:Project`
+- ~~Image registry~~ → ACR for managed agents (same as v1 services); manifest-declared registry allowed for user-submitted with admin approval; any tag locally
+- ~~Worker concurrency~~ → single async worker process; configurable container concurrency cap (default 5, asyncio.Semaphore); horizontal scale via replicas
+- ~~Run triggers~~ → both user JWTs and service-account API keys; `triggered_by_kind` records which class
+- ~~Schema migrations~~ → wire Alembic (already declared in `services/admin/pyproject.toml`); baseline migration ports today's `init.sql`; new migrations add designer tables
+
+**Companion task identified (must land before v0.1 implementation):**
+- **Wire Alembic in `services/admin/`.** Add `alembic.ini`, `migrations/env.py`, autogenerate a baseline migration matching current `infra/postgres/init.sql`, switch the `db-migrate` Compose service from `psql -f init.sql` to `alembic upgrade head`. Smoke test: an empty DB after `alembic upgrade head` produces the same schema as today's `init.sql`. ~1-2 days; prerequisite for all subsequent schema work, not just this spec.
 
 ---
 
