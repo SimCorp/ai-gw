@@ -14,17 +14,18 @@ that env var (docker-compose.test.yml sets it).
 """
 from __future__ import annotations
 
-import json
 import subprocess
 import time
 import uuid
-from contextlib import contextmanager
 
 import httpx
 import pytest
+import redis as redis_mod
 
 ADMIN = "http://localhost:8005"
 HEADERS: dict[str, str] = {}  # no token needed in DEV_BYPASS_AUTH mode
+
+_redis = redis_mod.Redis(host="localhost", port=6379, decode_responses=True)
 
 
 # ---------------------------------------------------------------------------
@@ -94,6 +95,15 @@ def _wait_run(run_id: str, timeout: float = 120) -> dict:
 @pytest.fixture(scope="session")
 def team_id() -> str:
     return _team_id()
+
+
+@pytest.fixture(autouse=True)
+def reset_rate_limit(team_id) -> None:
+    """Clear the per-team run rate-limit counter before each test so tests
+    don't pollute each other's quota."""
+    _redis.delete(f"workflow_runs:rate:{team_id}")
+    yield
+    # leave the counter in place so post-test state is inspectable if needed
 
 
 @pytest.fixture(scope="session")
@@ -270,9 +280,6 @@ def test_cross_team_access_denied(team_id, echo_agent_id):
     result = _wait_run(run_id)
     assert result["run"]["status"] == "succeeded"
 
-    # Verify the scoped key is revoked in the DB after run finishes
-    # (proxy: check the key is no longer in Redis)
-    import redis as redis_mod
-    r = redis_mod.Redis(host="localhost", port=6379, decode_responses=True)
-    remaining = r.get(f"workflow:scoped_key:{run_id}")
+    # Verify the scoped key is deleted from Redis after run finishes
+    remaining = _redis.get(f"workflow:scoped_key:{run_id}")
     assert remaining is None, "Scoped key should be deleted from Redis after run completes"
