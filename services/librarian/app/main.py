@@ -824,3 +824,176 @@ async def mcp_topics():
             for r in rows
         ]
     }
+
+
+# ---------------------------------------------------------------------------
+# JSON-RPC 2.0 MCP endpoint — for real MCP clients (VS Code, Claude Desktop)
+#
+# The librarian service cannot import from the admin package, so this
+# implements the same MCPServer pattern inline using a minimal dispatcher.
+# POST /mcp receives JSON-RPC 2.0 bodies and returns compliant responses.
+# ---------------------------------------------------------------------------
+
+_MCP_PROTOCOL_VERSION = "2024-11-05"
+_MCP_JSONRPC_TOOLS = [
+    {
+        "name": "search",
+        "description": "Search the knowledge base semantically",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string"},
+                "topic": {"type": "string"},
+                "limit": {"type": "integer", "default": 5},
+            },
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "ingest",
+        "description": "Add a document to the knowledge base",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string"},
+                "content": {"type": "string"},
+                "topic": {"type": "string"},
+                "tags": {"type": "array", "items": {"type": "string"}},
+            },
+            "required": ["title", "content"],
+        },
+    },
+    {
+        "name": "topics",
+        "description": "List all research topics",
+        "inputSchema": {"type": "object"},
+    },
+]
+
+
+async def _jsonrpc_tool_search(arguments: dict) -> dict:
+    query = arguments.get("query", "")
+    if not query:
+        raise ValueError("query is required")
+    pool = await get_pool()
+    redis = await get_redis()
+    items = await search_knowledge(
+        pool=pool,
+        redis=redis,
+        query=query,
+        topic=arguments.get("topic"),
+        limit=int(arguments.get("limit", 5)),
+    )
+    return {"items": items}
+
+
+async def _jsonrpc_tool_ingest(arguments: dict) -> dict:
+    title = arguments.get("title", "")
+    content = arguments.get("content", "")
+    if not title or not content:
+        raise ValueError("title and content are required")
+    pool = await get_pool()
+    redis = await get_redis()
+    doc_id = await ingest_document(
+        pool=pool,
+        redis=redis,
+        title=title,
+        content=content,
+        topic=arguments.get("topic"),
+        tags=arguments.get("tags") or [],
+    )
+    return {"id": doc_id}
+
+
+async def _jsonrpc_tool_topics(_arguments: dict) -> dict:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT topic, COUNT(*) AS item_count, MAX(ingested_at) AS last_ingested_at
+            FROM knowledge_items
+            GROUP BY topic
+            ORDER BY topic
+            """
+        )
+    return {
+        "topics": [
+            {
+                "topic": r["topic"],
+                "item_count": r["item_count"],
+                "last_ingested_at": (
+                    r["last_ingested_at"].isoformat() if r["last_ingested_at"] else None
+                ),
+            }
+            for r in rows
+        ]
+    }
+
+
+_JSONRPC_TOOL_HANDLERS = {
+    "search": _jsonrpc_tool_search,
+    "ingest": _jsonrpc_tool_ingest,
+    "topics": _jsonrpc_tool_topics,
+}
+
+
+from fastapi.responses import Response as _Response  # noqa: E402
+
+
+@app.post("/mcp")
+async def mcp_jsonrpc(body: dict):
+    """JSON-RPC 2.0 MCP endpoint consumed by real MCP clients."""
+    method: str = body.get("method", "")
+    params: dict = body.get("params") or {}
+    request_id = body.get("id")
+    is_notification = "id" not in body
+
+    def _ok(result: Any) -> dict:
+        return {"jsonrpc": "2.0", "id": request_id, "result": result}
+
+    def _err(code: int, message: str) -> dict:
+        return {"jsonrpc": "2.0", "id": request_id, "error": {"code": code, "message": message}}
+
+    if method == "initialize":
+        if is_notification:
+            return _Response(status_code=204)
+        return _ok({
+            "protocolVersion": _MCP_PROTOCOL_VERSION,
+            "capabilities": {"tools": {}},
+            "serverInfo": {"name": "ai-librarian", "version": "1.0.0"},
+        })
+
+    if method == "notifications/initialized":
+        return _Response(status_code=204)
+
+    if method == "tools/list":
+        if is_notification:
+            return _Response(status_code=204)
+        return _ok({"tools": _MCP_JSONRPC_TOOLS})
+
+    if method == "tools/call":
+        if is_notification:
+            return _Response(status_code=204)
+        tool_name = params.get("name", "")
+        arguments = params.get("arguments") or {}
+        handler = _JSONRPC_TOOL_HANDLERS.get(tool_name)
+        if handler is None:
+            return _err(-32601, f"Tool not found: {tool_name}")
+        try:
+            result = await handler(arguments)
+        except Exception as exc:
+            _log.exception("MCP tool %s error", tool_name)
+            return _err(-32603, f"Tool execution error: {exc}")
+        import json as _json
+        return _ok({"content": [{"type": "text", "text": _json.dumps(result)}]})
+
+    if method == "ping":
+        if is_notification:
+            return _Response(status_code=204)
+        return _ok({})
+
+    if is_notification:
+        return _Response(status_code=204)
+
+    _log.debug("MCP unknown method: %s", method)
+    return _err(-32601, f"Method not found: {method}")

@@ -21,6 +21,8 @@ import httpx
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
+from app.mcp_protocol import MCPServer
+
 _log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/mcp/copilot-catalog", tags=["copilot-catalog"])
@@ -306,3 +308,91 @@ async def mcp_get(body: dict, request: Request) -> dict:
         if item["id"] == body.get("id"):
             return item
     return JSONResponse({"detail": "not found"}, status_code=404)
+
+
+# ── JSON-RPC 2.0 MCP endpoint ─────────────────────────────────────────────────
+
+async def _tool_search(arguments: dict, request: Request) -> dict:
+    redis = getattr(request.app.state, "redis", None)
+    items = await _get_items(redis)
+    results = _search_items(
+        items,
+        arguments.get("query", ""),
+        kind=arguments.get("kind"),
+        limit=arguments.get("limit", 5),
+    )
+    return {"items": results, "count": len(results)}
+
+
+async def _tool_list(arguments: dict, request: Request) -> dict:
+    redis = getattr(request.app.state, "redis", None)
+    items = await _get_items(redis)
+    kind = arguments.get("kind")
+    if kind:
+        items = [i for i in items if i["kind"] == kind]
+    limit = arguments.get("limit", 20)
+    result = items[:limit]
+    return {"items": result, "count": len(result)}
+
+
+async def _tool_get(arguments: dict, request: Request) -> dict:
+    redis = getattr(request.app.state, "redis", None)
+    items = await _get_items(redis)
+    for item in items:
+        if item["id"] == arguments.get("id"):
+            return item
+    return {"detail": "not found"}
+
+
+_mcp_server = MCPServer(
+    name="awesome-copilot",
+    version="1.0.0",
+    description="Search and browse the Awesome GitHub Copilot catalog — community agents, instructions, and recipes.",
+)
+_mcp_server.add_tool(
+    name="search",
+    description="Search the Awesome Copilot catalog by keyword",
+    input_schema={
+        "type": "object",
+        "properties": {
+            "query": {"type": "string", "description": "Search keywords"},
+            "kind": {
+                "type": "string",
+                "enum": ["agent", "instruction", "recipe"],
+                "description": "Filter by type",
+            },
+            "limit": {"type": "integer", "default": 5, "description": "Max results"},
+        },
+        "required": ["query"],
+    },
+    handler=_tool_search,
+)
+_mcp_server.add_tool(
+    name="list",
+    description="List all items of a given type from the Awesome Copilot catalog",
+    input_schema={
+        "type": "object",
+        "properties": {
+            "kind": {"type": "string", "enum": ["agent", "instruction", "recipe"]},
+            "limit": {"type": "integer", "default": 20},
+        },
+    },
+    handler=_tool_list,
+)
+_mcp_server.add_tool(
+    name="get",
+    description="Get full details of a catalog item by its slug ID",
+    input_schema={
+        "type": "object",
+        "properties": {"id": {"type": "string"}},
+        "required": ["id"],
+    },
+    handler=_tool_get,
+)
+
+
+# POST /mcp/copilot-catalog — real MCP clients (VS Code Copilot, Claude Desktop)
+# send JSON-RPC 2.0 bodies here.
+@router.post("")
+async def mcp_jsonrpc(body: dict, request: Request):
+    return await _mcp_server.handle(body, request)
