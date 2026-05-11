@@ -189,19 +189,35 @@ async def _run_node_state(pool: asyncpg.Pool, run_id: uuid.UUID) -> dict[str, st
 # Sweeper — reclaim stale claims
 # ---------------------------------------------------------------------------
 
-async def _sweeper_loop(pool: asyncpg.Pool, interval_s: float, stop: asyncio.Event) -> None:
+async def _sweeper_loop(pool: asyncpg.Pool, interval_s: float, stop: asyncio.Event, redis: Redis | None = None) -> None:
     while not stop.is_set():
         try:
             async with pool.acquire() as conn:
-                n = await conn.execute(
-                    """
-                    UPDATE work_queue
-                    SET claimed_by = NULL, claim_expires = NULL
-                    WHERE claimed_by IS NOT NULL AND claim_expires < NOW()
-                    """,
-                )
-                if n and not n.endswith(" 0"):
-                    _log.info("sweeper reclaimed: %s", n)
+                async with conn.transaction():
+                    # Collect run_ids before resetting so we can purge their
+                    # plaintext scoped keys from Redis — a crashed worker would
+                    # otherwise leave those keys in Redis for up to 61 minutes.
+                    stale_rows = await conn.fetch(
+                        """
+                        SELECT run_id FROM work_queue
+                        WHERE claimed_by IS NOT NULL AND claim_expires < NOW()
+                        """,
+                    )
+                    if stale_rows:
+                        n = await conn.execute(
+                            """
+                            UPDATE work_queue
+                            SET claimed_by = NULL, claim_expires = NULL
+                            WHERE claimed_by IS NOT NULL AND claim_expires < NOW()
+                            """,
+                        )
+                        _log.info("sweeper reclaimed: %s", n)
+                        if redis is not None:
+                            for row in stale_rows:
+                                try:
+                                    await redis.delete(f"workflow:scoped_key:{row['run_id']}")
+                                except Exception as exc:
+                                    _log.warning("sweeper redis cleanup error run_id=%s: %s", row["run_id"], exc)
         except Exception as exc:
             _log.warning("sweeper error: %s", exc)
         try:
@@ -222,7 +238,9 @@ async def _handle_job(
     runtime: DockerRuntime,
     cache_base_url: str,
     relay_url: str,
+    relay_secret: str,
     admin_url: str,
+    admin_internal_token: str,
 ) -> None:
     run_id: uuid.UUID = job["run_id"]
     node_id: str = job["node_id"]
@@ -315,7 +333,7 @@ async def _handle_job(
     # Choose runtime: RelayRuntime for relay:// agents, DockerRuntime otherwise
     image: str = agent["image"]
     active_runtime: DockerRuntime | RelayRuntime = (
-        RelayRuntime(relay_url) if image.startswith("relay://") else runtime
+        RelayRuntime(relay_url, relay_secret=relay_secret) if image.startswith("relay://") else runtime
     )
 
     on_log = functools.partial(_forward_log, redis, run_id, node_id)
@@ -362,7 +380,7 @@ async def _handle_job(
     # Autonomous agent: fire-and-forget sub-workflow spawn if _spawn key present
     spawn_payload = outputs.get("_spawn")
     if spawn_payload and isinstance(spawn_payload, dict):
-        asyncio.create_task(_fire_spawn(admin_url, spawn_payload))
+        asyncio.create_task(_fire_spawn(admin_url, spawn_payload, ctx["team_id"], admin_internal_token))
 
     # Loop check: re-enqueue same node if loop condition met
     if should_loop(nspec, outputs, iteration):
@@ -392,19 +410,38 @@ async def _handle_job(
                 pass
 
 
-async def _fire_spawn(admin_url: str, spawn_payload: dict) -> None:
-    """Fire-and-forget: POST sub-workflow spawn to admin service."""
+async def _fire_spawn(admin_url: str, spawn_payload: dict, team_id: str, admin_internal_token: str) -> None:
+    """Fire-and-forget: POST sub-workflow spawn to admin service.
+
+    Restricts spawn_payload to only allowed fields (workflow_id, version, inputs)
+    and injects the parent run's team_id. Sends Authorization header if configured.
+    """
+    # Strip any fields the agent should not be able to control — only allow
+    # workflow_id, version, and inputs from the agent-supplied payload.
+    _ALLOWED_SPAWN_FIELDS = {"workflow_id", "version", "inputs"}
+    safe_payload = {k: v for k, v in spawn_payload.items() if k in _ALLOWED_SPAWN_FIELDS}
+    # Inject authoritative values from the parent run so the agent cannot
+    # escalate privileges by supplying team_id or triggered_by.
+    safe_payload["team_id"] = str(team_id) if team_id is not None else None
+    safe_payload["triggered_by"] = "workflow-worker-spawn"
+    safe_payload["triggered_by_kind"] = "system"
+
+    headers: dict[str, str] = {}
+    if admin_internal_token:
+        headers["Authorization"] = f"Bearer {admin_internal_token}"
+
     try:
         async with httpx.AsyncClient() as client:
             resp = await client.post(
                 f"{admin_url.rstrip('/')}/runs",
-                json=spawn_payload,
+                json=safe_payload,
+                headers=headers,
                 timeout=10.0,
             )
         if not resp.is_success:
             _log.warning("sub-workflow spawn failed (%s): %s", resp.status_code, resp.text[:200])
         else:
-            _log.info("sub-workflow spawned: %s", spawn_payload.get("workflow_id"))
+            _log.info("sub-workflow spawned: %s", safe_payload.get("workflow_id"))
     except Exception as exc:
         _log.warning("sub-workflow spawn error: %s", exc)
 
@@ -440,7 +477,9 @@ async def _main() -> None:
     )
     cache_base_url = "http://cache:8002"
     relay_url = cfg.relay_url
+    relay_secret = cfg.relay_secret
     admin_url = cfg.admin_url
+    admin_internal_token = cfg.admin_internal_token
 
     stop_event = asyncio.Event()
     sem = asyncio.Semaphore(cfg.concurrency)
@@ -452,7 +491,7 @@ async def _main() -> None:
     for sig in (signal.SIGTERM, signal.SIGINT):
         signal.signal(sig, _signal)
 
-    sweeper = asyncio.create_task(_sweeper_loop(pool, cfg.sweeper_interval_s, stop_event))
+    sweeper = asyncio.create_task(_sweeper_loop(pool, cfg.sweeper_interval_s, stop_event, redis))
 
     async def _worker_for(job: dict) -> None:
         async with sem:
@@ -464,7 +503,9 @@ async def _main() -> None:
                     runtime=runtime,
                     cache_base_url=cache_base_url,
                     relay_url=relay_url,
+                    relay_secret=relay_secret,
                     admin_url=admin_url,
+                    admin_internal_token=admin_internal_token,
                 )
             except Exception as exc:
                 _log.exception("unhandled error in job handler: %s", exc)

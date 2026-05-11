@@ -18,8 +18,10 @@ class Settings(BaseSettings):
     # How often (seconds) the background research loop polls for stale topics
     research_interval_seconds: int = 3600
 
-    # CORS origins allowed to call the librarian directly from the browser
-    cors_origins: str = "http://localhost:3002,http://localhost:3001"
+    # CORS origins allowed to call the librarian directly from the browser.
+    # Default is the portal origin only; set CORS_ORIGINS=* only if you need
+    # to allow all origins (operator's explicit choice).
+    cors_origins: str = "http://localhost:3002"
 
 
 settings = Settings()

@@ -27,9 +27,10 @@ import json
 import logging
 import uuid
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from redis.asyncio import Redis
@@ -75,6 +76,27 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="AI Gateway Agent Relay", version="0.1.0", lifespan=lifespan)
 
+
+# ---------------------------------------------------------------------------
+# Auth helper
+# ---------------------------------------------------------------------------
+
+
+def _check_relay_secret(request: Request) -> None:
+    """Verify X-Relay-Secret header if relay_secret is configured.
+
+    Fails open (allows) when relay_secret is empty — dev mode.
+    Raises HTTP 401 when the secret is configured but the header is missing
+    or does not match.
+    """
+    cfg = get_settings()
+    if not cfg.relay_secret:
+        return  # dev mode — no auth required
+    provided = request.headers.get("X-Relay-Secret", "")
+    if provided != cfg.relay_secret:
+        raise HTTPException(status_code=401, detail="Invalid or missing X-Relay-Secret")
+
+
 # ---------------------------------------------------------------------------
 # Request / response models
 # ---------------------------------------------------------------------------
@@ -115,22 +137,27 @@ async def health():
 
 @app.get("/agents")
 async def list_agents():
-    """Return metadata for all currently connected relay agents."""
+    """Return metadata for all currently connected relay agents.
+
+    The relay_token is intentionally omitted from this response — callers
+    only need slug, name, capabilities, and connected_at.
+    """
     return [
         {
-            "relay_token": token,
             "slug": info["slug"],
             "name": info["name"],
             "capabilities": info["capabilities"],
-            "connected": token in _connections,
+            "connected_at": info.get("connected_at"),
         }
         for token, info in _registered_agents.items()
+        if token in _connections
     ]
 
 
 @app.post("/register", response_model=RegisterResponse)
-async def register(req: RegisterRequest):
+async def register(req: RegisterRequest, request: Request):
     """Register a relay agent. Returns a relay_token for the subsequent WS connection."""
+    _check_relay_secret(request)
     relay_token = str(uuid.uuid4())
     _registered_agents[relay_token] = {
         "slug": req.slug,
@@ -160,6 +187,7 @@ async def connect(websocket: WebSocket, relay_token: str):
     await websocket.accept()
     _connections[relay_token] = websocket
     slug = _registered_agents[relay_token]["slug"]
+    _registered_agents[relay_token]["connected_at"] = datetime.now(timezone.utc).isoformat()
     _log.info("agent connected slug=%s token=%s", slug, relay_token)
 
     try:
@@ -202,8 +230,9 @@ async def connect(websocket: WebSocket, relay_token: str):
 
 
 @app.post("/invoke/{agent_slug}", response_model=InvokeResponse)
-async def invoke(agent_slug: str, req: InvokeRequest):
+async def invoke(agent_slug: str, req: InvokeRequest, request: Request):
     """Invoke a relay agent by slug. Forwards to the agent's WS and waits for the response."""
+    _check_relay_secret(request)
     relay_token = _slug_to_token.get(agent_slug)
 
     # Fallback: look up from Redis (another relay instance may have registered)

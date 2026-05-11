@@ -296,24 +296,27 @@ async def list_agents(
     conditions: list[str] = []
     params: list[Any] = []
 
-    if capability:
+    # Build parameterized conditions using only hardcoded column names and $N
+    # placeholders — never interpolate user-supplied values into the SQL string.
+    if capability is not None:
         params.append(capability)
-        conditions.append(f"${ len(params)} = ANY(capabilities)")
+        conditions.append(f"${len(params)} = ANY(capabilities)")
 
-    if category:
+    if category is not None:
         params.append(category)
-        conditions.append(f"category = ${ len(params)}")
+        conditions.append(f"category = ${len(params)}")
 
     if team_id is not None:
         params.append(team_id)
-        conditions.append(f"team_id = ${ len(params)}")
+        conditions.append(f"team_id = ${len(params)}")
 
     if managed is not None:
         params.append(managed)
-        conditions.append(f"managed = ${ len(params)}")
+        conditions.append(f"managed = ${len(params)}")
 
     where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
-    sql = f"SELECT * FROM agent_identities {where} ORDER BY name"
+    # Column names and table name are hardcoded; only values go through params.
+    sql = "SELECT * FROM agent_identities " + where + " ORDER BY name"
 
     async with _pool(request).acquire() as conn:
         rows = await conn.fetch(sql, *params)
