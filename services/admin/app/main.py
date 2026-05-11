@@ -16,6 +16,7 @@ from app.db import engine
 
 # Import all ORM models so they're available to routers and Alembic env
 from app.models import (  # noqa: F401
+    agent as agent_model,
     api_key,
     area as area_model,
     area_policy as area_policy_model,
@@ -27,6 +28,8 @@ from app.models import (  # noqa: F401
     policy,
     pricing as pricing_model,
     team,
+    workflow as workflow_model,
+    workflow_run as workflow_run_model,
 )
 
 from app.routers import (
@@ -51,6 +54,7 @@ from app.routers import (
     reports as reports_router,
     requests as requests_router,
     settings as settings_router,
+    workflows as workflows_router,
     system,
     teams,
 )
@@ -268,6 +272,7 @@ app.include_router(audit_log.router, dependencies=_auth)
 app.include_router(budget.router, dependencies=_auth)
 app.include_router(requests_router.router, dependencies=_auth)
 app.include_router(guardrails_router.router, dependencies=_auth)
+app.include_router(workflows_router.router, dependencies=_auth)
 app.include_router(mcp_router.router, dependencies=_auth)
 app.include_router(plugins_router.router, dependencies=_auth)
 app.include_router(reports_router.router, dependencies=_auth)

@@ -22,9 +22,11 @@ async def validate_api_key(key: str, db: asyncpg.Connection, redis=None) -> dict
     try:
         row = await db.fetchrow(
             """
-            SELECT id, team_id, project_id
+            SELECT id, team_id, project_id, scope
             FROM api_keys
-            WHERE key_hash = $1 AND revoked_at IS NULL
+            WHERE key_hash = $1
+              AND revoked_at IS NULL
+              AND (expires_at IS NULL OR expires_at > NOW())
             """,
             key_hash,
         )
@@ -41,6 +43,7 @@ async def validate_api_key(key: str, db: asyncpg.Connection, redis=None) -> dict
             "team_id": str(row["team_id"]),
             "project_id": str(row["project_id"]) if row["project_id"] else None,
             "key_id": str(row["id"]),
+            "scope": row["scope"] if "scope" in row else "standard",
         }
 
         # Populate Redis cache for Postgres-outage survivability
