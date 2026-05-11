@@ -263,32 +263,26 @@ def test_admin_restart_mid_run(team_id, echo_agent_id):
 # ---------------------------------------------------------------------------
 
 def test_rate_limit_resets_after_window(team_id, echo_agent_id):
-    """Exhaust rate limit for a synthetic team, delete the Redis key, verify reset.
+    """Exhaust rate limit using the real team, delete the Redis key to simulate
+    TTL expiry, then verify subsequent runs succeed.
 
-    Uses a separate synthetic team_id for the burn loop so the shared team_id
-    quota (used by other tests) is not consumed.  The workflow itself is created
-    under the real team_id; only the rate-limit team bucket differs.
+    The autouse reset_rate_limit fixture clears the key before this test,
+    so we start fresh.
     """
-    import hashlib
-
     wf_id, _ = _make_workflow(
         team_id,
         nodes=[{"id": "n1", "agent_slug": "echo-agent"}],
         edges=[],
     )
+    rate_key = f"workflow_runs:rate:{team_id}"
 
-    # Synthetic team_id — has a fresh rate-limit counter, won't conflict with others
-    burn_team = "00000000-0000-0000-0000-" + hashlib.md5(b"chaos-rate-limit").hexdigest()[:12]
-    rate_key = f"workflow_runs:rate:{burn_team}"
-    _redis.delete(rate_key)  # ensure clean state
-
-    # Exhaust the rate limit using the synthetic team bucket
+    # Exhaust the rate limit using the real team
     hit_429 = False
     for _ in range(101):
         r = httpx.post(f"{ADMIN}/runs", headers=HEADERS, timeout=10, json={
             "workflow_id": wf_id,
             "inputs": {},
-            "team_id": burn_team,
+            "team_id": team_id,
             "triggered_by": str(uuid.uuid4()),
             "triggered_by_kind": "user",
         })
@@ -297,23 +291,12 @@ def test_rate_limit_resets_after_window(team_id, echo_agent_id):
             break
 
     assert hit_429, "Expected to hit 429 rate limit within 101 submissions"
+    assert "Retry-After" in r.headers, "429 must include Retry-After header"
 
     # Simulate TTL expiry by deleting the rate-limit key from Redis
     _redis.delete(rate_key)
 
-    # Subsequent submission under the synthetic team should now succeed
-    r = httpx.post(f"{ADMIN}/runs", headers=HEADERS, timeout=10, json={
-        "workflow_id": wf_id,
-        "inputs": {},
-        "team_id": burn_team,
-        "triggered_by": str(uuid.uuid4()),
-        "triggered_by_kind": "user",
-    })
-    assert r.status_code in (200, 201), (
-        f"Expected 200/201 after rate-limit reset; got {r.status_code}: {r.text}"
-    )
-
-    # Verify the new run completes end-to-end (use real team_id so auth passes)
+    # Subsequent submission under the same team should now succeed
     new_run = _submit_run(wf_id, team_id)
     result = _wait_run(new_run["id"], timeout=60)
     assert result["run"]["status"] == "succeeded", f"Got: {result['run']['status']}"
