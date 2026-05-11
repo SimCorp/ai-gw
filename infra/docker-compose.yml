@@ -264,6 +264,7 @@ services:
       NEXT_TELEMETRY_DISABLED: "1"
       NEXT_PUBLIC_ADMIN_BASE_URL: "http://localhost:8005"
       NEXT_PUBLIC_CACHE_BASE_URL: "http://localhost:8002"
+      NEXT_PUBLIC_IDENTITY_BASE_URL: "http://localhost:8006"
     depends_on:
       admin:
         condition: service_healthy
@@ -289,6 +290,29 @@ services:
       redis:
         condition: service_healthy
     restart: unless-stopped
+
+  identity:
+    build:
+      context: ../services/identity
+    ports:
+      - "127.0.0.1:8006:8006"
+    environment:
+      DATABASE_URL: "postgresql+asyncpg://aigateway:aigateway@postgres:5432/aigateway"
+      REDIS_URL: "redis://redis:6379/0"
+      ADMIN_URL: "http://admin:8005"
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      admin:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8006/health')\" 2>/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
 
   claude-sandbox:
     build:
