@@ -52,7 +52,8 @@ def test_3node_linear_chain():
 
     # Find a team to scope the workflow to
     teams = _get("/teams")
-    team_id = teams["teams"][0]["id"]
+    # /teams returns a plain list
+    team_id = (teams[0] if isinstance(teams, list) else teams["teams"][0])["id"]
 
     # Create a workflow
     wf = _post("/workflows", {

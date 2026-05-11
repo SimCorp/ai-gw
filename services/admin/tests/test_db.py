@@ -1,7 +1,8 @@
 """Database-level integration tests for the admin service.
 
 Spins up a real PostgreSQL container (testcontainers) once per module,
-applies the full schema (ORM metadata + _EXTRA_DDL from app.main), and
+applies the full schema via Alembic migrations (replaces the old
+_EXTRA_DDL approach removed in T0), and
 tests SQL queries that unit tests with mocked sessions cannot catch:
   - date_trunc / COALESCE / GROUP BY aggregations
   - ON CONFLICT upsert partial-index correctness
@@ -43,9 +44,6 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from testcontainers.postgres import PostgresContainer
 
-# Import _EXTRA_DDL and Base *after* env vars are set so the settings singleton
-# resolves without hitting the real database.
-from app.main import _EXTRA_DDL
 from app.db import Base
 
 # Import ORM models so their tables are registered with Base.metadata
@@ -92,20 +90,26 @@ def _sqlalchemy_url(container: PostgresContainer) -> str:
 
 @pytest_asyncio.fixture(loop_scope="module", scope="module")
 async def db_engine(pg_container):
-    """Apply full schema (ORM + _EXTRA_DDL), return a module-scoped engine."""
-    raw_url = _asyncpg_url(pg_container)
+    """Apply full schema via Alembic migrations, return a module-scoped engine."""
+    import subprocess
+    from pathlib import Path
 
-    # Step 1: apply ORM-mapped tables via Base.metadata.create_all
-    engine = create_async_engine(_sqlalchemy_url(pg_container), echo=False)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-        # Step 2: apply the remaining DDL (areas, guardrails, partial indexes, etc.)
-        for ddl in _EXTRA_DDL:
-            try:
-                await conn.execute(text(ddl))
-            except Exception:
-                pass  # idempotent – index/column already exists is fine
+    sqlalchemy_url = _sqlalchemy_url(pg_container)
 
+    # Run `alembic upgrade head` from the service root so the relative
+    # 'migrations' path in alembic.ini resolves correctly.
+    service_root = Path(__file__).parents[1]
+    result = subprocess.run(
+        ["alembic", "-c", "alembic.ini", "upgrade", "head"],
+        cwd=str(service_root),
+        env={**os.environ, "DATABASE_URL": sqlalchemy_url},
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"alembic upgrade failed:\n{result.stderr}\n{result.stdout}")
+
+    engine = create_async_engine(sqlalchemy_url, echo=False)
     yield engine
     await engine.dispose()
 
