@@ -180,7 +180,7 @@ services:
     build:
       context: ../services/cache
     ports:
-      - "8002:8002"
+      - "127.0.0.1:8002:8002"
     env_file: ../.env
     environment:
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-change-me-internal-key}
@@ -220,6 +220,8 @@ services:
     ports:
       - "127.0.0.1:8005:8005"
     env_file: ../.env
+    environment:
+      ENVIRONMENT: development
     depends_on:
       db-migrate:
         condition: service_completed_successfully
@@ -231,6 +233,37 @@ services:
       timeout: 5s
       retries: 10
       start_period: 30s
+
+  admin-portal:
+    image: node:20-alpine
+    working_dir: /app/apps/admin
+    command: npm run dev
+    volumes:
+      - ..:/app
+    ports:
+      - "127.0.0.1:3001:3001"
+    environment:
+      NEXT_TELEMETRY_DISABLED: "1"
+      NEXT_PUBLIC_ADMIN_API: "http://localhost:8005"
+    depends_on:
+      admin:
+        condition: service_healthy
+
+  portal:
+    image: node:20-alpine
+    working_dir: /app/apps/portal
+    command: npm run dev
+    volumes:
+      - ..:/app
+    ports:
+      - "127.0.0.1:3002:3002"
+    environment:
+      NEXT_TELEMETRY_DISABLED: "1"
+      NEXT_PUBLIC_ADMIN_BASE_URL: "http://localhost:8005"
+      NEXT_PUBLIC_CACHE_BASE_URL: "http://localhost:8002"
+    depends_on:
+      admin:
+        condition: service_healthy
 
   claude-sandbox:
     build:

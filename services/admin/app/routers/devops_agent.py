@@ -331,18 +331,29 @@ async def _tool_get_audit_log(
     action_filter: str | None = None,
 ) -> list:
     limit = max(1, min(limit, 50))
-    where = ""
     if action_filter:
-        safe_filter = action_filter.replace("'", "").replace(";", "")[:40]
-        where = f"WHERE action ILIKE '%{safe_filter}%'"
+        rows = (await session.execute(
+            text("""
+                SELECT timestamp, actor, action, resource_type, resource_id, detail
+                FROM audit_log
+                WHERE action ILIKE :filter
+                ORDER BY timestamp DESC
+                LIMIT :limit
+            """),
+            {"filter": f"%{action_filter[:40]}%", "limit": limit},
+        )).mappings().all()
+    else:
+        rows = (await session.execute(
+            text("""
+                SELECT timestamp, actor, action, resource_type, resource_id, detail
+                FROM audit_log
+                ORDER BY timestamp DESC
+                LIMIT :limit
+            """),
+            {"limit": limit},
+        )).mappings().all()
     try:
-        rows = (await session.execute(text(f"""
-            SELECT timestamp, actor, action, resource_type, resource_id, detail
-            FROM audit_log
-            {where}
-            ORDER BY timestamp DESC
-            LIMIT {limit}
-        """))).mappings().all()
+        rows = list(rows)
         return [
             {
                 "timestamp": str(r["timestamp"]),

@@ -97,6 +97,60 @@ def _classify_intent(prompt_text: str) -> str:
 
 _log = logging.getLogger(__name__)
 
+
+async def _replay_as_sse(cached: dict):
+    """Re-emit a cached non-streaming OpenAI response as SSE chunks.
+
+    Clients that send stream=true receive text/event-stream even on a cache hit.
+    Emits: role-delta → content/tool_calls delta → finish chunk → [DONE].
+    Works for any model routed through /v1/chat/completions (Claude, GPT-4o,
+    GitHub Copilot models, Azure AI Foundry models, etc.).
+    """
+    import json as _j
+    import uuid as _uid
+
+    rid = cached.get("id") or f"chatcmpl-{_uid.uuid4().hex[:8]}"
+    model = cached.get("model", "")
+    choices = cached.get("choices", [])
+
+    def _chunk(delta: dict, index: int = 0, finish_reason=None) -> bytes:
+        obj = {
+            "id": rid,
+            "object": "chat.completion.chunk",
+            "model": model,
+            "choices": [{"index": index, "delta": delta, "finish_reason": finish_reason}],
+        }
+        return f"data: {_j.dumps(obj)}\n\n".encode()
+
+    # 1. Role delta — signals start of assistant turn
+    yield _chunk({"role": "assistant", "content": ""})
+
+    # 2. Content / tool_calls per choice
+    for i, choice in enumerate(choices):
+        msg = choice.get("message") or {}
+        content = msg.get("content") or ""
+        tool_calls = msg.get("tool_calls")
+        if content:
+            yield _chunk({"content": content}, index=i)
+        if tool_calls:
+            yield _chunk({"tool_calls": tool_calls}, index=i)
+
+    # 3. Finish chunk (includes usage if present)
+    finish_reason = (choices[0].get("finish_reason") if choices else None) or "stop"
+    finish_obj = {
+        "id": rid,
+        "object": "chat.completion.chunk",
+        "model": model,
+        "choices": [{"index": 0, "delta": {}, "finish_reason": finish_reason}],
+    }
+    usage = cached.get("usage")
+    if usage:
+        finish_obj["usage"] = usage
+    yield f"data: {_j.dumps(finish_obj)}\n\n".encode()
+
+    # 4. SSE end sentinel
+    yield b"data: [DONE]\n\n"
+
 # ---------------------------------------------------------------------------
 # Short-TTL identity cache — survives auth service restarts / rolling deploys.
 # Entries expire after _IDENTITY_CACHE_TTL seconds; revoked keys are stale at
@@ -408,7 +462,14 @@ async def chat_completions(request: Request):
                         "session_purpose": session_purpose, "repo": repo,
                     })
                 )
-                return JSONResponse(cached, headers={"X-Cache": "HIT", "X-Cache-Stage": "exact", "x-request-id": request_id})
+                _hit_headers = {"X-Cache": "HIT", "X-Cache-Stage": "exact", "x-request-id": request_id}
+                if body.get("stream"):
+                    return StreamingResponse(
+                        _replay_as_sse(cached),
+                        media_type="text/event-stream",
+                        headers=_hit_headers,
+                    )
+                return JSONResponse(cached, headers=_hit_headers)
         except Exception:
             pass  # Redis failure → fail open
 
@@ -430,7 +491,14 @@ async def chat_completions(request: Request):
                         "session_purpose": session_purpose, "repo": repo,
                     })
                 )
-                return JSONResponse(cached, headers={"X-Cache": "HIT", "X-Cache-Stage": "semantic", "x-request-id": request_id})
+                _hit_headers = {"X-Cache": "HIT", "X-Cache-Stage": "semantic", "x-request-id": request_id}
+                if body.get("stream"):
+                    return StreamingResponse(
+                        _replay_as_sse(cached),
+                        media_type="text/event-stream",
+                        headers=_hit_headers,
+                    )
+                return JSONResponse(cached, headers=_hit_headers)
         except Exception:
             semantic.record_embedding_failure(redis)
             emb = None  # embedding failure → treat as miss
