@@ -1,7 +1,9 @@
 # SimCorp AI Gateway — Developer Guide
 
 > For ~2000 SimCorp engineers who want to add AI capabilities to their projects.  
-> Updated: 2026-05-09
+> Updated: 2026-05-11
+
+> **Full technical reference:** See [`docs/SYSTEM_REFERENCE.md`](./SYSTEM_REFERENCE.md) for complete API documentation, schema specs, all configuration options, portal page descriptions, and workflow designer details.
 
 ---
 
