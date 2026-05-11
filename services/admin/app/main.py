@@ -36,6 +36,8 @@ from app.routers import (
     admin_auth as admin_auth_router,
     ai_help as ai_help_router,
     config_api as config_api_router,
+    codemate as codemate_router,
+    copilot_catalog as copilot_catalog_router,
     devops_agent as devops_agent_router,
     insights as insights_router,
     api_keys as api_keys_module,
@@ -206,6 +208,30 @@ async def lifespan(app: FastAPI):
 
     app.state.redis = make_redis(app_settings.redis_url)
 
+    # Start Awesome Copilot catalog background sync (first sync + every 6h)
+    from app.routers.copilot_catalog import start_background_sync as _start_catalog_sync
+    _start_catalog_sync(app)
+
+    # Auto-register gateway MCP servers (best-effort)
+    _mcp_seeds = [
+        ("Awesome Copilot", "Community agents, instructions, and recipes from Awesome GitHub Copilot",
+         "http://admin:8005/mcp/copilot-catalog"),
+        ("AI Librarian", "Shared research knowledge base with semantic search",
+         "http://librarian:8008/mcp"),
+        ("CodeMate Tools", "SimCorp codebase search tools — requires SimCorp network",
+         "http://admin:8005/mcp/codemate"),
+    ]
+    try:
+        async with engine.begin() as conn:
+            for name, desc, url in _mcp_seeds:
+                await conn.execute(text("""
+                    INSERT INTO mcp_servers (name, description, url, auth_type, enabled, status)
+                    VALUES (:name, :desc, :url, 'none', TRUE, 'active')
+                    ON CONFLICT (url) DO NOTHING
+                """), {"name": name, "desc": desc, "url": url})
+    except Exception:
+        pass  # table may not exist on first migration run
+
     # Start background optimization worker (runs every 6 hours)
     import asyncpg as _asyncpg
     from app.workers.optimization_worker import start_optimization_worker as _opt_worker
@@ -272,6 +298,8 @@ app.include_router(system.router, dependencies=_auth)
 app.include_router(audit_log.router, dependencies=_auth)
 app.include_router(budget.router, dependencies=_auth)
 app.include_router(config_api_router.router, dependencies=_auth)
+app.include_router(copilot_catalog_router.router, dependencies=_auth)
+app.include_router(codemate_router.router, dependencies=_auth)
 app.include_router(requests_router.router, dependencies=_auth)
 app.include_router(guardrails_router.router, dependencies=_auth)
 app.include_router(workflows_router.router, dependencies=_auth)
