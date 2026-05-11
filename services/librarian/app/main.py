@@ -21,7 +21,7 @@ from typing import Any
 import asyncpg
 import httpx
 import numpy as np
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from openai import AsyncOpenAI
 from pydantic import BaseModel
@@ -997,3 +997,42 @@ async def mcp_jsonrpc(body: dict):
 
     _log.debug("MCP unknown method: %s", method)
     return _err(-32601, f"Method not found: {method}")
+
+
+# GET /mcp/sse — HTTP+SSE transport for MCP clients that require it
+@app.get("/mcp/sse")
+async def mcp_sse(request: Request):
+    """HTTP+SSE MCP transport.
+
+    Sends an 'endpoint' event pointing to POST /mcp, then relays responses
+    for any JSON-RPC calls the client makes to that URL.
+    """
+    import asyncio as _asyncio
+    import json as _json
+    from fastapi.responses import StreamingResponse as _SSE
+
+    queue: _asyncio.Queue[str | None] = _asyncio.Queue()
+    conn_id = id(queue)
+    sessions = getattr(app.state, "_mcp_sse_sessions", {})
+    sessions[conn_id] = queue
+    app.state._mcp_sse_sessions = sessions
+
+    base = str(request.base_url).rstrip("/")
+    post_url = f"{base}/mcp"
+
+    async def _stream():
+        yield f"event: endpoint\ndata: {post_url}\n\n"
+        try:
+            while True:
+                try:
+                    item = await _asyncio.wait_for(queue.get(), timeout=15.0)
+                except _asyncio.TimeoutError:
+                    yield ": keepalive\n\n"
+                    continue
+                if item is None:
+                    break
+                yield f"event: message\ndata: {item}\n\n"
+        finally:
+            sessions.pop(conn_id, None)
+
+    return _SSE(_stream(), media_type="text/event-stream")
