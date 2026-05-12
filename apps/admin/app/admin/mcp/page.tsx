@@ -209,6 +209,19 @@ function ServerModal({
                 onChange={e => setForm(f => ({ ...f, url: e.target.value }))}
                 required placeholder="https://mcp.example.com"
               />
+              {form.url.includes('localhost') && (
+                <div style={{ marginTop: 5, fontSize: 11.5, color: 'var(--warn, #F59E0B)' }}>
+                  ⚠ The gateway runs inside Docker — use{' '}
+                  <button
+                    type="button"
+                    style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--sc-blue)', textDecoration: 'underline' }}
+                    onClick={() => setForm(f => ({ ...f, url: f.url.replace('localhost', 'host.docker.internal') }))}
+                  >
+                    host.docker.internal
+                  </button>
+                  {' '}instead of localhost.
+                </div>
+              )}
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <div>

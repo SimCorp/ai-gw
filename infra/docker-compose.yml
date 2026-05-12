@@ -226,6 +226,8 @@ services:
     environment:
       ENVIRONMENT: development
       MCP_ALLOW_LOCAL_URLS: "true"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       db-migrate:
         condition: service_completed_successfully
