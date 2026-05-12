@@ -41,7 +41,18 @@ class DockerRuntime:
         node_id: str,
         timeout_s: float,
         on_log: callable | None = None,
+        allowed_hosts: list[str] | None = None,
     ) -> RunResult:
+        # manifest.network.allowed_hosts: optional list of extra hostnames the
+        # agent is allowed to reach (e.g. ["api.example.com", "storage.example.com"]).
+        # Actual enforcement via iptables / egress policy is a v1.0 concern.
+        # For now we log the intended policy so operators can audit it.
+        if allowed_hosts:
+            _log.info(
+                "run=%s node=%s allowed_hosts=%s (enforcement pending; v1.0)",
+                run_id, node_id, allowed_hosts,
+            )
+
         # Prepare the per-invocation directory (visible at both worker and agent paths)
         worker_dir = f"{self._worker_runs_path}/{run_id}/{node_id}"
         host_dir = f"{self._host_runs_path}/{run_id}/{node_id}"
@@ -64,11 +75,19 @@ class DockerRuntime:
                     "Env": env_list,
                     "HostConfig": {
                         "Binds": binds,
-                        "NetworkMode": self._network,
-                        "AutoRemove": False,
+                        # NetworkMode intentionally omitted — container is attached
+                        # exclusively to the named aigateway network via NetworkingConfig
+                        # below, preventing access to the default bridge and other
+                        # Docker-internal networks.
                         "ReadonlyRootfs": True,
                         "CapDrop": ["ALL"],
                         "SecurityOpt": ["no-new-privileges:true"],
+                        "AutoRemove": False,
+                    },
+                    "NetworkingConfig": {
+                        "EndpointsConfig": {
+                            self._network: {}
+                        }
                     },
                     "AttachStdout": True,
                     "AttachStderr": True,

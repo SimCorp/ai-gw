@@ -25,8 +25,11 @@ from redis.asyncio import Redis
 from app.config import Settings
 from app.dag import ready_successors, is_terminal, node as dag_node, should_loop
 from app.events import node_started, node_log, node_finished, run_finished
+from app.runtime import RunResult
 from app.runtime.docker import DockerRuntime
 from app.runtime.relay import RelayRuntime
+from app.sanitizer import sanitize_inputs as _sanitize_inputs
+from app.threat_detection import load_patterns_from_admin as _load_threat_patterns, scan_outputs as _scan_outputs
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 _log = logging.getLogger("workflow-worker")
@@ -310,6 +313,10 @@ async def _handle_job(
     if pred_outputs:
         inputs["_predecessors"] = pred_outputs
 
+    # Sanitize inputs before writing inputs.json — strips @mentions, HTML tags,
+    # enforces size/key-count limits, preventing prompt injection via DAG inputs.
+    inputs = _sanitize_inputs(inputs)
+
     # Retrieve the plaintext scoped API key from Redis. Admin stored it there
     # during run submission (workflow:scoped_key:{run_id}) so the worker can
     # inject it into each agent container as AIGW_API_KEY.
@@ -365,6 +372,24 @@ async def _handle_job(
 
     if result.exit_code != 0:
         msg = f"exit code {result.exit_code}"
+        await _finalize_node(pool, queue_id, run_id, node_id, iteration, "failed", None, msg)
+        await node_finished(redis, run_id, node_id, iteration, "failed", error=msg)
+        await _mark_run_finished(pool, run_id, "failed", error=msg)
+        await run_finished(redis, run_id, "failed")
+        await _cleanup_run_key(redis, run_id)
+        return
+
+    # Redact scoped API keys and known secrets from outputs before DB persistence.
+    result = RunResult(
+        exit_code=result.exit_code,
+        outputs=_redact_outputs(result.outputs or {}),
+        stdout_tail=result.stdout_tail,
+    )
+
+    # Threat detection on agent outputs — block propagation if threats found.
+    clean, findings = _scan_outputs(result.outputs or {})
+    if not clean:
+        msg = f"threat-detection-blocked: {findings[0]}"
         await _finalize_node(pool, queue_id, run_id, node_id, iteration, "failed", None, msg)
         await node_finished(redis, run_id, node_id, iteration, "failed", error=msg)
         await _mark_run_finished(pool, run_id, "failed", error=msg)
@@ -446,6 +471,23 @@ async def _fire_spawn(admin_url: str, spawn_payload: dict, team_id: str, admin_i
         _log.warning("sub-workflow spawn error: %s", exc)
 
 
+def _redact_outputs(outputs: dict) -> dict:
+    """Redact any scoped API keys or known secrets from outputs before DB persistence."""
+    import re
+    SECRET_RE = re.compile(r'aigw_run_[A-Za-z0-9_\-]{20,}')
+
+    def _redact_value(v):
+        if isinstance(v, str):
+            return SECRET_RE.sub('[REDACTED]', v)
+        elif isinstance(v, dict):
+            return {k: _redact_value(val) for k, val in v.items()}
+        elif isinstance(v, list):
+            return [_redact_value(item) for item in v]
+        return v
+
+    return _redact_value(outputs)
+
+
 async def _forward_log(redis: Redis, run_id: uuid.UUID, node_id: str, line: str) -> None:
     # Sample log lines so we don't flood the bus
     try:
@@ -490,6 +532,11 @@ async def _main() -> None:
 
     for sig in (signal.SIGTERM, signal.SIGINT):
         signal.signal(sig, _signal)
+
+    # Load threat-detection patterns from admin service on startup.
+    # Fail-open: defaults are compiled inside load_patterns_from_admin even if
+    # the admin service is unreachable.
+    await _load_threat_patterns(admin_url)
 
     sweeper = asyncio.create_task(_sweeper_loop(pool, cfg.sweeper_interval_s, stop_event, redis))
 
