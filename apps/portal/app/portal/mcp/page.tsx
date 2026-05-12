@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useAuth } from '../_lib/authContext';
 
 const BASE = process.env.NEXT_PUBLIC_ADMIN_BASE_URL ?? 'http://localhost:8005';
 
@@ -158,11 +159,50 @@ const GATEWAY_MANAGED_SERVERS = [
   },
 ];
 
+const MP_SETUP_CONFIG = (url: string) => `{
+  "mcpServers": {
+    "memory-palace": {
+      "transport": "http",
+      "url": "${url}",
+      "headers": {
+        "Authorization": "Bearer REPLACE_WITH_YOUR_AIGW_KEY"
+      }
+    }
+  }
+}`;
+
 export default function McpPage() {
+  const { token } = useAuth();
   const [servers, setServers] = useState<McpServer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [mpExpanded, setMpExpanded] = useState(false);
+  const [mpTestStatus, setMpTestStatus] = useState<'idle' | 'testing' | 'ok' | 'error'>('idle');
+  const [mpTestMsg, setMpTestMsg] = useState<string | null>(null);
+  const [copiedSetup, setCopiedSetup] = useState(false);
+
+  const testMemoryPalace = async () => {
+    if (!token) { setMpTestMsg('Not signed in — use portal session token'); setMpTestStatus('error'); return; }
+    setMpTestStatus('testing');
+    setMpTestMsg(null);
+    try {
+      const r = await fetch(MEMORY_MCP_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'mempalace_status', arguments: {} } }),
+      });
+      if (!r.ok) { setMpTestMsg(`HTTP ${r.status}`); setMpTestStatus('error'); return; }
+      const data = await r.json();
+      if (data.error) { setMpTestMsg(data.error.message ?? JSON.stringify(data.error)); setMpTestStatus('error'); return; }
+      const text = data.result?.content?.[0]?.text ?? JSON.stringify(data.result ?? data);
+      setMpTestMsg(text.slice(0, 300));
+      setMpTestStatus('ok');
+    } catch (e) {
+      setMpTestMsg(String(e));
+      setMpTestStatus('error');
+    }
+  };
 
   useEffect(() => {
     setLoading(true);
@@ -257,7 +297,78 @@ export default function McpPage() {
                     <span style={{ fontSize: 12, color: 'var(--fg-2)' }}>{gws.description}</span>
                   </div>
                 </div>
+                <div className="card__actions">
+                  <button className="btn btn--sm" onClick={() => setMpExpanded(x => !x)}>
+                    {mpExpanded ? '▼ Hide setup' : '▶ Setup & test'}
+                  </button>
+                </div>
               </div>
+              {mpExpanded && (
+                <div className="card__body" style={{ borderTop: '1px solid var(--rule)' }}>
+                  {/* Setup steps */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg-2)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                        Connect from Claude Code
+                      </div>
+                      <ol style={{ margin: 0, paddingLeft: 20, fontSize: 13, lineHeight: 1.7, color: 'var(--fg-2)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <li>Copy your AIGW key from the <a href="/portal/keys" style={{ color: 'var(--sc-blue)' }}>Keys page</a>.</li>
+                        <li>
+                          Add this block to <span className="mono" style={{ fontSize: 12 }}>~/.claude/settings.json</span> (replacing the key):
+                          <div style={{ position: 'relative', marginTop: 8 }}>
+                            <pre style={{ margin: 0, padding: '10px 14px', background: 'var(--surface-soft)', borderRadius: 8, fontSize: 12, fontFamily: 'var(--font-mono)', lineHeight: 1.5, overflowX: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: 'var(--fg-1)' }}>
+                              {MP_SETUP_CONFIG(gws.url)}
+                            </pre>
+                            <button
+                              style={{ position: 'absolute', top: 8, right: 8, fontSize: 11.5, padding: '3px 8px', borderRadius: 5, border: '1px solid var(--rule)', background: 'var(--surface)', cursor: 'pointer', color: 'var(--fg-2)' }}
+                              onClick={() => {
+                                navigator.clipboard.writeText(MP_SETUP_CONFIG(gws.url));
+                                setCopiedSetup(true);
+                                setTimeout(() => setCopiedSetup(false), 2000);
+                              }}
+                            >
+                              {copiedSetup ? 'Copied!' : 'Copy'}
+                            </button>
+                          </div>
+                        </li>
+                        <li>Restart Claude Code. Memory Palace tools will appear automatically.</li>
+                      </ol>
+                    </div>
+
+                    {/* Test connection */}
+                    <div style={{ paddingTop: 12, borderTop: '1px solid var(--rule)' }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg-2)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                        Test connection (uses your portal session)
+                      </div>
+                      <button
+                        className="btn btn--sm btn--primary"
+                        onClick={testMemoryPalace}
+                        disabled={mpTestStatus === 'testing'}
+                      >
+                        {mpTestStatus === 'testing' ? 'Testing…' : 'Test Memory Palace'}
+                      </button>
+                      {mpTestStatus === 'ok' && (
+                        <div style={{ marginTop: 10, padding: '10px 14px', borderRadius: 8, background: 'rgba(31,138,91,0.06)', border: '1px solid rgba(31,138,91,0.2)', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                          <span style={{ color: 'var(--good)', fontWeight: 700, fontSize: 15 }}>✓</span>
+                          <div>
+                            <div style={{ fontSize: 13, color: 'var(--good)', fontWeight: 500 }}>Memory Palace is reachable</div>
+                            {mpTestMsg && <div className="mono" style={{ fontSize: 11.5, color: 'var(--fg-2)', marginTop: 3, whiteSpace: 'pre-wrap' }}>{mpTestMsg}</div>}
+                          </div>
+                        </div>
+                      )}
+                      {mpTestStatus === 'error' && (
+                        <div style={{ marginTop: 10, padding: '10px 14px', borderRadius: 8, background: 'rgba(239,62,74,0.06)', border: '1px solid rgba(239,62,74,0.2)', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                          <span style={{ color: 'var(--bad)', fontWeight: 700, fontSize: 15 }}>✗</span>
+                          <div>
+                            <div style={{ fontSize: 13, color: 'var(--bad)', fontWeight: 500 }}>Connection failed</div>
+                            {mpTestMsg && <div className="mono" style={{ fontSize: 11.5, color: 'var(--fg-2)', marginTop: 3 }}>{mpTestMsg}</div>}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>

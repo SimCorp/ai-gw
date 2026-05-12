@@ -6,6 +6,7 @@ import { useTeam } from "../_lib/teamContext";
 import { useAuth } from "../_lib/authContext";
 
 const ADMIN_BASE = process.env.NEXT_PUBLIC_ADMIN_BASE_URL ?? "http://localhost:8005";
+const CACHE_BASE = process.env.NEXT_PUBLIC_CACHE_BASE_URL ?? "http://localhost:8002";
 
 const LANG_TABS = ["curl", "python", "ts", "anthropic"] as const;
 type Lang = (typeof LANG_TABS)[number];
@@ -75,6 +76,107 @@ interface ApiKey {
   revoked_at: string | null;
   monthly_budget_usd: number | null;
   created_at: string;
+}
+
+function KeyVerifier({ initialKey }: { initialKey: string | null }) {
+  const [keyInput, setKeyInput] = useState(initialKey ?? "");
+  const [status, setStatus] = useState<"idle" | "testing" | "ok" | "error">("idle");
+  const [latency, setLatency] = useState<number | null>(null);
+  const [response, setResponse] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (initialKey) setKeyInput(initialKey);
+  }, [initialKey]);
+
+  const runTest = async () => {
+    const key = keyInput.trim();
+    if (!key) return;
+    setStatus("testing");
+    setResponse(null);
+    setErrorMsg(null);
+    const t0 = Date.now();
+    try {
+      const r = await fetch(`${CACHE_BASE}/v1/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${key}`,
+        },
+        body: JSON.stringify({
+          model: "claude-haiku-4-5",
+          messages: [{ role: "user", content: "Say OK" }],
+          max_tokens: 5,
+        }),
+      });
+      const ms = Date.now() - t0;
+      setLatency(ms);
+      if (!r.ok) {
+        const body = await r.json().catch(() => ({}));
+        setErrorMsg(`HTTP ${r.status}${body.detail ? `: ${body.detail}` : body.error?.message ? `: ${body.error.message}` : ""}`);
+        setStatus("error");
+        return;
+      }
+      const data = await r.json();
+      const text = data.choices?.[0]?.message?.content ?? "(no content)";
+      setResponse(text);
+      setStatus("ok");
+    } catch (e: unknown) {
+      setLatency(Date.now() - t0);
+      setErrorMsg(String(e));
+      setStatus("error");
+    }
+  };
+
+  return (
+    <div className="card" style={{ marginTop: 18 }}>
+      <div className="card__head">
+        <h3 className="card__title">Test your key</h3>
+        <span className="card__sub">verify the gateway is reachable and your key is valid</span>
+      </div>
+      <div className="card__body">
+        <div style={{ display: "flex", gap: 8 }}>
+          <input
+            type="text"
+            value={keyInput}
+            onChange={e => setKeyInput(e.target.value)}
+            placeholder="sk-..."
+            style={{
+              flex: 1, padding: "8px 12px", border: "1px solid var(--rule)",
+              borderRadius: 7, background: "var(--surface)", fontSize: 13,
+              fontFamily: "var(--font-mono)", color: "var(--fg-1)", outline: "none",
+              boxSizing: "border-box",
+            }}
+          />
+          <button
+            className="btn btn--primary"
+            onClick={runTest}
+            disabled={status === "testing" || !keyInput.trim()}
+          >
+            {status === "testing" ? "Testing…" : "Run test"}
+          </button>
+        </div>
+        {status === "ok" && (
+          <div style={{ marginTop: 10, padding: "10px 14px", borderRadius: 8, background: "rgba(31,138,91,0.06)", border: "1px solid rgba(31,138,91,0.2)", display: "flex", gap: 10, alignItems: "flex-start" }}>
+            <span style={{ color: "var(--good)", fontWeight: 700, fontSize: 15 }}>✓</span>
+            <div>
+              <div style={{ fontSize: 13, color: "var(--good)", fontWeight: 500 }}>Key is valid · gateway responded in {latency}ms</div>
+              {response && <div className="mono" style={{ fontSize: 12, color: "var(--fg-2)", marginTop: 3 }}>{response}</div>}
+            </div>
+          </div>
+        )}
+        {status === "error" && (
+          <div style={{ marginTop: 10, padding: "10px 14px", borderRadius: 8, background: "rgba(239,62,74,0.06)", border: "1px solid rgba(239,62,74,0.2)", display: "flex", gap: 10, alignItems: "flex-start" }}>
+            <span style={{ color: "var(--bad)", fontWeight: 700, fontSize: 15 }}>✗</span>
+            <div>
+              <div style={{ fontSize: 13, color: "var(--bad)", fontWeight: 500 }}>Test failed{latency ? ` · ${latency}ms` : ""}</div>
+              {errorMsg && <div className="mono" style={{ fontSize: 12, color: "var(--fg-2)", marginTop: 3 }}>{errorMsg}</div>}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function formatDate(iso: string) {
@@ -339,6 +441,8 @@ export default function KeysPage() {
         <span><span className="muted">Anthropic-shaped:</span> <span className="mono">/anthropic</span></span>
         <span><span className="muted">Status:</span> <a href="#" style={{ color: "var(--sc-blue)" }}>aigw.simcorp.internal/status</a></span>
       </div>
+
+      <KeyVerifier initialKey={newKeyValue} />
     </main>
   );
 }

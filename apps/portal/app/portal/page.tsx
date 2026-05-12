@@ -318,6 +318,34 @@ export default function PortalHome() {
         </div>
       )}
 
+      {/* Getting started checklist — shown until first key is created */}
+      {!loadingKeys && keys.length === 0 && (
+        <div className="card" style={{ marginBottom: 4, border: '1px solid var(--sc-blue, #0A7BD7)', background: 'linear-gradient(180deg,rgba(10,123,215,0.03),transparent 60%)' }}>
+          <div className="card__head">
+            <h3 className="card__title">Get started</h3>
+            <span className="card__sub">complete these steps to make your first API call</span>
+          </div>
+          <div className="card__body" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {[
+              { done: true,  label: `Joined team ${teamName}`, detail: 'You can make API calls on behalf of this team.' },
+              { done: false, label: 'Create an API key', detail: 'Keys authenticate your requests and track usage per service.', href: '/portal/keys' },
+              { done: false, label: 'Try the Playground', detail: 'Chat with Claude, Gemini, or GPT — no code needed.', href: '/portal/playground' },
+            ].map(({ done, label, detail, href }) => (
+              <div key={label} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '10px 14px', borderRadius: 8, background: 'var(--surface-soft)', border: '1px solid var(--rule)' }}>
+                <span style={{ fontSize: 16, flexShrink: 0, color: done ? 'var(--good)' : 'var(--fg-3)', marginTop: 1 }}>{done ? '✓' : '○'}</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: done ? 'var(--fg-2)' : 'var(--fg-1)', textDecoration: done ? 'line-through' : undefined }}>{label}</div>
+                  <div style={{ fontSize: 12.5, color: 'var(--fg-3)', marginTop: 2 }}>{detail}</div>
+                </div>
+                {!done && href && (
+                  <Link href={href} className="btn btn--sm btn--primary" style={{ flexShrink: 0 }}>Go →</Link>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Quick actions */}
       <div className="qg">
         <Link className="qa" href="/portal/playground">
