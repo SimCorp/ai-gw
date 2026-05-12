@@ -225,6 +225,7 @@ services:
     env_file: ../.env
     environment:
       ENVIRONMENT: development
+      MCP_ALLOW_LOCAL_URLS: "true"
     depends_on:
       db-migrate:
         condition: service_completed_successfully

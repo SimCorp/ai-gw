@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.db import get_session
 
 router = APIRouter(prefix="/mcp", tags=["mcp"])
@@ -41,20 +42,22 @@ def _validate_mcp_url(url: str) -> None:
     if not hostname:
         raise HTTPException(status_code=422, detail="MCP server URL must include a hostname")
 
-    # Block known private/loopback hostnames by name
-    _BLOCKED_HOSTNAMES = {
-        "localhost",
-        "metadata.google.internal",
-        "169.254.169.254",
-    }
-    if hostname.lower() in _BLOCKED_HOSTNAMES:
-        raise HTTPException(status_code=422, detail="MCP server URL hostname is not allowed")
+    if not settings.mcp_allow_local_urls:
+        # Block known private/loopback hostnames by name
+        _BLOCKED_HOSTNAMES = {
+            "localhost",
+            "metadata.google.internal",
+            "169.254.169.254",
+        }
+        if hostname.lower() in _BLOCKED_HOSTNAMES:
+            raise HTTPException(status_code=422, detail="MCP server URL hostname is not allowed")
 
     # Block bare IP addresses in private/link-local ranges (standard dotted-decimal and IPv6)
+    # Always block cloud metadata endpoints regardless of the allow-local flag
     try:
         addr = ipaddress.ip_address(hostname)
         for net in _PRIVATE_NETS:
-            if addr in net:
+            if addr in net and not settings.mcp_allow_local_urls:
                 raise HTTPException(
                     status_code=422,
                     detail="MCP server URL must not point to a private or link-local address",
@@ -62,42 +65,38 @@ def _validate_mcp_url(url: str) -> None:
     except ValueError:
         pass  # Not a standard IP literal — treat as domain name
 
-    # Block alternative IP representations (decimal, octal, hex) by normalising through int()
-    # e.g. "2130706433" == 127.0.0.1, "0x7f000001" == 127.0.0.1
-    # These are not caught by ipaddress.ip_address() but are resolved as loopback by HTTP clients.
-    try:
-        numeric = int(hostname, 0)  # handles decimal, 0x hex, 0 octal prefixes
-        if 0 <= numeric <= 0xFFFFFFFF:
-            addr = ipaddress.ip_address(numeric)
-            for net in _PRIVATE_NETS:
-                if addr in net:
-                    raise HTTPException(
-                        status_code=422,
-                        detail="MCP server URL must not point to a private or link-local address",
-                    )
-    except (ValueError, TypeError):
-        pass  # Not a numeric representation
+    if not settings.mcp_allow_local_urls:
+        # Block alternative IP representations (decimal, octal, hex)
+        try:
+            numeric = int(hostname, 0)
+            if 0 <= numeric <= 0xFFFFFFFF:
+                addr = ipaddress.ip_address(numeric)
+                for net in _PRIVATE_NETS:
+                    if addr in net:
+                        raise HTTPException(
+                            status_code=422,
+                            detail="MCP server URL must not point to a private or link-local address",
+                        )
+        except (ValueError, TypeError):
+            pass
 
-    # Block dotted-octal IP representations (e.g. "0177.0.0.1" == 127.0.0.1).
-    # Per-octet octal notation is parsed by many HTTP clients and curl.
-    # ipaddress.ip_address() rejects these, and int() can't parse dotted forms.
-    # Detect by: 4 dot-separated tokens, at least one starts with "0" and is >1 char.
-    parts = hostname.split(".")
-    if len(parts) == 4 and all(p for p in parts):
-        if any(p.startswith("0") and len(p) > 1 for p in parts):
-            # Attempt to parse each octet as octal
-            try:
-                octets = [int(p, 8) for p in parts]
-                if all(0 <= o <= 255 for o in octets):
-                    addr = ipaddress.ip_address(".".join(str(o) for o in octets))
-                    for net in _PRIVATE_NETS:
-                        if addr in net:
-                            raise HTTPException(
-                                status_code=422,
-                                detail="MCP server URL must not point to a private or link-local address",
-                            )
-            except (ValueError, TypeError):
-                pass  # Not valid octal octets
+    if not settings.mcp_allow_local_urls:
+        # Block dotted-octal IP representations (e.g. "0177.0.0.1" == 127.0.0.1)
+        parts = hostname.split(".")
+        if len(parts) == 4 and all(p for p in parts):
+            if any(p.startswith("0") and len(p) > 1 for p in parts):
+                try:
+                    octets = [int(p, 8) for p in parts]
+                    if all(0 <= o <= 255 for o in octets):
+                        addr = ipaddress.ip_address(".".join(str(o) for o in octets))
+                        for net in _PRIVATE_NETS:
+                            if addr in net:
+                                raise HTTPException(
+                                    status_code=422,
+                                    detail="MCP server URL must not point to a private or link-local address",
+                                )
+                except (ValueError, TypeError):
+                    pass
 
 
 # ---------------------------------------------------------------------------

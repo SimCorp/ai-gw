@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     # Email domain restriction — empty list allows all domains
     allowed_email_domains: list[str] = []
 
+    # Allow localhost/private-IP MCP URLs — safe to enable in development/staging
+    mcp_allow_local_urls: bool = False
+
     def warn_dev_values(self) -> None:
         env = os.getenv("ENVIRONMENT", "development")
         is_prod = env not in ("development", "test", "ci")
