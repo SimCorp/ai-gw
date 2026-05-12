@@ -149,8 +149,8 @@ export default function PortalHome() {
     );
   }
 
-  const spendDisplay = stats ? `$${stats.spend_mtd?.toFixed(2) ?? "—"}` : "—";
-  const budgetDisplay = stats?.budget_cap ? `of team cap $${stats.budget_cap.toLocaleString()}` : "";
+  const spendDisplay = stats ? `€${stats.spend_mtd?.toFixed(2) ?? "—"}` : "—";
+  const budgetDisplay = stats?.budget_cap ? `of team cap €${stats.budget_cap.toLocaleString()}` : "";
   const requests7dDisplay = stats ? (stats.requests_7d?.toLocaleString() ?? "—") : "—";
   const cacheHitDisplay = stats?.cache_hit_rate_24h != null
     ? `${(stats.cache_hit_rate_24h * 100).toFixed(1)}%`

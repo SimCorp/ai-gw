@@ -36,13 +36,19 @@ interface DisplayModel {
 // is classified as GitHub Copilot rather than Anthropic.
 function detectProvider(id: string): { provider: string; logoColor: string; logoText: string } {
   const lower = id.toLowerCase();
-  if (lower.startsWith("copilot-")) return { provider: "GitHub Copilot", logoColor: "#24292F", logoText: "GH" };
-  if (lower.startsWith("azure-")) return { provider: "Azure AI Foundry", logoColor: "#0078D4", logoText: "Az" };
-  if (lower.startsWith("github-")) return { provider: "GitHub Models", logoColor: "#1A1D31", logoText: "GH" };
-  if (lower.includes("claude")) return { provider: "Anthropic", logoColor: "#D97757", logoText: "A" };
-  if (lower.includes("gemini")) return { provider: "Google", logoColor: "#4285F4", logoText: "G" };
+  if (lower.startsWith("copilot-"))  return { provider: "GitHub Copilot",    logoColor: "#24292F", logoText: "GH" };
+  if (lower.startsWith("azure-"))    return { provider: "Azure AI Foundry",  logoColor: "#0078D4", logoText: "Az" };
+  if (lower.startsWith("github-"))   return { provider: "GitHub Models",     logoColor: "#1A1D31", logoText: "GH" };
+  // Azure AI Foundry serverless models — registered without "azure-" prefix
+  if (lower.startsWith("phi-"))      return { provider: "Azure AI Foundry",  logoColor: "#0078D4", logoText: "Az" };
+  if (lower.startsWith("deepseek-")) return { provider: "Azure AI Foundry",  logoColor: "#0078D4", logoText: "Az" };
+  if (lower.startsWith("cohere-"))   return { provider: "Azure AI Foundry",  logoColor: "#0078D4", logoText: "Az" };
+  if (lower.startsWith("mistral-"))  return { provider: "Azure AI Foundry",  logoColor: "#0078D4", logoText: "Az" };
+  if (lower.startsWith("llama-"))    return { provider: "Azure AI Foundry",  logoColor: "#0078D4", logoText: "Az" };
+  if (lower.includes("claude"))      return { provider: "Anthropic",         logoColor: "#D97757", logoText: "A"  };
+  if (lower.includes("gemini"))      return { provider: "Google",            logoColor: "#4285F4", logoText: "G"  };
   if (lower.includes("gpt") || lower.includes("o1") || lower.includes("o3")) return { provider: "OpenAI", logoColor: "#10A37F", logoText: "OA" };
-  if (lower.includes("local") || lower.includes("ollama") || lower.includes("llama")) return { provider: "Self-hosted", logoColor: "#1D958E", logoText: "Ol" };
+  if (lower === "local" || lower.includes("ollama")) return { provider: "Self-hosted", logoColor: "#1D958E", logoText: "Ol" };
   return { provider: "Other", logoColor: "#555", logoText: "?" };
 }
 

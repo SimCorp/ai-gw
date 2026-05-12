@@ -135,10 +135,10 @@ export default function UsagePage() {
               <line x1="40" y1="170" x2="588" y2="170"/>
             </g>
             <g fill="var(--fg-3)" fontSize="10" fontFamily="var(--font-mono)">
-              <text x="36" y="24" textAnchor="end">$20</text>
-              <text x="36" y="74" textAnchor="end">$15</text>
-              <text x="36" y="124" textAnchor="end">$10</text>
-              <text x="36" y="174" textAnchor="end">$0</text>
+              <text x="36" y="24" textAnchor="end">€20</text>
+              <text x="36" y="74" textAnchor="end">€15</text>
+              <text x="36" y="124" textAnchor="end">€10</text>
+              <text x="36" y="174" textAnchor="end">€0</text>
             </g>
             <g>
               {BAR_DATA.map(([sonnet, haiku, gemini], i) => {
