@@ -300,48 +300,79 @@ async def ping_server(server_id: str, session: AsyncSession = Depends(get_sessio
     error_msg = None
     latency_ms = 0
 
-    _jsonrpc_headers = {**headers, "Content-Type": "application/json", "Accept": "application/json"}
+    _rpc_headers = {**headers, "Content-Type": "application/json", "Accept": "application/json, text/event-stream"}
+
+    def _extract_tools_from_rpc(body: bytes) -> list[dict]:
+        """Parse tools/list result from JSON-RPC response (plain JSON or SSE stream)."""
+        text_body = body.decode(errors="replace")
+        # SSE: extract last `data: {...}` line
+        for line in reversed(text_body.splitlines()):
+            if line.startswith("data: ") and line != "data: [DONE]":
+                text_body = line[6:]
+                break
+        try:
+            rpc = json.loads(text_body)
+        except Exception:
+            return []
+        raw = rpc.get("result", {}).get("tools") or rpc.get("tools") or []
+        return raw if isinstance(raw, list) else []
 
     try:
         start = time.monotonic()
         async with httpx.AsyncClient(timeout=10.0, follow_redirects=False) as client:
             mcp_url = server["url"]
 
-            # ── Strategy 1: MCP JSON-RPC tools/list ──────────────────────────
-            resp = await client.post(
-                mcp_url,
-                headers=_jsonrpc_headers,
-                json={"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}},
+            # ── Strategy 1: MCP session handshake (initialize → tools/list) ─
+            init_resp = await client.post(
+                mcp_url, headers=_rpc_headers,
+                json={"jsonrpc": "2.0", "id": 1, "method": "initialize",
+                      "params": {"protocolVersion": "2024-11-05", "capabilities": {},
+                                 "clientInfo": {"name": "ai-gateway-admin", "version": "1.0"}}},
             )
-            if resp.status_code == 200:
-                rpc = resp.json()
-                raw_tools = (
-                    rpc.get("result", {}).get("tools")
-                    or rpc.get("tools")
-                    or (rpc if isinstance(rpc, list) else None)
-                    or []
+            if init_resp.status_code == 200:
+                session_id = init_resp.headers.get("mcp-session-id")
+                list_headers = {**_rpc_headers, **({"Mcp-Session-Id": session_id} if session_id else {})}
+                list_resp = await client.post(
+                    mcp_url, headers=list_headers,
+                    json={"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
                 )
-                tools = raw_tools if isinstance(raw_tools, list) else []
-            elif resp.status_code in (404, 405):
-                # ── Strategy 2: GET /tools (non-JSON-RPC servers) ────────────
-                tools_url = mcp_url.rstrip("/") + "/tools"
-                resp = await client.get(tools_url, headers=headers)
-                if resp.status_code == 404:
-                    resp = await client.get(mcp_url, headers=headers)
-                if resp.status_code < 400:
-                    data = resp.json()
-                    if isinstance(data, list):
-                        tools = data
-                    elif isinstance(data, dict) and "tools" in data:
-                        tools = data["tools"]
-                    elif isinstance(data, dict):
-                        tools = [{"name": k, **v} for k, v in data.items() if isinstance(v, dict)]
+                if list_resp.status_code == 200:
+                    tools = _extract_tools_from_rpc(list_resp.content)
+                elif list_resp.status_code >= 400:
+                    status = "error"
+                    error_msg = f"HTTP {list_resp.status_code}: {list_resp.text[:200]}"
+
+            elif init_resp.status_code in (404, 405):
+                # ── Strategy 2: direct tools/list (no session required) ──────
+                list_resp = await client.post(
+                    mcp_url, headers=_rpc_headers,
+                    json={"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}},
+                )
+                if list_resp.status_code == 200:
+                    tools = _extract_tools_from_rpc(list_resp.content)
+                elif list_resp.status_code in (404, 405):
+                    # ── Strategy 3: GET /tools (non-JSON-RPC servers) ─────────
+                    tools_url = mcp_url.rstrip("/") + "/tools"
+                    get_resp = await client.get(tools_url, headers=headers)
+                    if get_resp.status_code == 404:
+                        get_resp = await client.get(mcp_url, headers=headers)
+                    if get_resp.status_code < 400:
+                        data = get_resp.json()
+                        if isinstance(data, list):
+                            tools = data
+                        elif isinstance(data, dict) and "tools" in data:
+                            tools = data["tools"]
+                        elif isinstance(data, dict):
+                            tools = [{"name": k, **v} for k, v in data.items() if isinstance(v, dict)]
+                    else:
+                        status = "error"
+                        error_msg = f"HTTP {get_resp.status_code}: {get_resp.text[:200]}"
                 else:
                     status = "error"
-                    error_msg = f"HTTP {resp.status_code}: {resp.text[:200]}"
+                    error_msg = f"HTTP {list_resp.status_code}: {list_resp.text[:200]}"
             else:
                 status = "error"
-                error_msg = f"HTTP {resp.status_code}: {resp.text[:200]}"
+                error_msg = f"HTTP {init_resp.status_code}: {init_resp.text[:200]}"
 
         latency_ms = int((time.monotonic() - start) * 1000)
 
