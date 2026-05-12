@@ -300,32 +300,50 @@ async def ping_server(server_id: str, session: AsyncSession = Depends(get_sessio
     error_msg = None
     latency_ms = 0
 
+    _jsonrpc_headers = {**headers, "Content-Type": "application/json", "Accept": "application/json"}
+
     try:
         start = time.monotonic()
         async with httpx.AsyncClient(timeout=10.0, follow_redirects=False) as client:
-            # Try /tools first, fall back to base url
-            tools_url = server["url"].rstrip("/") + "/tools"
-            try:
+            mcp_url = server["url"]
+
+            # ── Strategy 1: MCP JSON-RPC tools/list ──────────────────────────
+            resp = await client.post(
+                mcp_url,
+                headers=_jsonrpc_headers,
+                json={"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}},
+            )
+            if resp.status_code == 200:
+                rpc = resp.json()
+                raw_tools = (
+                    rpc.get("result", {}).get("tools")
+                    or rpc.get("tools")
+                    or (rpc if isinstance(rpc, list) else None)
+                    or []
+                )
+                tools = raw_tools if isinstance(raw_tools, list) else []
+            elif resp.status_code in (404, 405):
+                # ── Strategy 2: GET /tools (non-JSON-RPC servers) ────────────
+                tools_url = mcp_url.rstrip("/") + "/tools"
                 resp = await client.get(tools_url, headers=headers)
                 if resp.status_code == 404:
-                    resp = await client.get(server["url"], headers=headers)
-            except Exception:
-                resp = await client.get(server["url"], headers=headers)
+                    resp = await client.get(mcp_url, headers=headers)
+                if resp.status_code < 400:
+                    data = resp.json()
+                    if isinstance(data, list):
+                        tools = data
+                    elif isinstance(data, dict) and "tools" in data:
+                        tools = data["tools"]
+                    elif isinstance(data, dict):
+                        tools = [{"name": k, **v} for k, v in data.items() if isinstance(v, dict)]
+                else:
+                    status = "error"
+                    error_msg = f"HTTP {resp.status_code}: {resp.text[:200]}"
+            else:
+                status = "error"
+                error_msg = f"HTTP {resp.status_code}: {resp.text[:200]}"
 
         latency_ms = int((time.monotonic() - start) * 1000)
-
-        if resp.status_code >= 400:
-            status = "error"
-            error_msg = f"HTTP {resp.status_code}: {resp.text[:200]}"
-        else:
-            data = resp.json()
-            if isinstance(data, list):
-                tools = data
-            elif isinstance(data, dict) and "tools" in data:
-                tools = data["tools"]
-            elif isinstance(data, dict):
-                # Some servers return a dict of tool_name -> schema
-                tools = [{"name": k, **v} for k, v in data.items() if isinstance(v, dict)]
 
     except Exception as exc:
         status = "error"
