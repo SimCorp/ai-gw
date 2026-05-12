@@ -47,7 +47,7 @@ async def _update_budget_counters(redis, team_id: str, key_id: str | None, cost_
     if cost_usd <= 0:
         return
     try:
-        month = datetime.utcnow().strftime("%Y-%m")
+        month = datetime.now(timezone.utc).strftime("%Y-%m")
         expiry = _end_of_month()
 
         pipe = redis.pipeline()
