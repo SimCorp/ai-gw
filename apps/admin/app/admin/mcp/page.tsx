@@ -287,6 +287,117 @@ function ServerModal({
   );
 }
 
+interface ToolRunResult {
+  latency_ms: number;
+  result?: { content?: { type: string; text: string }[] } | null;
+  error?: { code: number; message: string } | null;
+  raw?: unknown;
+}
+
+function buildDefaultArgs(schema: Record<string, unknown>): string {
+  const props = (schema?.properties ?? {}) as Record<string, { type?: string; default?: unknown }>;
+  const required = (schema?.required ?? []) as string[];
+  const obj: Record<string, unknown> = {};
+  for (const key of required) {
+    const prop = props[key] ?? {};
+    obj[key] = prop.default ?? (prop.type === 'integer' || prop.type === 'number' ? 0 : prop.type === 'boolean' ? false : prop.type === 'array' ? [] : '');
+  }
+  return JSON.stringify(obj, null, 2);
+}
+
+function ToolRunner({ serverId, tool }: { serverId: string; tool: McpTool }) {
+  const [open, setOpen] = useState(false);
+  const [args, setArgs] = useState(() => buildDefaultArgs(tool.input_schema));
+  const [running, setRunning] = useState(false);
+  const [result, setResult] = useState<ToolRunResult | null>(null);
+  const [callError, setCallError] = useState<string | null>(null);
+
+  async function run() {
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = args.trim() ? JSON.parse(args) : {};
+    } catch {
+      setCallError('Invalid JSON in arguments');
+      return;
+    }
+    setRunning(true);
+    setResult(null);
+    setCallError(null);
+    try {
+      const res = await fetch(`${BASE}/mcp/servers/${serverId}/tools/${encodeURIComponent(tool.name)}/call`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ arguments: parsed }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail ?? `HTTP ${res.status}`);
+      setResult(data as ToolRunResult);
+    } catch (err) {
+      setCallError(String(err));
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  const resultText = result?.result?.content?.map(c => c.text).join('\n')
+    ?? (result?.error ? `Error ${result.error.code}: ${result.error.message}` : null)
+    ?? (result ? JSON.stringify(result.raw, null, 2) : null);
+
+  return (
+    <div style={{ marginTop: 6 }}>
+      <button
+        className="btn btn--sm"
+        onClick={() => setOpen(o => !o)}
+        style={{ fontSize: 11.5 }}
+      >
+        {open ? '▼ Close' : '▶ Try'}
+      </button>
+      {open && (
+        <div style={{ marginTop: 8, padding: '12px 14px', background: 'var(--surface-soft)', borderRadius: 8, border: '1px solid var(--rule)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--fg-2)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Arguments (JSON)</div>
+          <textarea
+            value={args}
+            onChange={e => setArgs(e.target.value)}
+            rows={Math.max(3, args.split('\n').length)}
+            spellCheck={false}
+            style={{
+              width: '100%', boxSizing: 'border-box',
+              fontFamily: 'var(--font-mono)', fontSize: 12, lineHeight: 1.5,
+              padding: '8px 10px', border: '1px solid var(--rule)', borderRadius: 6,
+              background: 'var(--surface)', color: 'var(--fg-1)', resize: 'vertical', outline: 'none',
+            }}
+          />
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button className="btn btn--sm btn--primary" onClick={run} disabled={running}>
+              {running ? 'Running…' : 'Run'}
+            </button>
+            {result && !result.error && (
+              <span style={{ fontSize: 12, color: 'var(--good)' }}>✓ {result.latency_ms}ms</span>
+            )}
+            {result?.error && (
+              <span style={{ fontSize: 12, color: 'var(--bad)' }}>✗ tool error</span>
+            )}
+          </div>
+          {callError && (
+            <div style={{ fontSize: 12, color: 'var(--bad)', fontFamily: 'var(--font-mono)' }}>{callError}</div>
+          )}
+          {resultText && (
+            <pre style={{
+              margin: 0, padding: '10px 12px',
+              background: 'var(--surface)', border: '1px solid var(--rule)', borderRadius: 6,
+              fontSize: 12, fontFamily: 'var(--font-mono)', lineHeight: 1.5,
+              whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: 'var(--fg-1)',
+              maxHeight: 320, overflowY: 'auto',
+            }}>
+              {resultText}
+            </pre>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ExpandedRow({
   serverId,
   onClose,
@@ -380,27 +491,29 @@ function ExpandedRow({
                       <div
                         key={tool.id}
                         style={{
-                          display: 'flex', alignItems: 'center', gap: 12,
-                          padding: '8px 12px',
+                          padding: '10px 12px',
                           background: 'var(--surface)',
                           border: '1px solid var(--rule)',
                           borderRadius: 6,
                         }}
                       >
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <span className="mono" style={{ fontWeight: 500, fontSize: 13 }}>{tool.name}</span>
-                          {tool.description && (
-                            <span style={{ color: 'var(--fg-2)', fontSize: 12, marginLeft: 10 }}>{tool.description}</span>
-                          )}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <span className="mono" style={{ fontWeight: 500, fontSize: 13 }}>{tool.name}</span>
+                            {tool.description && (
+                              <span style={{ color: 'var(--fg-2)', fontSize: 12, marginLeft: 10 }}>{tool.description}</span>
+                            )}
+                          </div>
+                          <button
+                            className={`pill ${tool.enabled ? 'pill--good' : ''}`}
+                            style={{ cursor: 'pointer', border: 'none', background: 'none', padding: 0, flexShrink: 0 }}
+                            onClick={() => toggleTool(tool.name, !tool.enabled)}
+                            title={tool.enabled ? 'Click to disable' : 'Click to enable'}
+                          >
+                            <span className="dot" />{tool.enabled ? 'enabled' : 'disabled'}
+                          </button>
                         </div>
-                        <button
-                          className={`pill ${tool.enabled ? 'pill--good' : ''}`}
-                          style={{ cursor: 'pointer', border: 'none', background: 'none', padding: 0 }}
-                          onClick={() => toggleTool(tool.name, !tool.enabled)}
-                          title={tool.enabled ? 'Click to disable' : 'Click to enable'}
-                        >
-                          <span className="dot" />{tool.enabled ? 'enabled' : 'disabled'}
-                        </button>
+                        <ToolRunner serverId={serverId} tool={tool} />
                       </div>
                     ))}
                   </div>

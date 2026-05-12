@@ -485,6 +485,89 @@ async def update_tool(
 
 
 # ---------------------------------------------------------------------------
+# Tool call proxy
+# ---------------------------------------------------------------------------
+
+class ToolCallRequest(BaseModel):
+    arguments: dict = Field(default_factory=dict)
+
+
+@router.post("/servers/{server_id}/tools/{tool_name}/call")
+async def call_tool(
+    server_id: str,
+    tool_name: str,
+    body: ToolCallRequest,
+    session: AsyncSession = Depends(get_session),
+):
+    server_row = (await session.execute(
+        text("SELECT * FROM mcp_servers WHERE id = CAST(:id AS uuid)"),
+        {"id": server_id},
+    )).mappings().first()
+    if not server_row:
+        raise HTTPException(status_code=404, detail="MCP server not found")
+
+    server = dict(server_row)
+    headers: dict[str, str] = {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"}
+    auth_type = server.get("auth_type", "none")
+    if auth_type == "bearer" and server.get("auth_secret"):
+        headers["Authorization"] = f"Bearer {server['auth_secret']}"
+    elif auth_type == "api_key" and server.get("auth_secret"):
+        headers[server.get("auth_header") or "X-API-Key"] = server["auth_secret"]
+
+    mcp_url = server["url"]
+
+    def _parse_rpc_body(content: bytes) -> Any:
+        text_body = content.decode(errors="replace")
+        for line in reversed(text_body.splitlines()):
+            if line.startswith("data: ") and line != "data: [DONE]":
+                text_body = line[6:]
+                break
+        try:
+            return json.loads(text_body)
+        except Exception:
+            return {"raw": text_body}
+
+    try:
+        start = time.monotonic()
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=False) as client:
+            # Initialize to get session ID
+            session_id: str | None = None
+            init_resp = await client.post(
+                mcp_url, headers=headers,
+                json={"jsonrpc": "2.0", "id": 1, "method": "initialize",
+                      "params": {"protocolVersion": "2024-11-05", "capabilities": {},
+                                 "clientInfo": {"name": "ai-gateway-admin", "version": "1.0"}}},
+            )
+            if init_resp.status_code == 200:
+                session_id = init_resp.headers.get("mcp-session-id")
+
+            call_headers = {**headers, **({"Mcp-Session-Id": session_id} if session_id else {})}
+            call_resp = await client.post(
+                mcp_url, headers=call_headers,
+                json={"jsonrpc": "2.0", "id": 2, "method": "tools/call",
+                      "params": {"name": tool_name, "arguments": body.arguments}},
+            )
+
+        latency_ms = int((time.monotonic() - start) * 1000)
+
+        if call_resp.status_code >= 400:
+            raise HTTPException(status_code=502, detail=f"MCP server returned HTTP {call_resp.status_code}: {call_resp.text[:300]}")
+
+        rpc = _parse_rpc_body(call_resp.content)
+        return {
+            "latency_ms": latency_ms,
+            "result": rpc.get("result"),
+            "error": rpc.get("error"),
+            "raw": rpc,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+
+
+# ---------------------------------------------------------------------------
 # Access control
 # ---------------------------------------------------------------------------
 
