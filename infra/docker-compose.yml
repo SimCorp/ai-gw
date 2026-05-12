@@ -5,7 +5,7 @@ services:
   # ── Infrastructure ────────────────────────────────────────────────────────────
 
   postgres:
-    image: postgres:16
+    image: pgvector/pgvector:pg16
     environment:
       POSTGRES_DB: aigateway
       POSTGRES_USER: aigateway
@@ -266,6 +266,7 @@ services:
       NEXT_PUBLIC_CACHE_BASE_URL: "http://localhost:8002"
       NEXT_PUBLIC_IDENTITY_BASE_URL: "http://localhost:8006"
       NEXT_PUBLIC_LIBRARIAN_BASE_URL: "http://localhost:8008"
+      NEXT_PUBLIC_MEMORY_BASE_URL: "http://localhost:8009"
     depends_on:
       admin:
         condition: service_healthy
@@ -361,6 +362,29 @@ services:
       timeout: 5s
       retries: 10
       start_period: 30s
+
+  memory:
+    build:
+      context: ../services/memory
+    ports:
+      - "127.0.0.1:8009:8009"
+    environment:
+      DATABASE_URL: "postgresql://aigateway:aigateway@postgres:5432/aigateway"
+      AUTH_URL: "http://auth:8001"
+      ADMIN_URL: "http://admin:8005"
+      EMBEDDING_MODEL: "${EMBEDDING_MODEL:-text-embedding-3-small}"
+      EMBEDDING_API_KEY: "${EMBEDDING_API_KEY:-sk-local-placeholder}"
+      EMBEDDING_BASE_URL: "${EMBEDDING_BASE_URL:-http://ollama:11434/v1}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      auth:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8009/health')\" 2>/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
   claude-sandbox:
     build:

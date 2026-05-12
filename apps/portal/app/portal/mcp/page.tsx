@@ -144,6 +144,20 @@ function ServerToolsPanel({ serverId }: { serverId: string }) {
   );
 }
 
+const MEMORY_MCP_URL =
+  (process.env.NEXT_PUBLIC_MEMORY_BASE_URL ?? 'http://localhost:8009') + '/mcp';
+
+const GATEWAY_MANAGED_SERVERS = [
+  {
+    id: '__memory_palace__',
+    name: 'Memory Palace',
+    description: 'Per-developer isolated memory with drawers, knowledge graph, diary, and tunnels. Pre-authorized with your API key.',
+    url: MEMORY_MCP_URL,
+    auth_type: 'bearer' as const,
+    tool_count: 30,
+  },
+];
+
 export default function McpPage() {
   const [servers, setServers] = useState<McpServer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -208,6 +222,50 @@ export default function McpPage() {
               Your team does not have access to any active MCP servers. Contact your admin to get access.
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Gateway-managed built-in servers — always available, pre-authorized */}
+      <div style={{ marginBottom: 8 }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+          Gateway-managed
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {GATEWAY_MANAGED_SERVERS.map(gws => (
+            <div key={gws.id} className="card" style={{ border: '1px solid var(--sc-blue, #0A7BD7)' }}>
+              <div className="card__head" style={{ alignItems: 'flex-start' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <span style={{
+                      width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+                      background: 'var(--sc-blue, #0A7BD7)',
+                      boxShadow: '0 0 0 2px rgba(10,123,215,0.15)',
+                    }} />
+                    <h3 className="card__title" style={{ margin: 0 }}>{gws.name}</h3>
+                    <span className="pill" style={{ fontSize: 11, padding: '2px 7px' }}>
+                      {gws.tool_count} tools
+                    </span>
+                    <span className="pill" style={{ fontSize: 11, padding: '2px 7px', background: 'var(--sc-blue, #0A7BD7)', color: '#fff', borderColor: 'transparent' }}>
+                      built-in
+                    </span>
+                  </div>
+                  <div style={{ marginTop: 4, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                    <span className="mono" style={{ fontSize: 12, color: 'var(--fg-3)' }}>{gws.url}</span>
+                    <span style={{ color: 'var(--fg-3)', fontSize: 12 }}>·</span>
+                    <span style={{ fontSize: 12, color: 'var(--fg-3)' }}>{gws.auth_type} auth</span>
+                    <span style={{ color: 'var(--fg-3)', fontSize: 12 }}>·</span>
+                    <span style={{ fontSize: 12, color: 'var(--fg-2)' }}>{gws.description}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {activeServers.length > 0 && (
+        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+          Team servers
         </div>
       )}
 
