@@ -201,6 +201,65 @@ async def create_workflow_version(
     if dag["entry_node"] not in node_ids:
         raise HTTPException(422, "entry_node not found in nodes")
 
+    # --- Security invariants ---
+    _IMAGE_RE = re.compile(r'^[a-z0-9][a-z0-9._/\-]*:[a-z0-9._\-]+$')
+    _RELAY_RE = re.compile(r'^relay://[a-z0-9][a-z0-9\-]*$')
+    _CONDITION_RE = re.compile(r'^[\w.]+\s*(==|!=|>|>=|<|<=)\s*.+$')
+    _MAX_NODES = 50
+    _MAX_LOOP_ITERATIONS = 10
+
+    if len(dag["nodes"]) > _MAX_NODES:
+        raise HTTPException(422, f"Workflow exceeds maximum node count ({_MAX_NODES})")
+
+    for node in dag["nodes"]:
+        if not isinstance(node, dict) or "id" not in node:
+            raise HTTPException(422, "Each node must be a dict with an 'id' field")
+
+        # Only validate if 'image' is explicitly set in the node spec
+        if node.get("image"):
+            img = node["image"]
+            if not (_IMAGE_RE.match(img) or _RELAY_RE.match(img)):
+                raise HTTPException(422,
+                    f"Node '{node['id']}': invalid image format '{img}'. "
+                    "Use registry/image:tag or relay://agent-slug")
+
+        # Validate loop configuration
+        loop = node.get("loop")
+        if loop and isinstance(loop, dict) and loop.get("enabled"):
+            max_iter = int(loop.get("max_iterations", 10))
+            if max_iter > _MAX_LOOP_ITERATIONS:
+                raise HTTPException(422,
+                    f"Node '{node['id']}': loop max_iterations={max_iter} exceeds "
+                    f"limit of {_MAX_LOOP_ITERATIONS}")
+
+    # Validate edge conditions
+    for edge in dag.get("edges", []):
+        if not isinstance(edge, dict):
+            raise HTTPException(422, "Each edge must be a dict")
+        condition = edge.get("condition")
+        if condition is not None and condition != "":
+            if not _CONDITION_RE.match(str(condition)):
+                raise HTTPException(422,
+                    f"Edge {edge.get('from')}→{edge.get('to')}: invalid condition syntax "
+                    f"'{condition}'. Use: field.path == 'value'")
+
+    # Validate reachability (no orphan nodes)
+    node_ids_set = {n["id"] for n in dag["nodes"]}
+    reachable = {dag["entry_node"]}
+    changed = True
+    while changed:
+        changed = False
+        for edge in dag.get("edges", []):
+            src, dst = edge.get("from"), edge.get("to")
+            if src in reachable and dst and dst not in reachable:
+                reachable.add(dst)
+                changed = True
+    orphans = node_ids_set - reachable
+    if orphans:
+        raise HTTPException(422,
+            f"Unreachable nodes detected: {sorted(orphans)}. "
+            "Every node must be reachable from entry_node.")
+
     # Append new version; bump latest_version atomically
     new_version = (await session.execute(
         text(
