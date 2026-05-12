@@ -6,8 +6,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+import app.workers.postgres as pg_mod
 from app.models import GatewayEvent
-from app.workers.postgres import _estimate_cost, _update_budget_counters, make_handler
+from app.workers.postgres import (
+    _PRICING_TTL,
+    _estimate_cost,
+    _update_budget_counters,
+    make_handler,
+)
 
 # ---------------------------------------------------------------------------
 # _estimate_cost
@@ -169,7 +175,6 @@ async def test_handle_estimates_cost_when_cost_usd_not_set():
     pricing = [_pricing_row("gpt-4", 0.03, 0.06)]
     pool, conn = _make_pool_mock(pricing)
 
-    import app.workers.postgres as pg_mod
 
     with patch("asyncpg.create_pool", AsyncMock(return_value=pool)):
         # Force pricing fetch by placing fetched_at far in the past
@@ -193,7 +198,6 @@ async def test_handle_uses_provided_cost_usd():
     """Event with cost_usd already set → no estimation, uses that value."""
     pool, conn = _make_pool_mock(pricing_rows=[_pricing_row("gpt-4", 99.0, 99.0)])
 
-    import app.workers.postgres as pg_mod
 
     with patch("asyncpg.create_pool", AsyncMock(return_value=pool)):
         pg_mod._pricing_cache = {}
@@ -213,7 +217,6 @@ async def test_handle_writes_correct_insert():
     """Verify the INSERT uses the right table and passes all expected columns."""
     pool, conn = _make_pool_mock()
 
-    import app.workers.postgres as pg_mod
 
     with patch("asyncpg.create_pool", AsyncMock(return_value=pool)):
         pg_mod._pricing_cache = {}
@@ -253,7 +256,6 @@ async def test_handle_calls_budget_counters_when_redis_provided():
     pool, conn = _make_pool_mock()
     redis, _ = _make_redis_pipeline_mock()
 
-    import app.workers.postgres as pg_mod
 
     with patch("asyncpg.create_pool", AsyncMock(return_value=pool)):
         pg_mod._pricing_cache = {}
@@ -270,7 +272,6 @@ async def test_handle_no_budget_counters_when_redis_none():
     """No Redis → _update_budget_counters is never called."""
     pool, conn = _make_pool_mock()
 
-    import app.workers.postgres as pg_mod
 
     with patch("asyncpg.create_pool", AsyncMock(return_value=pool)):
         pg_mod._pricing_cache = {}
@@ -287,7 +288,6 @@ async def test_handle_valid_uuid_key_id_passed_to_db():
     pool, conn = _make_pool_mock()
     key = str(uuid.uuid4())
 
-    import app.workers.postgres as pg_mod
 
     with patch("asyncpg.create_pool", AsyncMock(return_value=pool)):
         pg_mod._pricing_cache = {}
@@ -307,7 +307,6 @@ async def test_handle_invalid_uuid_key_id_becomes_none():
     """key_id that is not a valid UUID → key_uuid=None passed to DB."""
     pool, conn = _make_pool_mock()
 
-    import app.workers.postgres as pg_mod
 
     with patch("asyncpg.create_pool", AsyncMock(return_value=pool)):
         pg_mod._pricing_cache = {}
@@ -324,8 +323,6 @@ async def test_handle_invalid_uuid_key_id_becomes_none():
 
 async def test_handle_pricing_cache_refreshed_after_ttl():
     """_load_pricing is called again once _PRICING_TTL seconds have elapsed."""
-    import app.workers.postgres as pg_mod
-    from app.workers.postgres import _PRICING_TTL
 
     pool, conn = _make_pool_mock(pricing_rows=[])
 
@@ -360,8 +357,6 @@ async def test_handle_pricing_cache_refreshed_after_ttl():
 
 async def test_handle_keeps_stale_cache_on_db_error():
     """DB error during _load_pricing → stale cache kept, no exception raised."""
-    import app.workers.postgres as pg_mod
-    from app.workers.postgres import _PRICING_TTL
 
     pool, conn = _make_pool_mock()
     # First fetch succeeds, second raises
