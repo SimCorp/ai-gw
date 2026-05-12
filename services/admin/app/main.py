@@ -41,6 +41,7 @@ from app.routers import (
     devops_agent as devops_agent_router,
     identity as identity_router,
     insights as insights_router,
+    memory_admin as memory_admin_router,
     api_keys as api_keys_module,
     areas as areas_router,
     audit_log,
@@ -317,6 +318,7 @@ app.include_router(devops_agent_router.router)  # own auth: require_admin_auth
 app.include_router(insights_router.router)      # own auth per endpoint (admin or dev session)
 app.include_router(identity_router.router, dependencies=_auth)  # POST /identity/tokens, POST /identity/verify
 app.include_router(identity_router.public_router)  # GET /identity/jwks — no auth required
+app.include_router(memory_admin_router.router, dependencies=_auth)
 
 
 @app.get("/", include_in_schema=False)
