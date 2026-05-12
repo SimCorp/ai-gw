@@ -157,9 +157,9 @@ interface AuditEntry {
 // --- helpers ---
 
 function fmtUsd(n: number | null | undefined): string {
-  if (n == null) return '$0.00';
-  if (n >= 1000) return `$${(n / 1000).toFixed(1)}k`;
-  return `$${n.toFixed(2)}`;
+  if (n == null) return '€0.00';
+  if (n >= 1000) return `€${(n / 1000).toFixed(1)}k`;
+  return `€${n.toFixed(2)}`;
 }
 
 function fmtTime(ts: string): string {
