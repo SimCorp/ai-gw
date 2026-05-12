@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Integer, PrimaryKeyConstraint, String, text
+from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, Index, Integer, PrimaryKeyConstraint, String, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -15,6 +15,14 @@ RUN_STATUSES = ("pending", "running", "succeeded", "failed", "cancelled")
 
 class WorkflowRun(Base):
     __tablename__ = "workflow_runs"
+    __table_args__ = (
+        Index("idx_workflow_runs_team_created", "team_id", "created_at"),
+        Index("idx_workflow_runs_status", "status"),
+        CheckConstraint(
+            "status IN ('pending','running','succeeded','failed','cancelled')",
+            name="workflow_runs_status_check",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
@@ -65,6 +73,12 @@ class RunNode(Base):
 
 class WorkQueueItem(Base):
     __tablename__ = "work_queue"
+    __table_args__ = (
+        # Partial index for the SELECT ... FOR UPDATE SKIP LOCKED claim pattern
+        Index("work_queue_available_idx", "available_at",
+              postgresql_where="(claimed_by IS NULL)"),
+        Index("work_queue_claim_expires_idx", "claim_expires"),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     run_id: Mapped[uuid.UUID] = mapped_column(

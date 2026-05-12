@@ -20,6 +20,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # Import Base + all ORM models so their metadata is registered
 from app.db import Base  # noqa: E402
 from app.models import (  # noqa: E402,F401
+    agent,
     api_key,
     area,
     area_policy,
@@ -31,6 +32,8 @@ from app.models import (  # noqa: E402,F401
     policy,
     pricing,
     team,
+    workflow,
+    workflow_run,
 )
 
 # Tables that are managed by raw-SQL migrations (not ORM-mapped).
@@ -50,8 +53,44 @@ NON_ORM_TABLES = {
 
 
 def include_object(obj, name, type_, reflected, compare_to):
+    # Skip non-ORM raw-SQL tables
     if type_ == "table" and name in NON_ORM_TABLES:
         return False
+    # Skip LiteLLM Prisma-managed tables (share the same DB, owned by LiteLLM)
+    if type_ == "table" and (name.startswith("LiteLLM_") or name.startswith("_prisma")):
+        return False
+    # Skip provider_keys table (created lazily by settings router, not in ORM)
+    if type_ == "table" and name == "provider_keys":
+        return False
+    # Skip tables from other services that share the same Postgres database
+    # (identity service, librarian service — managed by their own startup DDL)
+    if type_ == "table" and name in {
+        "agent_identities", "knowledge_items", "research_topics",
+    }:
+        return False
+    # These indexes were created via raw SQL in the baseline migration with DESC
+    # column ordering. Alembic can't compare them cleanly because the column
+    # spec differs between raw SQL and the ORM Index() definition. They work
+    # correctly in the DB; we exclude them from autogenerate to avoid noise.
+    _RAW_SQL_INDEXES = {
+        "idx_workflow_runs_team_created",
+        "audit_log_timestamp_idx",
+        "idx_workflows_team",
+    }
+    if type_ == "index" and name in _RAW_SQL_INDEXES:
+        return False
+
+    # Skip FK constraints that reference non-ORM tables (developers, etc.) —
+    # these exist in the DB via the baseline migration but aren't declared in
+    # models because the target tables are excluded from ORM mapping.
+    if type_ == "foreign_key_constraint":
+        try:
+            for fk in obj.elements:
+                referred_table = fk.column.table.name if fk.column is not None else ""
+                if referred_table in NON_ORM_TABLES:
+                    return False
+        except Exception:
+            pass
     return True
 
 
@@ -92,7 +131,7 @@ def run_migrations_online() -> None:
             connection=connection,
             target_metadata=target_metadata,
             include_object=include_object,
-            compare_type=True,
+            compare_type=False,  # VARCHAR vs TEXT is cosmetic; suppress noise
         )
         with context.begin_transaction():
             context.run_migrations()

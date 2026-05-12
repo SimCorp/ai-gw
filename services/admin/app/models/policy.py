@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import ARRAY, Boolean, DateTime, Float, ForeignKey, Integer, Text, text
+from sqlalchemy import ARRAY, Boolean, DateTime, Float, ForeignKey, Index, Integer, Text, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -10,6 +10,14 @@ from app.db import Base
 
 class Policy(Base):
     __tablename__ = "policies"
+    __table_args__ = (
+        # The original UNIQUE(team_id, project_id) was replaced by two partial
+        # indexes for correct ON CONFLICT behaviour with nullable project_id.
+        Index("policies_team_null_proj_uidx", "team_id",
+              unique=True, postgresql_where="(project_id IS NULL)"),
+        Index("policies_team_proj_uidx", "team_id", "project_id",
+              unique=True, postgresql_where="(project_id IS NOT NULL)"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
     team_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("teams.id", ondelete="CASCADE"), nullable=False)
