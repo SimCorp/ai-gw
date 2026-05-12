@@ -2,7 +2,7 @@
 
 > Enterprise AI gateway for SimCorp's ~2000 developers.
 > Stack: FastAPI + Next.js + Redis + PostgreSQL + Docker.
-> Last updated: 2026-05-11
+> Last updated: 2026-05-12
 
 ---
 
@@ -2278,6 +2278,46 @@ The Developer Portal's live run viewer subscribes to these events and renders a 
 
 Each run has a scoped API key injected into every agent container as `AIGW_API_KEY`. This key has `scope = workflow-run` and is tied to the run's team. It is revoked automatically when the run finishes (either by the worker in `_mark_run_finished()` or by the sweeper on stale claims).
 
+The cache service enforces that `workflow-run` scoped keys may **only** call `/v1/chat/completions*` — all other paths return 403.
+
+### 10.10 DAG Compile-time Security Linting
+
+When a new workflow version is submitted via `POST /workflows/{id}/versions`, the admin service validates the following security invariants before accepting the DAG:
+
+| Check | Rule | Error |
+|---|---|---|
+| Node count | Max 50 nodes | 422 — exceeds maximum node count |
+| Loop bound | `loop.max_iterations` ≤ 10 | 422 — exceeds limit of 10 |
+| Image format | Must match `registry/image:tag` or `relay://slug` | 422 — invalid image format |
+| Edge conditions | Must match `field.path OP value` syntax | 422 — invalid condition syntax |
+| Reachability | Every node must be reachable from `entry_node` | 422 — Unreachable nodes detected |
+
+These checks implement the **Configuration-level validation** layer from the gh-aw security architecture.
+
+### 10.11 SafeOutputs Security Patterns (gh-aw)
+
+The workflow worker implements three safety layers derived from gh-aw's SafeOutputs subsystem:
+
+#### Input Sanitization (`services/workflow-worker/app/sanitizer.py`)
+Applied to `inputs.json` before the agent container launches:
+- `@mention` strings replaced with `(mention redacted)`
+- `<` and `>` HTML-escaped to `&lt;` / `&gt;`
+- Individual strings truncated at 50,000 chars
+- Total key count capped at 100 keys
+- Total payload size capped at 1 MB
+
+#### Output Threat Detection (`services/workflow-worker/app/threat_detection.py`)
+After each node completes, `outputs.json` is scanned **before DAG advancement**:
+- Scoped key patterns (`aigw_run_*`)
+- API key patterns (Anthropic, OpenAI, GitHub, JWT, private key headers)
+- Prompt injection phrases ("ignore previous instructions", etc.)
+- Enriched from admin guardrails on startup; defaults apply if admin unreachable
+- Fail-open: unreachable guardrails service → allow through
+- On detection: run marked `failed` with `error="threat-detection-blocked"`, run halted
+
+#### Secret Redaction
+After reading `outputs.json`, `aigw_run_*` patterns are redacted to `[REDACTED]` before DB persistence, preventing scoped keys from appearing in `workflow_runs.outputs`.
+
 ---
 
 ## 11. Agents
@@ -2904,7 +2944,20 @@ Guardrails are applied by the cache service before forwarding requests to LiteLL
 
 Guardrail hits are logged to the audit log and visible in the admin portal's Guardrails page.
 
-### 15.7 Audit Logging
+### 15.7 Workflow Agent Security (gh-aw SafeOutputs patterns)
+
+Four security layers are applied during workflow execution, derived from the gh-aw defense-in-depth architecture:
+
+| Layer | When | What |
+|---|---|---|
+| **Network isolation** | Container launch | Agent container attaches only to the `aigateway` Docker network — no host/bridge access |
+| **Input sanitization** | Before `inputs.json` written | @mentions redacted, XML escaped, 50k char / 100 key / 1MB limits enforced |
+| **Output threat detection** | After node exits, before DAG advances | Scans outputs for leaked credentials, API keys, injection phrases |
+| **Secret redaction** | Before DB persistence | `aigw_run_*` patterns replaced with `[REDACTED]` in `workflow_runs.outputs` |
+
+The `workflow-run` scoped API key injected as `AIGW_API_KEY` is **additionally** blocked by the cache service from accessing any path outside `/v1/chat/completions`.
+
+### 15.8 Audit Logging
 
 Every significant action is written to the `audit_log` table by the observability service. Audit events include:
 - API key creation, revocation, and use.
@@ -3162,7 +3215,37 @@ Call POST https://ai-gateway.internal/runs with:
 Post the result as a PR comment.
 ```
 
+### 17.5 Shipped gh-aw Workflows
 
+Seven ready-to-use workflow definitions in `.github/workflows/`:
+
+| File | Trigger | Purpose | Gateway services used |
+|---|---|---|---|
+| `simcorp-pr-describe.md` | `label_command: ai-describe` | Generates structured PR description | cache:8002 |
+| `simcorp-budget-alerts.md` | Daily 08:00 UTC | Issues a GitHub alert when any team hits ≥80% monthly budget | /budget, cache:8002 |
+| `simcorp-chargeback-report.md` | Weekly Monday 09:00 UTC | Full cost breakdown with cache savings and forecast | /budget, /reports, cache:8002 |
+| `simcorp-run-diagnosis.md` | `workflow_run` failure | Diagnoses CI failures using Gateway DevOps agent | /system/health, /audit, cache:8002 |
+| `simcorp-pr-review.md` | `pull_request` opened/sync | Code review + CodeMate codebase context | cache:8002, /mcp/codemate |
+| `simcorp-security-scan.md` | `pull_request` opened/sync | Guardrails scan + TruffleHog + Semgrep → SARIF to GitHub Security tab | /guardrails, cache:8002 |
+| `simcorp-issue-triage.md` | `issues` opened | Triage + AI Librarian knowledge base search | cache:8002, librarian:8008 |
+| `simcorp-workflow-health.md` | Weekly Monday 07:00 UTC | Meta-agent: monitors failed runs, flags threat-detection events | /runs, /agents, /system/health |
+
+**Setup:** Add these GitHub Actions secrets/variables to your org:
+
+| Name | Type | Value |
+|---|---|---|
+| `AIGW_API_KEY` | Secret | Service-account API key from Gateway admin → Teams → API Keys |
+| `AIGW_BASE_URL` | Variable | `https://aigw.simcorp.internal/v1` (cache OpenAI-compat endpoint) |
+| `AIGW_BASE_URL_ADMIN` | Variable | `https://aigw.simcorp.internal` (admin service) |
+| `AIGW_LIBRARIAN_URL` | Variable | `https://aigw.simcorp.internal:8008` (librarian) |
+
+**Compile lock files** (required after frontmatter changes):
+```bash
+gh extension install github/gh-aw
+gh aw compile
+```
+
+Full research report: `docs/gh-aw-research.md`
 
 ## Appendix A: DAG JSON Full Schema
 
