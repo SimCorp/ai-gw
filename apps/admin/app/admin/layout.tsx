@@ -108,7 +108,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
                 <NavSection label="Catalog">
                   <NavItem href="/admin/mcp" label="MCP servers" />
-                  <NavItem href="/admin/memory" label="Memory Palace" />
+                  <NavItem href="/admin/memory" label="Memory" />
                   <NavItem href="/admin/skills" label="Skills" />
                   <NavItem href="/admin/plugins" label="Plugins" />
                 </NavSection>

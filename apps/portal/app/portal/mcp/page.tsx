@@ -151,8 +151,8 @@ const MEMORY_MCP_URL =
 const GATEWAY_MANAGED_SERVERS = [
   {
     id: '__memory_palace__',
-    name: 'Memory Palace',
-    description: 'Per-developer isolated memory with drawers, knowledge graph, diary, and tunnels. Pre-authorized with your API key.',
+    name: 'Memory',
+    description: 'Per-developer persistent memory — store anything, search semantically, connect related ideas. Pre-authorized with your API key.',
     url: MEMORY_MCP_URL,
     auth_type: 'bearer' as const,
     tool_count: 30,
@@ -309,7 +309,7 @@ export default function McpPage() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                     <div>
                       <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg-2)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                        Connect from Claude Code
+                        Connect from Claude Code (or any MCP client)
                       </div>
                       <ol style={{ margin: 0, paddingLeft: 20, fontSize: 13, lineHeight: 1.7, color: 'var(--fg-2)', display: 'flex', flexDirection: 'column', gap: 6 }}>
                         <li>Copy your AIGW key from the <a href="/portal/keys" style={{ color: 'var(--sc-blue)' }}>Keys page</a>.</li>
@@ -345,13 +345,13 @@ export default function McpPage() {
                         onClick={testMemoryPalace}
                         disabled={mpTestStatus === 'testing'}
                       >
-                        {mpTestStatus === 'testing' ? 'Testing…' : 'Test Memory Palace'}
+                        {mpTestStatus === 'testing' ? 'Testing…' : 'Test Memory'}
                       </button>
                       {mpTestStatus === 'ok' && (
                         <div style={{ marginTop: 10, padding: '10px 14px', borderRadius: 8, background: 'rgba(31,138,91,0.06)', border: '1px solid rgba(31,138,91,0.2)', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                           <span style={{ color: 'var(--good)', fontWeight: 700, fontSize: 15 }}>✓</span>
                           <div>
-                            <div style={{ fontSize: 13, color: 'var(--good)', fontWeight: 500 }}>Memory Palace is reachable</div>
+                            <div style={{ fontSize: 13, color: 'var(--good)', fontWeight: 500 }}>Memory is reachable</div>
                             {mpTestMsg && <div className="mono" style={{ fontSize: 11.5, color: 'var(--fg-2)', marginTop: 3, whiteSpace: 'pre-wrap' }}>{mpTestMsg}</div>}
                           </div>
                         </div>

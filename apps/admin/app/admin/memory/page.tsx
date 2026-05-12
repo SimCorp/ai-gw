@@ -65,7 +65,7 @@ function TaxonomyPanel({ devId, onClose }: { devId: string; onClose: () => void 
           {q.data && (
             <div>
               <div style={{ fontWeight: 600, fontSize: 12, color: 'var(--fg-2)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                Memory taxonomy — wings & rooms
+                Memory structure — categories & topics
               </div>
               {Object.keys(q.data.taxonomy).length === 0 ? (
                 <div style={{ fontSize: 13, color: 'var(--fg-3)' }}>No drawers found.</div>
@@ -83,7 +83,7 @@ function TaxonomyPanel({ devId, onClose }: { devId: string; onClose: () => void 
                       }}
                     >
                       <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ fontSize: 15 }}>🏛</span> {wing}
+                        <span style={{ fontSize: 15 }}>📂</span> {wing}
                         <span className="pill" style={{ fontSize: 10.5, padding: '1px 5px' }}>
                           {Object.values(rooms).reduce((a, b) => a + b, 0)}
                         </span>
@@ -143,7 +143,7 @@ export default function MemoryAdminPage() {
 
   function handlePurge(dev: DevRow) {
     const name = dev.display_name ?? dev.email;
-    if (!confirm(`Permanently delete all memory data for "${name}"?\n\nThis removes all drawers, KG nodes/edges, diary entries and tunnels. This cannot be undone.`)) return;
+    if (!confirm(`Permanently delete all memory data for "${name}"?\n\nThis removes all stored memories, connections, journal entries and links. This cannot be undone.`)) return;
     purgeMut.mutate(dev.developer_id);
   }
 
@@ -154,11 +154,11 @@ export default function MemoryAdminPage() {
     <section className="page">
       <div className="page__head">
         <div>
-          <h1 className="page__title">Memory Palace</h1>
+          <h1 className="page__title">Memory</h1>
           <p className="page__sub">
             {stats
-              ? `${stats.total_developers} developers · ${stats.total_drawers} drawers · ${stats.total_kg_nodes} KG nodes · ${stats.total_diary_entries} diary entries`
-              : 'Per-developer isolated memory usage across the platform'}
+              ? `${stats.total_developers} developers · ${stats.total_drawers} memories · ${stats.total_kg_nodes} connections · ${stats.total_diary_entries} journal entries`
+              : 'Per-developer memory usage across the platform'}
           </p>
         </div>
       </div>
@@ -171,19 +171,19 @@ export default function MemoryAdminPage() {
           <div className="kpi__delta flat">with any memory</div>
         </div>
         <div className="kpi">
-          <div className="kpi__label">Drawers</div>
+          <div className="kpi__label">Memories</div>
           <div className="kpi__value">{stats?.total_drawers ?? '—'}</div>
-          <div className="kpi__delta flat">semantic memories</div>
+          <div className="kpi__delta flat">stored items</div>
         </div>
         <div className="kpi">
-          <div className="kpi__label">KG nodes</div>
+          <div className="kpi__label">Connections</div>
           <div className="kpi__value">{stats?.total_kg_nodes ?? '—'}</div>
-          <div className="kpi__delta flat">{stats ? `${stats.total_kg_edges} edges` : ''}</div>
+          <div className="kpi__delta flat">{stats ? `${stats.total_kg_edges} relations` : ''}</div>
         </div>
         <div className="kpi">
-          <div className="kpi__label">Diary entries</div>
+          <div className="kpi__label">Journal</div>
           <div className="kpi__value">{stats?.total_diary_entries ?? '—'}</div>
-          <div className="kpi__delta flat">{stats ? `${stats.total_tunnels} tunnels` : ''}</div>
+          <div className="kpi__delta flat">{stats ? `${stats.total_tunnels} links` : ''}</div>
         </div>
       </div>
 
@@ -206,18 +206,18 @@ export default function MemoryAdminPage() {
             </div>
           ) : devs.length === 0 ? (
             <div style={{ padding: '40px 20px', color: 'var(--fg-2)', textAlign: 'center', fontSize: 13 }}>
-              No developers have used Memory Palace yet.
+              No developers have used Memory yet.
             </div>
           ) : (
             <table className="tbl">
               <thead>
                 <tr>
                   <th>Developer</th>
-                  <th className="num">Drawers</th>
-                  <th className="num">KG nodes</th>
-                  <th className="num">KG edges</th>
-                  <th className="num">Diary</th>
-                  <th className="num">Tunnels</th>
+                  <th className="num">Memories</th>
+                  <th className="num">Connections</th>
+                  <th className="num">Relations</th>
+                  <th className="num">Journal</th>
+                  <th className="num">Links</th>
                   <th>Last active</th>
                   <th></th>
                 </tr>
@@ -256,7 +256,7 @@ export default function MemoryAdminPage() {
                             style={{ color: 'var(--bad)' }}
                             onClick={() => handlePurge(dev)}
                             disabled={purgeMut.isPending}
-                            title="Purge all memory for this developer"
+                            title="Delete all memory for this developer"
                           >
                             Purge
                           </button>
