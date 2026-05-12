@@ -164,7 +164,7 @@ export default function RequestsPage() {
                       </td>
                       <td className="num mono">{fmtMs(r.latency_ms)}</td>
                       <td className="num mono">
-                        {r.cost_usd === 0 ? '—' : `$${r.cost_usd.toFixed(4)}`}
+                        {r.cost_usd === 0 ? '—' : `€${r.cost_usd.toFixed(4)}`}
                       </td>
                       <td>
                         <span className="mono" style={{ fontSize: 11.5, color: 'var(--fg-3)' }}>
@@ -199,7 +199,7 @@ export default function RequestsPage() {
                 <dt>Model</dt><dd className="mono">{selectedRow.model}</dd>
                 <dt>Cache</dt><dd>{cachePill(selectedRow.cache_hit)}</dd>
                 <dt>Tokens</dt><dd>{selectedRow.tokens_input.toLocaleString()} in · {selectedRow.tokens_output.toLocaleString()} out</dd>
-                <dt>Cost</dt><dd>{selectedRow.cost_usd === 0 ? '$0.00' : `$${selectedRow.cost_usd.toFixed(6)}`}</dd>
+                <dt>Cost</dt><dd>{selectedRow.cost_usd === 0 ? '€0.00' : `€${selectedRow.cost_usd.toFixed(6)}`}</dd>
                 <dt>Latency</dt><dd>{fmtMs(selectedRow.latency_ms)}</dd>
               </div>
 

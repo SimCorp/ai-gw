@@ -41,9 +41,9 @@ interface ModelRow {
 type ReportRow = AreaRow | TeamRow | ModelRow;
 
 function formatCost(usd: number): string {
-  if (usd === 0) return '$0.00';
-  if (usd < 0.01) return `$${usd.toFixed(4)}`;
-  return `$${usd.toFixed(2)}`;
+  if (usd === 0) return '€0.00';
+  if (usd < 0.01) return `€${usd.toFixed(4)}`;
+  return `€${usd.toFixed(2)}`;
 }
 
 function formatTokens(n: number): string {

@@ -31,8 +31,8 @@ const BASE = process.env.NEXT_PUBLIC_ADMIN_API ?? 'http://localhost:8005';
 
 function fmtUsd(v: number | null | undefined) {
   if (v == null) return '—';
-  if (v >= 1000) return `$${(v / 1000).toFixed(1)}k`;
-  return `$${v.toFixed(0)}`;
+  if (v >= 1000) return `€${(v / 1000).toFixed(1)}k`;
+  return `€${v.toFixed(0)}`;
 }
 
 function pctBar(pct: number, warn: boolean) {

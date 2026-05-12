@@ -62,7 +62,7 @@ export default function UsagePage() {
     );
   }
 
-  const formatCost = (v: number) => `$${v.toFixed(2)}`;
+  const formatCost = (v: number) => `€${v.toFixed(2)}`;
   const formatTokens = (v: number) => v >= 1_000_000 ? `${(v / 1_000_000).toFixed(1)}M` : v >= 1_000 ? `${(v / 1_000).toFixed(1)}K` : String(v);
   const formatPct = (v: number) => `${v.toFixed(1)}%`;
 
