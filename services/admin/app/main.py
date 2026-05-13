@@ -108,14 +108,15 @@ async def lifespan(app: FastAPI):
     # Seed default admin account only in dev/test/ci environments.
     # In production, admin accounts must be created explicitly via the provisioning script.
     if os.getenv("ENVIRONMENT", "production") in ("development", "test", "ci"):
+        _default_hash = '$2b$12$LP9R7KYdFg.30w6XJutjo.oKw6YcKu0.daZtUj3R7Vy9AOPIkjwhu'
         async with engine.begin() as conn:
-            await conn.execute(text("""
-                INSERT INTO admin_users (email, display_name, password_hash, role) VALUES
-                    ('admin@simcorp.com', 'Default Admin',
-                     '$2b$12$bUvzQRuY31dPXWEszjCKR.KZrm9DKO1GAb0t20IjNA92IpphK5JVK',
-                     'superadmin')
-                ON CONFLICT (email) DO NOTHING
-            """))
+            await conn.execute(text(f"""
+                INSERT INTO admin_users (email, display_name, password_hash, role, must_change_password)
+                VALUES ('admin@simcorp.com', 'Default Admin', :hash, 'superadmin', TRUE)
+                ON CONFLICT (email) DO UPDATE
+                    SET must_change_password = TRUE
+                    WHERE admin_users.password_hash = :hash
+            """), {"hash": _default_hash})
 
     # Seed a default team if none exists (dev convenience)
     async with engine.begin() as conn:

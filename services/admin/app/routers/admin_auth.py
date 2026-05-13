@@ -61,8 +61,8 @@ def _verify_password(password: str, stored_hash: str) -> bool:
 
 def _validate_password_strength(password: str) -> None:
     """Raise ValueError if password does not meet strength requirements."""
-    if len(password) < 8:
-        raise ValueError("Password must be at least 8 characters")
+    if len(password) < 12:
+        raise ValueError("Password must be at least 12 characters")
     if not re.search(r"[A-Z]", password):
         raise ValueError("Password must contain at least one uppercase letter")
     if not re.search(r"[a-z]", password):
@@ -124,7 +124,7 @@ class LoginRequest(BaseModel):
 
 class ChangePasswordRequest(BaseModel):
     current_password: str
-    new_password: str = Field(..., min_length=8, max_length=128)
+    new_password: str = Field(..., min_length=12, max_length=128)
 
     @field_validator("new_password")
     @classmethod
@@ -148,7 +148,7 @@ async def login(
 
     row = (await session.execute(
         text("""
-            SELECT id, email, display_name, password_hash, role
+            SELECT id, email, display_name, password_hash, role, must_change_password
             FROM admin_users
             WHERE email = :email
         """),
@@ -180,7 +180,7 @@ async def login(
     redis = request.app.state.redis
     await redis.setex(_session_key(token), ttl, json.dumps(payload))
 
-    return {"token": token, "user": payload}
+    return {"token": token, "user": payload, "must_change_password": bool(row["must_change_password"])}
 
 
 @router.get("/me")
@@ -223,7 +223,7 @@ async def change_password(
     await session.execute(
         text("""
             UPDATE admin_users
-            SET password_hash = :hash, updated_at = NOW()
+            SET password_hash = :hash, must_change_password = FALSE, updated_at = NOW()
             WHERE id = CAST(:id AS uuid)
         """),
         {"hash": new_hash, "id": admin["user_id"]},
