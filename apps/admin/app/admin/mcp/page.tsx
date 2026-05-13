@@ -736,7 +736,10 @@ export default function McpPage() {
               <tbody>
                 {servers.map(server => (
                   <React.Fragment key={server.id}>
-                    <tr style={{ opacity: server.enabled ? 1 : 0.55 }}>
+                    <tr
+                      style={{ opacity: server.enabled ? 1 : 0.55, cursor: 'pointer' }}
+                      onClick={() => setExpandedId(id => id === server.id ? null : server.id)}
+                    >
                       <td>
                         <div className="cell-2">
                           <span style={{ fontWeight: 500 }}>{server.name}</span>
@@ -785,7 +788,7 @@ export default function McpPage() {
                           <span className="muted">never</span>
                         )}
                       </td>
-                      <td>
+                      <td onClick={e => e.stopPropagation()}>
                         <div style={{ display: 'flex', gap: 4, alignItems: 'center', justifyContent: 'flex-end' }}>
                           <button
                             className="btn btn--sm"
