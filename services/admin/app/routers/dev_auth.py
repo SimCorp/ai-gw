@@ -24,6 +24,7 @@ from app.db import get_session
 router = APIRouter(prefix="/dev-auth", tags=["developer-auth"])
 
 _SESSION_TTL = int(timedelta(days=7).total_seconds())
+_SESSION_TTL_REMEMBER = int(timedelta(days=30).total_seconds())
 _ITERATIONS = 390_000  # NIST SP 800-132 recommended minimum for PBKDF2-HMAC-SHA256
 
 _EMAIL_RE = re.compile(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$')
@@ -116,9 +117,34 @@ class RegisterRequest(BaseModel):
         return v
 
 
+def _validate_password_strength(password: str) -> None:
+    if len(password) < 12:
+        raise ValueError("Password must be at least 12 characters")
+    if not re.search(r"[A-Z]", password):
+        raise ValueError("Password must contain at least one uppercase letter")
+    if not re.search(r"[a-z]", password):
+        raise ValueError("Password must contain at least one lowercase letter")
+    if not re.search(r"\d", password):
+        raise ValueError("Password must contain at least one digit")
+    if not re.search(r"[^A-Za-z0-9]", password):
+        raise ValueError("Password must contain at least one special character")
+
+
 class LoginRequest(BaseModel):
     email: str
     password: str
+    remember_me: bool = False
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str = Field(..., min_length=12, max_length=128)
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_strength(cls, v: str) -> str:
+        _validate_password_strength(v)
+        return v
 
 
 class ProfileUpdate(BaseModel):
@@ -184,7 +210,7 @@ async def login(
     row = (await session.execute(
         text("""
             SELECT d.id, d.email, d.display_name, d.password_hash, d.status,
-                   d.team_id, t.name AS team_name
+                   d.must_change_password, d.team_id, t.name AS team_name
             FROM developers d
             LEFT JOIN teams t ON t.id = d.team_id
             WHERE d.email = :email
@@ -206,9 +232,10 @@ async def login(
         "team_id": str(row["team_id"]) if row["team_id"] else None,
         "team_name": row["team_name"],
     }
-    await request.app.state.redis.setex(_session_key(token), _SESSION_TTL, json.dumps(payload))
+    ttl = _SESSION_TTL_REMEMBER if body.remember_me else _SESSION_TTL
+    await request.app.state.redis.setex(_session_key(token), ttl, json.dumps(payload))
 
-    return {"token": token, **payload}
+    return {"token": token, **payload, "must_change_password": bool(row["must_change_password"])}
 
 
 @router.get("/me")
@@ -281,6 +308,43 @@ async def select_team(
     new_payload = {**developer, "team_id": team_id, "team_name": row["name"]}
     await request.app.state.redis.setex(_session_key(token), _SESSION_TTL, json.dumps(new_payload))
     return new_payload
+
+
+@router.post("/change-password")
+async def change_password(
+    body: ChangePasswordRequest,
+    request: Request,
+    authorization: str | None = Header(default=None),
+    session: AsyncSession = Depends(get_session),
+):
+    """Change the developer's password. Requires current password verification."""
+    developer = await _get_current_developer(authorization, request)
+
+    row = (await session.execute(
+        text("SELECT id, password_hash FROM developers WHERE id = CAST(:id AS uuid)"),
+        {"id": developer["developer_id"]},
+    )).mappings().first()
+
+    if not row or not _verify_password(body.current_password, row["password_hash"]):
+        raise HTTPException(status_code=401, detail="Current password is incorrect")
+
+    new_hash = _hash_password(body.new_password)
+    await session.execute(
+        text("""
+            UPDATE developers
+            SET password_hash = :hash, must_change_password = FALSE
+            WHERE id = CAST(:id AS uuid)
+        """),
+        {"hash": new_hash, "id": developer["developer_id"]},
+    )
+    await session.commit()
+
+    # Invalidate current session so the caller must re-login
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.removeprefix("Bearer ").strip()
+        await request.app.state.redis.delete(_session_key(token))
+
+    return {"ok": True}
 
 
 @router.post("/logout")

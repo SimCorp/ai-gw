@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { useAuth } from "../_lib/authContext";
 
 export default function AuthGate({ children }: { children: React.ReactNode }) {
-  const { developer, loading } = useAuth();
+  const { developer, loading, mustChangePassword } = useAuth();
 
   if (loading) {
     return (
@@ -17,11 +17,148 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
     );
   }
 
+  if (mustChangePassword) {
+    return <ChangePasswordPage />;
+  }
+
   if (!developer) {
     return <LoginPage />;
   }
 
   return <>{children}</>;
+}
+
+function ChangePasswordPage() {
+  const { changePassword, logout } = useAuth();
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    if (newPassword !== confirmPassword) { setError("Passwords do not match"); return; }
+    if (newPassword.length < 12) { setError("Password must be at least 12 characters"); return; }
+    setSubmitting(true);
+    try {
+      await changePassword(newPassword);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to change password");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div style={{
+      minHeight: "100vh",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      background: "var(--bg)",
+      padding: "24px 16px",
+    }}>
+      {/* Brand */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 36 }}>
+        <div style={{
+          width: 40, height: 40, borderRadius: 10,
+          background: "linear-gradient(135deg, var(--sc-blue), var(--sc-purple))",
+          display: "grid", placeItems: "center",
+          fontWeight: 800, fontSize: 16, color: "#fff",
+        }}>AI</div>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 18, color: "var(--fg-1)" }}>AI Gateway</div>
+          <div style={{ fontSize: 12, color: "var(--fg-3)" }}>Developer Portal</div>
+        </div>
+      </div>
+
+      <div style={{
+        width: "100%", maxWidth: 400,
+        background: "var(--surface)",
+        border: "1px solid var(--rule)",
+        borderRadius: 12,
+        overflow: "hidden",
+      }}>
+        <div style={{ padding: "20px 24px 0" }}>
+          <div style={{
+            background: "rgba(8, 62, 167, 0.12)",
+            border: "1px solid rgba(8, 62, 167, 0.35)",
+            borderRadius: 6, padding: "10px 12px",
+            fontSize: 13, color: "var(--sc-link, #60A5FA)", lineHeight: 1.5,
+          }}>
+            Your account requires a password change before you can continue.
+            Choose a password that is at least 12 characters and includes uppercase,
+            lowercase, a digit, and a special character.
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit} style={{ padding: "16px 24px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
+          <div>
+            <label style={{ fontSize: 12, color: "var(--fg-2)", display: "block", marginBottom: 5 }}>
+              New password
+            </label>
+            <input
+              type="password"
+              className="input"
+              style={{ width: "100%", boxSizing: "border-box" }}
+              value={newPassword}
+              onChange={e => setNewPassword(e.target.value)}
+              required
+              autoFocus
+              autoComplete="new-password"
+              placeholder="••••••••••••"
+            />
+          </div>
+
+          <div>
+            <label style={{ fontSize: 12, color: "var(--fg-2)", display: "block", marginBottom: 5 }}>
+              Confirm new password
+            </label>
+            <input
+              type="password"
+              className="input"
+              style={{ width: "100%", boxSizing: "border-box" }}
+              value={confirmPassword}
+              onChange={e => setConfirmPassword(e.target.value)}
+              required
+              autoComplete="new-password"
+              placeholder="••••••••••••"
+            />
+          </div>
+
+          {error && (
+            <div style={{
+              padding: "10px 12px", borderRadius: 6,
+              background: "rgba(239,62,74,0.1)", border: "1px solid var(--bad)",
+              color: "var(--bad)", fontSize: 13,
+            }}>
+              {error}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            className="btn btn--primary"
+            disabled={submitting}
+            style={{ width: "100%", marginTop: 4, justifyContent: "center" }}
+          >
+            {submitting ? "Saving…" : "Set password and continue"}
+          </button>
+        </form>
+
+        <div style={{ padding: "0 24px 20px", textAlign: "center" }}>
+          <button
+            onClick={() => logout()}
+            style={{ background: "none", border: 0, color: "var(--fg-3)", cursor: "pointer", fontSize: 12, fontFamily: "inherit", padding: 0 }}
+          >
+            Cancel and sign out
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function LoginPage() {
@@ -30,6 +167,7 @@ function LoginPage() {
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -39,7 +177,7 @@ function LoginPage() {
     setSubmitting(true);
     try {
       if (tab === "login") {
-        await login(email, password);
+        await login(email, password, rememberMe);
       } else {
         if (!displayName.trim()) { setError("Display name is required"); setSubmitting(false); return; }
         await register(email, displayName, password);
@@ -153,6 +291,21 @@ function LoginPage() {
               autoComplete={tab === "login" ? "current-password" : "new-password"}
             />
           </div>
+
+          {tab === "login" && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <input
+                id="dev-remember"
+                type="checkbox"
+                checked={rememberMe}
+                onChange={e => setRememberMe(e.target.checked)}
+                style={{ cursor: "pointer", accentColor: "var(--sc-blue)" }}
+              />
+              <label htmlFor="dev-remember" style={{ fontSize: 12.5, color: "var(--fg-3)", cursor: "pointer" }}>
+                Stay signed in for 30 days
+              </label>
+            </div>
+          )}
 
           {error && (
             <div style={{
