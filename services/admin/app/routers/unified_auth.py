@@ -455,3 +455,540 @@ async def revoke_role(
     )
     await session.commit()
     return {"ok": True}
+
+
+@router.patch("/users/{user_id}/status")
+async def set_user_status(
+    user_id: str,
+    status: str,
+    admin: dict = Depends(require_platform_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    if status not in ("active", "suspended"):
+        raise HTTPException(status_code=422, detail="status must be 'active' or 'suspended'")
+    await session.execute(
+        text("UPDATE users SET status = :status, updated_at = NOW() WHERE id = CAST(:uid AS uuid)"),
+        {"status": status, "uid": user_id},
+    )
+    await session.commit()
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Invitations
+# ---------------------------------------------------------------------------
+
+_VALID_ROLES = {"platform_admin", "area_owner", "team_admin", "developer", "viewer"}
+_INVITE_TTL = int(timedelta(hours=48).total_seconds())
+
+
+class CreateInviteRequest(BaseModel):
+    email: str
+    role: str = "developer"
+    scope_type: str = "global"
+    scope_id: str | None = None
+
+    @field_validator("email")
+    @classmethod
+    def normalise(cls, v: str) -> str:
+        return v.lower().strip()
+
+    @field_validator("role")
+    @classmethod
+    def check_role(cls, v: str) -> str:
+        if v not in _VALID_ROLES:
+            raise ValueError(f"role must be one of {sorted(_VALID_ROLES)}")
+        return v
+
+
+class AcceptInviteRequest(BaseModel):
+    token: str
+    display_name: str = Field(..., min_length=1, max_length=200)
+    password: str = Field(..., min_length=12, max_length=128)
+
+    @field_validator("password")
+    @classmethod
+    def strength(cls, v: str) -> str:
+        _validate_password_strength(v)
+        return v
+
+
+def _hash_token(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+@router.post("/invitations", status_code=201)
+async def create_invitation(
+    body: CreateInviteRequest,
+    request: Request,
+    caller: dict = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    roles = [r["role"] for r in caller.get("roles", [])]
+    is_platform_admin = "platform_admin" in roles
+    is_team_admin = "team_admin" in roles
+
+    # team_admin can only invite developers/viewers to their own team
+    if not is_platform_admin:
+        if not is_team_admin:
+            raise HTTPException(status_code=403, detail="Insufficient permissions to invite users")
+        if body.role not in ("developer", "viewer"):
+            raise HTTPException(status_code=403, detail="Team admins can only invite developers or viewers")
+        if body.scope_type != "team":
+            raise HTTPException(status_code=403, detail="Team admins must invite to team scope")
+        # Verify they admin that specific team
+        team_scopes = [r.get("scope_id") for r in caller.get("roles", []) if r["role"] == "team_admin"]
+        if body.scope_id not in team_scopes:
+            raise HTTPException(status_code=403, detail="You do not manage that team")
+
+    import uuid as _uuid
+    token = secrets.token_urlsafe(32)
+    token_hash = _hash_token(token)
+    invite_id = str(_uuid.uuid4())
+    from datetime import datetime, UTC as _UTC, timedelta as _td
+    expires_at = datetime.now(_UTC) + _td(hours=48)
+
+    await session.execute(
+        text("""
+            INSERT INTO user_invitations
+                (id, email, role, scope_type, scope_id, token_hash, invited_by, expires_at)
+            VALUES
+                (CAST(:id AS uuid), :email, :role, :scope_type,
+                 CAST(:scope_id AS uuid), :token_hash,
+                 CAST(:by AS uuid), :expires_at)
+        """),
+        {
+            "id": invite_id, "email": body.email, "role": body.role,
+            "scope_type": body.scope_type, "scope_id": body.scope_id,
+            "token_hash": token_hash, "by": caller["user_id"],
+            "expires_at": expires_at,
+        },
+    )
+    await session.commit()
+
+    # Return the raw token once — caller copies the link
+    base = request.base_url
+    accept_url = f"{base}auth/invitations/accept?token={token}"
+    return {
+        "invite_id": invite_id,
+        "email": body.email,
+        "role": body.role,
+        "expires_at": expires_at.isoformat(),
+        "accept_url": accept_url,
+        "token": token,
+    }
+
+
+@router.get("/invitations")
+async def list_invitations(
+    caller: dict = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    roles = [r["role"] for r in caller.get("roles", [])]
+    is_platform_admin = "platform_admin" in roles
+
+    if is_platform_admin:
+        rows = (await session.execute(text("""
+            SELECT i.id, i.email, i.role, i.scope_type, i.scope_id::text,
+                   i.expires_at, i.accepted_at, i.created_at,
+                   u.email AS invited_by_email
+            FROM user_invitations i
+            LEFT JOIN users u ON u.id = i.invited_by
+            ORDER BY i.created_at DESC
+        """))).mappings().all()
+    elif "team_admin" in roles:
+        team_scopes = [r.get("scope_id") for r in caller.get("roles", []) if r["role"] == "team_admin"]
+        rows = (await session.execute(
+            text("""
+                SELECT i.id, i.email, i.role, i.scope_type, i.scope_id::text,
+                       i.expires_at, i.accepted_at, i.created_at,
+                       u.email AS invited_by_email
+                FROM user_invitations i
+                LEFT JOIN users u ON u.id = i.invited_by
+                WHERE i.scope_id = ANY(CAST(:scopes AS uuid[]))
+                ORDER BY i.created_at DESC
+            """),
+            {"scopes": [s for s in team_scopes if s]},
+        )).mappings().all()
+    else:
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+    return [dict(r) for r in rows]
+
+
+@router.delete("/invitations/{invite_id}")
+async def revoke_invitation(
+    invite_id: str,
+    caller: dict = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    roles = [r["role"] for r in caller.get("roles", [])]
+    if "platform_admin" not in roles and "team_admin" not in roles:
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    await session.execute(
+        text("DELETE FROM user_invitations WHERE id = CAST(:id AS uuid) AND accepted_at IS NULL"),
+        {"id": invite_id},
+    )
+    await session.commit()
+    return {"ok": True}
+
+
+@router.post("/invitations/accept", status_code=201)
+async def accept_invitation(
+    body: AcceptInviteRequest,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+):
+    await _check_rate_limit(request.app.state.redis, request.client.host if request.client else "unknown")
+    token_hash = _hash_token(body.token)
+
+    invite = (await session.execute(
+        text("""
+            SELECT id, email, role, scope_type, scope_id::text
+            FROM user_invitations
+            WHERE token_hash = :th
+              AND accepted_at IS NULL
+              AND expires_at > NOW()
+        """),
+        {"th": token_hash},
+    )).mappings().first()
+
+    if not invite:
+        raise HTTPException(status_code=404, detail="Invitation not found or expired")
+
+    # Check email not already registered
+    existing = (await session.execute(
+        text("SELECT id FROM users WHERE email = :email"),
+        {"email": invite["email"]},
+    )).first()
+    if existing:
+        raise HTTPException(status_code=409, detail="Email already registered")
+
+    import uuid as _uuid
+    user_id = str(_uuid.uuid4())
+    pw_hash = _hash_bcrypt(body.password)
+
+    await session.execute(
+        text("""
+            INSERT INTO users (id, email, display_name, password_hash, hash_type, status)
+            VALUES (CAST(:id AS uuid), :email, :display_name, :hash, 'bcrypt', 'active')
+        """),
+        {"id": user_id, "email": invite["email"],
+         "display_name": body.display_name.strip(), "hash": pw_hash},
+    )
+    await session.execute(
+        text("""
+            INSERT INTO user_roles (user_id, role, scope_type, scope_id)
+            VALUES (CAST(:uid AS uuid), :role, :scope_type, CAST(:scope_id AS uuid))
+        """),
+        {"uid": user_id, "role": invite["role"],
+         "scope_type": invite["scope_type"], "scope_id": invite["scope_id"]},
+    )
+    await session.execute(
+        text("UPDATE user_invitations SET accepted_at = NOW() WHERE id = CAST(:id AS uuid)"),
+        {"id": str(invite["id"])},
+    )
+    await session.commit()
+
+    roles = await _load_user_roles(session, user_id)
+    payload = {
+        "user_id": user_id,
+        "email": invite["email"],
+        "display_name": body.display_name.strip(),
+        "roles": roles,
+        "primary_team_id": invite["scope_id"] if invite["scope_type"] == "team" else None,
+        "team_name": None,
+    }
+    token = await _issue_session(request.app.state.redis, payload, _SESSION_TTL_DEV)
+    return {"token": token, "user": payload}
+
+
+# ---------------------------------------------------------------------------
+# Service accounts
+# ---------------------------------------------------------------------------
+
+class CreateServiceAccountRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=200)
+    description: str = Field(default="", max_length=1000)
+    team_id: str | None = None
+
+
+@router.post("/service-accounts", status_code=201)
+async def create_service_account(
+    body: CreateServiceAccountRequest,
+    caller: dict = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    roles = [r["role"] for r in caller.get("roles", [])]
+    if "platform_admin" not in roles and "team_admin" not in roles:
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+    import uuid as _uuid, hashlib as _hl
+    sa_id = str(_uuid.uuid4())
+    raw_key = f"sa_{secrets.token_urlsafe(32)}"
+    key_prefix = raw_key[:12]
+    key_hash = _hl.sha256(raw_key.encode()).hexdigest()
+
+    await session.execute(
+        text("""
+            INSERT INTO service_accounts
+                (id, name, description, key_hash, key_prefix,
+                 owner_user_id, team_id, created_by)
+            VALUES
+                (CAST(:id AS uuid), :name, :desc, :kh, :kp,
+                 CAST(:owner AS uuid), CAST(:team AS uuid), CAST(:by AS uuid))
+        """),
+        {
+            "id": sa_id, "name": body.name, "desc": body.description,
+            "kh": key_hash, "kp": key_prefix,
+            "owner": caller["user_id"],
+            "team": body.team_id,
+            "by": caller["user_id"],
+        },
+    )
+    await session.commit()
+
+    return {
+        "id": sa_id,
+        "name": body.name,
+        "key_prefix": key_prefix,
+        "api_key": raw_key,  # shown once only
+        "team_id": body.team_id,
+    }
+
+
+@router.get("/service-accounts")
+async def list_service_accounts(
+    caller: dict = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    roles = [r["role"] for r in caller.get("roles", [])]
+    is_platform_admin = "platform_admin" in roles
+
+    if is_platform_admin:
+        rows = (await session.execute(text("""
+            SELECT sa.id, sa.name, sa.description, sa.key_prefix, sa.status,
+                   sa.team_id::text, t.name AS team_name,
+                   sa.last_used_at, sa.created_at,
+                   u.email AS owner_email
+            FROM service_accounts sa
+            LEFT JOIN teams t ON t.id = sa.team_id
+            LEFT JOIN users u ON u.id = sa.owner_user_id
+            ORDER BY sa.created_at DESC
+        """))).mappings().all()
+    elif "team_admin" in roles:
+        team_scopes = [r.get("scope_id") for r in caller.get("roles", []) if r["role"] == "team_admin"]
+        rows = (await session.execute(
+            text("""
+                SELECT sa.id, sa.name, sa.description, sa.key_prefix, sa.status,
+                       sa.team_id::text, t.name AS team_name,
+                       sa.last_used_at, sa.created_at,
+                       u.email AS owner_email
+                FROM service_accounts sa
+                LEFT JOIN teams t ON t.id = sa.team_id
+                LEFT JOIN users u ON u.id = sa.owner_user_id
+                WHERE sa.team_id = ANY(CAST(:scopes AS uuid[]))
+                ORDER BY sa.created_at DESC
+            """),
+            {"scopes": [s for s in team_scopes if s]},
+        )).mappings().all()
+    else:
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+    return [dict(r) for r in rows]
+
+
+@router.patch("/service-accounts/{sa_id}/status")
+async def set_service_account_status(
+    sa_id: str,
+    status: str,
+    caller: dict = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    roles = [r["role"] for r in caller.get("roles", [])]
+    if "platform_admin" not in roles and "team_admin" not in roles:
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    if status not in ("active", "suspended", "revoked"):
+        raise HTTPException(status_code=422, detail="Invalid status")
+    await session.execute(
+        text("UPDATE service_accounts SET status = :s, updated_at = NOW() WHERE id = CAST(:id AS uuid)"),
+        {"s": status, "id": sa_id},
+    )
+    await session.commit()
+    return {"ok": True}
+
+
+@router.post("/service-accounts/{sa_id}/rotate-key")
+async def rotate_service_account_key(
+    sa_id: str,
+    caller: dict = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    roles = [r["role"] for r in caller.get("roles", [])]
+    if "platform_admin" not in roles and "team_admin" not in roles:
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+    import hashlib as _hl
+    raw_key = f"sa_{secrets.token_urlsafe(32)}"
+    key_prefix = raw_key[:12]
+    key_hash = _hl.sha256(raw_key.encode()).hexdigest()
+
+    await session.execute(
+        text("""
+            UPDATE service_accounts
+            SET key_hash = :kh, key_prefix = :kp, updated_at = NOW()
+            WHERE id = CAST(:id AS uuid)
+        """),
+        {"kh": key_hash, "kp": key_prefix, "id": sa_id},
+    )
+    await session.commit()
+    return {"api_key": raw_key, "key_prefix": key_prefix}
+
+
+# ---------------------------------------------------------------------------
+# OIDC / SSO
+# ---------------------------------------------------------------------------
+
+oidc_router = APIRouter(prefix="/auth", tags=["auth-oidc"])
+
+_OIDC_STATE_TTL = 300  # 5 minutes
+
+
+@oidc_router.get("/oidc/login")
+async def oidc_login(request: Request):
+    """Redirect to the configured OIDC provider (Dex / Entra ID)."""
+    from app.config import settings as _cfg
+    import urllib.parse as _up
+
+    state = secrets.token_urlsafe(16)
+    await request.app.state.redis.setex(f"oidc_state:{state}", _OIDC_STATE_TTL, "1")
+
+    redirect_uri = str(request.base_url).rstrip("/") + "/auth/oidc/callback"
+    params = _up.urlencode({
+        "client_id": _cfg.oidc_client_id,
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        "scope": "openid email profile",
+        "state": state,
+    })
+    from fastapi.responses import RedirectResponse as _RR
+    return _RR(f"{_cfg.oidc_issuer}/auth?{params}")
+
+
+@oidc_router.get("/oidc/callback")
+async def oidc_callback(
+    code: str,
+    state: str,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+):
+    from app.config import settings as _cfg
+    import urllib.parse as _up
+    import httpx as _httpx
+
+    # Validate state
+    stored = await request.app.state.redis.get(f"oidc_state:{state}")
+    if not stored:
+        raise HTTPException(status_code=400, detail="Invalid or expired OAuth state")
+    await request.app.state.redis.delete(f"oidc_state:{state}")
+
+    redirect_uri = str(request.base_url).rstrip("/") + "/auth/oidc/callback"
+
+    # Exchange code for tokens
+    async with _httpx.AsyncClient() as client:
+        token_resp = await client.post(
+            f"{_cfg.oidc_issuer}/token",
+            data={
+                "grant_type": "authorization_code",
+                "code": code,
+                "redirect_uri": redirect_uri,
+                "client_id": _cfg.oidc_client_id,
+                "client_secret": _cfg.oidc_client_secret,
+            },
+            headers={"Accept": "application/json"},
+        )
+    if token_resp.status_code != 200:
+        raise HTTPException(status_code=502, detail="OIDC token exchange failed")
+
+    id_token_raw = token_resp.json().get("id_token")
+    if not id_token_raw:
+        raise HTTPException(status_code=502, detail="No id_token in OIDC response")
+
+    # Decode claims without full verification (Dex is internal; add jwks verification for production)
+    import base64 as _b64
+    parts = id_token_raw.split(".")
+    if len(parts) < 2:
+        raise HTTPException(status_code=502, detail="Malformed id_token")
+    padding = 4 - len(parts[1]) % 4
+    claims = json.loads(_b64.urlsafe_b64decode(parts[1] + "=" * padding))
+
+    email = claims.get("email", "").lower().strip()
+    display_name = claims.get("name") or claims.get("preferred_username") or email.split("@")[0]
+
+    if not email:
+        raise HTTPException(status_code=502, detail="No email in OIDC claims")
+
+    # Find or create user
+    row = (await session.execute(
+        text("""
+            SELECT u.id, u.status, u.display_name, u.primary_team_id, t.name AS team_name
+            FROM users u
+            LEFT JOIN teams t ON t.id = u.primary_team_id
+            WHERE u.email = :email
+        """),
+        {"email": email},
+    )).mappings().first()
+
+    if not row:
+        import uuid as _uuid
+        user_id = str(_uuid.uuid4())
+        await session.execute(
+            text("""
+                INSERT INTO users (id, email, display_name, password_hash, hash_type, status)
+                VALUES (CAST(:id AS uuid), :email, :dn, '', 'bcrypt', 'active')
+            """),
+            {"id": user_id, "email": email, "dn": display_name},
+        )
+        await session.execute(
+            text("INSERT INTO user_roles (user_id, role, scope_type) VALUES (CAST(:uid AS uuid), 'developer', 'global')"),
+            {"uid": user_id},
+        )
+        await session.commit()
+        user_id_str = user_id
+        team_name = None
+        primary_team_id = None
+        status = "active"
+    else:
+        if row["status"] != "active":
+            raise HTTPException(status_code=403, detail="Account is not active")
+        user_id_str = str(row["id"])
+        team_name = row["team_name"]
+        primary_team_id = str(row["primary_team_id"]) if row.get("primary_team_id") else None
+        status = row["status"]
+
+    await session.execute(
+        text("UPDATE users SET last_login_at = NOW() WHERE id = CAST(:id AS uuid)"),
+        {"id": user_id_str},
+    )
+    await session.commit()
+
+    roles = await _load_user_roles(session, user_id_str)
+    payload = {
+        "user_id": user_id_str,
+        "email": email,
+        "display_name": display_name,
+        "roles": roles,
+        "primary_team_id": primary_team_id,
+        "team_name": team_name,
+    }
+    token = await _issue_session(request.app.state.redis, payload, _SESSION_TTL_DEV)
+
+    # Redirect to the appropriate portal with token in fragment
+    role_names = [r["role"] for r in roles]
+    if any(r in role_names for r in ("platform_admin", "area_owner", "team_admin")):
+        frontend = f"http://localhost:3001/admin?sso_token={token}"
+    else:
+        frontend = f"http://localhost:3002/portal?sso_token={token}"
+
+    from fastapi.responses import RedirectResponse as _RR
+    return _RR(frontend)

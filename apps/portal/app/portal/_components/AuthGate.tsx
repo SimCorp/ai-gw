@@ -330,15 +330,42 @@ function LoginPage() {
         </form>
 
         {tab === "login" && (
-          <div style={{ padding: "0 24px 20px", fontSize: 12, color: "var(--fg-3)", textAlign: "center" }}>
-            No account?{" "}
-            <button
-              onClick={() => setTab("register")}
-              style={{ background: "none", border: 0, color: "var(--sc-link, var(--sc-blue))", cursor: "pointer", fontSize: 12, fontFamily: "inherit", padding: 0 }}
-            >
-              Create one →
-            </button>
-          </div>
+          <>
+            <div style={{ padding: "12px 24px 0", display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ flex: 1, height: 1, background: "var(--rule, #232950)" }} />
+              <span style={{ fontSize: 11, color: "var(--fg-3)", whiteSpace: "nowrap" }}>or</span>
+              <div style={{ flex: 1, height: 1, background: "var(--rule, #232950)" }} />
+            </div>
+            <div style={{ padding: "12px 24px 0" }}>
+              <a
+                href={`${process.env.NEXT_PUBLIC_ADMIN_BASE_URL ?? "http://localhost:8005"}/auth/oidc/login`}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                  width: "100%", padding: "9px 16px", fontSize: 13, fontWeight: 600,
+                  background: "transparent", color: "var(--fg-1)",
+                  border: "1px solid var(--rule, #232950)", borderRadius: 8,
+                  cursor: "pointer", textDecoration: "none",
+                }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                </svg>
+                Sign in with Entra ID (SSO)
+              </a>
+            </div>
+            <div style={{ padding: "12px 24px 20px", fontSize: 12, color: "var(--fg-3)", textAlign: "center" }}>
+              No account?{" "}
+              <button
+                onClick={() => setTab("register")}
+                style={{ background: "none", border: 0, color: "var(--sc-link, var(--sc-blue))", cursor: "pointer", fontSize: 12, fontFamily: "inherit", padding: 0 }}
+              >
+                Create one →
+              </button>
+            </div>
+          </>
+        )}
+        {tab !== "login" && (
+          <div style={{ padding: "0 24px 20px" }} />
         )}
       </div>
 

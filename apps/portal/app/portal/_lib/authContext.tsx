@@ -101,9 +101,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     rememberMe: boolean;
   } | null>(null);
 
-  // Restore session on mount
+  // Restore session on mount — also handle SSO callback (?sso_token=)
   useEffect(() => {
-    const storedToken = getStoredToken();
+    const params = new URLSearchParams(window.location.search);
+    const ssoToken = params.get("sso_token");
+    if (ssoToken) {
+      storeToken(ssoToken, false);
+      // Strip the query param from URL without reloading
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+    const storedToken = ssoToken ?? getStoredToken();
     if (!storedToken) { setLoading(false); return; }
     fetch(`${ADMIN_BASE}/dev-auth/me`, {
       headers: { Authorization: `Bearer ${storedToken}` },

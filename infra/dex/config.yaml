@@ -9,7 +9,7 @@ web:
 staticClients:
   - id: ai-gateway-admin
     redirectURIs:
-      - http://localhost:8005/auth/callback
+      - http://localhost:8005/auth/oidc/callback
     name: AI Gateway Admin
     secret: ai-gateway-admin-secret
 

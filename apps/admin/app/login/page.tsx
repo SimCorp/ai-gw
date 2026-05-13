@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, FormEvent } from 'react';
+import { useState, FormEvent, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { setAdminToken } from '../../lib/adminAuth';
 
@@ -28,6 +28,16 @@ const labelStyle: React.CSSProperties = {
 
 export default function LoginPage() {
   const router = useRouter();
+
+  // Handle SSO callback: ?sso_token=<token> redirected from /auth/oidc/callback
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const ssoToken = params.get('sso_token');
+    if (ssoToken) {
+      setAdminToken(ssoToken, false);
+      router.replace('/admin');
+    }
+  }, [router]);
 
   // Login state
   const [email, setEmail] = useState('');
@@ -303,6 +313,30 @@ export default function LoginPage() {
             >
               {loading ? 'Signing in…' : 'Sign in'}
             </button>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '16px 0' }}>
+              <div style={{ flex: 1, height: 1, background: 'var(--side-rule, #232950)' }} />
+              <span style={{ fontSize: 11, color: 'var(--side-fg-mute, #8089A3)', whiteSpace: 'nowrap' }}>or</span>
+              <div style={{ flex: 1, height: 1, background: 'var(--side-rule, #232950)' }} />
+            </div>
+
+            <a
+              href={`${ADMIN_API}/auth/oidc/login`}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                width: '100%', padding: '9px 16px', fontSize: 13, fontWeight: 600,
+                background: 'transparent', color: 'var(--side-fg, #C8CDDC)',
+                border: '1px solid var(--side-rule, #232950)', borderRadius: 7,
+                cursor: 'pointer', textDecoration: 'none', transition: 'border-color 0.15s',
+              }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--sc-blue, #083EA7)'; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--side-rule, #232950)'; }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              </svg>
+              Sign in with Entra ID (SSO)
+            </a>
           </form>
         </div>
         )}

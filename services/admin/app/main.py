@@ -35,6 +35,7 @@ from app.models import (  # noqa: F401
 from app.routers import (
     admin_auth as admin_auth_router,
     unified_auth as unified_auth_router,
+    users as users_router,
     transformation as transformation_router,
     ai_help as ai_help_router,
     config_api as config_api_router,
@@ -309,7 +310,9 @@ async def _security_headers(request: Request, call_next):
 app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 app.include_router(dev_auth.router)  # public — no admin auth
 app.include_router(admin_auth_router.router)  # public — IS the auth, no token required
-app.include_router(unified_auth_router.router)  # public — unified /auth/* endpoints
+app.include_router(unified_auth_router.router)      # public — unified /auth/* endpoints
+app.include_router(unified_auth_router.oidc_router) # public — OIDC SSO flow
+app.include_router(users_router.router, dependencies=_auth)  # admin user management UI
 app.include_router(settings_router.router, dependencies=_auth)
 app.include_router(dashboard.router, dependencies=_auth)
 app.include_router(areas_router.router, dependencies=_auth)
