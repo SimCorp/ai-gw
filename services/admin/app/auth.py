@@ -1,11 +1,22 @@
 import secrets
+import json
 
 from fastapi import Depends, Header, HTTPException, Request
 
 from app.config import settings
 
-# Role hierarchy: superadmin > admin > viewer
+# Role hierarchy for backwards-compat helpers
 _ROLE_RANK = {"viewer": 0, "admin": 1, "superadmin": 2}
+
+# New role → old rank mapping for _check_role compatibility
+_NEW_TO_OLD_RANK = {
+    "viewer": 0,
+    "developer": 0,
+    "service_account": 0,
+    "team_admin": 1,
+    "area_owner": 1,
+    "platform_admin": 2,
+}
 
 
 async def require_admin_auth(
@@ -13,10 +24,10 @@ async def require_admin_auth(
     x_admin_token: str | None = Header(default=None),
     authorization: str | None = Header(default=None),
 ) -> dict:
-    """Accept either X-Admin-Token (static) or Authorization: Bearer <session> (admin session).
+    """Accept X-Admin-Token (static) or Authorization: Bearer <session>.
 
-    Returns a dict with at least {"actor": str, "role": str} for use in audit logging
-    and downstream role checks.
+    Checks new unified session:{token} key first, then legacy admin_session:{token}.
+    Returns a dict with at least {"actor": str, "role": str} for audit logging.
     """
     if settings.dev_bypass_auth:
         result = {"actor": "dev-bypass", "role": "superadmin"}
@@ -32,14 +43,38 @@ async def require_admin_auth(
             request.state.admin_auth = result
             return result
 
-    # ── Path 2: bearer session token (admin portal login) ────────────────────
+    # ── Path 2: bearer session token ────────────────────────────────────────
     if authorization and authorization.startswith("Bearer "):
         token = authorization.removeprefix("Bearer ").strip()
         redis = getattr(request.app.state, "redis", None)
         if redis:
+            # Try new unified session first
+            raw = await redis.get(f"session:{token}")
+            if raw:
+                data = json.loads(raw)
+                roles = [r["role"] for r in data.get("roles", [])]
+                is_admin = any(r in roles for r in ("platform_admin", "area_owner", "team_admin"))
+                if not is_admin:
+                    raise HTTPException(status_code=403, detail="Admin access required")
+                # Compute legacy role string for backwards compat
+                if "platform_admin" in roles:
+                    legacy_role = "superadmin"
+                elif any(r in roles for r in ("area_owner", "team_admin")):
+                    legacy_role = "admin"
+                else:
+                    legacy_role = "viewer"
+                result = {
+                    "actor": data.get("email", "unknown"),
+                    "role": legacy_role,
+                    "session": data,
+                    "user_id": data.get("user_id"),
+                }
+                request.state.admin_auth = result
+                return result
+
+            # Fallback: legacy admin_session:{token}
             raw = await redis.get(f"admin_session:{token}")
             if raw:
-                import json
                 data = json.loads(raw)
                 role = data.get("role", "viewer")
                 result = {"actor": data.get("email", "unknown"), "role": role, "session": data}
@@ -62,12 +97,10 @@ def _check_role(auth: dict, minimum_role: str) -> None:
 
 
 async def require_admin_role(auth: dict = Depends(require_admin_auth)) -> dict:
-    """Gate to admin or superadmin. Viewers are denied."""
     _check_role(auth, "admin")
     return auth
 
 
 async def require_superadmin_role(auth: dict = Depends(require_admin_auth)) -> dict:
-    """Gate to superadmin only."""
     _check_role(auth, "superadmin")
     return auth

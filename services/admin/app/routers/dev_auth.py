@@ -1,158 +1,70 @@
 """
-Developer portal authentication.
-Provides register / login / me / logout for the developer portal (localhost:3002).
-Sessions are UUID tokens stored in Redis with a 7-day TTL.
-Passwords are hashed with PBKDF2-HMAC-SHA256 (standard library, no extra deps).
-"""
+Developer portal authentication — shim over unified_auth.
 
-import hashlib
+/dev-auth/login, /register, /me, /logout, /change-password delegate to unified_auth.
+Portal-specific endpoints (profile, select-team, stats) stay here and query users table.
+Session key: session:{token}  (unified format)
+"""
+from __future__ import annotations
+
 import json
-import os
-import re
-import secrets
-import uuid
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.db import get_session
+from app.routers.unified_auth import (
+    LoginRequest,
+    RegisterRequest,
+    ChangePasswordRequest,
+    get_current_user,
+    login as _unified_login,
+    logout as _unified_logout,
+    register as _unified_register,
+    change_password as _unified_change_password,
+    require_developer,
+    _session_key,
+)
 
 router = APIRouter(prefix="/dev-auth", tags=["developer-auth"])
 
 _SESSION_TTL = int(timedelta(days=7).total_seconds())
 _SESSION_TTL_REMEMBER = int(timedelta(days=30).total_seconds())
-_ITERATIONS = 390_000  # NIST SP 800-132 recommended minimum for PBKDF2-HMAC-SHA256
 
-_EMAIL_RE = re.compile(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$')
 
-# ---------------------------------------------------------------------------
-# Rate limiting — Redis-backed so all replicas share the counter
-# ---------------------------------------------------------------------------
-
-def _real_ip(request: Request) -> str:
+def _rate_limit_key(request: Request) -> str:
+    if settings.dev_bypass_auth:
+        test_id = request.headers.get("X-Test-Client-ID")
+        if test_id:
+            return f"test:{test_id}"
     forwarded = request.headers.get("X-Forwarded-For")
     if forwarded:
         return forwarded.split(",")[0].strip()
     return request.client.host if request.client else "unknown"
 
 
-def _rate_limit_key(request: Request) -> str:
-    # In dev/test, allow a per-test unique ID so parallel tests don't share a bucket.
-    if settings.dev_bypass_auth:
-        test_id = request.headers.get("X-Test-Client-ID")
-        if test_id:
-            return f"test:{test_id}"
-    return _real_ip(request)
-
-
-async def _check_auth_rate_limit(redis, identifier: str, max_attempts: int = 10, window_seconds: int = 60) -> None:
-    # Rate limiting is always active; it is independent of DEV_BYPASS_AUTH.
-    key = f"login_rl:{identifier}"
-    count = await redis.incr(key)
-    if count == 1:
-        await redis.expire(key, window_seconds)
-    if count > max_attempts:
-        raise HTTPException(status_code=429, detail="Too many attempts, try again later")
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def _hash_password(password: str) -> str:
-    salt = secrets.token_hex(16)
-    dk = hashlib.pbkdf2_hmac("sha256", password.encode(), salt.encode(), _ITERATIONS)
-    return f"pbkdf2:sha256:{_ITERATIONS}:{salt}:{dk.hex()}"
-
-
-def _verify_password(password: str, stored_hash: str) -> bool:
-    try:
-        parts = stored_hash.split(":")
-        if parts[0] != "pbkdf2" or parts[1] != "sha256":
-            return False
-        iterations, salt, expected_hex = int(parts[2]), parts[3], parts[4]
-        dk = hashlib.pbkdf2_hmac("sha256", password.encode(), salt.encode(), iterations)
-        return secrets.compare_digest(dk.hex(), expected_hex)
-    except Exception:
-        return False
-
-
-def _session_key(token: str) -> str:
-    return f"dev_session:{token}"
-
-
 async def _get_current_developer(
     authorization: str | None = Header(default=None),
     request: Request = None,
 ) -> dict:
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    token = authorization.removeprefix("Bearer ").strip()
-    redis = request.app.state.redis
-    raw = await redis.get(_session_key(token))
-    if not raw:
-        raise HTTPException(status_code=401, detail="Session expired or invalid")
-    return json.loads(raw)
+    """Backwards-compat dependency. Validates session and checks developer role.
+    Returns unified session payload but also maps user_id → developer_id for compat."""
+    user = await get_current_user(authorization, request)
+    roles = [r["role"] for r in user.get("roles", [])]
+    if not any(r in roles for r in ("developer", "platform_admin", "team_admin", "area_owner")):
+        raise HTTPException(status_code=403, detail="Developer access required")
+    # Backwards compat: expose developer_id as alias for user_id
+    if "developer_id" not in user:
+        user = {**user, "developer_id": user["user_id"]}
+    return user
 
 
 # ---------------------------------------------------------------------------
-# Schemas
-# ---------------------------------------------------------------------------
-
-class RegisterRequest(BaseModel):
-    email: str = Field(..., max_length=255)
-    display_name: str = Field(..., max_length=200, min_length=1)
-    password: str = Field(..., min_length=8, max_length=128)
-
-    @field_validator('email')
-    @classmethod
-    def validate_email(cls, v: str) -> str:
-        v = v.lower().strip()
-        if not _EMAIL_RE.match(v):
-            raise ValueError('Invalid email address')
-        return v
-
-
-def _validate_password_strength(password: str) -> None:
-    if len(password) < 12:
-        raise ValueError("Password must be at least 12 characters")
-    if not re.search(r"[A-Z]", password):
-        raise ValueError("Password must contain at least one uppercase letter")
-    if not re.search(r"[a-z]", password):
-        raise ValueError("Password must contain at least one lowercase letter")
-    if not re.search(r"\d", password):
-        raise ValueError("Password must contain at least one digit")
-    if not re.search(r"[^A-Za-z0-9]", password):
-        raise ValueError("Password must contain at least one special character")
-
-
-class LoginRequest(BaseModel):
-    email: str
-    password: str
-    remember_me: bool = False
-
-
-class ChangePasswordRequest(BaseModel):
-    current_password: str
-    new_password: str = Field(..., min_length=12, max_length=128)
-
-    @field_validator("new_password")
-    @classmethod
-    def validate_strength(cls, v: str) -> str:
-        _validate_password_strength(v)
-        return v
-
-
-class ProfileUpdate(BaseModel):
-    display_name: str | None = Field(default=None, max_length=200)
-
-
-# ---------------------------------------------------------------------------
-# Routes
+# Auth routes (delegate to unified)
 # ---------------------------------------------------------------------------
 
 @router.post("/register", status_code=201)
@@ -161,42 +73,23 @@ async def register(
     request: Request,
     session: AsyncSession = Depends(get_session),
 ):
-    await _check_auth_rate_limit(request.app.state.redis, _rate_limit_key(request))
-
-    # Email is already validated and normalised by the schema validator
-    email = body.email
-
-    # Corporate domain restriction
+    # Apply corporate domain restriction if configured
     if settings.allowed_email_domains:
-        domain = email.split("@")[1]
+        domain = body.email.split("@")[1]
         if domain not in settings.allowed_email_domains:
             raise HTTPException(status_code=422, detail="Registration is restricted to corporate email addresses")
-
-    # Check uniqueness
-    exists = (await session.execute(
-        text("SELECT id FROM developers WHERE email = :email"),
-        {"email": email},
-    )).first()
-    if exists:
-        raise HTTPException(status_code=409, detail="Email already registered")
-
-    dev_id = str(uuid.uuid4())
-    pw_hash = _hash_password(body.password)
-    await session.execute(
-        text("""
-            INSERT INTO developers (id, email, display_name, password_hash, status)
-            VALUES (CAST(:id AS uuid), :email, :display_name, :password_hash, 'active')
-        """),
-        {"id": dev_id, "email": email, "display_name": body.display_name.strip(), "password_hash": pw_hash},
-    )
-    await session.commit()
-
-    # Issue session
-    token = secrets.token_urlsafe(32)
-    payload = {"developer_id": dev_id, "email": email, "display_name": body.display_name.strip(), "team_id": None, "team_name": None}
-    await request.app.state.redis.setex(_session_key(token), _SESSION_TTL, json.dumps(payload))
-
-    return {"token": token, **payload}
+    result = await _unified_register(body, request, session)
+    # Map to dev portal format
+    u = result["user"]
+    return {
+        "token": result["token"],
+        "developer_id": u["user_id"],
+        "email": u["email"],
+        "display_name": u["display_name"],
+        "team_id": u.get("primary_team_id"),
+        "team_name": u.get("team_name"),
+        "must_change_password": result.get("must_change_password", False),
+    }
 
 
 @router.post("/login")
@@ -205,42 +98,54 @@ async def login(
     request: Request,
     session: AsyncSession = Depends(get_session),
 ):
-    await _check_auth_rate_limit(request.app.state.redis, _rate_limit_key(request))
-    email = body.email.lower().strip()
-    row = (await session.execute(
-        text("""
-            SELECT d.id, d.email, d.display_name, d.password_hash, d.status,
-                   d.must_change_password, d.team_id, t.name AS team_name
-            FROM developers d
-            LEFT JOIN teams t ON t.id = d.team_id
-            WHERE d.email = :email
-        """),
-        {"email": email},
-    )).mappings().first()
+    result = await _unified_login(body, request, session)
+    u = result["user"]
+    roles = [r["role"] for r in u.get("roles", [])]
+    if not any(r in roles for r in ("developer", "platform_admin", "team_admin", "area_owner")):
+        token = result["token"]
+        await request.app.state.redis.delete(_session_key(token))
+        raise HTTPException(status_code=403, detail="Developer portal access required")
 
-    if not row or not _verify_password(body.password, row["password_hash"]):
-        raise HTTPException(status_code=401, detail="Invalid email or password")
-
-    if row["status"] != "active":
-        raise HTTPException(status_code=403, detail="Account is not active")
-
-    token = secrets.token_urlsafe(32)
-    payload = {
-        "developer_id": str(row["id"]),
-        "email": row["email"],
-        "display_name": row["display_name"],
-        "team_id": str(row["team_id"]) if row["team_id"] else None,
-        "team_name": row["team_name"],
+    return {
+        "token": result["token"],
+        "developer_id": u["user_id"],
+        "email": u["email"],
+        "display_name": u["display_name"],
+        "team_id": u.get("primary_team_id"),
+        "team_name": u.get("team_name"),
+        "must_change_password": result.get("must_change_password", False),
     }
-    ttl = _SESSION_TTL_REMEMBER if body.remember_me else _SESSION_TTL
-    await request.app.state.redis.setex(_session_key(token), ttl, json.dumps(payload))
-
-    return {"token": token, **payload, "must_change_password": bool(row["must_change_password"])}
 
 
 @router.get("/me")
 async def me(developer: dict = Depends(_get_current_developer)):
     return developer
+
+
+@router.post("/logout")
+async def logout(
+    request: Request,
+    authorization: str | None = Header(default=None),
+):
+    return await _unified_logout(request, authorization)
+
+
+@router.post("/change-password")
+async def change_password(
+    body: ChangePasswordRequest,
+    request: Request,
+    authorization: str | None = Header(default=None),
+    session: AsyncSession = Depends(get_session),
+):
+    return await _unified_change_password(body, request, authorization, session)
+
+
+# ---------------------------------------------------------------------------
+# Portal-specific routes
+# ---------------------------------------------------------------------------
+
+class ProfileUpdate(BaseModel):
+    display_name: str | None = Field(default=None, max_length=200)
 
 
 @router.patch("/profile")
@@ -251,26 +156,20 @@ async def update_profile(
     session: AsyncSession = Depends(get_session),
 ):
     developer = await _get_current_developer(authorization, request)
-    updates: dict = {}
-    params: dict = {"id": developer["developer_id"]}
-
-    if body.display_name is not None:
-        updates["display_name"] = body.display_name.strip()
-        params["display_name"] = updates["display_name"]
-
-    if not updates:
+    if body.display_name is None:
         return developer
 
+    display_name = body.display_name.strip()
     await session.execute(
-        text("UPDATE developers SET display_name = :display_name WHERE id = CAST(:id AS uuid)"),
-        params,
+        text("UPDATE users SET display_name = :dn, updated_at = NOW() WHERE id = CAST(:id AS uuid)"),
+        {"dn": display_name, "id": developer["user_id"]},
     )
     await session.commit()
 
-    # Refresh session payload
     token = (authorization or "").removeprefix("Bearer ").strip()
-    new_payload = {**developer, **updates}
-    await request.app.state.redis.setex(_session_key(token), _SESSION_TTL, json.dumps(new_payload))
+    new_payload = {**developer, "display_name": display_name}
+    ttl = _SESSION_TTL_REMEMBER if len(token) > 40 else _SESSION_TTL
+    await request.app.state.redis.setex(_session_key(token), ttl, json.dumps(new_payload))
     return new_payload
 
 
@@ -281,7 +180,6 @@ async def select_team(
     authorization: str | None = Header(default=None),
     session: AsyncSession = Depends(get_session),
 ):
-    """Let a developer associate themselves with a team (dev convenience)."""
     developer = await _get_current_developer(authorization, request)
     row = (await session.execute(
         text("SELECT id, name FROM teams WHERE id = CAST(:id AS uuid)"),
@@ -290,73 +188,32 @@ async def select_team(
     if not row:
         raise HTTPException(status_code=404, detail="Team not found")
 
-    # Verify developer is a member of this team
     member_row = (await session.execute(
-        text("SELECT id FROM team_members WHERE team_id = CAST(:team_id AS uuid) AND developer_id = :developer_id"),
-        {"team_id": team_id, "developer_id": developer["developer_id"]},
+        text("""
+            SELECT id FROM team_members
+            WHERE team_id = CAST(:team_id AS uuid)
+              AND (user_id = CAST(:uid AS uuid) OR developer_id = CAST(:uid AS uuid))
+        """),
+        {"team_id": team_id, "uid": developer["user_id"]},
     )).first()
     if not member_row:
         raise HTTPException(status_code=403, detail="You are not a member of this team")
 
     await session.execute(
-        text("UPDATE developers SET team_id = CAST(:team_id AS uuid) WHERE id = CAST(:id AS uuid)"),
-        {"team_id": team_id, "id": developer["developer_id"]},
+        text("UPDATE users SET primary_team_id = CAST(:team_id AS uuid) WHERE id = CAST(:id AS uuid)"),
+        {"team_id": team_id, "id": developer["user_id"]},
     )
     await session.commit()
 
     token = (authorization or "").removeprefix("Bearer ").strip()
-    new_payload = {**developer, "team_id": team_id, "team_name": row["name"]}
+    new_payload = {**developer, "primary_team_id": team_id, "team_id": team_id, "team_name": row["name"]}
     await request.app.state.redis.setex(_session_key(token), _SESSION_TTL, json.dumps(new_payload))
     return new_payload
 
 
-@router.post("/change-password")
-async def change_password(
-    body: ChangePasswordRequest,
-    request: Request,
-    authorization: str | None = Header(default=None),
-    session: AsyncSession = Depends(get_session),
-):
-    """Change the developer's password. Requires current password verification."""
-    developer = await _get_current_developer(authorization, request)
-
-    row = (await session.execute(
-        text("SELECT id, password_hash FROM developers WHERE id = CAST(:id AS uuid)"),
-        {"id": developer["developer_id"]},
-    )).mappings().first()
-
-    if not row or not _verify_password(body.current_password, row["password_hash"]):
-        raise HTTPException(status_code=401, detail="Current password is incorrect")
-
-    new_hash = _hash_password(body.new_password)
-    await session.execute(
-        text("""
-            UPDATE developers
-            SET password_hash = :hash, must_change_password = FALSE
-            WHERE id = CAST(:id AS uuid)
-        """),
-        {"hash": new_hash, "id": developer["developer_id"]},
-    )
-    await session.commit()
-
-    # Invalidate current session so the caller must re-login
-    if authorization and authorization.startswith("Bearer "):
-        token = authorization.removeprefix("Bearer ").strip()
-        await request.app.state.redis.delete(_session_key(token))
-
-    return {"ok": True}
-
-
-@router.post("/logout")
-async def logout(
-    request: Request,
-    authorization: str | None = Header(default=None),
-):
-    if authorization and authorization.startswith("Bearer "):
-        token = authorization.removeprefix("Bearer ").strip()
-        await request.app.state.redis.delete(_session_key(token))
-    return {"ok": True}
-
+# ---------------------------------------------------------------------------
+# /dev-auth/me/stats — kept here (large endpoint, developer-only)
+# ---------------------------------------------------------------------------
 
 @router.get("/me/stats")
 async def my_stats(
@@ -364,16 +221,15 @@ async def my_stats(
     developer: dict = Depends(_get_current_developer),
     session: AsyncSession = Depends(get_session),
 ):
-    """Developer-facing productivity stats with personal ROI — no admin token required."""
     valid_periods = {"7d", "30d", "90d", "mtd", "all"}
     if period not in valid_periods:
         period = "7d"
 
-    developer_id = developer["developer_id"]
-    team_id = developer.get("team_id")
+    developer_id = developer["user_id"]
+    team_id = developer.get("primary_team_id") or developer.get("team_id")
 
     since_map = {
-        "7d": "AND cr.created_at >= NOW() - INTERVAL '7 days'",
+        "7d":  "AND cr.created_at >= NOW() - INTERVAL '7 days'",
         "30d": "AND cr.created_at >= NOW() - INTERVAL '30 days'",
         "90d": "AND cr.created_at >= NOW() - INTERVAL '90 days'",
         "mtd": "AND cr.created_at >= date_trunc('month', NOW())",
@@ -381,43 +237,41 @@ async def my_stats(
     }
     since = since_map[period]
     since_doe = since.replace("AND cr.created_at", "AND doe.occurred_at")
-    since_s = since.replace("AND cr.created_at", "AND s.first_request_at")
+    since_s   = since.replace("AND cr.created_at", "AND s.first_request_at")
 
     cost_row = (await session.execute(text(f"""
         SELECT
-            COUNT(cr.id)                                                  AS request_count,
-            COALESCE(SUM(cr.tokens_input + cr.tokens_output), 0)         AS total_tokens,
-            COALESCE(ROUND(SUM(cr.cost_usd)::numeric, 6), 0)             AS cost_usd,
-            COALESCE(SUM(cr.tool_invocation_count), 0)                   AS tool_invocations,
-            ROUND(AVG(CASE WHEN cr.cache_hit THEN 1.0 ELSE 0.0 END)*100, 1) AS cache_hit_pct,
-            ROUND(AVG(cr.latency_ms), 0)                                 AS avg_latency_ms,
-            COUNT(CASE WHEN cr.request_error_type IS NOT NULL THEN 1 END) AS error_count,
-            COUNT(DISTINCT cr.repo)                                       AS repo_count,
-            COALESCE(SUM(cr.retry_count), 0)                             AS total_retries
+            COUNT(cr.id)                                                              AS request_count,
+            COALESCE(SUM(cr.tokens_input + cr.tokens_output), 0)                     AS total_tokens,
+            COALESCE(ROUND(SUM(cr.cost_usd)::numeric, 6), 0)                         AS cost_usd,
+            COALESCE(SUM(cr.tool_invocation_count), 0)                               AS tool_invocations,
+            ROUND(AVG(CASE WHEN cr.cache_hit THEN 1.0 ELSE 0.0 END)*100, 1)          AS cache_hit_pct,
+            ROUND(AVG(cr.latency_ms), 0)                                             AS avg_latency_ms,
+            COUNT(CASE WHEN cr.request_error_type IS NOT NULL THEN 1 END)            AS error_count,
+            COUNT(DISTINCT cr.repo)                                                   AS repo_count,
+            COALESCE(SUM(cr.retry_count), 0)                                         AS total_retries
         FROM cost_records cr
         WHERE cr.developer_id = CAST(:dev_id AS uuid) {since}
     """), {"dev_id": developer_id})).mappings().one()
 
-    # GitHub output for ROI calculation
     output_totals = (await session.execute(text(f"""
         SELECT
-            COALESCE(SUM(doe.commit_count), 0) AS total_commits,
-            COUNT(CASE WHEN doe.event_type IN ('pr_opened', 'pr_merged') THEN 1 END) AS total_prs,
-            COUNT(CASE WHEN doe.event_type = 'pr_merged' THEN 1 END) AS merged_prs
+            COALESCE(SUM(doe.commit_count), 0)                                       AS total_commits,
+            COUNT(CASE WHEN doe.event_type IN ('pr_opened','pr_merged') THEN 1 END)  AS total_prs,
+            COUNT(CASE WHEN doe.event_type = 'pr_merged' THEN 1 END)                AS merged_prs
         FROM developer_output_events doe
         WHERE doe.developer_id = CAST(:dev_id AS uuid) {since_doe}
     """), {"dev_id": developer_id})).mappings().one()
 
-    cost_usd = float(cost_row["cost_usd"])
-    total_prs = int(output_totals["total_prs"])
+    cost_usd     = float(cost_row["cost_usd"])
+    total_prs    = int(output_totals["total_prs"])
     total_commits = int(output_totals["total_commits"])
-    merged_prs = int(output_totals["merged_prs"])
+    merged_prs   = int(output_totals["merged_prs"])
 
-    cost_per_pr = round(cost_usd / total_prs, 4) if total_prs > 0 else None
+    cost_per_pr     = round(cost_usd / total_prs, 4)    if total_prs    > 0 else None
     cost_per_commit = round(cost_usd / total_commits, 4) if total_commits > 0 else None
-    pr_merge_rate = round(merged_prs * 100.0 / total_prs, 1) if total_prs > 0 else None
+    pr_merge_rate   = round(merged_prs * 100.0 / total_prs, 1) if total_prs > 0 else None
 
-    # Team budget context
     team_budget_info = None
     if team_id:
         budget_row = (await session.execute(text("""
@@ -439,13 +293,12 @@ async def my_stats(
                 "remaining_usd": round(team_limit - team_spent, 4) if team_limit else None,
             }
 
-    # Session quality stats
     session_row = (await session.execute(text(f"""
-        SELECT COUNT(s.session_trace_id) AS session_count,
-               ROUND(AVG(s.quality_score), 2) AS avg_quality,
-               ROUND(AVG(s.turn_count), 1) AS avg_turns,
-               ROUND(AVG(s.avg_inter_request_s), 0) AS avg_inter_s,
-               COUNT(CASE WHEN s.produced_commit THEN 1 END) AS sessions_with_commit
+        SELECT COUNT(s.session_trace_id)                                AS session_count,
+               ROUND(AVG(s.quality_score), 2)                           AS avg_quality,
+               ROUND(AVG(s.turn_count), 1)                              AS avg_turns,
+               ROUND(AVG(s.avg_inter_request_s), 0)                     AS avg_inter_s,
+               COUNT(CASE WHEN s.produced_commit THEN 1 END)            AS sessions_with_commit
         FROM sessions s
         WHERE s.developer_id = CAST(:dev_id AS uuid) {since_s}
     """), {"dev_id": developer_id})).mappings().one()
@@ -456,85 +309,26 @@ async def my_stats(
         if session_count > 0 else None
     )
 
-    # Efficiency percentile vs team (by cost-per-request; lower = more focused)
-    efficiency_percentile = None
-    if team_id and cost_row["request_count"] > 0:
-        team_costs = (await session.execute(text(f"""
-            SELECT cr.developer_id,
-                   SUM(cr.cost_usd) / GREATEST(COUNT(cr.id), 1) AS cost_per_req
-            FROM cost_records cr
-            WHERE cr.team_id = (
-                SELECT team_id FROM developers WHERE id = CAST(:dev_id AS uuid)
-            ) AND cr.developer_id IS NOT NULL {since}
-            GROUP BY cr.developer_id
-            HAVING COUNT(cr.id) >= 5
-        """), {"dev_id": developer_id})).mappings().all()
-
-        if len(team_costs) > 1:
-            my_cpr = cost_usd / max(1, cost_row["request_count"])
-            all_cprs = sorted(float(r["cost_per_req"]) for r in team_costs)
-            rank = sum(1 for c in all_cprs if c <= my_cpr)
-            efficiency_percentile = round(rank * 100 / len(all_cprs), 0)
-
-    # Optimization hints (based on DX/GitHub research)
     hints = []
     request_count = int(cost_row["request_count"])
-    retry_count = int(cost_row["total_retries"])
-    retry_rate = retry_count / max(1, request_count)
+    retry_count   = int(cost_row["total_retries"])
+    retry_rate    = retry_count / max(1, request_count)
 
     if retry_rate > 0.3:
-        hints.append({
-            "type": "high_retry_rate",
-            "message": f"Your retry rate is {retry_rate:.0%}. Try scoping prompts to a single task — focused sessions have 3× better acceptance rates.",
-            "severity": "warning",
-        })
+        hints.append({"type": "high_retry_rate", "severity": "warning",
+            "message": f"Your retry rate is {retry_rate:.0%}. Try scoping prompts to a single task."})
     if cost_row["cache_hit_pct"] is not None and float(cost_row["cache_hit_pct"]) < 20 and request_count > 20:
-        hints.append({
-            "type": "low_cache_hit",
-            "message": "Less than 20% of your requests hit the semantic cache. Using consistent phrasings for repeated tasks can reduce cost significantly.",
-            "severity": "info",
-        })
+        hints.append({"type": "low_cache_hit", "severity": "info",
+            "message": "Less than 20% of your requests hit the semantic cache."})
     if cost_per_pr is not None and cost_per_pr > 50:
-        hints.append({
-            "type": "high_cost_per_pr",
-            "message": f"Your cost per PR is ${cost_per_pr:.2f}. Top quartile developers achieve <$10/PR. Consider using Sonnet for exploration and Opus only for final implementation.",
-            "severity": "warning",
-        })
-    if session_row["avg_quality"] is not None and float(session_row["avg_quality"]) <= 2:
-        hints.append({
-            "type": "low_session_quality",
-            "message": "Your recent sessions show struggle patterns (high retries, short sessions without commits). Try breaking large tasks into smaller, well-scoped sessions.",
-            "severity": "warning",
-        })
+        hints.append({"type": "high_cost_per_pr", "severity": "warning",
+            "message": f"Your cost per PR is ${cost_per_pr:.2f}. Top quartile developers achieve <$10/PR."})
 
     daily_rows = (await session.execute(text("""
         SELECT date, request_count, cost_usd, cache_hits, tool_invocations, error_count
         FROM developer_activity_log
         WHERE developer_id = CAST(:dev_id AS uuid)
-        ORDER BY date DESC
-        LIMIT 30
-    """), {"dev_id": developer_id})).mappings().all()
-
-    output_rows = (await session.execute(text(f"""
-        SELECT event_type, repo, COUNT(*) AS event_count,
-               SUM(commit_count) AS commits, SUM(lines_added) AS lines_added,
-               SUM(lines_removed) AS lines_removed
-        FROM developer_output_events doe
-        WHERE developer_id = CAST(:dev_id AS uuid) {since_doe}
-        GROUP BY event_type, repo
-        ORDER BY event_count DESC
-        LIMIT 20
-    """), {"dev_id": developer_id})).mappings().all()
-
-    model_rows = (await session.execute(text(f"""
-        SELECT cr.model,
-               COUNT(cr.id) AS request_count,
-               COALESCE(ROUND(SUM(cr.cost_usd)::numeric, 6), 0) AS cost_usd
-        FROM cost_records cr
-        WHERE cr.developer_id = CAST(:dev_id AS uuid) {since}
-        GROUP BY cr.model
-        ORDER BY cost_usd DESC
-        LIMIT 10
+        ORDER BY date DESC LIMIT 30
     """), {"dev_id": developer_id})).mappings().all()
 
     return {
@@ -553,11 +347,8 @@ async def my_stats(
             "repo_count": int(cost_row["repo_count"]),
         },
         "roi": {
-            "total_commits": total_commits,
-            "total_prs": total_prs,
-            "merged_prs": merged_prs,
-            "cost_per_pr": cost_per_pr,
-            "cost_per_commit": cost_per_commit,
+            "total_commits": total_commits, "total_prs": total_prs, "merged_prs": merged_prs,
+            "cost_per_pr": cost_per_pr, "cost_per_commit": cost_per_commit,
             "pr_merge_rate_pct": pr_merge_rate,
         },
         "session_quality": {
@@ -567,33 +358,12 @@ async def my_stats(
             "avg_inter_request_s": float(session_row["avg_inter_s"]) if session_row["avg_inter_s"] is not None else None,
             "commit_conversion_pct": commit_conversion_pct,
         },
-        "efficiency_percentile": efficiency_percentile,
         "team_budget": team_budget_info,
         "optimization_hints": hints,
         "daily": [
-            {
-                "date": str(r["date"]),
-                "request_count": r["request_count"],
-                "cost_usd": float(r["cost_usd"]),
-                "cache_hits": r["cache_hits"],
-                "tool_invocations": r["tool_invocations"],
-                "error_count": r["error_count"],
-            }
+            {"date": str(r["date"]), "request_count": r["request_count"],
+             "cost_usd": float(r["cost_usd"]), "cache_hits": r["cache_hits"],
+             "tool_invocations": r["tool_invocations"], "error_count": r["error_count"]}
             for r in daily_rows
-        ],
-        "by_model": [
-            {"model": r["model"], "request_count": r["request_count"], "cost_usd": float(r["cost_usd"])}
-            for r in model_rows
-        ],
-        "github_output": [
-            {
-                "event_type": r["event_type"],
-                "repo": r["repo"],
-                "event_count": r["event_count"],
-                "commits": int(r["commits"] or 0),
-                "lines_added": int(r["lines_added"] or 0),
-                "lines_removed": int(r["lines_removed"] or 0),
-            }
-            for r in output_rows
         ],
     }

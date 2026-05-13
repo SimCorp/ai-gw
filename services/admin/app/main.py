@@ -34,6 +34,7 @@ from app.models import (  # noqa: F401
 
 from app.routers import (
     admin_auth as admin_auth_router,
+    unified_auth as unified_auth_router,
     transformation as transformation_router,
     ai_help as ai_help_router,
     config_api as config_api_router,
@@ -109,15 +110,32 @@ async def lifespan(app: FastAPI):
     # Seed default admin account only in dev/test/ci environments.
     # In production, admin accounts must be created explicitly via the provisioning script.
     if os.getenv("ENVIRONMENT", "production") in ("development", "test", "ci"):
-        _default_hash = '$2b$12$LP9R7KYdFg.30w6XJutjo.oKw6YcKu0.daZtUj3R7Vy9AOPIkjwhu'
+        _default_hash = '$2b$12$97tEM5lfcioIn4w9wDRHQe3qQNeU9OIBDImBuWj6wQRF30UCpIWom'
         async with engine.begin() as conn:
-            await conn.execute(text(f"""
-                INSERT INTO admin_users (email, display_name, password_hash, role, must_change_password)
-                VALUES ('admin@simcorp.com', 'Default Admin', :hash, 'superadmin', TRUE)
-                ON CONFLICT (email) DO UPDATE
-                    SET must_change_password = TRUE
-                    WHERE admin_users.password_hash = :hash
-            """), {"hash": _default_hash})
+            # Insert/update into unified users table (migration 0010 creates it)
+            # Falls back gracefully if the table doesn't exist yet (first boot before migration)
+            try:
+                await conn.execute(text("""
+                    INSERT INTO users (email, display_name, password_hash, hash_type, status, must_change_password)
+                    VALUES ('admin@simcorp.com', 'Default Admin', :hash, 'bcrypt', 'active', TRUE)
+                    ON CONFLICT (email) DO UPDATE
+                        SET must_change_password = TRUE
+                        WHERE users.password_hash = :hash
+                """), {"hash": _default_hash})
+                await conn.execute(text("""
+                    INSERT INTO user_roles (user_id, role, scope_type)
+                    SELECT id, 'platform_admin', 'global' FROM users WHERE email = 'admin@simcorp.com'
+                    ON CONFLICT DO NOTHING
+                """))
+            except Exception:
+                # users table not yet created (before migration 0010) — seed admin_users as fallback
+                await conn.execute(text("""
+                    INSERT INTO admin_users (email, display_name, password_hash, role, must_change_password)
+                    VALUES ('admin@simcorp.com', 'Default Admin', :hash, 'superadmin', TRUE)
+                    ON CONFLICT (email) DO UPDATE
+                        SET must_change_password = TRUE
+                        WHERE admin_users.password_hash = :hash
+                """), {"hash": _default_hash})
 
     # Seed a default team if none exists (dev convenience)
     async with engine.begin() as conn:
@@ -291,6 +309,7 @@ async def _security_headers(request: Request, call_next):
 app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 app.include_router(dev_auth.router)  # public — no admin auth
 app.include_router(admin_auth_router.router)  # public — IS the auth, no token required
+app.include_router(unified_auth_router.router)  # public — unified /auth/* endpoints
 app.include_router(settings_router.router, dependencies=_auth)
 app.include_router(dashboard.router, dependencies=_auth)
 app.include_router(areas_router.router, dependencies=_auth)
