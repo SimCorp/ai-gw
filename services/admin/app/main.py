@@ -112,7 +112,7 @@ async def lifespan(app: FastAPI):
             await conn.execute(text("""
                 INSERT INTO admin_users (email, display_name, password_hash, role) VALUES
                     ('admin@simcorp.com', 'Default Admin',
-                     '$2b$12$GwGtCW6GNoGJlD5lhF8xLeZPEZO8W5eDXr6TO7u3zm3SiHe1uZK3S',
+                     '$2b$12$bUvzQRuY31dPXWEszjCKR.KZrm9DKO1GAb0t20IjNA92IpphK5JVK',
                      'superadmin')
                 ON CONFLICT (email) DO NOTHING
             """))
