@@ -25,8 +25,9 @@ const NAV = [
   {
     group: "Account",
     items: [
-      { href: "/portal/usage",    label: "Usage & spend", icon: <ChartIcon /> },
-      { href: "/portal/settings", label: "Settings",      icon: <SettingsIcon /> },
+      { href: "/portal/usage",          label: "Usage & spend",   icon: <ChartIcon /> },
+      { href: "/portal/transformation", label: "AI Transformation", icon: <TransformIcon /> },
+      { href: "/portal/settings",       label: "Settings",         icon: <SettingsIcon /> },
     ],
   },
 ];
@@ -342,6 +343,15 @@ function SettingsIcon() {
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
       <circle cx="8" cy="8" r="2.5"/>
       <path d="M8 1.5v1M8 13.5v1M1.5 8h1M13.5 8h1M3.2 3.2l.7.7M12.1 12.1l.7.7M3.2 12.8l.7-.7M12.1 3.9l.7-.7"/>
+    </svg>
+  );
+}
+
+function TransformIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M2 12 L6 8 L9 10 L14 4"/>
+      <path d="M11 4h3v3"/>
     </svg>
   );
 }
