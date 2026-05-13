@@ -3750,3 +3750,132 @@ POST /mcp/tools/search               Search tool (REST)
 POST /mcp/tools/ingest               Ingest tool (REST)
 POST /mcp/tools/topics               Topics tool (REST)
 ```
+
+---
+
+## 18. Unified Identity Model (migration 0010–0011)
+
+### 18.1 Overview
+
+The platform uses a single `users` table for all human principals, replacing the prior split between `admin_users` and `developers`. Non-human principals (CI pipelines, integrations) are modelled as `service_accounts`.
+
+All existing UUIDs were preserved during migration: every foreign-key reference in `cost_records`, `sessions`, `developer_achievements`, `team_members`, and related tables remains valid.
+
+### 18.2 Schema
+
+```sql
+-- Primary identity table
+users (
+  id                  UUID PRIMARY KEY,
+  email               VARCHAR(255) UNIQUE NOT NULL,
+  display_name        VARCHAR(255),
+  password_hash       TEXT,
+  hash_type           TEXT CHECK (hash_type IN ('bcrypt', 'pbkdf2')),
+  status              TEXT CHECK (status IN ('active', 'pending', 'suspended')),
+  must_change_password BOOLEAN DEFAULT FALSE,
+  primary_team_id     UUID REFERENCES teams(id),
+  last_login_at       TIMESTAMPTZ,
+  created_at, updated_at TIMESTAMPTZ
+)
+
+-- Scoped role grants
+user_roles (
+  id          UUID PRIMARY KEY,
+  user_id     UUID REFERENCES users(id) ON DELETE CASCADE,
+  role        TEXT CHECK (role IN (
+                'platform_admin', 'area_owner', 'team_admin',
+                'developer', 'viewer', 'service_account')),
+  scope_type  TEXT CHECK (scope_type IN ('global', 'area', 'team')),
+  scope_id    UUID,          -- area.id or team.id when scope_type != 'global'
+  granted_at  TIMESTAMPTZ,
+  granted_by  UUID REFERENCES users(id)
+)
+
+-- Token-based onboarding (no SMTP required)
+user_invitations (
+  id          UUID PRIMARY KEY,
+  email       VARCHAR(255),
+  role        TEXT,
+  scope_type  TEXT,
+  scope_id    UUID,
+  token_hash  TEXT UNIQUE,   -- SHA-256 of raw token; raw shown once
+  invited_by  UUID REFERENCES users(id),
+  expires_at  TIMESTAMPTZ,   -- 48 hours from creation
+  accepted_at TIMESTAMPTZ
+)
+
+-- API-key-only principals
+service_accounts (
+  id              UUID PRIMARY KEY,
+  name            VARCHAR(200),
+  description     TEXT,
+  key_hash        TEXT UNIQUE,   -- SHA-256 of raw key
+  key_prefix      VARCHAR(20),   -- first 12 chars for identification
+  owner_user_id   UUID REFERENCES users(id),
+  team_id         UUID REFERENCES teams(id),
+  status          TEXT CHECK (status IN ('active', 'suspended', 'revoked')),
+  created_by      UUID REFERENCES users(id),
+  last_used_at    TIMESTAMPTZ
+)
+```
+
+### 18.3 Session model
+
+Sessions are stored in Redis at key `session:{token}` with the following payload:
+
+```json
+{
+  "user_id": "uuid",
+  "email": "user@simcorp.com",
+  "display_name": "Full Name",
+  "roles": [
+    {"role": "developer", "scope_type": "global", "scope_id": null}
+  ],
+  "primary_team_id": "uuid | null",
+  "team_name": "Engineering | null"
+}
+```
+
+TTL: 8 hours (admins) / 7 days (developers). Extended to 30 days with `remember_me: true`.
+
+### 18.4 Password hashing
+
+- New passwords: bcrypt (cost 12)
+- Legacy developer passwords: pbkdf2-sha256 (390,000 iterations)
+- Transparent upgrade: pbkdf2 passwords are re-hashed to bcrypt on first successful login
+
+### 18.5 Org hierarchy
+
+```
+Organisation (SimCorp — single tenant)
+  └── Areas  (area_owner role — scoped to area.id)
+        └── Teams  (team_admin role — scoped to team.id)
+              └── Users  (developer / viewer roles — global scope)
+```
+
+`platform_admin` users have access to all areas and teams. `area_owner` and `team_admin` roles include a `scope_id` FK that restricts their authority to a specific area or team.
+
+### 18.6 SSO / OIDC flow
+
+```
+Browser  →  GET /auth/oidc/login
+         →  302 to OIDC provider (Dex locally / Entra ID in production)
+         →  user authenticates
+         →  GET /auth/oidc/callback?code=...&state=...
+         →  backend exchanges code for id_token
+         →  extracts email + display_name claims
+         →  finds or creates users row (developer role if new)
+         →  issues Redis session
+         →  302 to /admin?sso_token=<token> or /portal?sso_token=<token>
+         →  frontend stores token, strips query param
+```
+
+To use real Entra ID: set `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` in `.env` and register redirect URI `https://<host>/auth/oidc/callback` in Azure.
+
+### 18.7 Backwards compatibility
+
+The `/admin-auth/*` and `/dev-auth/*` route families are kept as thin shims that delegate to `unified_auth.py`. Existing session tokens remain valid. The `require_admin_auth` dependency in `auth.py` checks `session:{token}` first, then falls back to the legacy `admin_session:{token}` format.
+
+---
+
+*Last updated: 2026-05-13*

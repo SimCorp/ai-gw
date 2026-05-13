@@ -16,6 +16,7 @@ Enterprise AI gateway for the SimCorp Developer Platform. This reference covers 
 8. [Rate Limiting](#8-rate-limiting)
 9. [Caching](#9-caching)
 10. [Admin REST API](#10-admin-rest-api)
+11. [Unified Auth API](#11-unified-auth-api)
 
 ---
 
@@ -924,4 +925,255 @@ Role is stored on the admin user record. In local development with `DEV_BYPASS_A
 
 ---
 
-*Last updated: 2026-05-09*
+---
+
+## 11. Unified Auth API
+
+All endpoints at `/auth/*` are served by the admin service on `:8005`.
+Session tokens are passed as `Authorization: Bearer <token>`.
+The legacy `/admin-auth/*` and `/dev-auth/*` routes remain for backwards compatibility and delegate to these endpoints internally.
+
+### 11.1 Login
+
+```
+POST /auth/login
+```
+
+**Request body**
+
+```json
+{
+  "email": "dev@simcorp.com",
+  "password": "YourPassword123!",
+  "remember_me": false
+}
+```
+
+**Response**
+
+```json
+{
+  "token": "<session-token>",
+  "user": {
+    "user_id": "uuid",
+    "email": "dev@simcorp.com",
+    "display_name": "Dev User",
+    "roles": [{"role": "developer", "scope_type": "global", "scope_id": null}],
+    "primary_team_id": "uuid | null",
+    "team_name": "Engineering | null"
+  },
+  "must_change_password": false
+}
+```
+
+Session TTL: 8 h for admins (30 days with `remember_me: true`), 7 days for developers (30 days with `remember_me: true`).
+
+If `must_change_password` is `true`, the session is valid only for `POST /auth/change-password`. All other endpoints return `403` until the password is changed.
+
+### 11.2 Self-service registration
+
+```
+POST /auth/register
+```
+
+Creates a developer account. Restricted to corporate email domains if `ALLOWED_EMAIL_DOMAINS` is configured.
+
+**Request body**
+
+```json
+{
+  "email": "dev@simcorp.com",
+  "display_name": "Dev User",
+  "password": "YourPassword123!"
+}
+```
+
+Password requirements: 12+ characters, uppercase, lowercase, digit, special character.
+
+### 11.3 Current user
+
+```
+GET /auth/me
+Authorization: Bearer <token>
+```
+
+Returns the full session payload (same shape as the `user` object in the login response).
+
+### 11.4 Logout
+
+```
+POST /auth/logout
+Authorization: Bearer <token>
+```
+
+Deletes the Redis session immediately. Returns `{"ok": true}`.
+
+### 11.5 Change password
+
+```
+POST /auth/change-password
+Authorization: Bearer <token>
+```
+
+```json
+{
+  "current_password": "OldPassword123!",
+  "new_password": "NewPassword456@"
+}
+```
+
+Clears the current session on success. Re-login required.
+
+### 11.6 SSO / OIDC
+
+```
+GET /auth/oidc/login
+```
+
+Redirects to the configured OIDC provider (Dex locally, Entra ID in production). Sets a short-lived `oidc_state` cookie for CSRF protection.
+
+```
+GET /auth/oidc/callback?code=...&state=...
+```
+
+Exchanges the authorization code for an id_token, extracts `email` and `name` claims, then:
+- Finds the existing user record by email, or creates a new one with the `developer` role
+- Issues a session token
+- Redirects to `/admin?sso_token=<token>` (for admin-role users) or `/portal?sso_token=<token>` (for developers)
+
+Both portal frontends read `?sso_token=` on mount and store it as a session.
+
+### 11.7 Invitations
+
+Invite links are the only way to onboard users when `ALLOWED_EMAIL_DOMAINS` is not set or when you want to pre-assign a specific role.
+
+**Create invite**
+
+```
+POST /auth/invitations
+Authorization: Bearer <token>    (platform_admin or team_admin)
+```
+
+```json
+{
+  "email": "newdev@simcorp.com",
+  "role": "developer",
+  "scope_type": "global",
+  "scope_id": null
+}
+```
+
+`team_admin` callers: `role` must be `developer` or `viewer`; `scope_type` must be `team` and `scope_id` must be a team the caller manages.
+
+**Response** — includes a ready-to-copy `accept_url`:
+
+```json
+{
+  "invite_id": "uuid",
+  "email": "newdev@simcorp.com",
+  "role": "developer",
+  "expires_at": "2026-05-15T10:00:00+00:00",
+  "accept_url": "http://localhost:8005/auth/invitations/accept?token=...",
+  "token": "<raw-token>"
+}
+```
+
+The raw token is shown **once** and not stored. Share the `accept_url` with the recipient.
+
+**List invitations**
+
+```
+GET /auth/invitations
+Authorization: Bearer <token>
+```
+
+**Revoke pending invite**
+
+```
+DELETE /auth/invitations/{invite_id}
+Authorization: Bearer <token>
+```
+
+**Accept invite** (public endpoint)
+
+```
+POST /auth/invitations/accept
+```
+
+```json
+{
+  "token": "<raw-token-from-url>",
+  "display_name": "New Developer",
+  "password": "NewPassword123!"
+}
+```
+
+Creates the user account, grants the pre-assigned role, and returns a session token ready for immediate use.
+
+### 11.8 Service accounts
+
+Service accounts are API-key-only principals — no portal login.
+
+**Create**
+
+```
+POST /auth/service-accounts
+Authorization: Bearer <token>
+```
+
+```json
+{
+  "name": "CI Pipeline",
+  "description": "GitHub Actions integration",
+  "team_id": "uuid | null"
+}
+```
+
+**Response** — `api_key` is shown **once**:
+
+```json
+{
+  "id": "uuid",
+  "name": "CI Pipeline",
+  "key_prefix": "sa_0ly5dAAL",
+  "api_key": "sa_0ly5dAALXUAHb...",
+  "team_id": null
+}
+```
+
+**List / update status / rotate key**
+
+```
+GET    /auth/service-accounts
+PATCH  /auth/service-accounts/{id}/status?status=suspended
+POST   /auth/service-accounts/{id}/rotate-key
+```
+
+### 11.9 User management (platform_admin only)
+
+```
+GET    /auth/users                          List all users
+POST   /auth/users/{id}/roles              Grant role
+DELETE /auth/users/{id}/roles/{role}       Revoke role
+PATCH  /auth/users/{id}/status?status=...  active | suspended
+```
+
+```
+GET  /admin/users?search=&status=&role=&limit=&offset=   Paginated user list
+GET  /admin/users/{id}                                    User detail with roles + team
+```
+
+### 11.10 RBAC roles reference
+
+| Role | Scope | Capabilities |
+|---|---|---|
+| `platform_admin` | global | All admin APIs, all portals |
+| `area_owner` | area | Manage teams + policies within their area |
+| `team_admin` | team | Manage team members, keys, budgets; invite developers/viewers to their team |
+| `developer` | global | Developer portal; personal API keys; transformation stats |
+| `viewer` | global | Read-only developer portal |
+| `service_account` | — | API key bearer only; no portal access |
+
+---
+
+*Last updated: 2026-05-13*
