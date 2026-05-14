@@ -98,7 +98,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   <NavItem href="/admin/users" label="Users" />
                 </NavSection>
 
-                <NavSectionLink href="/admin/transformation" label="AI Transformation ✦">
+                <NavSectionLink href="/admin/transformation" label="AI Transformation">
                   <NavItem href="/admin/genai-adoption" label="GenAI Adoption" />
                   <NavItem href="/admin/insights" label="AI Insights" />
                   <NavItem href="/admin/devops" label="DevOps Agent" />
