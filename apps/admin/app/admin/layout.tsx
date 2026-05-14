@@ -93,11 +93,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 <NavSection label="Overview">
                   <NavItem href="/admin/dashboard" label="Dashboard" />
                   <NavItem href="/admin/requests" label="Live requests" />
-                  <NavItem href="/admin/transformation" label="AI Transformation ✦" />
                   <NavItem href="/admin/areas" label="Areas" />
                   <NavItem href="/admin/teams" label="Teams" />
                   <NavItem href="/admin/users" label="Users" />
                 </NavSection>
+
+                <NavSectionLink href="/admin/transformation" label="AI Transformation ✦">
+                  <NavItem href="/admin/genai-adoption" label="GenAI Adoption" />
+                  <NavItem href="/admin/insights" label="AI Insights" />
+                  <NavItem href="/admin/devops" label="DevOps Agent" />
+                </NavSectionLink>
 
                 <NavSection label="Govern">
                   <NavItem href="/admin/guardrails" label="Guardrails" />
@@ -124,12 +129,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 <NavSection label="Operate">
                   <NavItem href="/admin/reports" label="Cost reports" />
                   <NavItem href="/admin/alerts" label="Alerts" />
-                  <NavItem href="/admin/insights" label="AI Insights ✦" />
-                  <NavItem href="/admin/devops" label="DevOps Agent ✦" />
-                </NavSection>
-
-                <NavSection label="Measure">
-                  <NavItem href="/admin/genai-adoption" label="GenAI Adoption ✦" />
                 </NavSection>
               </div>
 
@@ -145,6 +144,26 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <AiHelpWidget />
       </AuthGuard>
     </QueryClientProvider>
+  );
+}
+
+function NavSectionLink({ href, label, children }: { href: string; label: string; children?: React.ReactNode }) {
+  return (
+    <div style={{ marginBottom: 4 }}>
+      <a
+        href={href}
+        style={{
+          display: 'block',
+          padding: '10px 14px 4px',
+          fontSize: 10.5, fontWeight: 600, letterSpacing: '0.06em',
+          textTransform: 'uppercase', color: 'var(--side-fg-mute)',
+          textDecoration: 'none',
+        }}
+        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'var(--side-fg)'; }}
+        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--side-fg-mute)'; }}
+      >{label}</a>
+      {children}
+    </div>
   );
 }
 
