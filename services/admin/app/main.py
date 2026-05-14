@@ -65,6 +65,7 @@ from app.routers import (
     workflows as workflows_router,
     system,
     teams,
+    genai_adoption as genai_adoption_router,
 )
 
 
@@ -345,6 +346,7 @@ app.include_router(identity_router.public_router)  # GET /identity/jwks — no a
 app.include_router(memory_admin_router.router, dependencies=_auth)
 app.include_router(transformation_router.dev_router)    # own auth: dev session
 app.include_router(transformation_router.admin_router, dependencies=_auth)
+app.include_router(genai_adoption_router.router, dependencies=_auth)
 
 
 @app.get("/", include_in_schema=False)

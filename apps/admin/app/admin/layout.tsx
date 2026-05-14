@@ -127,6 +127,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   <NavItem href="/admin/insights" label="AI Insights ✦" />
                   <NavItem href="/admin/devops" label="DevOps Agent ✦" />
                 </NavSection>
+
+                <NavSection label="Measure">
+                  <NavItem href="/admin/genai-adoption" label="GenAI Adoption ✦" />
+                </NavSection>
               </div>
 
               <div style={{ borderTop: '1px solid var(--side-rule)', paddingTop: 8, paddingBottom: 8 }}>
