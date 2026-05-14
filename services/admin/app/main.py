@@ -175,6 +175,7 @@ async def lifespan(app: FastAPI):
                 ("Engineering", "engineering", "Software engineering teams", "#0A7BD7"),
                 ("Risk & Compliance", "risk-compliance", "Risk management and compliance teams", "#EF3E4A"),
                 ("Finance", "finance", "Finance and treasury teams", "#1D958E"),
+                ("AI Transformation", "ai-transformation", "AI adoption, tooling, and transformation initiatives", "#4B17B6"),
             ]:
                 await conn.execute(text("""
                     INSERT INTO areas (name, slug, description, color)
