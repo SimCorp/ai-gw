@@ -407,6 +407,14 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  hub:
+    image: nginx:alpine
+    ports:
+      - "127.0.0.1:8080:80"
+    volumes:
+      - ../landing.html:/usr/share/nginx/html/index.html:ro
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   ollama_data:
