@@ -1,0 +1,12 @@
+{
+  "id": "session-1778448094699",
+  "startedAt": "2026-05-10T21:21:34.699Z",
+  "cwd": "/home/bntp/repos/ai-gw/services/admin",
+  "context": {},
+  "metrics": {
+    "edits": 3,
+    "commands": 0,
+    "tasks": 0,
+    "errors": 0
+  }
+}

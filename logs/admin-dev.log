@@ -1,0 +1,1023 @@
+
+> @aigw/admin@0.0.1 dev
+> next dev -p 3001
+
+   ▲ Next.js 15.3.1
+   - Local:        http://localhost:3001
+   - Network:      http://10.255.255.254:3001
+
+ ✓ Starting...
+ ✓ Ready in 1545ms
+ ○ Compiling / ...
+ ✓ Compiled / in 1054ms (660 modules)
+ GET / 307 in 1256ms
+ GET / 307 in 53ms
+ ○ Compiling /admin/dashboard ...
+ ✓ Compiled /admin/dashboard in 1697ms (1296 modules)
+ GET /admin/dashboard 200 in 1848ms
+ GET /admin/dashboard 200 in 57ms
+ GET /admin/dashboard 200 in 23ms
+ GET /admin/dashboard 200 in 25ms
+ GET /admin/dashboard 200 in 37ms
+ GET /admin/dashboard 200 in 33ms
+ ○ Compiling /admin/requests ...
+ ✓ Compiled /admin/requests in 520ms (1291 modules)
+ GET /admin/requests 200 in 686ms
+ GET /admin/dashboard 200 in 65ms
+ GET /admin/dashboard 200 in 41ms
+ GET /admin/requests 200 in 43ms
+ ✓ Compiled /admin/teams in 465ms (1298 modules)
+ GET /admin/teams 200 in 580ms
+ ✓ Compiled /admin/guardrails in 268ms (1305 modules)
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ GET /admin/guardrails 200 in 362ms
+ ✓ Compiled /admin/audit in 239ms (1312 modules)
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ GET /admin/audit 200 in 301ms
+ ○ Compiling /admin/alerts ...
+ ✓ Compiled /admin/alerts in 600ms (1304 modules)
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ GET /admin/alerts 200 in 722ms
+ ✓ Compiled /admin/requests in 107ms (706 modules)
+ GET /admin/requests 200 in 201ms
+ GET /admin/dashboard 200 in 52ms
+ GET /admin/dashboard 200 in 37ms
+ ✓ Compiled /admin/teams in 205ms (701 modules)
+ GET /admin/teams 200 in 312ms
+ ✓ Compiled /admin/teams/[id] in 458ms (1311 modules)
+ GET /admin/teams/75a57351-55c0-4828-8c76-c7f81d127d34 200 in 901ms
+ GET /admin/teams 200 in 45ms
+ GET /admin/teams/f11013cd-5253-49e2-a6ff-1e6033b81576 200 in 44ms
+ ✓ Compiled in 492ms (1311 modules)
+ ✓ Compiled in 313ms (1311 modules)
+ ✓ Compiled in 234ms (1311 modules)
+ ✓ Compiled in 435ms (1311 modules)
+ GET /admin/teams/f11013cd-5253-49e2-a6ff-1e6033b81576 200 in 286ms
+ GET /admin/teams/f11013cd-5253-49e2-a6ff-1e6033b81576 200 in 71ms
+ GET /admin/dashboard 200 in 43ms
+ ○ Compiling /admin/requests ...
+ ✓ Compiled /admin/requests in 879ms (711 modules)
+ GET /admin/requests 200 in 1002ms
+ GET /admin/dashboard 200 in 49ms
+ GET /admin/dashboard 200 in 39ms
+ GET /admin/dashboard 200 in 39ms
+ GET /admin/requests 200 in 33ms
+ GET /admin/dashboard 200 in 30ms
+ GET /admin/dashboard 200 in 38ms
+ GET /admin/dashboard 200 in 45ms
+ GET /admin/requests 200 in 50ms
+ GET /admin/teams 200 in 42ms
+ ✓ Compiled /admin/guardrails in 365ms (716 modules)
+ GET /admin/guardrails 200 in 484ms
+ GET /admin/audit 200 in 46ms
+ ○ Compiling /admin/policies ...
+ ✓ Compiled /admin/policies in 517ms (1328 modules)
+ GET /admin/policies 200 in 640ms
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ ✓ Compiled /admin/approvals in 281ms (1335 modules)
+ GET /admin/approvals 200 in 365ms
+ ✓ Compiled /admin/quotas in 321ms (1342 modules)
+ GET /admin/quotas 200 in 404ms
+ ✓ Compiled /admin/mcp in 404ms (1349 modules)
+Each child in a list should have a unique "key" prop.
+
+Check the render method of `McpPage`. See https://react.dev/link/warning-keys for more information.
+Each child in a list should have a unique "key" prop.
+
+Check the render method of `McpPage`. See https://react.dev/link/warning-keys for more information.
+Each child in a list should have a unique "key" prop.
+
+Check the render method of `McpPage`. See https://react.dev/link/warning-keys for more information.
+Each child in a list should have a unique "key" prop.
+
+Check the render method of `McpPage`. See https://react.dev/link/warning-keys for more information.
+Each child in a list should have a unique "key" prop.
+
+Check the render method of `McpPage`. See https://react.dev/link/warning-keys for more information.
+Each child in a list should have a unique "key" prop.
+
+Check the render method of `McpPage`. See https://react.dev/link/warning-keys for more information.
+ GET /admin/mcp 200 in 504ms
+ ○ Compiling /admin/skills ...
+ ✓ Compiled /admin/skills in 694ms (1356 modules)
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ GET /admin/skills 200 in 784ms
+ ✓ Compiled /admin/models in 417ms (1363 modules)
+ GET /admin/models 200 in 493ms
+ ○ Compiling /admin/cache ...
+ ✓ Compiled /admin/cache in 686ms (1370 modules)
+ GET /admin/cache 200 in 803ms
+ GET /admin/requests 200 in 37ms
+ GET /admin/dashboard 200 in 58ms
+ GET /admin/teams 200 in 34ms
+ GET /admin/dashboard 200 in 28ms
+ GET /admin/guardrails 200 in 38ms
+ GET /admin/audit 200 in 30ms
+ GET /admin/policies 200 in 62ms
+ ⚠ ./app/admin/approvals/page.tsx
+Attempted import error: 'ComingSoon' is not exported from '../_components/PageStates' (imported as 'ComingSoon').
+
+Import trace for requested module:
+./app/admin/approvals/page.tsx
+ ⚠ ./app/admin/approvals/page.tsx
+Attempted import error: 'ComingSoon' is not exported from '../_components/PageStates' (imported as 'ComingSoon').
+
+Import trace for requested module:
+./app/admin/approvals/page.tsx
+
+./app/admin/mcp/page.tsx
+Attempted import error: 'ComingSoon' is not exported from '../_components/PageStates' (imported as 'ComingSoon').
+
+Import trace for requested module:
+./app/admin/mcp/page.tsx
+ GET /admin/policies 200 in 53ms
+ ⚠ ./app/admin/approvals/page.tsx
+Attempted import error: 'ComingSoon' is not exported from '../_components/PageStates' (imported as 'ComingSoon').
+
+Import trace for requested module:
+./app/admin/approvals/page.tsx
+
+./app/admin/skills/page.tsx
+Attempted import error: 'ComingSoon' is not exported from '../_components/PageStates' (imported as 'ComingSoon').
+
+Import trace for requested module:
+./app/admin/skills/page.tsx
+
+./app/admin/mcp/page.tsx
+Attempted import error: 'ComingSoon' is not exported from '../_components/PageStates' (imported as 'ComingSoon').
+
+Import trace for requested module:
+./app/admin/mcp/page.tsx
+ ✓ Compiled in 544ms (1329 modules)
+ ✓ Compiled in 359ms (863 modules)
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ ⨯ ReferenceError: MSWGate is not defined
+    at AdminLayout (app/admin/layout.tsx:26:7)
+  24 |   return (
+  25 |     <QueryClientProvider client={queryClient}>
+> 26 |       <MSWGate>
+     |       ^
+  27 |         <div className="app">
+  28 |           <aside className="sidebar">
+  29 |             <div style={{ padding: '16px 14px', borderBottom: '1px solid var(--side-rule)', marginBottom: 8 }}> {
+  digest: '2925068152'
+}
+ GET /admin/policies 500 in 94ms
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ ✓ Compiled in 289ms (863 modules)
+ ⨯ ReferenceError: MSWGate is not defined
+    at AdminLayout (app/admin/layout.tsx:26:7)
+  24 |   return (
+  25 |     <QueryClientProvider client={queryClient}>
+> 26 |       <MSWGate>
+     |       ^
+  27 |         <div className="app">
+  28 |           <aside className="sidebar">
+  29 |             <div style={{ padding: '16px 14px', borderBottom: '1px solid var(--side-rule)', marginBottom: 8 }}> {
+  digest: '2925068152'
+}
+ GET /admin/policies 500 in 377ms
+ ⨯ ./app/admin/layout.tsx
+Error:   [31mx[0m Unexpected token `QueryClientProvider`. Expected jsx identifier
+    ,-[[36;1;4m/home/bntp/repos/ai-gw/apps/admin/app/admin/layout.tsx[0m:25:1]
+ [2m22[0m |   }, []);
+ [2m23[0m | 
+ [2m24[0m |   return (
+ [2m25[0m |     <QueryClientProvider client={queryClient}>
+    : [35;1m     ^^^^^^^^^^^^^^^^^^^[0m
+ [2m26[0m |       <div className="app">
+ [2m27[0m |           <aside className="sidebar">
+ [2m28[0m |             <div style={{ padding: '16px 14px', borderBottom: '1px solid var(--side-rule)', marginBottom: 8 }}>
+    `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./app/admin/layout.tsx
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ ✓ Compiled in 305ms (863 modules)
+ GET /admin/policies 200 in 349ms
+ GET /admin/policies 200 in 35ms
+ GET /admin/guardrails 200 in 41ms
+ ✓ Compiled /admin/audit in 380ms (482 modules)
+ GET /admin/audit 200 in 467ms
+ GET /admin/policies 200 in 39ms
+ ✓ Compiled in 459ms (863 modules)
+ ○ Compiling /admin/audit ...
+ ✓ Compiled /admin/audit in 558ms (482 modules)
+ GET /admin/audit 200 in 747ms
+ GET /admin/policies 200 in 33ms
+ GET /admin/policies 200 in 28ms
+ GET /admin/guardrails 200 in 34ms
+ GET /admin/policies 200 in 28ms
+ GET /admin/audit 200 in 43ms
+ ✓ Compiled /admin/quotas in 182ms (487 modules)
+ GET /admin/quotas 200 in 259ms
+ ✓ Compiled /admin/approvals in 359ms (873 modules)
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ GET /admin/quotas 200 in 57ms
+ GET /admin/approvals 200 in 434ms
+ ✓ Compiled /admin/teams in 218ms (494 modules)
+ GET /admin/teams 200 in 287ms
+ ✓ Compiled /admin/requests in 208ms (494 modules)
+ GET /admin/requests 200 in 275ms
+ GET /admin/teams 200 in 35ms
+ ✓ Compiled in 347ms (861 modules)
+ GET /admin/teams 200 in 56ms
+ GET /admin/teams 200 in 10ms
+ ✓ Compiled in 169ms (861 modules)
+ GET /admin/teams 200 in 35ms
+ ✓ Compiled in 260ms (861 modules)
+ ✓ Compiled in 173ms (861 modules)
+ ✓ Compiled in 226ms (861 modules)
+ ✓ Compiled in 176ms (861 modules)
+ ✓ Compiled in 178ms (861 modules)
+ ✓ Compiled in 171ms (861 modules)
+ ✓ Compiled in 174ms (861 modules)
+ ✓ Compiled in 430ms (861 modules)
+ ○ Compiling /admin/dashboard ...
+ ✓ Compiled /admin/dashboard in 503ms (482 modules)
+ GET /admin/dashboard 200 in 648ms
+ ✓ Compiled /admin/requests in 220ms (487 modules)
+ GET /admin/requests 200 in 304ms
+ ✓ Compiled /admin/areas in 351ms (878 modules)
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ GET /admin/areas 200 in 410ms
+ GET /admin/teams 200 in 56ms
+ GET /admin/areas 200 in 39ms
+ GET /admin/teams 200 in 39ms
+ ✓ Compiled /admin/users in 305ms (875 modules)
+ GET /admin/users 200 in 411ms
+ ○ Compiling /_not-found ...
+ ✓ Compiled /_not-found in 508ms (874 modules)
+ GET /admin/users/9ce221fb-5ad2-46b6-95bb-8fbcdf739b97 404 in 576ms
+ GET /admin/users 200 in 35ms
+ GET /admin/teams 200 in 47ms
+ GET /admin/areas 200 in 32ms
+ GET /admin/teams 200 in 35ms
+ GET /admin/areas 200 in 28ms
+ GET /admin/teams 200 in 30ms
+ GET /admin/areas 200 in 28ms
+ ✓ Compiled in 470ms (865 modules)
+ ✓ Compiled in 195ms (865 modules)
+ ✓ Compiled in 426ms (865 modules)
+ ✓ Compiled in 190ms (865 modules)
+ ✓ Compiled in 173ms (865 modules)
+ ✓ Compiled in 424ms (865 modules)
+ ✓ Compiled in 130ms (388 modules)
+ ✓ Compiled in 66ms (388 modules)
+ ✓ Compiled in 64ms (388 modules)
+ ✓ Compiled in 71ms (388 modules)
+ ✓ Compiled in 118ms (388 modules)
+ GET /admin/areas 200 in 103ms
+ GET /admin/areas 200 in 28ms
+ GET /admin/teams 200 in 53ms
+ GET /admin/users 200 in 37ms
+ GET /admin/teams 200 in 37ms
+ ✓ Compiled /admin/teams/[id] in 377ms (482 modules)
+ GET /admin/teams/75a57351-55c0-4828-8c76-c7f81d127d34 200 in 435ms
+ GET /admin/areas 200 in 50ms
+ ○ Compiling /admin/plugins ...
+ ✓ Compiled /admin/plugins in 529ms (870 modules)
+ GET /admin/plugins 200 in 601ms
+ GET /admin/dashboard 200 in 42ms
+ ✓ Compiled in 955ms (865 modules)
+ GET /admin/dashboard 200 in 69ms
+ ✓ Compiled /admin/requests in 210ms (482 modules)
+ GET /admin/requests 200 in 270ms
+ GET /admin/areas 200 in 33ms
+ GET /admin/teams 200 in 38ms
+ GET /admin/areas 200 in 39ms
+ GET /admin/requests 200 in 31ms
+ GET /admin/areas 200 in 29ms
+ GET /admin/requests 200 in 38ms
+ GET /admin/areas 200 in 62ms
+ GET /admin/teams 200 in 85ms
+ ✓ Compiled /admin/alerts in 287ms (487 modules)
+ GET /admin/alerts 200 in 364ms
+ GET /admin/alerts 200 in 66ms
+ GET /admin/teams 200 in 66ms
+ ✓ Compiled in 210ms (875 modules)
+ GET /admin/alerts 200 in 38ms
+ GET /admin/teams 200 in 39ms
+ ✓ Compiled /admin/quotas in 196ms (492 modules)
+ GET /admin/quotas 200 in 277ms
+ ✓ Compiled in 373ms (880 modules)
+ ✓ Compiled /admin/policies in 390ms (497 modules)
+ GET /admin/policies 200 in 465ms
+ ✓ Compiled /admin/guardrails in 358ms (502 modules)
+ GET /admin/guardrails 200 in 479ms
+ GET /admin/dashboard 200 in 48ms
+ GET /admin/requests 200 in 33ms
+ GET /admin/dashboard 200 in 105ms
+ ✓ Compiled /admin/mcp in 317ms (497 modules)
+ GET /admin/mcp 200 in 390ms
+ ✓ Compiled /admin/skills in 376ms (885 modules)
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ GET /admin/mcp 200 in 62ms
+ GET /admin/skills 200 in 448ms
+ GET /admin/teams 200 in 88ms
+ ✓ Compiled /admin/plugins in 269ms (501 modules)
+ GET /admin/plugins 200 in 331ms
+ GET /admin/mcp 200 in 26ms
+ ✓ Compiled /admin/approvals in 260ms (503 modules)
+ GET /admin/approvals 200 in 325ms
+ GET /admin/quotas 200 in 42ms
+ GET /admin/guardrails 200 in 32ms
+ ○ Compiling /admin/users ...
+ ✓ Compiled /admin/users in 992ms (508 modules)
+ GET /admin/users 200 in 1290ms
+ GET /admin/dashboard 200 in 43ms
+ GET /admin/dashboard 200 in 289ms
+ GET /admin/teams 200 in 287ms
+ GET /admin/dashboard 200 in 57ms
+ GET /admin/dashboard 200 in 46ms
+ GET /admin/dashboard 200 in 43ms
+ GET /admin/dashboard 200 in 40ms
+ GET /admin/requests 200 in 45ms
+ GET /admin/dashboard 200 in 30ms
+ GET /admin/quotas 200 in 38ms
+ GET /admin/areas 200 in 48ms
+ GET /admin/users 200 in 49ms
+ GET /admin/quotas 200 in 42ms
+ GET /admin/guardrails 200 in 45ms
+ GET /admin/dashboard 200 in 34ms
+ GET /admin/dashboard 200 in 180ms
+ ✓ Compiled in 734ms (386 modules)
+ GET /admin/dashboard 200 in 152ms
+ GET /admin/requests 200 in 56ms
+ GET /admin/areas 200 in 44ms
+ GET /admin/dashboard 200 in 34ms
+ GET /admin/areas 200 in 36ms
+ GET /admin/teams 200 in 42ms
+ GET /admin/users 200 in 38ms
+ GET /admin/teams 200 in 83ms
+ GET /admin/areas 200 in 85ms
+ GET /admin/areas 200 in 62ms
+ GET /admin/requests 200 in 36ms
+ GET /admin/teams 200 in 41ms
+ GET /admin/guardrails 200 in 40ms
+ GET /admin/dashboard 200 in 31ms
+ ✓ Compiled in 1088ms (863 modules)
+ ✓ Compiled /admin/models in 335ms (482 modules)
+ GET /admin/models 200 in 440ms
+ ✓ Compiled /admin/cache in 235ms (482 modules)
+ GET /admin/cache 200 in 359ms
+ ✓ Compiled /admin/providers in 433ms (875 modules)
+ GET /admin/providers 200 in 489ms
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ ✓ Compiled in 481ms (865 modules)
+ GET /admin/providers 200 in 113ms
+ ✓ Compiled in 499ms (865 modules)
+ ✓ Compiled in 187ms (865 modules)
+ ✓ Compiled in 173ms (865 modules)
+ ✓ Compiled in 163ms (865 modules)
+ ✓ Compiled in 206ms (865 modules)
+ GET /admin/providers 200 in 99ms
+ ✓ Compiled in 443ms (865 modules)
+ ✓ Compiled in 175ms (865 modules)
+ GET /admin/dashboard 200 in 113ms
+ GET /admin/dashboard 200 in 28ms
+ GET /admin/requests 200 in 38ms
+ GET /admin/requests 200 in 30ms
+ ✓ Compiled /admin/areas in 313ms (482 modules)
+ GET /admin/areas 200 in 379ms
+ GET /admin/teams 200 in 36ms
+ ✓ Compiled /admin/users in 113ms (487 modules)
+ GET /admin/users 200 in 181ms
+ ✓ Compiled /admin/guardrails in 256ms (492 modules)
+ GET /admin/guardrails 200 in 373ms
+ ✓ Compiled /admin/quotas in 133ms (497 modules)
+ GET /admin/quotas 200 in 190ms
+ ✓ Compiled /admin/skills in 256ms (502 modules)
+ GET /admin/skills 200 in 314ms
+ ✓ Compiled /admin/mcp in 136ms (504 modules)
+ GET /admin/mcp 200 in 190ms
+ GET /admin/mcp 200 in 27ms
+ GET /admin/mcp 200 in 32ms
+ ⚠ Found a change in next.config.ts. Restarting the server to apply the changes...
+   ▲ Next.js 15.3.1
+   - Local:        http://localhost:3001
+   - Network:      http://10.255.255.254:3001
+
+ ✓ Starting...
+ ✓ Ready in 1662ms
+ ○ Compiling /admin/plugins ...
+ ✓ Compiled /admin/plugins in 4.9s (759 modules)
+ GET /admin/plugins 200 in 5159ms
+ GET /admin/plugins 200 in 29ms
+ ✓ Compiled /admin/skills in 325ms (761 modules)
+ GET /admin/skills 200 in 425ms
+ GET /admin/skills 200 in 29ms
+ GET /admin/plugins 200 in 41ms
+ ○ Compiling /admin/models ...
+ ✓ Compiled /admin/models in 1565ms (768 modules)
+ GET /admin/models 200 in 182ms
+ ✓ Compiled /admin/cache in 414ms (775 modules)
+ GET /admin/cache 200 in 512ms
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ ○ Compiling /admin/teams ...
+ ✓ Compiled /admin/teams in 579ms (839 modules)
+ GET /admin/teams 200 in 699ms
+ GET /admin/cache 200 in 79ms
+ ○ Compiling /admin/quotas ...
+ ✓ Compiled /admin/quotas in 540ms (791 modules)
+ GET /admin/quotas 200 in 653ms
+ ✓ Compiled in 584ms (796 modules)
+ ⨯ Error: Cannot find module './569.js'
+Require stack:
+- /home/bntp/repos/ai-gw/apps/admin/.next/server/webpack-runtime.js
+- /home/bntp/repos/ai-gw/apps/admin/.next/server/app/admin/quotas/page.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/require.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/load-components.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/utils.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/swc/options.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/swc/index.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/next-config-ts/transpile-config.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/config.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/next.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/lib/start-server.js
+    at __webpack_require__.f.require (.next/server/webpack-runtime.js:198:28)
+    at <unknown> (.next/server/webpack-runtime.js:111:40)
+    at Array.reduce (<anonymous>)
+    at __webpack_require__.e (.next/server/webpack-runtime.js:110:67)
+    at Array.map (<anonymous>)
+    at __webpack_require__.X (.next/server/webpack-runtime.js:162:22)
+    at <unknown> (.next/server/app/admin/quotas/page.js:1:11866)
+    at Object.<anonymous> (.next/server/app/admin/quotas/page.js:1:11918) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [Array],
+  page: '/admin/quotas'
+}
+ ○ Compiling /_error ...
+ ✓ Compiled /_error in 1196ms (1129 modules)
+ GET /admin/quotas 500 in 1547ms
+ GET /admin/quotas 200 in 51ms
+ GET /admin/quotas 200 in 13ms
+ GET /admin/quotas 200 in 55ms
+ ✓ Compiled /_not-found in 323ms (1133 modules)
+ GET /_next/static/css/app/layout.css?v=1778267205186 404 in 400ms
+ GET /_next/static/chunks/main-app.js?v=1778267205186 404 in 397ms
+ GET /_next/static/chunks/app-pages-internals.js 404 in 50ms
+ GET /_next/static/chunks/app/admin/layout.js 404 in 22ms
+ GET /_next/static/chunks/app/admin/quotas/page.js 404 in 21ms
+ ✓ Compiled in 1535ms (1086 modules)
+ ✓ Compiled in 296ms (1086 modules)
+ ○ Compiling /admin/dashboard ...
+ ✓ Compiled /admin/dashboard in 744ms (1143 modules)
+ GET /admin/dashboard 200 in 876ms
+ ✓ Compiled /_not-found in 370ms (1147 modules)
+ ⨯ Error: Cannot find module './569.js'
+Require stack:
+- /home/bntp/repos/ai-gw/apps/admin/.next/server/webpack-runtime.js
+- /home/bntp/repos/ai-gw/apps/admin/.next/server/app/_not-found/page.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/require.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/load-components.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/utils.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/swc/options.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/swc/index.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/next-config-ts/transpile-config.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/config.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/next.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/lib/start-server.js
+    at __webpack_require__.f.require (.next/server/webpack-runtime.js:198:28)
+    at <unknown> (.next/server/webpack-runtime.js:111:40)
+    at Array.reduce (<anonymous>)
+    at __webpack_require__.e (.next/server/webpack-runtime.js:110:67)
+    at Array.map (<anonymous>)
+    at __webpack_require__.X (.next/server/webpack-runtime.js:162:22)
+    at <unknown> (.next/server/app/_not-found/page.js:1:2942)
+    at Object.<anonymous> (.next/server/app/_not-found/page.js:1:2983) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [Array]
+}
+ ⨯ Error: Cannot find module './569.js'
+Require stack:
+- /home/bntp/repos/ai-gw/apps/admin/.next/server/webpack-runtime.js
+- /home/bntp/repos/ai-gw/apps/admin/.next/server/app/_not-found/page.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/require.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/load-components.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/utils.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/swc/options.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/swc/index.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/next-config-ts/transpile-config.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/config.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/next.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/lib/start-server.js
+    at __webpack_require__.f.require (.next/server/webpack-runtime.js:198:28)
+    at <unknown> (.next/server/webpack-runtime.js:111:40)
+    at Array.reduce (<anonymous>)
+    at __webpack_require__.e (.next/server/webpack-runtime.js:110:67)
+    at Array.map (<anonymous>)
+    at __webpack_require__.X (.next/server/webpack-runtime.js:162:22)
+    at <unknown> (.next/server/app/_not-found/page.js:1:2942)
+    at Object.<anonymous> (.next/server/app/_not-found/page.js:1:2983) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [Array]
+}
+ ○ Compiling /_error ...
+ ✓ Compiled /_error in 733ms (1190 modules)
+ GET /_next/static/css/app/layout.css?v=1778268509779 500 in 2808ms
+ GET /_next/static/chunks/main-app.js?v=1778268509779 500 in 2764ms
+ ⨯ Error: Cannot find module './569.js'
+Require stack:
+- /home/bntp/repos/ai-gw/apps/admin/.next/server/webpack-runtime.js
+- /home/bntp/repos/ai-gw/apps/admin/.next/server/app/_not-found/page.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/require.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/load-components.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/utils.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/swc/options.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/swc/index.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/next-config-ts/transpile-config.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/config.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/next.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/lib/start-server.js
+    at __webpack_require__.f.require (.next/server/webpack-runtime.js:198:28)
+    at <unknown> (.next/server/webpack-runtime.js:111:40)
+    at Array.reduce (<anonymous>)
+    at __webpack_require__.e (.next/server/webpack-runtime.js:110:67)
+    at Array.map (<anonymous>)
+    at __webpack_require__.X (.next/server/webpack-runtime.js:162:22)
+    at <unknown> (.next/server/app/_not-found/page.js:1:2942)
+    at Object.<anonymous> (.next/server/app/_not-found/page.js:1:2983) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [Array]
+}
+ ⨯ Error: Cannot find module './569.js'
+Require stack:
+- /home/bntp/repos/ai-gw/apps/admin/.next/server/webpack-runtime.js
+- /home/bntp/repos/ai-gw/apps/admin/.next/server/app/_not-found/page.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/require.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/load-components.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/utils.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/swc/options.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/swc/index.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/next-config-ts/transpile-config.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/config.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/next.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/lib/start-server.js
+    at __webpack_require__.f.require (.next/server/webpack-runtime.js:198:28)
+    at <unknown> (.next/server/webpack-runtime.js:111:40)
+    at Array.reduce (<anonymous>)
+    at __webpack_require__.e (.next/server/webpack-runtime.js:110:67)
+    at Array.map (<anonymous>)
+    at __webpack_require__.X (.next/server/webpack-runtime.js:162:22)
+    at <unknown> (.next/server/app/_not-found/page.js:1:2942)
+    at Object.<anonymous> (.next/server/app/_not-found/page.js:1:2983) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [Array]
+}
+ GET /_next/static/chunks/app-pages-internals.js 500 in 43ms
+ GET /_next/static/chunks/app/admin/layout.js 500 in 41ms
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, rename '/home/bntp/repos/ai-gw/apps/admin/.next/cache/webpack/client-development-fallback/1.pack.gz_' -> '/home/bntp/repos/ai-gw/apps/admin/.next/cache/webpack/client-development-fallback/1.pack.gz'
+ ✓ Compiled in 380ms (1190 modules)
+ GET /admin/dashboard 200 in 130ms
+ ⨯ Error: Cannot find module './569.js'
+Require stack:
+- /home/bntp/repos/ai-gw/apps/admin/.next/server/webpack-runtime.js
+- /home/bntp/repos/ai-gw/apps/admin/.next/server/app/admin/dashboard/page.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/require.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/load-components.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/utils.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/swc/options.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/swc/index.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/next-config-ts/transpile-config.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/config.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/next.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/lib/start-server.js
+    at __webpack_require__.f.require (.next/server/webpack-runtime.js:198:28)
+    at <unknown> (.next/server/webpack-runtime.js:111:40)
+    at Array.reduce (<anonymous>)
+    at __webpack_require__.e (.next/server/webpack-runtime.js:110:67)
+    at Array.map (<anonymous>)
+    at __webpack_require__.X (.next/server/webpack-runtime.js:162:22)
+    at <unknown> (.next/server/app/_not-found/page.js:1:2942)
+    at Object.<anonymous> (.next/server/app/_not-found/page.js:1:2983) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [Array]
+}
+ GET /_next/static/css/app/layout.css?v=1778268524130 500 in 27ms
+ ⨯ Error: Cannot find module './569.js'
+Require stack:
+- /home/bntp/repos/ai-gw/apps/admin/.next/server/webpack-runtime.js
+- /home/bntp/repos/ai-gw/apps/admin/.next/server/app/admin/dashboard/page.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/require.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/load-components.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/utils.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/swc/options.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/swc/index.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/next-config-ts/transpile-config.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/config.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/next.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/lib/start-server.js
+    at __webpack_require__.f.require (.next/server/webpack-runtime.js:198:28)
+    at <unknown> (.next/server/webpack-runtime.js:111:40)
+    at Array.reduce (<anonymous>)
+    at __webpack_require__.e (.next/server/webpack-runtime.js:110:67)
+    at Array.map (<anonymous>)
+    at __webpack_require__.X (.next/server/webpack-runtime.js:162:22)
+    at <unknown> (.next/server/app/_not-found/page.js:1:2942)
+    at Object.<anonymous> (.next/server/app/_not-found/page.js:1:2983) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [Array]
+}
+ GET /_next/static/chunks/main-app.js?v=1778268524130 500 in 21ms
+ ⨯ Error: Cannot find module './569.js'
+Require stack:
+- /home/bntp/repos/ai-gw/apps/admin/.next/server/webpack-runtime.js
+- /home/bntp/repos/ai-gw/apps/admin/.next/server/app/admin/dashboard/page.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/require.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/load-components.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/utils.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/swc/options.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/swc/index.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/next-config-ts/transpile-config.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/config.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/next.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/lib/start-server.js
+    at __webpack_require__.f.require (.next/server/webpack-runtime.js:198:28)
+    at <unknown> (.next/server/webpack-runtime.js:111:40)
+    at Array.reduce (<anonymous>)
+    at __webpack_require__.e (.next/server/webpack-runtime.js:110:67)
+    at Array.map (<anonymous>)
+    at __webpack_require__.X (.next/server/webpack-runtime.js:162:22)
+    at <unknown> (.next/server/app/_not-found/page.js:1:2942)
+    at Object.<anonymous> (.next/server/app/_not-found/page.js:1:2983) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [Array]
+}
+ GET /_next/static/chunks/app-pages-internals.js 500 in 24ms
+ ⨯ Error: Cannot find module './569.js'
+Require stack:
+- /home/bntp/repos/ai-gw/apps/admin/.next/server/webpack-runtime.js
+- /home/bntp/repos/ai-gw/apps/admin/.next/server/app/admin/dashboard/page.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/require.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/load-components.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/utils.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/swc/options.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/swc/index.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/next-config-ts/transpile-config.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/config.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/next.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/lib/start-server.js
+    at __webpack_require__.f.require (.next/server/webpack-runtime.js:198:28)
+    at <unknown> (.next/server/webpack-runtime.js:111:40)
+    at Array.reduce (<anonymous>)
+    at __webpack_require__.e (.next/server/webpack-runtime.js:110:67)
+    at Array.map (<anonymous>)
+    at __webpack_require__.X (.next/server/webpack-runtime.js:162:22)
+    at <unknown> (.next/server/app/_not-found/page.js:1:2942)
+    at Object.<anonymous> (.next/server/app/_not-found/page.js:1:2983) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [Array]
+}
+ GET /_next/static/chunks/app/admin/layout.js 500 in 19ms
+ GET /admin/dashboard 200 in 38ms
+ ⨯ Error: Cannot find module './569.js'
+Require stack:
+- /home/bntp/repos/ai-gw/apps/admin/.next/server/webpack-runtime.js
+- /home/bntp/repos/ai-gw/apps/admin/.next/server/app/admin/dashboard/page.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/require.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/load-components.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/utils.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/swc/options.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/swc/index.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/next-config-ts/transpile-config.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/config.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/next.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/lib/start-server.js
+    at __webpack_require__.f.require (.next/server/webpack-runtime.js:198:28)
+    at <unknown> (.next/server/webpack-runtime.js:111:40)
+    at Array.reduce (<anonymous>)
+    at __webpack_require__.e (.next/server/webpack-runtime.js:110:67)
+    at Array.map (<anonymous>)
+    at __webpack_require__.X (.next/server/webpack-runtime.js:162:22)
+    at <unknown> (.next/server/app/_not-found/page.js:1:2942)
+    at Object.<anonymous> (.next/server/app/_not-found/page.js:1:2983) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [Array]
+}
+ GET /_next/static/css/app/layout.css?v=1778268525936 500 in 21ms
+ ⨯ Error: Cannot find module './569.js'
+Require stack:
+- /home/bntp/repos/ai-gw/apps/admin/.next/server/webpack-runtime.js
+- /home/bntp/repos/ai-gw/apps/admin/.next/server/app/admin/dashboard/page.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/require.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/load-components.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/utils.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/swc/options.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/swc/index.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/next-config-ts/transpile-config.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/config.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/next.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/lib/start-server.js
+    at __webpack_require__.f.require (.next/server/webpack-runtime.js:198:28)
+    at <unknown> (.next/server/webpack-runtime.js:111:40)
+    at Array.reduce (<anonymous>)
+    at __webpack_require__.e (.next/server/webpack-runtime.js:110:67)
+    at Array.map (<anonymous>)
+    at __webpack_require__.X (.next/server/webpack-runtime.js:162:22)
+    at <unknown> (.next/server/app/_not-found/page.js:1:2942)
+    at Object.<anonymous> (.next/server/app/_not-found/page.js:1:2983) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [Array]
+}
+ GET /_next/static/chunks/main-app.js?v=1778268525936 500 in 27ms
+ ⨯ Error: Cannot find module './569.js'
+Require stack:
+- /home/bntp/repos/ai-gw/apps/admin/.next/server/webpack-runtime.js
+- /home/bntp/repos/ai-gw/apps/admin/.next/server/app/admin/dashboard/page.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/require.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/load-components.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/utils.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/swc/options.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/swc/index.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/next-config-ts/transpile-config.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/config.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/next.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/lib/start-server.js
+    at __webpack_require__.f.require (.next/server/webpack-runtime.js:198:28)
+    at <unknown> (.next/server/webpack-runtime.js:111:40)
+    at Array.reduce (<anonymous>)
+    at __webpack_require__.e (.next/server/webpack-runtime.js:110:67)
+    at Array.map (<anonymous>)
+    at __webpack_require__.X (.next/server/webpack-runtime.js:162:22)
+    at <unknown> (.next/server/app/_not-found/page.js:1:2942)
+    at Object.<anonymous> (.next/server/app/_not-found/page.js:1:2983) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [Array]
+}
+ ⨯ Error: Cannot find module './569.js'
+Require stack:
+- /home/bntp/repos/ai-gw/apps/admin/.next/server/webpack-runtime.js
+- /home/bntp/repos/ai-gw/apps/admin/.next/server/app/admin/dashboard/page.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/require.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/load-components.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/utils.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/swc/options.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/swc/index.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/next-config-ts/transpile-config.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/config.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/next.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/lib/start-server.js
+    at __webpack_require__.f.require (.next/server/webpack-runtime.js:198:28)
+    at <unknown> (.next/server/webpack-runtime.js:111:40)
+    at Array.reduce (<anonymous>)
+    at __webpack_require__.e (.next/server/webpack-runtime.js:110:67)
+    at Array.map (<anonymous>)
+    at __webpack_require__.X (.next/server/webpack-runtime.js:162:22)
+    at <unknown> (.next/server/app/_not-found/page.js:1:2942)
+    at Object.<anonymous> (.next/server/app/_not-found/page.js:1:2983) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [Array]
+}
+ GET /_next/static/chunks/app-pages-internals.js 500 in 39ms
+ GET /_next/static/chunks/app/admin/layout.js 500 in 39ms
+ GET /admin/dashboard 200 in 27ms
+ ⨯ Error: Cannot find module './569.js'
+Require stack:
+- /home/bntp/repos/ai-gw/apps/admin/.next/server/webpack-runtime.js
+- /home/bntp/repos/ai-gw/apps/admin/.next/server/app/admin/dashboard/page.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/require.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/load-components.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/utils.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/swc/options.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/swc/index.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/next-config-ts/transpile-config.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/config.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/next.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/lib/start-server.js
+    at __webpack_require__.f.require (.next/server/webpack-runtime.js:198:28)
+    at <unknown> (.next/server/webpack-runtime.js:111:40)
+    at Array.reduce (<anonymous>)
+    at __webpack_require__.e (.next/server/webpack-runtime.js:110:67)
+    at Array.map (<anonymous>)
+    at __webpack_require__.X (.next/server/webpack-runtime.js:162:22)
+    at <unknown> (.next/server/app/_not-found/page.js:1:2942)
+    at Object.<anonymous> (.next/server/app/_not-found/page.js:1:2983) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [Array]
+}
+ GET /_next/static/css/app/layout.css?v=1778268526836 500 in 18ms
+ ⨯ Error: Cannot find module './569.js'
+Require stack:
+- /home/bntp/repos/ai-gw/apps/admin/.next/server/webpack-runtime.js
+- /home/bntp/repos/ai-gw/apps/admin/.next/server/app/admin/dashboard/page.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/require.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/load-components.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/utils.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/swc/options.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/swc/index.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/next-config-ts/transpile-config.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/config.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/next.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/lib/start-server.js
+    at __webpack_require__.f.require (.next/server/webpack-runtime.js:198:28)
+    at <unknown> (.next/server/webpack-runtime.js:111:40)
+    at Array.reduce (<anonymous>)
+    at __webpack_require__.e (.next/server/webpack-runtime.js:110:67)
+    at Array.map (<anonymous>)
+    at __webpack_require__.X (.next/server/webpack-runtime.js:162:22)
+    at <unknown> (.next/server/app/_not-found/page.js:1:2942)
+    at Object.<anonymous> (.next/server/app/_not-found/page.js:1:2983) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [Array]
+}
+ GET /_next/static/chunks/main-app.js?v=1778268526836 500 in 25ms
+ ⨯ Error: Cannot find module './569.js'
+Require stack:
+- /home/bntp/repos/ai-gw/apps/admin/.next/server/webpack-runtime.js
+- /home/bntp/repos/ai-gw/apps/admin/.next/server/app/admin/dashboard/page.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/require.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/load-components.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/utils.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/swc/options.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/swc/index.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/next-config-ts/transpile-config.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/config.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/next.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/lib/start-server.js
+    at __webpack_require__.f.require (.next/server/webpack-runtime.js:198:28)
+    at <unknown> (.next/server/webpack-runtime.js:111:40)
+    at Array.reduce (<anonymous>)
+    at __webpack_require__.e (.next/server/webpack-runtime.js:110:67)
+    at Array.map (<anonymous>)
+    at __webpack_require__.X (.next/server/webpack-runtime.js:162:22)
+    at <unknown> (.next/server/app/_not-found/page.js:1:2942)
+    at Object.<anonymous> (.next/server/app/_not-found/page.js:1:2983) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [Array]
+}
+ ⨯ Error: Cannot find module './569.js'
+Require stack:
+- /home/bntp/repos/ai-gw/apps/admin/.next/server/webpack-runtime.js
+- /home/bntp/repos/ai-gw/apps/admin/.next/server/app/admin/dashboard/page.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/require.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/load-components.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/utils.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/swc/options.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/swc/index.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/next-config-ts/transpile-config.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/config.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/next.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/lib/start-server.js
+    at __webpack_require__.f.require (.next/server/webpack-runtime.js:198:28)
+    at <unknown> (.next/server/webpack-runtime.js:111:40)
+    at Array.reduce (<anonymous>)
+    at __webpack_require__.e (.next/server/webpack-runtime.js:110:67)
+    at Array.map (<anonymous>)
+    at __webpack_require__.X (.next/server/webpack-runtime.js:162:22)
+    at <unknown> (.next/server/app/_not-found/page.js:1:2942)
+    at Object.<anonymous> (.next/server/app/_not-found/page.js:1:2983) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [Array]
+}
+ GET /_next/static/chunks/app/admin/layout.js 500 in 34ms
+ GET /_next/static/chunks/app-pages-internals.js 500 in 35ms
+ ✓ Compiled in 708ms (1103 modules)
+ ✓ Compiled in 271ms (1103 modules)
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, rename '/home/bntp/repos/ai-gw/apps/admin/.next/cache/webpack/client-development-fallback/2.pack.gz_' -> '/home/bntp/repos/ai-gw/apps/admin/.next/cache/webpack/client-development-fallback/2.pack.gz'
+ ✓ Compiled in 636ms (1088 modules)
+ ✓ Compiled in 980ms (1094 modules)
+ ○ Compiling /admin/dashboard ...
+ ✓ Compiled /admin/dashboard in 678ms (530 modules)
+ ⨯ Error: ENOENT: no such file or directory, open '/home/bntp/repos/ai-gw/apps/admin/.next/server/vendor-chunks/@swc+helpers@0.5.15.js'
+    at __webpack_require__.f.require (.next/server/webpack-runtime.js:198:28)
+    at <unknown> (.next/server/webpack-runtime.js:111:40)
+    at Array.reduce (<anonymous>)
+    at __webpack_require__.e (.next/server/webpack-runtime.js:110:67)
+    at Array.map (<anonymous>)
+    at __webpack_require__.X (.next/server/webpack-runtime.js:162:22)
+    at <unknown> (.next/server/app/admin/dashboard/page.js:302:47)
+    at Object.<anonymous> (.next/server/app/admin/dashboard/page.js:305:3) {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: '/home/bntp/repos/ai-gw/apps/admin/.next/server/vendor-chunks/@swc+helpers@0.5.15.js',
+  page: '/admin/dashboard'
+}
+ ✓ Compiled /_error in 446ms (1192 modules)
+ ⨯ Error: Cannot find module './992.js'
+Require stack:
+- /home/bntp/repos/ai-gw/apps/admin/.next/server/webpack-runtime.js
+- /home/bntp/repos/ai-gw/apps/admin/.next/server/pages/_document.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/require.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/load-components.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/utils.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/swc/options.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/swc/index.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/next-config-ts/transpile-config.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/config.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/next.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/lib/start-server.js
+    at __webpack_require__.f.require (.next/server/webpack-runtime.js:198:28)
+    at <unknown> (.next/server/webpack-runtime.js:111:40)
+    at Array.reduce (<anonymous>)
+    at __webpack_require__.e (.next/server/webpack-runtime.js:110:67)
+    at Array.map (<anonymous>)
+    at __webpack_require__.X (.next/server/webpack-runtime.js:162:22)
+    at <unknown> (.next/server/pages/_document.js:1:335)
+    at Object.<anonymous> (.next/server/pages/_document.js:1:375) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [Array]
+}
+Error: ENOENT: no such file or directory, open '/home/bntp/repos/ai-gw/apps/admin/.next/server/vendor-chunks/@swc+helpers@0.5.15.js'
+    at __webpack_require__.f.require (.next/server/webpack-runtime.js:198:28)
+    at <unknown> (.next/server/webpack-runtime.js:111:40)
+    at Array.reduce (<anonymous>)
+    at __webpack_require__.e (.next/server/webpack-runtime.js:110:67)
+    at Array.map (<anonymous>)
+    at __webpack_require__.X (.next/server/webpack-runtime.js:162:22)
+    at <unknown> (.next/server/app/admin/dashboard/page.js:302:47)
+    at Object.<anonymous> (.next/server/app/admin/dashboard/page.js:305:3) {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: '/home/bntp/repos/ai-gw/apps/admin/.next/server/vendor-chunks/@swc+helpers@0.5.15.js',
+  page: '/admin/dashboard'
+}
+ ⨯ Error: Cannot find module './992.js'
+Require stack:
+- /home/bntp/repos/ai-gw/apps/admin/.next/server/webpack-runtime.js
+- /home/bntp/repos/ai-gw/apps/admin/.next/server/pages/_document.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/require.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/load-components.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/utils.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/swc/options.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/swc/index.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/build/next-config-ts/transpile-config.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/config.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/next.js
+- /home/bntp/repos/ai-gw/node_modules/.pnpm/next@15.3.1_react-dom@19.2.6_react@19.2.6__react@19.2.6/node_modules/next/dist/server/lib/start-server.js
+    at __webpack_require__.f.require (.next/server/webpack-runtime.js:198:28)
+    at <unknown> (.next/server/webpack-runtime.js:111:40)
+    at Array.reduce (<anonymous>)
+    at __webpack_require__.e (.next/server/webpack-runtime.js:110:67)
+    at Array.map (<anonymous>)
+    at __webpack_require__.X (.next/server/webpack-runtime.js:162:22)
+    at <unknown> (.next/server/pages/_document.js:1:335)
+    at Object.<anonymous> (.next/server/pages/_document.js:1:375) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [Array]
+}
+[Error: ENOENT: no such file or directory, open '/home/bntp/repos/ai-gw/apps/admin/.next/fallback-build-manifest.json'] {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: '/home/bntp/repos/ai-gw/apps/admin/.next/fallback-build-manifest.json'
+}
+ GET /admin/dashboard 500 in 1722ms
+ GET /admin/dashboard 500 in 233ms
+ GET /admin/dashboard 200 in 138ms
+ ✓ Compiled /_not-found in 245ms (1196 modules)
+ GET /_next/static/css/app/layout.css?v=1778277831505 404 in 364ms
+ GET /_next/static/chunks/main-app.js?v=1778277831505 404 in 359ms
+ GET /_next/static/chunks/app/admin/layout.js 404 in 46ms
+ GET /_next/static/chunks/app-pages-internals.js 404 in 45ms
+ GET /_next/static/chunks/app/admin/dashboard/page.js 404 in 46ms
+ GET /admin/dashboard 200 in 44ms
+ GET /_next/static/css/app/layout.css?v=1778277847769 404 in 17ms
+ GET /_next/static/chunks/main-app.js?v=1778277847769 404 in 22ms
+ GET /_next/static/chunks/app-pages-internals.js 404 in 14ms
+ GET /_next/static/chunks/app/admin/layout.js 404 in 18ms
+ GET /_next/static/chunks/app/admin/dashboard/page.js 404 in 18ms
+ GET /admin/dashboard 200 in 22ms
+ GET /_next/static/css/app/layout.css?v=1778277850630 404 in 55ms
+ GET /_next/static/chunks/app-pages-internals.js 404 in 70ms
+ GET /_next/static/chunks/app/admin/layout.js 404 in 70ms
+ GET /_next/static/chunks/main-app.js?v=1778277850630 404 in 71ms
+ GET /_next/static/chunks/app/admin/dashboard/page.js 404 in 18ms
+ GET /admin/dashboard 200 in 22ms
+ GET /_next/static/css/app/layout.css?v=1778277851293 404 in 20ms
+ GET /_next/static/chunks/app-pages-internals.js 404 in 74ms
+ GET /_next/static/chunks/main-app.js?v=1778277851293 404 in 76ms
+ GET /_next/static/chunks/app/admin/layout.js 404 in 70ms
+ GET /_next/static/chunks/app/admin/dashboard/page.js 404 in 33ms
+ GET /admin/dashboard 200 in 22ms
+ GET /_next/static/css/app/layout.css?v=1778277851559 404 in 45ms
+ GET /_next/static/chunks/main-app.js?v=1778277851559 404 in 70ms
+ GET /_next/static/chunks/app-pages-internals.js 404 in 70ms
+ GET /_next/static/chunks/app/admin/layout.js 404 in 38ms
+ GET /_next/static/chunks/app/admin/dashboard/page.js 404 in 37ms
+ GET /admin/dashboard 200 in 17ms
+ GET /_next/static/css/app/layout.css?v=1778277851792 404 in 44ms
+ GET /_next/static/chunks/main-app.js?v=1778277851792 404 in 78ms
+ GET /_next/static/chunks/app-pages-internals.js 404 in 79ms
+ GET /_next/static/chunks/app/admin/layout.js 404 in 37ms
+ GET /_next/static/chunks/app/admin/dashboard/page.js 404 in 36ms
+ GET /admin/dashboard 200 in 18ms
+ GET /_next/static/css/app/layout.css?v=1778277852002 404 in 47ms
+ GET /_next/static/chunks/main-app.js?v=1778277852002 404 in 67ms
+ GET /_next/static/chunks/app-pages-internals.js 404 in 67ms
+ GET /_next/static/chunks/app/admin/layout.js 404 in 21ms
+ GET /_next/static/chunks/app/admin/dashboard/page.js 404 in 21ms
+ GET /admin/dashboard 200 in 25ms
+ GET /_next/static/css/app/layout.css?v=1778278012873 404 in 18ms
+ GET /_next/static/chunks/main-app.js?v=1778278012873 404 in 26ms
+ GET /_next/static/chunks/app-pages-internals.js 404 in 26ms
+ GET /_next/static/chunks/app/admin/layout.js 404 in 27ms
+ GET /_next/static/chunks/app/admin/dashboard/page.js 404 in 26ms
+ ✓ Compiled in 466ms (1094 modules)
+[?25h
