@@ -28,6 +28,7 @@ from app.models import (  # noqa: F401
     policy,
     pricing as pricing_model,
     team,
+    unit as unit_model,
     workflow as workflow_model,
     workflow_run as workflow_run_model,
 )
@@ -65,6 +66,7 @@ from app.routers import (
     workflows as workflows_router,
     system,
     teams,
+    units as units_router,
     genai_adoption as genai_adoption_router,
 )
 
@@ -318,6 +320,7 @@ app.include_router(users_router.router, dependencies=_auth)  # admin user manage
 app.include_router(settings_router.router, dependencies=_auth)
 app.include_router(dashboard.router, dependencies=_auth)
 app.include_router(areas_router.router, dependencies=_auth)
+app.include_router(units_router.router, dependencies=_auth)
 app.include_router(teams.router, dependencies=_auth)
 app.include_router(members.router, dependencies=_auth)
 app.include_router(developers_router.router, dependencies=_auth)

@@ -94,6 +94,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   <NavItem href="/admin/dashboard" label="Dashboard" />
                   <NavItem href="/admin/requests" label="Live requests" />
                   <NavItem href="/admin/areas" label="Areas" />
+                  <NavItem href="/admin/units" label="Units" />
                   <NavItem href="/admin/teams" label="Teams" />
                   <NavItem href="/admin/users" label="Users" />
                 </NavSection>

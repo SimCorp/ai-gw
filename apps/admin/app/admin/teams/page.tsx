@@ -14,6 +14,13 @@ interface Area {
   color: string;
 }
 
+interface Unit {
+  id: string;
+  name: string;
+  slug: string;
+  area_id: string;
+}
+
 interface Team {
   id: string;
   slug: string;
@@ -25,6 +32,9 @@ interface Team {
   area_name?: string | null;
   area_slug?: string | null;
   area_color?: string | null;
+  unit_id?: string | null;
+  unit_name?: string | null;
+  unit_slug?: string | null;
 }
 
 interface DashboardStat {
@@ -72,6 +82,7 @@ function formatCost(usd: number | null | undefined): string {
 export default function TeamsPage() {
   const [range, setRange] = useState('24h');
   const [areaFilter, setAreaFilter] = useState<string>('all');
+  const [unitFilter, setUnitFilter] = useState<string>('all');
   const queryClient = useQueryClient();
 
   const areasQuery = useQuery<Area[]>({
@@ -80,6 +91,12 @@ export default function TeamsPage() {
       if (!r.ok) return [];
       return r.json();
     }),
+    staleTime: 60_000,
+  });
+
+  const unitsQuery = useQuery<Unit[]>({
+    queryKey: ['units'],
+    queryFn: () => fetch(`${BASE}/units`).then(r => r.ok ? r.json() : []),
     staleTime: 60_000,
   });
 
@@ -135,6 +152,7 @@ export default function TeamsPage() {
   const teams = teamsQuery.data ?? [];
   const stats = statsQuery.data ?? [];
   const areas = areasQuery.data ?? [];
+  const units = unitsQuery.data ?? [];
 
   if (teams.length === 0) return <section className="page"><EmptyState message="No teams found." /></section>;
 
@@ -145,11 +163,15 @@ export default function TeamsPage() {
     stat: statsMap.get(t.name) ?? null,
   }));
 
-  const rows = areaFilter === 'all'
-    ? allRows
+  const visibleUnits = areaFilter === 'all'
+    ? units
     : areaFilter === 'none'
-      ? allRows.filter(t => !t.area_slug)
-      : allRows.filter(t => t.area_slug === areaFilter);
+      ? []
+      : units.filter(u => areas.find(a => a.slug === areaFilter)?.id === u.area_id);
+
+  const rows = allRows
+    .filter(t => areaFilter === 'all' || (areaFilter === 'none' ? !t.area_slug : t.area_slug === areaFilter))
+    .filter(t => unitFilter === 'all' || (unitFilter === 'none' ? !t.unit_id : t.unit_slug === unitFilter));
 
   const totalSpend = stats.reduce((sum, s) => sum + (s.total_cost_usd ?? 0), 0);
 
@@ -174,7 +196,7 @@ export default function TeamsPage() {
         {areas.length > 0 && (
           <select
             value={areaFilter}
-            onChange={e => setAreaFilter(e.target.value)}
+            onChange={e => { setAreaFilter(e.target.value); setUnitFilter('all'); }}
             style={{
               padding: '5px 10px', fontSize: 12.5,
               background: 'var(--surface-2)', border: '1px solid var(--rule)',
@@ -186,6 +208,24 @@ export default function TeamsPage() {
             <option value="none">No area</option>
             {areas.map(a => (
               <option key={a.id} value={a.slug}>{a.name}</option>
+            ))}
+          </select>
+        )}
+        {visibleUnits.length > 0 && (
+          <select
+            value={unitFilter}
+            onChange={e => setUnitFilter(e.target.value)}
+            style={{
+              padding: '5px 10px', fontSize: 12.5,
+              background: 'var(--surface-2)', border: '1px solid var(--rule)',
+              borderRadius: 6, color: 'var(--fg-1)', cursor: 'pointer',
+              fontFamily: 'inherit',
+            }}
+          >
+            <option value="all">All units</option>
+            <option value="none">No unit</option>
+            {visibleUnits.map(u => (
+              <option key={u.id} value={u.slug}>{u.name}</option>
             ))}
           </select>
         )}
@@ -204,7 +244,7 @@ export default function TeamsPage() {
               <tr>
                 <th style={{ width: 30 }}><input type="checkbox" /></th>
                 <th>Team</th>
-                <th>Area</th>
+                <th>Area / Unit</th>
                 <th>Members</th>
                 <th>API keys</th>
                 <th className="num">Requests (24h)</th>
@@ -247,12 +287,19 @@ export default function TeamsPage() {
                     </td>
                     <td>
                       {t.area_name ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span style={{
-                            display: 'inline-block', width: 8, height: 8, borderRadius: 2,
-                            background: t.area_color ?? '#888', flexShrink: 0,
-                          }} />
-                          <span style={{ fontSize: 13 }}>{t.area_name}</span>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{
+                              display: 'inline-block', width: 8, height: 8, borderRadius: 2,
+                              background: t.area_color ?? '#888', flexShrink: 0,
+                            }} />
+                            <span style={{ fontSize: 13 }}>{t.area_name}</span>
+                          </div>
+                          {t.unit_name && (
+                            <span style={{ fontSize: 11.5, color: 'var(--fg-3)', paddingLeft: 14 }}>
+                              {t.unit_name}
+                            </span>
+                          )}
                         </div>
                       ) : <span className="muted">—</span>}
                     </td>

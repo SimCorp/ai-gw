@@ -16,6 +16,7 @@ class TeamCreate(BaseModel):
     name: str
     slug: str
     area_id: UUID | None = None
+    unit_id: UUID | None = None
 
 
 class ProjectCreate(BaseModel):
@@ -36,6 +37,9 @@ def _team_row_to_dict(row) -> dict:
         "area_name": row["area_name"],
         "area_slug": row["area_slug"],
         "area_color": row["area_color"],
+        "unit_id": str(row["unit_id"]) if row["unit_id"] else None,
+        "unit_name": row["unit_name"],
+        "unit_slug": row["unit_slug"],
     }
 
 
@@ -44,9 +48,12 @@ async def list_teams(session: AsyncSession = Depends(get_session)):
     result = await session.execute(text("""
         SELECT t.id, t.name, t.slug, t.created_at, t.monthly_budget_usd,
                t.budget_alert_pct, t.budget_action, t.area_id,
-               a.name AS area_name, a.slug AS area_slug, a.color AS area_color
-        FROM teams t LEFT JOIN areas a ON a.id = t.area_id
-        ORDER BY a.name NULLS LAST, t.name
+               a.name AS area_name, a.slug AS area_slug, a.color AS area_color,
+               t.unit_id, u.name AS unit_name, u.slug AS unit_slug
+        FROM teams t
+        LEFT JOIN areas a ON a.id = t.area_id
+        LEFT JOIN units u ON u.id = t.unit_id
+        ORDER BY a.name NULLS LAST, u.name NULLS LAST, t.name
     """))
     return [_team_row_to_dict(row) for row in result.mappings().all()]
 
@@ -55,9 +62,29 @@ async def list_teams(session: AsyncSession = Depends(get_session)):
 async def create_team(
     body: TeamCreate, request: Request, session: AsyncSession = Depends(get_session)
 ):
-    team = Team(name=body.name, slug=body.slug, area_id=body.area_id)
+    area_id = body.area_id
+    unit_id = body.unit_id
+
+    # derive area_id from unit if unit_id is provided and area_id is not
+    if unit_id and not area_id:
+        unit_row = (await session.execute(
+            text("SELECT area_id FROM units WHERE id = :id"), {"id": unit_id}
+        )).one_or_none()
+        if not unit_row:
+            raise HTTPException(status_code=404, detail="Unit not found")
+        area_id = unit_row[0]
+
+    team = Team(name=body.name, slug=body.slug, area_id=area_id)
     session.add(team)
     await session.flush()  # get generated ID before commit
+
+    # set unit_id via raw SQL since ORM model may not have the column yet
+    if unit_id:
+        await session.execute(
+            text("UPDATE teams SET unit_id = :unit_id WHERE id = :id"),
+            {"unit_id": unit_id, "id": team.id},
+        )
+
     await audit.record(session, request, "create_team", "team", resource_id=team.id)
     await session.commit()
     await session.refresh(team)
@@ -70,6 +97,7 @@ async def create_team(
         "budget_alert_pct": team.budget_alert_pct,
         "budget_action": team.budget_action,
         "area_id": str(team.area_id) if team.area_id else None,
+        "unit_id": str(unit_id) if unit_id else None,
     }
 
 
@@ -79,8 +107,11 @@ async def get_team(team_id: UUID, session: AsyncSession = Depends(get_session)):
         text("""
             SELECT t.id, t.name, t.slug, t.created_at, t.monthly_budget_usd,
                    t.budget_alert_pct, t.budget_action, t.area_id,
-                   a.name AS area_name, a.slug AS area_slug, a.color AS area_color
-            FROM teams t LEFT JOIN areas a ON a.id = t.area_id
+                   a.name AS area_name, a.slug AS area_slug, a.color AS area_color,
+                   t.unit_id, u.name AS unit_name, u.slug AS unit_slug
+            FROM teams t
+            LEFT JOIN areas a ON a.id = t.area_id
+            LEFT JOIN units u ON u.id = t.unit_id
             WHERE t.id = :id
         """),
         {"id": team_id},

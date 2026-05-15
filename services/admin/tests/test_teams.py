@@ -26,6 +26,9 @@ def _make_team_row(team_id=None):
         "area_name": None,
         "area_slug": None,
         "area_color": None,
+        "unit_id": None,
+        "unit_name": None,
+        "unit_slug": None,
     }[k]
     return row
 
