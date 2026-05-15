@@ -9,7 +9,7 @@ router = APIRouter(prefix="/requests", tags=["requests"])
 _SUMMARY_QUERY = text("""
     SELECT
         COUNT(*) AS request_count,
-        ROUND(AVG(CASE WHEN cache_hit THEN 1.0 ELSE 0.0 END) * 100, 1) AS cache_hit_pct,
+        ROUND((AVG(CASE WHEN cache_hit THEN 1.0 ELSE 0.0 END) * 100)::numeric, 1) AS cache_hit_pct,
         PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY latency_ms) AS p50_ms,
         PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY latency_ms) AS p99_ms,
         SUM(tokens_input + tokens_output) AS total_tokens

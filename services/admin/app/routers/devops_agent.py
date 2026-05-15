@@ -205,8 +205,8 @@ async def _tool_get_gateway_metrics(session: AsyncSession, period: str = "24h") 
             SELECT
                 COUNT(*)                                                        AS total_requests,
                 COUNT(*) FILTER (WHERE request_error_type IS NOT NULL)          AS error_count,
-                ROUND(AVG(CASE WHEN cache_hit THEN 1.0 ELSE 0.0 END)*100, 1)   AS cache_hit_pct,
-                ROUND(AVG(latency_ms), 0)                                       AS avg_latency_ms,
+                ROUND((AVG(CASE WHEN cache_hit THEN 1.0 ELSE 0.0 END)*100)::numeric, 1)   AS cache_hit_pct,
+                ROUND(AVG(latency_ms)::numeric, 0)                                       AS avg_latency_ms,
                 ROUND(SUM(cost_usd)::numeric, 4)                               AS total_cost_usd,
                 COALESCE(SUM(tokens_input + tokens_output), 0)                  AS total_tokens
             FROM cost_records
@@ -301,8 +301,8 @@ async def _tool_get_model_usage(session: AsyncSession, period: str = "7d") -> li
                    COUNT(*) AS request_count,
                    COALESCE(SUM(tokens_input + tokens_output), 0) AS total_tokens,
                    ROUND(SUM(cost_usd)::numeric, 4) AS cost_usd,
-                   ROUND(AVG(CASE WHEN cache_hit THEN 1.0 ELSE 0.0 END)*100, 1) AS cache_hit_pct,
-                   ROUND(AVG(latency_ms), 0) AS avg_latency_ms
+                   ROUND((AVG(CASE WHEN cache_hit THEN 1.0 ELSE 0.0 END)*100)::numeric, 1) AS cache_hit_pct,
+                   ROUND(AVG(latency_ms)::numeric, 0) AS avg_latency_ms
             FROM cost_records
             WHERE created_at >= NOW() - INTERVAL '{_interval}'
               AND model IS NOT NULL
@@ -387,7 +387,7 @@ async def _tool_get_top_teams_by_spend(
                    COUNT(cr.id) AS request_count,
                    COALESCE(SUM(cr.tokens_input + cr.tokens_output), 0) AS total_tokens,
                    ROUND(SUM(cr.cost_usd)::numeric, 4) AS cost_usd,
-                   ROUND(AVG(CASE WHEN cr.cache_hit THEN 1.0 ELSE 0.0 END)*100, 1) AS cache_hit_pct
+                   ROUND((AVG(CASE WHEN cr.cache_hit THEN 1.0 ELSE 0.0 END)*100)::numeric, 1) AS cache_hit_pct
             FROM teams t
             LEFT JOIN cost_records cr ON cr.team_id = t.id {_interval}
             GROUP BY t.name

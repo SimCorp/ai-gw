@@ -245,8 +245,8 @@ async def my_stats(
             COALESCE(SUM(cr.tokens_input + cr.tokens_output), 0)                     AS total_tokens,
             COALESCE(ROUND(SUM(cr.cost_usd)::numeric, 6), 0)                         AS cost_usd,
             COALESCE(SUM(cr.tool_invocation_count), 0)                               AS tool_invocations,
-            ROUND(AVG(CASE WHEN cr.cache_hit THEN 1.0 ELSE 0.0 END)*100, 1)          AS cache_hit_pct,
-            ROUND(AVG(cr.latency_ms), 0)                                             AS avg_latency_ms,
+            ROUND((AVG(CASE WHEN cr.cache_hit THEN 1.0 ELSE 0.0 END)*100)::numeric, 1) AS cache_hit_pct,
+            ROUND(AVG(cr.latency_ms)::numeric, 0)                                    AS avg_latency_ms,
             COUNT(CASE WHEN cr.request_error_type IS NOT NULL THEN 1 END)            AS error_count,
             COUNT(DISTINCT cr.repo)                                                   AS repo_count,
             COALESCE(SUM(cr.retry_count), 0)                                         AS total_retries
@@ -295,9 +295,9 @@ async def my_stats(
 
     session_row = (await session.execute(text(f"""
         SELECT COUNT(s.session_trace_id)                                AS session_count,
-               ROUND(AVG(s.quality_score), 2)                           AS avg_quality,
-               ROUND(AVG(s.turn_count), 1)                              AS avg_turns,
-               ROUND(AVG(s.avg_inter_request_s), 0)                     AS avg_inter_s,
+               ROUND(AVG(s.quality_score)::numeric, 2)                  AS avg_quality,
+               ROUND(AVG(s.turn_count)::numeric, 1)                     AS avg_turns,
+               ROUND(AVG(s.avg_inter_request_s)::numeric, 0)            AS avg_inter_s,
                COUNT(CASE WHEN s.produced_commit THEN 1 END)            AS sessions_with_commit
         FROM sessions s
         WHERE s.developer_id = CAST(:dev_id AS uuid) {since_s}

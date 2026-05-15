@@ -64,7 +64,7 @@ async def _cost_by_area(period: Period, session: AsyncSession) -> list[dict]:
                COUNT(cr.id) AS request_count,
                COALESCE(SUM(cr.tokens_input + cr.tokens_output), 0) AS total_tokens,
                COALESCE(ROUND(SUM(cr.cost_usd)::numeric, 6), 0) AS total_cost_usd,
-               ROUND(AVG(CASE WHEN cr.cache_hit THEN 1.0 ELSE 0.0 END) * 100, 1) AS cache_hit_pct
+               ROUND((AVG(CASE WHEN cr.cache_hit THEN 1.0 ELSE 0.0 END) * 100)::numeric, 1) AS cache_hit_pct
         FROM areas a
         LEFT JOIN teams t ON t.area_id = a.id
         LEFT JOIN cost_records cr ON cr.team_id = t.id {since_fragment}
@@ -92,7 +92,7 @@ async def _cost_by_area(period: Period, session: AsyncSession) -> list[dict]:
         SELECT COUNT(cr.id) AS request_count,
                COALESCE(SUM(cr.tokens_input + cr.tokens_output), 0) AS total_tokens,
                COALESCE(ROUND(SUM(cr.cost_usd)::numeric, 6), 0) AS total_cost_usd,
-               ROUND(AVG(CASE WHEN cr.cache_hit THEN 1.0 ELSE 0.0 END) * 100, 1) AS cache_hit_pct
+               ROUND((AVG(CASE WHEN cr.cache_hit THEN 1.0 ELSE 0.0 END) * 100)::numeric, 1) AS cache_hit_pct
         FROM teams t
         LEFT JOIN cost_records cr ON cr.team_id = t.id {since_fragment}
         WHERE t.area_id IS NULL
@@ -120,7 +120,7 @@ async def _cost_by_team(period: Period, session: AsyncSession) -> list[dict]:
                COUNT(cr.id) AS request_count,
                COALESCE(SUM(cr.tokens_input + cr.tokens_output), 0) AS total_tokens,
                COALESCE(ROUND(SUM(cr.cost_usd)::numeric, 6), 0) AS total_cost_usd,
-               ROUND(AVG(CASE WHEN cr.cache_hit THEN 1.0 ELSE 0.0 END) * 100, 1) AS cache_hit_pct
+               ROUND((AVG(CASE WHEN cr.cache_hit THEN 1.0 ELSE 0.0 END) * 100)::numeric, 1) AS cache_hit_pct
         FROM teams t
         LEFT JOIN areas a ON a.id = t.area_id
         LEFT JOIN cost_records cr ON cr.team_id = t.id {since_fragment}
@@ -161,7 +161,7 @@ async def developer_productivity_report(
                COALESCE(SUM(cr.tokens_input + cr.tokens_output), 0)         AS total_tokens,
                COALESCE(ROUND(SUM(cr.cost_usd)::numeric, 6), 0)             AS cost_usd,
                COALESCE(SUM(cr.tool_invocation_count), 0)                   AS tool_invocations,
-               ROUND(AVG(CASE WHEN cr.cache_hit THEN 1.0 ELSE 0.0 END)*100, 1) AS cache_hit_pct,
+               ROUND((AVG(CASE WHEN cr.cache_hit THEN 1.0 ELSE 0.0 END)*100)::numeric, 1) AS cache_hit_pct,
                COUNT(CASE WHEN cr.request_error_type IS NOT NULL THEN 1 END) AS error_count,
                COUNT(DISTINCT cr.repo)                                       AS repo_count
         FROM developers d
@@ -300,7 +300,7 @@ async def team_efficiency_report(
                    COALESCE(ROUND(SUM(cr.cost_usd)::numeric, 6), 0) AS cost_usd,
                    COUNT(cr.id) AS request_count,
                    COUNT(DISTINCT cr.developer_id) AS active_developers,
-                   ROUND(AVG(CASE WHEN cr.cache_hit THEN 1.0 ELSE 0.0 END)*100, 1) AS cache_hit_pct
+                   ROUND((AVG(CASE WHEN cr.cache_hit THEN 1.0 ELSE 0.0 END)*100)::numeric, 1) AS cache_hit_pct
             FROM cost_records cr
             WHERE cr.developer_id IS NOT NULL {since_cr}
             GROUP BY cr.team_id
@@ -326,7 +326,7 @@ async def team_efficiency_report(
                CASE WHEN COALESCE(to2.merged_prs, 0) > 0
                     THEN ROUND((tc.cost_usd / to2.merged_prs)::numeric, 4) END AS cost_per_merged_pr
         FROM teams t
-        JOIN team_cost tc ON tc.team_id = CAST(t.id AS TEXT)
+        JOIN team_cost tc ON tc.team_id = t.id
         LEFT JOIN team_output to2 ON to2.team_id = t.id
         LEFT JOIN areas a ON a.id = t.area_id
         ORDER BY cost_per_pr ASC NULLS LAST
@@ -439,10 +439,10 @@ async def session_quality_report(
     sql = text(f"""
         SELECT d.id AS developer_id, d.email, d.display_name, t.name AS team_name,
                COUNT(s.session_trace_id)                              AS session_count,
-               ROUND(AVG(s.quality_score), 2)                        AS avg_quality_score,
-               ROUND(AVG(s.turn_count), 1)                           AS avg_turns,
-               ROUND(AVG(s.avg_inter_request_s), 1)                  AS avg_inter_request_s,
-               ROUND(AVG(s.retry_count::float / GREATEST(s.turn_count, 1)), 3) AS avg_retry_rate,
+               ROUND(AVG(s.quality_score)::numeric, 2)                        AS avg_quality_score,
+               ROUND(AVG(s.turn_count)::numeric, 1)                           AS avg_turns,
+               ROUND(AVG(s.avg_inter_request_s)::numeric, 1)                  AS avg_inter_request_s,
+               ROUND(AVG(s.retry_count::float / GREATEST(s.turn_count, 1))::numeric, 3) AS avg_retry_rate,
                COUNT(CASE WHEN s.produced_commit THEN 1 END)         AS sessions_with_commit,
                ROUND(COUNT(CASE WHEN s.produced_commit THEN 1 END) * 100.0
                      / GREATEST(COUNT(s.session_trace_id), 1), 1)    AS commit_conversion_pct,
@@ -580,8 +580,8 @@ async def intent_distribution(
         SELECT COALESCE(s.dominant_intent, 'general') AS intent,
                COUNT(s.session_trace_id)               AS session_count,
                COALESCE(ROUND(SUM(s.total_cost)::numeric, 4), 0) AS cost_usd,
-               ROUND(AVG(s.quality_score), 2)          AS avg_quality,
-               ROUND(AVG(s.turn_count), 1)             AS avg_turns,
+               ROUND(AVG(s.quality_score)::numeric, 2)          AS avg_quality,
+               ROUND(AVG(s.turn_count)::numeric, 1)             AS avg_turns,
                COUNT(CASE WHEN s.produced_commit THEN 1 END) AS sessions_with_commit,
                ROUND(
                    COUNT(CASE WHEN s.produced_commit THEN 1 END) * 100.0
