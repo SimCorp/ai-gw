@@ -3,14 +3,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { LoadingState, ErrorState } from '../_components/PageStates';
-import { getAdminToken } from '../../../lib/adminAuth';
-
-const BASE = process.env.NEXT_PUBLIC_ADMIN_API ?? 'http://localhost:8005';
-
-function authHeaders(): HeadersInit {
-  const t = getAdminToken();
-  return t ? { Authorization: `Bearer ${t}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' };
-}
+import { apiFetch, BASE } from '../../../lib/apiClient';
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -113,18 +106,11 @@ function InviteModal({ onClose }: { onClose: () => void }) {
   const [copied, setCopied] = useState(false);
 
   const inviteMut = useMutation({
-    mutationFn: async () => {
-      const res = await fetch(`${BASE}/auth/invitations`, {
-        method: 'POST',
-        headers: authHeaders(),
-        body: JSON.stringify({ email, role, scope_type: 'global' }),
-      });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        throw new Error(d.detail ?? 'Failed to create invitation');
-      }
-      return res.json();
-    },
+    mutationFn: async () => apiFetch('/auth/invitations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, role, scope_type: 'global' }),
+    }),
     onSuccess: (data) => {
       setResult(data);
       qc.invalidateQueries({ queryKey: ['invitations'] });
@@ -241,55 +227,35 @@ export default function UsersPage() {
       const params = new URLSearchParams({ limit: '100' });
       if (search) params.set('search', search);
       if (statusFilter) params.set('status', statusFilter);
-      const res = await fetch(`${BASE}/admin/users?${params}`, { headers: authHeaders() });
-      if (!res.ok) throw new Error(`Failed (${res.status})`);
-      return res.json();
+      return apiFetch(`/admin/users?${params}`);
     },
   });
 
   const invitesQuery = useQuery<Invitation[]>({
     queryKey: ['invitations'],
-    queryFn: async () => {
-      const res = await fetch(`${BASE}/auth/invitations`, { headers: authHeaders() });
-      if (!res.ok) return [];
-      return res.json();
-    },
+    queryFn: () => apiFetch<Invitation[]>('/auth/invitations').catch(() => []),
     enabled: tab === 'invitations',
   });
 
   const serviceAccountsQuery = useQuery({
     queryKey: ['service-accounts'],
-    queryFn: async () => {
-      const res = await fetch(`${BASE}/auth/service-accounts`, { headers: authHeaders() });
-      if (!res.ok) return [];
-      return res.json();
-    },
+    queryFn: () => apiFetch('/auth/service-accounts').catch(() => []),
     enabled: tab === 'service-accounts',
   });
 
   const statusMut = useMutation({
-    mutationFn: async ({ userId, status }: { userId: string; status: string }) => {
-      const res = await fetch(`${BASE}/auth/users/${userId}/status?status=${status}`, {
-        method: 'PATCH', headers: authHeaders(),
-      });
-      if (!res.ok) throw new Error('Failed to update status');
-    },
+    mutationFn: ({ userId, status }: { userId: string; status: string }) =>
+      apiFetch(`/auth/users/${userId}/status?status=${status}`, { method: 'PATCH' }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-users'] }),
   });
 
   const revokeInviteMut = useMutation({
-    mutationFn: async (id: string) => {
-      await fetch(`${BASE}/auth/invitations/${id}`, { method: 'DELETE', headers: authHeaders() });
-    },
+    mutationFn: (id: string) => apiFetch(`/auth/invitations/${id}`, { method: 'DELETE' }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['invitations'] }),
   });
 
   const revokeServiceAccountMut = useMutation({
-    mutationFn: async (id: string) => {
-      await fetch(`${BASE}/auth/service-accounts/${id}/status?status=revoked`, {
-        method: 'PATCH', headers: authHeaders(),
-      });
-    },
+    mutationFn: (id: string) => apiFetch(`/auth/service-accounts/${id}/status?status=revoked`, { method: 'PATCH' }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['service-accounts'] }),
   });
 

@@ -3,8 +3,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { LoadingState, ErrorState, EmptyState } from '../_components/PageStates';
-
-const BASE = process.env.NEXT_PUBLIC_ADMIN_API ?? 'http://localhost:8005';
+import { apiFetch } from '../../../lib/apiClient';
 
 const PRESET_COLORS = [
   { value: '#0A7BD7', label: 'Blue' },
@@ -32,6 +31,8 @@ interface Unit {
   color: string | null;
   team_count: number;
   created_at: string;
+  parent_unit_id: string | null;
+  parent_unit_name: string | null;
 }
 
 function toSlug(name: string): string {
@@ -48,12 +49,13 @@ function formatDate(iso: string | null | undefined) {
 interface UnitModalProps {
   unit?: Unit;
   areas: Area[];
+  allUnits: Unit[];
   defaultAreaId?: string;
   onClose: () => void;
   onSaved: () => void;
 }
 
-function UnitModal({ unit, areas, defaultAreaId, onClose, onSaved }: UnitModalProps) {
+function UnitModal({ unit, areas, allUnits, defaultAreaId, onClose, onSaved }: UnitModalProps) {
   const isEdit = !!unit;
   const [form, setForm] = useState({
     name: unit?.name ?? '',
@@ -61,9 +63,14 @@ function UnitModal({ unit, areas, defaultAreaId, onClose, onSaved }: UnitModalPr
     description: unit?.description ?? '',
     color: unit?.color ?? PRESET_COLORS[0].value,
     area_id: unit?.area_id ?? defaultAreaId ?? (areas[0]?.id ?? ''),
+    parent_unit_id: unit?.parent_unit_id ?? '',
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const siblingUnits = allUnits.filter(u =>
+    u.area_id === form.area_id && u.id !== unit?.id && !u.parent_unit_id
+  );
 
   const handleNameChange = (name: string) => {
     setForm(f => ({ ...f, name, slug: isEdit ? f.slug : toSlug(name) }));
@@ -75,8 +82,8 @@ function UnitModal({ unit, areas, defaultAreaId, onClose, onSaved }: UnitModalPr
     setSaving(true);
     setError(null);
     try {
-      const url = isEdit ? `${BASE}/units/${unit!.id}` : `${BASE}/units`;
-      const res = await fetch(url, {
+      const path = isEdit ? `/units/${unit!.id}` : '/units';
+      await apiFetch(path, {
         method: isEdit ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -85,17 +92,13 @@ function UnitModal({ unit, areas, defaultAreaId, onClose, onSaved }: UnitModalPr
           description: form.description.trim() || null,
           color: form.color,
           area_id: form.area_id,
+          parent_unit_id: form.parent_unit_id || null,
         }),
       });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setError((body as { detail?: string }).detail ?? `Error ${res.status}`);
-        return;
-      }
       onSaved();
       onClose();
-    } catch (e) {
-      setError(String(e));
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setSaving(false);
     }
@@ -132,10 +135,21 @@ function UnitModal({ unit, areas, defaultAreaId, onClose, onSaved }: UnitModalPr
           <select
             style={inputStyle}
             value={form.area_id}
-            onChange={e => setForm(f => ({ ...f, area_id: e.target.value }))}
+            onChange={e => setForm(f => ({ ...f, area_id: e.target.value, parent_unit_id: '' }))}
             disabled={isEdit}
           >
             {areas.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+          </select>
+        ))}
+
+        {field('Parent unit (optional)', (
+          <select
+            style={inputStyle}
+            value={form.parent_unit_id}
+            onChange={e => setForm(f => ({ ...f, parent_unit_id: e.target.value }))}
+          >
+            <option value="">— None (top-level unit) —</option>
+            {siblingUnits.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
           </select>
         ))}
 
@@ -204,29 +218,20 @@ export default function UnitsPage() {
 
   const areasQuery = useQuery<Area[]>({
     queryKey: ['areas'],
-    queryFn: () => fetch(`${BASE}/areas`).then(r => r.ok ? r.json() : []),
+    queryFn: () => apiFetch<Area[]>('/areas'),
     staleTime: 60_000,
   });
 
   const unitsQuery = useQuery<Unit[]>({
     queryKey: ['units', areaFilter],
     queryFn: () => {
-      const url = areaFilter === 'all' ? `${BASE}/units` : `${BASE}/units?area_id=${areaFilter}`;
-      return fetch(url).then(r => {
-        if (!r.ok) throw new Error(`Failed to fetch units: ${r.status}`);
-        return r.json();
-      });
+      const path = areaFilter === 'all' ? '/units' : `/units?area_id=${areaFilter}`;
+      return apiFetch<Unit[]>(path);
     },
   });
 
   const deleteMutation = useMutation({
-    mutationFn: async (unitId: string) => {
-      const res = await fetch(`${BASE}/units/${unitId}`, { method: 'DELETE' });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error((body as { detail?: string }).detail ?? `Error ${res.status}`);
-      }
-    },
+    mutationFn: (unitId: string) => apiFetch(`/units/${unitId}`, { method: 'DELETE' }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['units'] }),
     onError: (err: Error) => window.alert(err.message),
   });
@@ -234,6 +239,11 @@ export default function UnitsPage() {
   const handleDelete = (unit: Unit) => {
     if (unit.team_count > 0) {
       window.alert(`Cannot delete "${unit.name}" — it has ${unit.team_count} team${unit.team_count > 1 ? 's' : ''}. Reassign or delete the teams first.`);
+      return;
+    }
+    const childCount = units.filter(u => u.parent_unit_id === unit.id).length;
+    if (childCount > 0) {
+      window.alert(`Cannot delete "${unit.name}" — it has ${childCount} child unit${childCount > 1 ? 's' : ''}. Delete or reparent them first.`);
       return;
     }
     if (!window.confirm(`Delete unit "${unit.name}"? This cannot be undone.`)) return;
@@ -301,6 +311,7 @@ export default function UnitsPage() {
                 <tr>
                   <th>Unit</th>
                   <th>Area</th>
+                  <th>Parent</th>
                   <th>Description</th>
                   <th className="num">Teams</th>
                   <th>Created</th>
@@ -309,24 +320,26 @@ export default function UnitsPage() {
               </thead>
               <tbody>
                 {(grouped
-                  ? Array.from(grouped.entries()).flatMap(([areaId, areaUnits]) =>
-                      areaUnits.map((u, i) => ({ u, isFirst: i === 0, areaId }))
+                  ? Array.from(grouped.entries()).flatMap(([, areaUnits]) =>
+                      areaUnits.map((u, i) => ({ u, isFirst: i === 0 }))
                     )
-                  : units.map(u => ({ u, isFirst: false, areaId: u.area_id }))
+                  : units.map(u => ({ u, isFirst: false }))
                 ).map(({ u }) => {
                   const color = u.color ?? areaColorMap.get(u.area_id) ?? '#888';
+                  const isSubUnit = !!u.parent_unit_id;
                   return (
                     <tr key={u.id}>
                       <td>
                         <div className="cell-2">
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: isSubUnit ? 16 : 0 }}>
+                            {isSubUnit && <span style={{ color: 'var(--fg-3)', fontSize: 11 }}>↳</span>}
                             <span style={{
                               display: 'inline-block', width: 10, height: 10,
                               borderRadius: 3, background: color, flexShrink: 0,
                             }} />
                             <span style={{ fontWeight: 500 }}>{u.name}</span>
                           </div>
-                          <span className="lo mono">{u.slug}</span>
+                          <span className="lo mono" style={{ paddingLeft: isSubUnit ? 16 : 0 }}>{u.slug}</span>
                         </div>
                       </td>
                       <td>
@@ -339,6 +352,11 @@ export default function UnitsPage() {
                             <span style={{ fontSize: 13 }}>{u.area_name}</span>
                           </div>
                         ) : <span className="muted">—</span>}
+                      </td>
+                      <td>
+                        {u.parent_unit_name
+                          ? <span style={{ fontSize: 12.5, color: 'var(--fg-2)' }}>{u.parent_unit_name}</span>
+                          : <span className="muted">—</span>}
                       </td>
                       <td>
                         <span style={{ fontSize: 12.5, color: 'var(--fg-2)' }}>
@@ -377,6 +395,7 @@ export default function UnitsPage() {
       {modal === 'create' && (
         <UnitModal
           areas={areas}
+          allUnits={units}
           onClose={() => setModal(null)}
           onSaved={onSaved}
         />
@@ -385,6 +404,7 @@ export default function UnitsPage() {
         <UnitModal
           unit={modal.unit}
           areas={areas}
+          allUnits={units}
           onClose={() => setModal(null)}
           onSaved={onSaved}
         />

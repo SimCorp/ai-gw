@@ -1,5 +1,7 @@
 import type { NextConfig } from "next";
 
+const adminApi = process.env.NEXT_PUBLIC_ADMIN_API ?? 'http://localhost:8005';
+
 const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "X-Frame-Options", value: "DENY" },
@@ -12,7 +14,7 @@ const securityHeaders = [
       "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob:",
-      "connect-src 'self' http://localhost:8005",
+      `connect-src 'self' ${adminApi}`,
       "font-src 'self'",
       "frame-ancestors 'none'",
     ].join("; "),

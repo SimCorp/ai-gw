@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { LoadingState, ErrorState } from '../_components/PageStates';
+import { apiFetch } from '../../../lib/apiClient';
 
 // ---------------------------------------------------------------------------
 // Arc gauge — pure SVG, no extra deps
@@ -82,8 +83,6 @@ interface GatewayInfo {
 }
 
 const RANGES = ['1h', '24h', '7d', '30d', '90d'];
-
-const BASE = process.env.NEXT_PUBLIC_ADMIN_API ?? 'http://localhost:8005';
 
 // --- API types ---
 
@@ -192,37 +191,25 @@ export default function DashboardPage() {
 
   const statsQuery = useQuery<TeamStat[]>({
     queryKey: ['dashboard-stats'],
-    queryFn: () => fetch(`${BASE}/dashboard/stats`).then(r => {
-      if (!r.ok) throw new Error(`/dashboard/stats ${r.status}`);
-      return r.json();
-    }),
+    queryFn: () => apiFetch<TeamStat[]>('/dashboard/stats'),
     staleTime: 30_000,
   });
 
   const healthQuery = useQuery<SystemHealth>({
     queryKey: ['system-health'],
-    queryFn: () => fetch(`${BASE}/system/health`).then(r => {
-      if (!r.ok) throw new Error(`/system/health ${r.status}`);
-      return r.json();
-    }),
+    queryFn: () => apiFetch<SystemHealth>('/system/health'),
     staleTime: 15_000,
   });
 
   const auditQuery = useQuery<AuditEntry[]>({
     queryKey: ['audit-recent'],
-    queryFn: () => fetch(`${BASE}/audit?limit=6`).then(r => {
-      if (!r.ok) throw new Error(`/audit ${r.status}`);
-      return r.json();
-    }),
+    queryFn: () => apiFetch<AuditEntry[]>('/audit?limit=6'),
     staleTime: 30_000,
   });
 
   const gatewayInfoQuery = useQuery<GatewayInfo>({
     queryKey: ['gateway-info'],
-    queryFn: () => fetch(`${BASE}/gateway-info`).then(r => {
-      if (!r.ok) throw new Error(`/gateway-info ${r.status}`);
-      return r.json();
-    }),
+    queryFn: () => apiFetch<GatewayInfo>('/gateway-info'),
     staleTime: 30_000,
   });
 

@@ -87,6 +87,9 @@ def _session_key(token: str) -> str:
 async def _get_session_data(token: str, redis) -> dict | None:
     raw = await redis.get(_session_key(token))
     if not raw:
+        # Fallback: legacy admin_session:{token} issued before the unified auth migration
+        raw = await redis.get(f"admin_session:{token}")
+    if not raw:
         return None
     return json.loads(raw)
 
