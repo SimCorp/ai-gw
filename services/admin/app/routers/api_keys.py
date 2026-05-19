@@ -4,6 +4,8 @@ import secrets
 from datetime import datetime, timezone
 from uuid import UUID
 
+from app.scopes import DEFAULT_KEY_SCOPES, has_scope, ROLE_SCOPES
+
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import select, text
@@ -85,6 +87,7 @@ async def portal_create_key(
     )).first()
     if not membership:
         raise HTTPException(status_code=403, detail="Not a member of this team")
+    scopes = body.scopes if body.scopes else DEFAULT_KEY_SCOPES
     raw_key = "sk-" + secrets.token_urlsafe(32)
     key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
     api_key = APIKey(
@@ -92,12 +95,13 @@ async def portal_create_key(
         project_id=body.project_id,
         name=body.name,
         key_hash=key_hash,
+        scopes=scopes,
     )
     session.add(api_key)
     await session.flush()
     await audit.record(
         session, request, "create_api_key", "api_key", resource_id=api_key.id,
-        details={"name": body.name, "team_id": str(team_id), "developer_id": developer_id},
+        details={"name": body.name, "team_id": str(team_id), "developer_id": developer_id, "scopes": scopes},
     )
     await session.commit()
     await session.refresh(api_key)
@@ -105,6 +109,7 @@ async def portal_create_key(
         "id": str(api_key.id),
         "name": api_key.name,
         "key": raw_key,
+        "scopes": api_key.scopes,
         "created_at": api_key.created_at,
     }
 
@@ -143,6 +148,8 @@ async def portal_revoke_key(
 class KeyCreate(BaseModel):
     name: str
     project_id: UUID | None = None
+    scopes: list[str] = ["ai-gw:inference:*"]
+    expires_at: str | None = None
 
 
 @router.get("")
@@ -160,20 +167,29 @@ async def create_key(
     request: Request,
     session: AsyncSession = Depends(get_session),
 ):
+    scopes = body.scopes if body.scopes else DEFAULT_KEY_SCOPES
+
     raw_key = "sk-" + secrets.token_urlsafe(32)
     key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
+
+    expires_at = None
+    if body.expires_at:
+        from datetime import datetime as _dt
+        expires_at = _dt.fromisoformat(body.expires_at.replace("Z", "+00:00"))
 
     api_key = APIKey(
         team_id=team_id,
         project_id=body.project_id,
         name=body.name,
         key_hash=key_hash,
+        scopes=scopes,
+        expires_at=expires_at,
     )
     session.add(api_key)
     await session.flush()
     await audit.record(
         session, request, "create_api_key", "api_key", resource_id=api_key.id,
-        details={"name": body.name, "team_id": str(team_id)},
+        details={"name": body.name, "team_id": str(team_id), "scopes": scopes},
     )
     await session.commit()
     await session.refresh(api_key)
@@ -182,6 +198,7 @@ async def create_key(
         "id": str(api_key.id),
         "name": api_key.name,
         "key": raw_key,  # returned once only; not stored
+        "scopes": api_key.scopes,
         "created_at": api_key.created_at,
     }
 

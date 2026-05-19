@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, Index, Numeric, Text, text
+from sqlalchemy import ARRAY, DateTime, ForeignKey, Index, Numeric, Text, text
 # Note: developer_id references developers.id (raw-SQL table, not ORM-mapped).
 # FK constraint exists in the DB via the baseline migration; the column is
 # declared here without a SQLAlchemy ForeignKey so autogenerate doesn't fail
@@ -32,4 +32,5 @@ class APIKey(Base):
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     monthly_budget_usd: Mapped[Decimal | None] = mapped_column(Numeric(14, 8), nullable=True)
     scope: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'standard'"))
+    scopes: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, server_default=text("'{ai-gw:inference:*}'"))
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

@@ -481,7 +481,7 @@ async def set_user_status(
 # Invitations
 # ---------------------------------------------------------------------------
 
-_VALID_ROLES = {"platform_admin", "area_owner", "team_admin", "developer", "viewer"}
+_VALID_ROLES = {"platform_admin", "area_owner", "unit_lead", "team_admin", "developer", "viewer"}
 _INVITE_TTL = int(timedelta(hours=48).total_seconds())
 
 

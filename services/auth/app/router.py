@@ -28,6 +28,35 @@ class ValidateResponse(BaseModel):
     project_id: str | None = None
     key_id: str | None = None
     scope: str | None = None
+    scopes: list[str] = []
+
+
+def _scope_matches(requested: str, granted: str) -> bool:
+    if granted == requested:
+        return True
+    if granted.endswith(":*"):
+        prefix = granted[:-2]
+        return requested.startswith(prefix + ":") or requested == prefix
+    return False
+
+
+def _has_scope(requested: str, granted_scopes: list[str]) -> bool:
+    return any(_scope_matches(requested, g) for g in granted_scopes)
+
+
+def _model_to_scope(model: str) -> str:
+    m = model.lower()
+    if "haiku" in m:
+        return "ai-gw:inference:claude-haiku:execute"
+    if "sonnet" in m:
+        return "ai-gw:inference:claude-sonnet:execute"
+    if "opus" in m:
+        return "ai-gw:inference:claude-opus:execute"
+    if m.startswith("claude"):
+        return "ai-gw:inference:claude:*"
+    if m.startswith("gpt") or m.startswith("o1") or m.startswith("o3"):
+        return "ai-gw:inference:openai:*"
+    return "ai-gw:inference:*"
 
 
 async def check_budget(team_id: str, key_id: str | None, redis: Redis) -> tuple[bool, str]:
@@ -114,5 +143,16 @@ async def validate(body: ValidateRequest, request: Request):
     allowed, reason = await check_budget(identity["team_id"], identity.get("key_id"), redis)
     if not allowed:
         return JSONResponse({"error": "budget_exhausted", "message": reason}, status_code=429)
+
+    # Scope enforcement — only when both model and scopes are present
+    key_scopes = identity.get("scopes", [])
+    if body.model and key_scopes:
+        required = _model_to_scope(body.model)
+        if not _has_scope(required, key_scopes):
+            from fastapi import HTTPException
+            raise HTTPException(
+                status_code=403,
+                detail=f"Key does not have scope '{required}' required for model '{body.model}'",
+            )
 
     return ValidateResponse(**identity)

@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     jwks_uri: str = "http://dex:5556/dex/keys"
     entra_tenant_id: str = "local"
     entra_client_id: str = "ai-gateway-admin"
+    admin_url: str = "http://admin:8005"
     rate_limit_default_rpm: int = 1000
 
 

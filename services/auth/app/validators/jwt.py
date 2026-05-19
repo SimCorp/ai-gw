@@ -22,6 +22,12 @@ _JWKS_REDIS_TTL = 90000   # 25 hours Redis fallback TTL (survives overnight outa
 _JWKS_REDIS_KEY = "jwks:cache"
 _jwks_lock = asyncio.Lock()
 
+# Separate cache for admin-issued identity JWTs
+_identity_jwks_cache: dict = {}
+_identity_jwks_expires: float = 0.0
+_IDENTITY_JWKS_REDIS_KEY = "jwks:identity:cache"
+_identity_jwks_lock = asyncio.Lock()
+
 _PRIVATE_NETS = [
     ipaddress.ip_network("10.0.0.0/8"),
     ipaddress.ip_network("172.16.0.0/12"),
@@ -121,8 +127,103 @@ async def _get_jwks(settings: Settings, redis=None) -> dict:
             raise HTTPException(status_code=503, detail="JWKS fetch failed")
 
 
+async def _get_identity_jwks(settings: Settings, redis=None) -> dict:
+    """Fetch JWKS from the admin service identity endpoint."""
+    global _identity_jwks_cache, _identity_jwks_expires
+    now = time.monotonic()
+    if _identity_jwks_cache and now < _identity_jwks_expires:
+        return _identity_jwks_cache
+
+    async with _identity_jwks_lock:
+        if _identity_jwks_cache and time.monotonic() < _identity_jwks_expires:
+            return _identity_jwks_cache
+
+        identity_jwks_uri = f"{settings.admin_url}/identity/jwks"
+        try:
+            async with httpx.AsyncClient(follow_redirects=False, timeout=5) as client:
+                resp = await client.get(identity_jwks_uri)
+                resp.raise_for_status()
+                data = resp.json()
+            _identity_jwks_cache = data
+            _identity_jwks_expires = time.monotonic() + _JWKS_TTL
+            if redis is not None:
+                try:
+                    await redis.set(_IDENTITY_JWKS_REDIS_KEY, json.dumps(data), ex=_JWKS_REDIS_TTL)
+                except Exception:
+                    pass
+            return _identity_jwks_cache
+        except httpx.HTTPError as exc:
+            _log.warning("Identity JWKS fetch failed (%s), trying Redis fallback", exc)
+            if redis is not None:
+                try:
+                    cached = await redis.get(_IDENTITY_JWKS_REDIS_KEY)
+                    if cached:
+                        data = json.loads(cached)
+                        _identity_jwks_cache = data
+                        _identity_jwks_expires = time.monotonic() + 300
+                        return data
+                except Exception:
+                    pass
+            raise HTTPException(status_code=503, detail="Identity JWKS fetch failed")
+
+
+async def _validate_identity_jwt(token: str, settings: Settings, redis=None) -> dict:
+    """Verify an admin-issued identity JWT and extract team_id + capabilities as scopes."""
+    import base64 as _b64
+    try:
+        parts = token.split(".")
+        if len(parts) < 2:
+            raise HTTPException(status_code=401, detail="Malformed token")
+        padding = 4 - len(parts[1]) % 4
+        claims = json.loads(_b64.urlsafe_b64decode(parts[1] + "=" * padding))
+    except Exception:
+        raise HTTPException(status_code=401, detail="Malformed token")
+
+    jwks_data = await _get_identity_jwks(settings, redis=redis)
+    header = jwt.get_unverified_header(token)
+    kid = header.get("kid")
+    key = next((k for k in jwks_data.get("keys", []) if k.get("kid") == kid), None)
+    if key is None:
+        raise HTTPException(status_code=401, detail="Unknown signing key")
+
+    from jwt import algorithms as jwt_alg
+    rsa_key = jwt_alg.RSAAlgorithm.from_jwk(key)
+    try:
+        payload = jwt.decode(
+            token,
+            rsa_key,
+            algorithms=["RS256"],
+            options={"verify_aud": False},
+        )
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    team_id = payload.get("team_id") or payload.get("tid") or payload.get("sub")
+    scopes = payload.get("capabilities") or payload.get("scopes") or ["ai-gw:inference:*"]
+    return {
+        "team_id": str(team_id) if team_id else None,
+        "project_id": payload.get("project_id"),
+        "scopes": scopes,
+    }
+
+
 async def validate_jwt(token: str, settings: Settings, redis=None) -> dict:
-    """Fetch JWKS, verify token signature + claims, return {team_id, project_id}."""
+    """Verify a JWT and return identity dict.
+
+    Routes to identity JWT path when the token carries a 'capabilities' claim
+    (admin-issued agent tokens). Falls back to OIDC path for Dex/Entra tokens.
+    """
+    import base64 as _b64
+    try:
+        parts = token.split(".")
+        if len(parts) >= 2:
+            padding = 4 - len(parts[1]) % 4
+            unverified = json.loads(_b64.urlsafe_b64decode(parts[1] + "=" * padding))
+            if "capabilities" in unverified or "scopes" in unverified:
+                return await _validate_identity_jwt(token, settings, redis=redis)
+    except Exception:
+        pass  # fall through to OIDC path
+
     global _jwks_cache, _jwks_cache_expires
     try:
         jwks_data = await _get_jwks(settings, redis=redis)
