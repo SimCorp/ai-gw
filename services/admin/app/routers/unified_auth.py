@@ -21,6 +21,7 @@ import json
 import re
 import secrets
 from datetime import timedelta
+from uuid import UUID
 
 import bcrypt
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
@@ -135,6 +136,40 @@ def has_role(user: dict, role: str, scope_id: str | None = None) -> bool:
     return False
 
 
+async def _can_manage_team(user: dict, team_id: str, session: AsyncSession) -> bool:
+    """Return True if user can create/update/delete the given team."""
+    if has_role(user, "platform_admin"):
+        return True
+    if has_role(user, "team_admin", team_id):
+        return True
+    # area_owner inherits management of all teams in their area
+    row = (await session.execute(
+        text("SELECT area_id FROM teams WHERE id = CAST(:tid AS uuid)"),
+        {"tid": team_id},
+    )).first()
+    if row and row[0] and has_role(user, "area_owner", str(row[0])):
+        return True
+    return False
+
+
+async def _can_manage_unit(user: dict, unit_id: str, session: AsyncSession) -> bool:
+    """Return True if user can create/update/delete the given unit."""
+    if has_role(user, "platform_admin"):
+        return True
+    row = (await session.execute(
+        text("SELECT area_id FROM units WHERE id = CAST(:uid AS uuid)"),
+        {"uid": unit_id},
+    )).first()
+    if row and row[0] and has_role(user, "area_owner", str(row[0])):
+        return True
+    return False
+
+
+async def _can_manage_area(user: dict, area_id: str) -> bool:
+    """Return True if user can create/update/delete the given area."""
+    return has_role(user, "platform_admin") or has_role(user, "area_owner", area_id)
+
+
 # ---------------------------------------------------------------------------
 # Rate limiting
 # ---------------------------------------------------------------------------
@@ -205,12 +240,18 @@ async def _load_user_roles(session: AsyncSession, user_id: str) -> list[dict]:
 
 
 async def _build_session_payload(row, roles: list[dict]) -> dict:
+    is_platform_admin = any(r["role"] == "platform_admin" for r in roles)
+    managed_area_ids = [r["scope_id"] for r in roles if r["role"] == "area_owner" and r.get("scope_id")]
+    managed_team_ids = [r["scope_id"] for r in roles if r["role"] == "team_admin" and r.get("scope_id")]
     return {
         "user_id": str(row["id"]),
         "email": row["email"],
         "display_name": row["display_name"] or "",
         "roles": roles,
         "primary_team_id": str(row["primary_team_id"]) if row.get("primary_team_id") else None,
+        "is_platform_admin": is_platform_admin,
+        "managed_area_ids": managed_area_ids,
+        "managed_team_ids": managed_team_ids,
     }
 
 
@@ -973,6 +1014,32 @@ async def oidc_callback(
         text("UPDATE users SET last_login_at = NOW() WHERE id = CAST(:id AS uuid)"),
         {"id": user_id_str},
     )
+
+    # Apply Entra group → role mappings from the groups claim
+    group_ids = claims.get("groups", [])
+    if group_ids:
+        try:
+            mappings = (await session.execute(
+                text("""
+                    SELECT role, scope_type, scope_id::text
+                    FROM entra_group_role_mappings
+                    WHERE entra_group_id = ANY(:gids)
+                """),
+                {"gids": group_ids},
+            )).mappings().all()
+            for m in mappings:
+                await session.execute(
+                    text("""
+                        INSERT INTO user_roles (user_id, role, scope_type, scope_id)
+                        VALUES (CAST(:uid AS uuid), :role, :scope_type, CAST(:scope_id AS uuid))
+                        ON CONFLICT DO NOTHING
+                    """),
+                    {"uid": user_id_str, "role": m["role"],
+                     "scope_type": m["scope_type"], "scope_id": m["scope_id"]},
+                )
+        except Exception:
+            await session.rollback()  # table may not exist before migration 0016
+
     await session.commit()
 
     roles = await _load_user_roles(session, user_id_str)

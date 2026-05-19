@@ -21,6 +21,7 @@ async def list_users(
     search: str | None = Query(default=None),
     role: str | None = Query(default=None),
     status: str | None = Query(default=None),
+    team_id: str | None = Query(default=None),
     limit: int = Query(default=50, le=200),
     offset: int = Query(default=0),
     auth: dict = Depends(get_admin_session),
@@ -38,6 +39,14 @@ async def list_users(
     if role:
         filters.append("EXISTS (SELECT 1 FROM user_roles r2 WHERE r2.user_id = u.id AND r2.role = :role)")
         params["role"] = role
+    if team_id:
+        filters.append("""EXISTS (
+            SELECT 1 FROM user_roles r3
+            WHERE r3.user_id = u.id
+              AND r3.scope_type = 'team'
+              AND r3.scope_id = CAST(:team_id AS uuid)
+        )""")
+        params["team_id"] = team_id
 
     where = " AND ".join(filters)
 

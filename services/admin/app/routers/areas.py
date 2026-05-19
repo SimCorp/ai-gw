@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app import audit
 from app.db import get_session
 from app.models.area_policy import AreaPolicy
+from app.routers.unified_auth import get_current_user, _can_manage_area
 
 router = APIRouter(prefix="/areas", tags=["areas"])
 
@@ -77,8 +78,13 @@ async def list_areas(session: AsyncSession = Depends(get_session)):
 
 @router.post("", status_code=201)
 async def create_area(
-    body: AreaCreate, request: Request, session: AsyncSession = Depends(get_session)
+    body: AreaCreate,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+    user: dict = Depends(get_current_user),
 ):
+    if not await _can_manage_area(user, ""):  # only platform_admin can create areas
+        raise HTTPException(status_code=403, detail="Platform admin required to create areas")
     result = await session.execute(
         text("""
             INSERT INTO areas (name, slug, description, color)
@@ -173,7 +179,10 @@ async def update_area(
     body: AreaUpdate,
     request: Request,
     session: AsyncSession = Depends(get_session),
+    user: dict = Depends(get_current_user),
 ):
+    if not await _can_manage_area(user, str(area_id)):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
     result = await session.execute(
         text("""
             UPDATE areas SET name = :name, slug = :slug, description = :description, color = :color
@@ -202,8 +211,13 @@ async def update_area(
 
 @router.delete("/{area_id}", status_code=204)
 async def delete_area(
-    area_id: UUID, request: Request, session: AsyncSession = Depends(get_session)
+    area_id: UUID,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+    user: dict = Depends(get_current_user),
 ):
+    if not await _can_manage_area(user, str(area_id)):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
     result = await session.execute(
         text("DELETE FROM areas WHERE id = :id RETURNING id"),
         {"id": area_id},
@@ -254,7 +268,10 @@ async def upsert_area_policy(
     body: AreaPolicyUpdate,
     request: Request,
     session: AsyncSession = Depends(get_session),
+    user: dict = Depends(get_current_user),
 ):
+    if not await _can_manage_area(user, str(area_id)):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
     # Verify area exists
     area_exists = (await session.execute(
         text("SELECT id FROM areas WHERE id = :id"), {"id": area_id}

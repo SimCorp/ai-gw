@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import audit
 from app.db import get_session
+from app.routers.unified_auth import get_current_user, _can_manage_unit, _can_manage_area
 
 router = APIRouter(prefix="/units", tags=["units"])
 
@@ -113,7 +114,14 @@ async def _validate_parent(session: AsyncSession, area_id, parent_unit_id, self_
 
 
 @router.post("", status_code=201)
-async def create_unit(body: UnitCreate, request: Request, session: AsyncSession = Depends(get_session)):
+async def create_unit(
+    body: UnitCreate,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+    user: dict = Depends(get_current_user),
+):
+    if not await _can_manage_area(user, str(body.area_id)):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
     slug = body.slug or _slugify(body.name)
 
     # check area exists
@@ -213,8 +221,14 @@ async def get_unit(unit_id: UUID, session: AsyncSession = Depends(get_session)):
 
 @router.put("/{unit_id}")
 async def update_unit(
-    unit_id: UUID, body: UnitUpdate, request: Request, session: AsyncSession = Depends(get_session)
+    unit_id: UUID,
+    body: UnitUpdate,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+    user: dict = Depends(get_current_user),
 ):
+    if not await _can_manage_unit(user, str(unit_id), session):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
     current = (await session.execute(
         text("SELECT id, area_id, name, slug, description, color, created_at, parent_unit_id FROM units WHERE id = :id"),
         {"id": unit_id},
@@ -271,7 +285,14 @@ async def update_unit(
 
 
 @router.delete("/{unit_id}", status_code=204)
-async def delete_unit(unit_id: UUID, request: Request, session: AsyncSession = Depends(get_session)):
+async def delete_unit(
+    unit_id: UUID,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+    user: dict = Depends(get_current_user),
+):
+    if not await _can_manage_unit(user, str(unit_id), session):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
     unit = (await session.execute(
         text("SELECT id FROM units WHERE id = :id"), {"id": unit_id}
     )).one_or_none()

@@ -93,6 +93,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 <NavSection label="Overview">
                   <NavItem href="/admin/dashboard" label="Dashboard" />
                   <NavItem href="/admin/requests" label="Live requests" />
+                </NavSection>
+
+                <NavSection label="Organisation">
+                  <NavItem href="/admin/org" label="Org tree" />
                   <NavItem href="/admin/areas" label="Areas" />
                   <NavItem href="/admin/units" label="Units" />
                   <NavItem href="/admin/teams" label="Teams" />
@@ -130,6 +134,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 <NavSection label="Operate">
                   <NavItem href="/admin/reports" label="Cost reports" />
                   <NavItem href="/admin/alerts" label="Alerts" />
+                </NavSection>
+
+                <NavSection label="Settings">
+                  <NavItem href="/admin/settings/entra" label="Entra ID groups" />
                 </NavSection>
               </div>
 

@@ -68,6 +68,7 @@ from app.routers import (
     teams,
     units as units_router,
     genai_adoption as genai_adoption_router,
+    entra as entra_router,
 )
 
 
@@ -337,6 +338,7 @@ app.include_router(config_api_router.router, dependencies=_auth)
 app.include_router(copilot_catalog_router.router, dependencies=_auth)
 app.include_router(codemate_router.router, dependencies=_auth)
 app.include_router(requests_router.router, dependencies=_auth)
+app.include_router(entra_router.router, dependencies=_auth)
 app.include_router(guardrails_router.router, dependencies=_auth)
 app.include_router(workflows_router.router, dependencies=_auth)
 app.include_router(mcp_router.router, dependencies=_auth)

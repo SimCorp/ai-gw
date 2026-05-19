@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app import audit
 from app.db import get_session
 from app.models.team import Project, Team
+from app.routers.unified_auth import get_current_user, _can_manage_team, _can_manage_area
 
 router = APIRouter(prefix="/teams", tags=["teams"])
 
@@ -60,8 +61,15 @@ async def list_teams(session: AsyncSession = Depends(get_session)):
 
 @router.post("", status_code=201)
 async def create_team(
-    body: TeamCreate, request: Request, session: AsyncSession = Depends(get_session)
+    body: TeamCreate,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+    user: dict = Depends(get_current_user),
 ):
+    # area_owner can create teams in their area; platform_admin can create anywhere
+    area_id_for_check = str(body.area_id) if body.area_id else ""
+    if not await _can_manage_area(user, area_id_for_check):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
     area_id = body.area_id
     unit_id = body.unit_id
 
@@ -128,7 +136,10 @@ async def update_team(
     body: TeamCreate,
     request: Request,
     session: AsyncSession = Depends(get_session),
+    user: dict = Depends(get_current_user),
 ):
+    if not await _can_manage_team(user, str(team_id), session):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
     team = await session.get(Team, team_id)
     if not team:
         raise HTTPException(status_code=404, detail="Team not found")
@@ -155,8 +166,13 @@ async def update_team(
 
 @router.delete("/{team_id}", status_code=204)
 async def delete_team(
-    team_id: UUID, request: Request, session: AsyncSession = Depends(get_session)
+    team_id: UUID,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+    user: dict = Depends(get_current_user),
 ):
+    if not await _can_manage_team(user, str(team_id), session):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
     team = await session.get(Team, team_id)
     if not team:
         raise HTTPException(status_code=404, detail="Team not found")
