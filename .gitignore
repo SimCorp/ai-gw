@@ -20,3 +20,6 @@ node_modules/
 .turbo/
 dist/
 storybook-static/
+
+# Persistent bind-mount data (survives Docker Desktop restarts)
+data/
