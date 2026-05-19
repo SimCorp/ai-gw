@@ -105,7 +105,43 @@ docker compose -f infra/docker-compose.yml up --build
 docker compose -f infra/docker-compose.yml up --build -d
 ```
 
-The `db-migrate` container runs `init.sql` before any app services start. LiteLLM has a 120-second `start_period` — allow 2–3 minutes for full cluster readiness.
+The `db-migrate` container runs all Alembic migrations (0001 → latest) before any app services start. LiteLLM has a 120-second `start_period` — allow 2–3 minutes for full cluster readiness.
+
+### First login (admin portal)
+
+The default admin account is seeded automatically on first boot in `development` mode:
+
+| Field | Value |
+|-------|-------|
+| URL | http://localhost:3001 |
+| Email | `admin@simcorp.com` |
+| Password | set by the `_default_hash` in `services/admin/app/main.py` |
+
+The plaintext password is not stored in the repo. If you don't know it (e.g. after a fresh install), reset it:
+
+```bash
+python3 - <<'EOF'
+import bcrypt, subprocess
+NEW_PASSWORD = "SimCorp1!"   # change to whatever you want
+h = bcrypt.hashpw(NEW_PASSWORD.encode(), bcrypt.gensalt(12)).decode()
+sql = f"UPDATE users SET password_hash = '{h}', must_change_password = false WHERE email = 'admin@simcorp.com';"
+subprocess.run(["docker", "exec", "ai-gateway-postgres-1", "psql", "-U", "aigateway", "-d", "aigateway", "-c", sql])
+print(f"Password reset to: {NEW_PASSWORD}")
+EOF
+```
+
+### Seed the SimCorp org structure
+
+After a fresh install the areas/units/teams tables are empty. Populate the real org hierarchy:
+
+```bash
+# 1. Log in at http://localhost:3001, then in the browser console:
+#    sessionStorage.getItem('admin_session_token')
+# 2. Copy the token and run:
+ADMIN_TOKEN=<token> python3 scripts/seed_simcorp_org.py
+```
+
+The script is idempotent — safe to run again if partially applied.
 
 ### Start with Ollama (local model serving)
 
@@ -121,10 +157,17 @@ docker compose -f infra/docker-compose.yml down
 
 ### Stop and Wipe Persistent Data
 
+Postgres data is stored in a bind mount at `data/postgres/` (not a named Docker volume) so it
+survives Docker Desktop restarts on WSL2. To fully wipe:
+
 ```bash
-# Destroys postgres_data and ollama_data volumes — use with care
-docker compose -f infra/docker-compose.yml down -v
+docker compose -f infra/docker-compose.yml down
+sudo rm -rf data/postgres && mkdir -p data/postgres
+# Redis data (named volume):
+docker volume rm ai-gateway_redis_master_data 2>/dev/null || true
 ```
+
+On next `up`, `db-migrate` will re-apply all migrations from scratch.
 
 ### Restart a Single Service
 
