@@ -159,7 +159,7 @@ async def submit(
         SELECT MAX(sc.composite) AS best
         FROM league_submissions sub
         JOIN league_scores sc ON sc.submission_id = sub.id
-        WHERE sub.challenge_id = :cid AND sub.engineer_id = :uid
+        WHERE sub.challenge_id = :cid AND sub.engineer_id = :uid AND sub.mode = 'league'
     """), {"cid": str(challenge_id), "uid": user["user_id"]})).mappings().one_or_none()
     prior_best = float(prior_row["best"]) if prior_row and prior_row["best"] is not None else None
 
@@ -176,6 +176,11 @@ async def submit(
     season_weights = row["scoring_weights"] or dict(DEFAULT_WEIGHTS)
     scores = _compute_scores(run_results, prior_best, season_weights)
 
+    # strip expected from league run_results before persisting (hidden test suite protection)
+    results_to_store = run_results
+    if body.mode == "league":
+        results_to_store = [{k: v for k, v in r.items() if k != "expected"} for r in run_results]
+
     prompt_hash = hashlib.sha256(body.system_prompt.encode()).hexdigest()
     sub_result = await session.execute(text("""
         INSERT INTO league_submissions
@@ -190,7 +195,7 @@ async def submit(
         "prompt": body.system_prompt,
         "tools": json.dumps(body.tool_config),
         "attempt": attempt_num,
-        "results": json.dumps(run_results),
+        "results": json.dumps(results_to_store),
         "hash": prompt_hash,
     })
     submission_id = sub_result.scalar()

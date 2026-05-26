@@ -45,8 +45,11 @@ class WeightsUpdate(BaseModel):
 
     @model_validator(mode="after")
     def check_sum(self):
-        total = (self.quality + self.robustness + self.token_efficiency +
-                 self.speed + self.cost_efficiency + self.improvement_rate + self.creativity)
+        weights = [self.quality, self.robustness, self.token_efficiency,
+                   self.speed, self.cost_efficiency, self.improvement_rate, self.creativity]
+        if any(w < 0 for w in weights):
+            raise ValueError("weights must be non-negative")
+        total = sum(weights)
         if abs(total - 1.0) > 0.01:
             raise ValueError("weights must sum to 1.0")
         return self
