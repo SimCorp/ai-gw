@@ -10,7 +10,7 @@ for _k in list(sys.modules.keys()):
         del sys.modules[_k]
 sys.path.insert(0, _SERVICE_ROOT)
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from httpx import AsyncClient, ASGITransport
@@ -82,14 +82,13 @@ async def app_client(mock_redis, db_session):
     from app.db import get_session
     from app.main import app
 
-    app.state.redis = mock_redis
-
     async def override_get_session():
         yield db_session
 
     app.dependency_overrides[get_session] = override_get_session
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        yield client
+    with patch("app.main.aioredis.from_url", return_value=mock_redis):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            yield client
 
     app.dependency_overrides.clear()
