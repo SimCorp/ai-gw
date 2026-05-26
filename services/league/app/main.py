@@ -15,6 +15,7 @@ from app.routers import challenges as challenges_router
 from app.routers import submissions as submissions_router
 from app.routers import leaderboard as leaderboard_router
 from app.routers import store as store_router
+from app.routers import proposals as proposals_router
 
 
 @asynccontextmanager
@@ -47,6 +48,7 @@ app.include_router(challenges_router.router)
 app.include_router(submissions_router.router)
 app.include_router(leaderboard_router.router)
 app.include_router(store_router.router)
+app.include_router(proposals_router.router)
 
 
 @app.get("/health", tags=["health"])
