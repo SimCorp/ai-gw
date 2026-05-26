@@ -247,23 +247,23 @@
 <h2>Portals</h2>
 <div class="grid" style="grid-template-columns: 1fr 1fr; margin-bottom: 28px;">
 
-  <a class="card" href="http://localhost:3001/admin/dashboard" target="_blank" data-accent="blue">
+  <a class="card" href="http://localhost:8080/admin-portal/admin/dashboard" target="_blank" data-accent="blue">
     <div class="card__arrow">↗</div>
     <div class="card__icon" style="background: rgba(59,130,246,0.15);">🛡️</div>
     <div>
       <div class="card__title">Admin portal</div>
       <div class="card__desc">Team management, model registry, audit log, quotas, provider keys, and system health.</div>
-      <div class="card__url">localhost:3001/admin/dashboard</div>
+      <div class="card__url">localhost:8080/admin-portal/admin/dashboard</div>
     </div>
   </a>
 
-  <a class="card" href="http://localhost:3002/portal" target="_blank" data-accent="teal">
+  <a class="card" href="http://localhost:8080/portal/portal" target="_blank" data-accent="teal">
     <div class="card__arrow">↗</div>
     <div class="card__icon" style="background: rgba(20,184,166,0.15);">⚡</div>
     <div>
       <div class="card__title">Developer portal</div>
       <div class="card__desc">API keys, usage &amp; spend, playground, model catalog, agents, and MCP servers.</div>
-      <div class="card__url">localhost:3002/portal</div>
+      <div class="card__url">localhost:8080/portal/portal</div>
     </div>
   </a>
 
@@ -272,93 +272,103 @@
 <h2>APIs &amp; docs</h2>
 <div class="grid" style="grid-template-columns: repeat(3, 1fr); margin-bottom: 28px;" id="apis">
 
-  <a class="card" href="http://localhost:8005/docs" target="_blank" data-accent="purple">
+  <a class="card" href="http://localhost:8080/admin/docs" target="_blank" data-accent="purple">
     <div class="card__arrow">↗</div>
     <div class="card__icon" style="background: rgba(139,92,246,0.15);">📋</div>
     <div>
       <div class="card__title">Admin API</div>
       <div class="card__desc">FastAPI backend — teams, models, audit, budget, providers. Swagger UI included.</div>
-      <div class="card__url">localhost:8005/docs</div>
+      <div class="card__url">localhost:8080/admin/docs</div>
     </div>
   </a>
 
-  <a class="card" href="http://localhost:8003/ui" target="_blank" data-accent="orange">
+  <a class="card" href="http://localhost:8080/litellm/ui" target="_blank" data-accent="orange">
     <div class="card__arrow">↗</div>
     <div class="card__icon" style="background: rgba(249,115,22,0.15);">🤖</div>
     <div>
       <div class="card__title">LiteLLM proxy</div>
       <div class="card__desc">OpenAI-compatible provider router. UI for model management and key testing.</div>
-      <div class="card__url">localhost:8003/ui</div>
+      <div class="card__url">localhost:8080/litellm/ui</div>
     </div>
   </a>
 
-  <a class="card" href="http://localhost:8001/docs" target="_blank" data-accent="green">
+  <a class="card" href="http://localhost:8080/auth/docs" target="_blank" data-accent="green">
     <div class="card__arrow">↗</div>
     <div class="card__icon" style="background: rgba(34,197,94,0.10);">🔐</div>
     <div>
       <div class="card__title">Auth service</div>
       <div class="card__desc">JWT and API key validation, rate limiting. FastAPI docs.</div>
-      <div class="card__url">localhost:8001/docs</div>
+      <div class="card__url">localhost:8080/auth/docs</div>
     </div>
   </a>
 
-  <a class="card" href="http://localhost:8002/docs" target="_blank" data-accent="teal">
+  <a class="card" href="http://localhost:8080/cache/docs" target="_blank" data-accent="teal">
     <div class="card__arrow">↗</div>
     <div class="card__icon" style="background: rgba(20,184,166,0.15);">🗄️</div>
     <div>
       <div class="card__title">Cache service</div>
       <div class="card__desc">Semantic + exact cache proxy. FastAPI docs with cache hit, invalidation, and stats endpoints.</div>
-      <div class="card__url">localhost:8002/docs</div>
+      <div class="card__url">localhost:8080/cache/docs</div>
     </div>
   </a>
 
-  <a class="card" href="http://localhost:8004/docs" target="_blank" data-accent="blue">
+  <a class="card" href="http://localhost:8080/observability/docs" target="_blank" data-accent="blue">
     <div class="card__arrow">↗</div>
     <div class="card__icon" style="background: rgba(59,130,246,0.15);">📡</div>
     <div>
       <div class="card__title">Observability</div>
       <div class="card__desc">Async event ingestion for request logs, token usage, and latency telemetry. FastAPI docs.</div>
-      <div class="card__url">localhost:8004/docs</div>
+      <div class="card__url">localhost:8080/observability/docs</div>
     </div>
   </a>
 
-  <a class="card" href="http://localhost:8006/docs" target="_blank" data-accent="purple">
+  <a class="card" href="http://localhost:8080/identity/docs" target="_blank" data-accent="purple">
     <div class="card__arrow">↗</div>
     <div class="card__icon" style="background: rgba(139,92,246,0.15);">🔍</div>
     <div>
       <div class="card__title">Identity Pool</div>
       <div class="card__desc">DNS for agents — queryable registry. Resolve agents by slug, capability tag, or name. Heartbeat-based online tracking.</div>
-      <div class="card__url">localhost:8006/docs</div>
+      <div class="card__url">localhost:8080/identity/docs</div>
     </div>
   </a>
 
-  <a class="card" href="http://localhost:8007/docs" target="_blank" data-accent="orange">
+  <a class="card" href="http://localhost:8080/agent-relay/docs" target="_blank" data-accent="orange">
     <div class="card__arrow">↗</div>
     <div class="card__icon" style="background: rgba(249,115,22,0.15);">🔌</div>
     <div>
       <div class="card__title">Agent Relay</div>
       <div class="card__desc">WebSocket relay bus for agentic workflows — routes messages between agents, tools, and the workflow worker.</div>
-      <div class="card__url">localhost:8007/docs</div>
+      <div class="card__url">localhost:8080/agent-relay/docs</div>
     </div>
   </a>
 
-  <a class="card" href="http://localhost:8008/docs" target="_blank" data-accent="teal">
+  <a class="card" href="http://localhost:8080/librarian/docs" target="_blank" data-accent="teal">
     <div class="card__arrow">↗</div>
     <div class="card__icon" style="background: rgba(20,184,166,0.15);">📚</div>
     <div>
       <div class="card__title">Librarian</div>
       <div class="card__desc">Knowledge and document management — ingestion, chunking, semantic search, and retrieval for AI context.</div>
-      <div class="card__url">localhost:8008/docs</div>
+      <div class="card__url">localhost:8080/librarian/docs</div>
     </div>
   </a>
 
-  <a class="card" href="http://localhost:8009/docs" target="_blank" data-accent="blue">
+  <a class="card" href="http://localhost:8080/memory/docs" target="_blank" data-accent="blue">
     <div class="card__arrow">↗</div>
     <div class="card__icon" style="background: rgba(59,130,246,0.15);">🧠</div>
     <div>
       <div class="card__title">Memory Palace</div>
       <div class="card__desc">Persistent agent memory — stores, retrieves, and expires structured memories scoped to user or team.</div>
-      <div class="card__url">localhost:8009/docs</div>
+      <div class="card__url">localhost:8080/memory/docs</div>
+    </div>
+  </a>
+
+  <a class="card" href="http://localhost:8080/league/docs" target="_blank" data-accent="purple">
+    <div class="card__arrow">↗</div>
+    <div class="card__icon" style="background: rgba(139,92,246,0.15);">⚔️</div>
+    <div>
+      <div class="card__title">League</div>
+      <div class="card__desc">AI-League challenge platform · gamified agent scoring</div>
+      <div class="card__url">localhost:8080/league/docs</div>
     </div>
   </a>
 
