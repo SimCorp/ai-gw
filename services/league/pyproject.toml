@@ -13,7 +13,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "pytest-asyncio>=0.23", "httpx", "pytest-mock"]
+dev = ["pytest>=8", "pytest-asyncio>=0.23", "httpx", "pytest-mock", "aiosqlite>=0.20"]
 
 [build-system]
 requires = ["hatchling"]
