@@ -72,17 +72,28 @@ Default dev credentials: `admin@simcorp.com` / `password` (you'll be forced to c
 
 ## Service Reference
 
-| Service | URL | Purpose |
-|---|---|---|
-| auth | http://localhost:8001 | API key / JWT validation, per-team rate limiting |
-| cache | http://localhost:8002 | Semantic + exact cache proxy; public LLM endpoint |
-| litellm | http://localhost:8003 | Provider routing, retries, fallbacks (OpenAI-compatible) |
-| observability | http://localhost:8004 | Async event ingestion, cost accounting |
-| admin | http://localhost:8005 | Operator + developer portal backend |
-| redis | localhost:6379 | Cache store + rate-limit counters |
-| postgres | localhost:5432 | Teams, API keys, policies, cost records |
-| dex (mock OIDC) | http://localhost:5556 | Local Entra ID substitute for development |
-| ollama | http://localhost:11434 | Local model serving (opt-in via `--profile ollama`) |
+All services are available via the nginx hub at **http://localhost:8080** — no need to remember individual port numbers.
+
+| Service | Via nginx (preferred) | Direct port | Purpose |
+|---|---|---|---|
+| auth | http://localhost:8080/auth/ | :8001 | API key / JWT validation, per-team rate limiting |
+| cache | http://localhost:8080/cache/ | :8002 | Semantic + exact cache proxy; public LLM endpoint |
+| litellm | http://localhost:8080/litellm/ | :8003 | Provider routing, retries, fallbacks (OpenAI-compatible) |
+| observability | http://localhost:8080/observability/ | :8004 | Async event ingestion, cost accounting |
+| admin | http://localhost:8080/admin/ | :8005 | Operator + developer portal backend |
+| identity | http://localhost:8080/identity/ | :8006 | Agent registry — DNS-style resolve, heartbeat TTL |
+| agent-relay | http://localhost:8080/agent-relay/ | :8007 | WebSocket relay bus for agentic workflows |
+| librarian | http://localhost:8080/librarian/ | :8008 | Knowledge ingestion, chunking, semantic search |
+| memory | http://localhost:8080/memory/ | :8009 | Persistent agent memory scoped to user/team |
+| league | http://localhost:8080/league/ | :8010 | AI-League gamified challenge platform |
+| admin-portal | http://localhost:8080/admin-portal/ | :3001 | Admin Next.js app |
+| portal | http://localhost:8080/portal/ | :3002 | Developer Next.js app |
+| redis | — | :6379 | Cache store + rate-limit counters |
+| postgres | — | :5432 | Teams, API keys, policies, cost records |
+| dex (mock OIDC) | — | :5556 | Local Entra ID substitute for development |
+| ollama | — | :11434 | Local model serving (opt-in via `--profile ollama`) |
+
+> **Ports are pinned.** The nginx config in `infra/nginx/default.conf` hardcodes these port numbers — changing any service port in `docker-compose.yml` requires a matching update there.
 
 ---
 
