@@ -244,6 +244,33 @@ services:
       start_period: 30s
     restart: unless-stopped
 
+  league:
+    build:
+      context: ../services/league
+    ports:
+      - "127.0.0.1:8010:8010"
+    env_file: ../.env
+    environment:
+      ENVIRONMENT: development
+      DATABASE_URL: "postgresql+asyncpg://aigateway:aigateway@postgres:5432/aigateway"
+      REDIS_URL: "redis://redis:6379/0"
+      LITELLM_URL: "http://litellm:8003"
+      DEV_BYPASS_AUTH: "false"
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      litellm:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8010/health')\" 2>/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    restart: unless-stopped
+
   admin-portal:
     image: node:20-alpine
     working_dir: /app/apps/admin
