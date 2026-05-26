@@ -70,6 +70,11 @@ def test_robustness_zero_total():
     assert score_robustness(passed=0, total=0) == pytest.approx(0.0)
 
 
+def test_robustness_passed_exceeds_total():
+    # should be capped at 100, not return 150
+    assert score_robustness(passed=15, total=10) == pytest.approx(100.0)
+
+
 # improvement rate
 def test_improvement_rate_first_submission():
     # no prior best -> neutral score of 50
@@ -89,6 +94,12 @@ def test_improvement_rate_no_improvement():
 def test_improvement_rate_regression():
     # worse than prior best -> score 0 (floor)
     assert score_improvement_rate(current=300.0, prior_best=600.0) == pytest.approx(0.0)
+
+
+def test_improvement_rate_shallow_regression():
+    # -5% regression → proportionally below 50 (not 0)
+    result = score_improvement_rate(current=570.0, prior_best=600.0)
+    assert 40.0 < result < 50.0  # somewhere in the partial-regression range
 
 
 # composite

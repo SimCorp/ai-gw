@@ -1,6 +1,9 @@
 # services/league/app/scoring.py
 
-DEFAULT_WEIGHTS = {
+import types
+from collections.abc import Mapping
+
+DEFAULT_WEIGHTS: types.MappingProxyType = types.MappingProxyType({
     "quality": 0.35,
     "robustness": 0.20,
     "token_efficiency": 0.15,
@@ -8,7 +11,7 @@ DEFAULT_WEIGHTS = {
     "cost_efficiency": 0.10,
     "improvement_rate": 0.05,
     "creativity": 0.05,
-}
+})
 
 
 def score_quality_exact(results: list[dict]) -> float:
@@ -35,17 +38,19 @@ def score_efficiency(actual: float, median: float) -> float:
 
 
 def score_robustness(passed: int, total: int) -> float:
-    """Score robustness as % of edge-case test variants passed."""
+    """Score robustness as % of edge-case test variants passed. Returns 0-100."""
     if total == 0:
         return 0.0
-    return passed * 100.0 / total
+    return min(100.0, passed * 100.0 / total)
 
 
 def score_improvement_rate(current: float, prior_best: float | None) -> float:
-    """Score improvement vs personal season best.
+    """Score improvement vs personal season best. Returns 0-100.
 
-    Returns 50 (neutral) if no prior best (first submission).
-    Improvement of >=50% -> 100. No change -> 50. Regression -> 0.
+    No prior best (first submission) → 50 (neutral).
+    +50% or more improvement → 100 (cap).
+    No change → 50 (neutral).
+    Any regression → proportionally below 50; deep regression (≥50% drop) → 0 (floor).
     """
     if prior_best is None or prior_best == 0:
         return 50.0
@@ -55,7 +60,7 @@ def score_improvement_rate(current: float, prior_best: float | None) -> float:
     return min(100.0, max(0.0, 50.0 + delta * 100.0))
 
 
-def compute_composite(scores: dict[str, float], weights: dict[str, float]) -> float:
+def compute_composite(scores: Mapping[str, float], weights: Mapping[str, float]) -> float:
     """Compute weighted composite score 0-1000.
 
     Raises ValueError if weights don't sum to 1.0 (+-0.01 tolerance).
