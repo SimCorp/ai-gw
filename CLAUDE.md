@@ -11,7 +11,7 @@ docker compose -f infra/docker-compose.yml up --build
 
 ## Service ports
 
-These ports are pinned — they do not change. See `landing.html` for the dev hub.
+These ports are pinned — they do not change. See `infra/html/index.html` for the dev hub (served at `localhost:8080`).
 
 | Service | URL (nginx) | Direct port | Purpose |
 |---|---|---|---|

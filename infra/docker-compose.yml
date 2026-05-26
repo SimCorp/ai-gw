@@ -464,9 +464,9 @@ services:
     ports:
       - "127.0.0.1:8080:80"
     volumes:
-      - ../landing.html:/usr/share/nginx/html/index.html:ro
-      # Mount the whole directory (not the file) so inode replacements are
-      # visible inside the container without requiring a full restart.
+      # Directory mounts (not file mounts) so inode replacements from editor
+      # writes are visible inside the container without a full restart.
+      - ./html/:/usr/share/nginx/html/:ro
       - ./nginx/:/etc/nginx/conf.d/:ro
     depends_on:
       auth:

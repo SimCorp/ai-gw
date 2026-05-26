@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Gateway — Dev Hub</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0d0f14;
+    --surface: #13161e;
+    --surface-2: #1a1e28;
+    --rule: #252934;
+    --fg-1: #e8eaf0;
+    --fg-2: #9399a8;
+    --fg-3: #5a6070;
+    --blue: #3b82f6;
+    --blue-dim: rgba(59,130,246,0.12);
+    --teal: #14b8a6;
+    --teal-dim: rgba(20,184,166,0.12);
+    --purple: #8b5cf6;
+    --purple-dim: rgba(139,92,246,0.12);
+    --green: #22c55e;
+    --green-dim: rgba(34,197,94,0.10);
+    --orange: #f97316;
+    --orange-dim: rgba(249,115,22,0.10);
+    --radius: 10px;
+    --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --mono: 'SF Mono', 'Fira Code', ui-monospace, monospace;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--fg-1);
+    font-family: var(--font);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 48px 24px 64px;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 48px;
+  }
+
+  .wordmark {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .logo {
+    width: 40px; height: 40px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, var(--blue), var(--purple));
+    display: grid; place-items: center;
+    font-weight: 800; font-size: 18px; color: #fff;
+    flex-shrink: 0;
+  }
+
+  h1 {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+    color: var(--fg-1);
+  }
+
+  .tagline {
+    font-size: 14px;
+    color: var(--fg-2);
+    margin-top: 6px;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    width: 100%;
+    max-width: 900px;
+    margin-bottom: 28px;
+  }
+
+  .grid--services {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  h2 {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--fg-3);
+    width: 100%;
+    max-width: 900px;
+    margin-bottom: 10px;
+  }
+
+  a.card {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 18px;
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius);
+    text-decoration: none;
+    color: inherit;
+    transition: border-color 140ms, background 140ms, transform 100ms;
+    position: relative;
+    overflow: hidden;
+  }
+
+  a.card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity 140ms;
+    border-radius: var(--radius);
+  }
+
+  a.card:hover { border-color: var(--accent); transform: translateY(-1px); }
+  a.card:hover::before { opacity: 1; }
+  a.card:active { transform: translateY(0); }
+
+  a.card[data-accent="blue"]   { --accent: var(--blue); }
+  a.card[data-accent="blue"]::before   { background: var(--blue-dim); }
+  a.card[data-accent="teal"]   { --accent: var(--teal); }
+  a.card[data-accent="teal"]::before   { background: var(--teal-dim); }
+  a.card[data-accent="purple"] { --accent: var(--purple); }
+  a.card[data-accent="purple"]::before { background: var(--purple-dim); }
+  a.card[data-accent="green"]  { --accent: var(--green); }
+  a.card[data-accent="green"]::before  { background: var(--green-dim); }
+  a.card[data-accent="orange"] { --accent: var(--orange); }
+  a.card[data-accent="orange"]::before { background: var(--orange-dim); }
+
+  .card__icon {
+    width: 34px; height: 34px;
+    border-radius: 8px;
+    display: grid; place-items: center;
+    font-size: 17px;
+    flex-shrink: 0;
+  }
+
+  .card__title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--fg-1);
+    line-height: 1.2;
+  }
+
+  .card__desc {
+    font-size: 12px;
+    color: var(--fg-2);
+    line-height: 1.5;
+    flex: 1;
+  }
+
+  .card__url {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--fg-3);
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .card__arrow {
+    position: absolute;
+    top: 16px; right: 16px;
+    font-size: 14px;
+    color: var(--fg-3);
+    opacity: 0;
+    transition: opacity 140ms;
+  }
+
+  a.card:hover .card__arrow { opacity: 1; }
+
+  /* service cards — smaller, no clickable on non-http */
+  .scard {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 14px 16px;
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius);
+  }
+
+  .scard__dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--green);
+    flex-shrink: 0;
+    margin-top: 4px;
+  }
+
+  .scard__body { flex: 1; min-width: 0; }
+
+  .scard__name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--fg-1);
+  }
+
+  .scard__desc {
+    font-size: 11.5px;
+    color: var(--fg-2);
+    margin-top: 2px;
+  }
+
+  .scard__port {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--fg-3);
+    margin-top: 4px;
+  }
+
+  footer {
+    margin-top: 40px;
+    font-size: 12px;
+    color: var(--fg-3);
+    text-align: center;
+  }
+
+  @media (max-width: 700px) {
+    .grid { grid-template-columns: 1fr; }
+    .grid--services { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wordmark">
+    <div class="logo">AI</div>
+    <h1>AI Gateway</h1>
+  </div>
+  <p class="tagline">SimCorp developer platform · local dev environment</p>
+</header>
+
+<h2>Portals</h2>
+<div class="grid" style="grid-template-columns: 1fr 1fr; margin-bottom: 28px;">
+
+  <a class="card" href="http://localhost:8080/admin-portal/admin/dashboard" target="_blank" data-accent="blue">
+    <div class="card__arrow">↗</div>
+    <div class="card__icon" style="background: rgba(59,130,246,0.15);">🛡️</div>
+    <div>
+      <div class="card__title">Admin portal</div>
+      <div class="card__desc">Team management, model registry, audit log, quotas, provider keys, and system health.</div>
+      <div class="card__url">localhost:8080/admin-portal/admin/dashboard</div>
+    </div>
+  </a>
+
+  <a class="card" href="http://localhost:8080/portal/portal" target="_blank" data-accent="teal">
+    <div class="card__arrow">↗</div>
+    <div class="card__icon" style="background: rgba(20,184,166,0.15);">⚡</div>
+    <div>
+      <div class="card__title">Developer portal</div>
+      <div class="card__desc">API keys, usage &amp; spend, playground, model catalog, agents, and MCP servers.</div>
+      <div class="card__url">localhost:8080/portal/portal</div>
+    </div>
+  </a>
+
+</div>
+
+<h2>APIs &amp; docs</h2>
+<div class="grid" style="grid-template-columns: repeat(3, 1fr); margin-bottom: 28px;" id="apis">
+
+  <a class="card" href="http://localhost:8080/admin/docs" target="_blank" data-accent="purple">
+    <div class="card__arrow">↗</div>
+    <div class="card__icon" style="background: rgba(139,92,246,0.15);">📋</div>
+    <div>
+      <div class="card__title">Admin API</div>
+      <div class="card__desc">FastAPI backend — teams, models, audit, budget, providers. Swagger UI included.</div>
+      <div class="card__url">localhost:8080/admin/docs</div>
+    </div>
+  </a>
+
+  <a class="card" href="http://localhost:8080/litellm/ui" target="_blank" data-accent="orange">
+    <div class="card__arrow">↗</div>
+    <div class="card__icon" style="background: rgba(249,115,22,0.15);">🤖</div>
+    <div>
+      <div class="card__title">LiteLLM proxy</div>
+      <div class="card__desc">OpenAI-compatible provider router. UI for model management and key testing.</div>
+      <div class="card__url">localhost:8080/litellm/ui</div>
+    </div>
+  </a>
+
+  <a class="card" href="http://localhost:8080/auth/docs" target="_blank" data-accent="green">
+    <div class="card__arrow">↗</div>
+    <div class="card__icon" style="background: rgba(34,197,94,0.10);">🔐</div>
+    <div>
+      <div class="card__title">Auth service</div>
+      <div class="card__desc">JWT and API key validation, rate limiting. FastAPI docs.</div>
+      <div class="card__url">localhost:8080/auth/docs</div>
+    </div>
+  </a>
+
+  <a class="card" href="http://localhost:8080/cache/docs" target="_blank" data-accent="teal">
+    <div class="card__arrow">↗</div>
+    <div class="card__icon" style="background: rgba(20,184,166,0.15);">🗄️</div>
+    <div>
+      <div class="card__title">Cache service</div>
+      <div class="card__desc">Semantic + exact cache proxy. FastAPI docs with cache hit, invalidation, and stats endpoints.</div>
+      <div class="card__url">localhost:8080/cache/docs</div>
+    </div>
+  </a>
+
+  <a class="card" href="http://localhost:8080/observability/docs" target="_blank" data-accent="blue">
+    <div class="card__arrow">↗</div>
+    <div class="card__icon" style="background: rgba(59,130,246,0.15);">📡</div>
+    <div>
+      <div class="card__title">Observability</div>
+      <div class="card__desc">Async event ingestion for request logs, token usage, and latency telemetry. FastAPI docs.</div>
+      <div class="card__url">localhost:8080/observability/docs</div>
+    </div>
+  </a>
+
+  <a class="card" href="http://localhost:8080/identity/docs" target="_blank" data-accent="purple">
+    <div class="card__arrow">↗</div>
+    <div class="card__icon" style="background: rgba(139,92,246,0.15);">🔍</div>
+    <div>
+      <div class="card__title">Identity Pool</div>
+      <div class="card__desc">DNS for agents — queryable registry. Resolve agents by slug, capability tag, or name. Heartbeat-based online tracking.</div>
+      <div class="card__url">localhost:8080/identity/docs</div>
+    </div>
+  </a>
+
+  <a class="card" href="http://localhost:8080/agent-relay/docs" target="_blank" data-accent="orange">
+    <div class="card__arrow">↗</div>
+    <div class="card__icon" style="background: rgba(249,115,22,0.15);">🔌</div>
+    <div>
+      <div class="card__title">Agent Relay</div>
+      <div class="card__desc">WebSocket relay bus for agentic workflows — routes messages between agents, tools, and the workflow worker.</div>
+      <div class="card__url">localhost:8080/agent-relay/docs</div>
+    </div>
+  </a>
+
+  <a class="card" href="http://localhost:8080/librarian/docs" target="_blank" data-accent="teal">
+    <div class="card__arrow">↗</div>
+    <div class="card__icon" style="background: rgba(20,184,166,0.15);">📚</div>
+    <div>
+      <div class="card__title">Librarian</div>
+      <div class="card__desc">Knowledge and document management — ingestion, chunking, semantic search, and retrieval for AI context.</div>
+      <div class="card__url">localhost:8080/librarian/docs</div>
+    </div>
+  </a>
+
+  <a class="card" href="http://localhost:8080/memory/docs" target="_blank" data-accent="blue">
+    <div class="card__arrow">↗</div>
+    <div class="card__icon" style="background: rgba(59,130,246,0.15);">🧠</div>
+    <div>
+      <div class="card__title">Memory Palace</div>
+      <div class="card__desc">Persistent agent memory — stores, retrieves, and expires structured memories scoped to user or team.</div>
+      <div class="card__url">localhost:8080/memory/docs</div>
+    </div>
+  </a>
+
+  <a class="card" href="http://localhost:8080/league/docs" target="_blank" data-accent="purple">
+    <div class="card__arrow">↗</div>
+    <div class="card__icon" style="background: rgba(139,92,246,0.15);">⚔️</div>
+    <div>
+      <div class="card__title">League</div>
+      <div class="card__desc">AI-League challenge platform · gamified agent scoring</div>
+      <div class="card__url">localhost:8080/league/docs</div>
+    </div>
+  </a>
+
+</div>
+
+<h2>Infrastructure</h2>
+<div class="grid grid--services">
+
+  <div class="scard">
+    <div class="scard__dot"></div>
+    <div class="scard__body">
+      <div class="scard__name">Redis</div>
+      <div class="scard__desc">Cache + rate limit counters</div>
+      <div class="scard__port">localhost:6379</div>
+    </div>
+  </div>
+
+  <div class="scard">
+    <div class="scard__dot"></div>
+    <div class="scard__body">
+      <div class="scard__name">PostgreSQL</div>
+      <div class="scard__desc">Teams, policies, cost records</div>
+      <div class="scard__port">localhost:5432</div>
+    </div>
+  </div>
+
+  <div class="scard">
+    <div class="scard__dot"></div>
+    <div class="scard__body">
+      <div class="scard__name">Dex (mock OIDC)</div>
+      <div class="scard__desc">Local Entra ID substitute</div>
+      <div class="scard__port">localhost:5556</div>
+    </div>
+  </div>
+
+  <div class="scard">
+    <div class="scard__dot"></div>
+    <div class="scard__body">
+      <div class="scard__name">Ollama</div>
+      <div class="scard__desc">Local model serving (opt-in)</div>
+      <div class="scard__port">localhost:11434</div>
+    </div>
+  </div>
+
+  <div class="scard">
+    <div class="scard__dot"></div>
+    <div class="scard__body">
+      <div class="scard__name">Identity Pool</div>
+      <div class="scard__desc">Agent registry — DNS-style resolve, heartbeat TTL</div>
+      <div class="scard__port">localhost:8006</div>
+    </div>
+  </div>
+
+  <div class="scard">
+    <div class="scard__dot"></div>
+    <div class="scard__body">
+      <div class="scard__name">Agent Relay</div>
+      <div class="scard__desc">WebSocket relay bus for agentic workflows</div>
+      <div class="scard__port">localhost:8007</div>
+    </div>
+  </div>
+
+  <div class="scard">
+    <div class="scard__dot"></div>
+    <div class="scard__body">
+      <div class="scard__name">Librarian</div>
+      <div class="scard__desc">Knowledge ingestion, chunking, semantic search</div>
+      <div class="scard__port">localhost:8008</div>
+    </div>
+  </div>
+
+  <div class="scard">
+    <div class="scard__dot"></div>
+    <div class="scard__body">
+      <div class="scard__name">Memory Palace</div>
+      <div class="scard__desc">Persistent agent memory, scoped to user or team</div>
+      <div class="scard__port">localhost:8009</div>
+    </div>
+  </div>
+
+</div>
+
+<footer>AI Gateway · SimCorp · local dev · <a href="http://localhost:8080" style="color:inherit;text-decoration:none;">localhost:8080</a> · <span id="ts"></span></footer>
+<script>document.getElementById('ts').textContent = new Date().toLocaleDateString('en-GB', {day:'numeric',month:'short',year:'numeric'});</script>
+</body>
+</html>
