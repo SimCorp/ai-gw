@@ -12,6 +12,7 @@ from app.db import engine
 import app.models  # noqa: F401 — registers all ORM models with Base.metadata
 from app.routers import seasons as seasons_router
 from app.routers import challenges as challenges_router
+from app.routers import submissions as submissions_router
 
 
 @asynccontextmanager
@@ -41,6 +42,7 @@ app.add_middleware(
 
 app.include_router(seasons_router.router)
 app.include_router(challenges_router.router)
+app.include_router(submissions_router.router)
 
 
 @app.get("/health", tags=["health"])
