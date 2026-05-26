@@ -19,6 +19,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    restart: unless-stopped
 
   redis:
     image: redis/redis-stack:7.2.0-v14
@@ -29,6 +30,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    restart: unless-stopped
 
   # ── Redis Sentinel (HA profile) ───────────────────────────────────────────────
   # Enable with: docker compose --profile sentinel up
@@ -112,6 +114,7 @@ services:
     volumes:
       - ./dex/config.yaml:/etc/dex/config.yaml:ro
     command: ["dex", "serve", "/etc/dex/config.yaml"]
+    restart: unless-stopped
 
   ollama:
     image: ollama/ollama:latest
@@ -285,6 +288,12 @@ services:
     depends_on:
       admin:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3001/admin-portal/ || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
     restart: unless-stopped
 
   portal:
@@ -305,6 +314,12 @@ services:
     depends_on:
       admin:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3002/portal/ || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
     restart: unless-stopped
 
   agent-relay:
@@ -324,6 +339,7 @@ services:
       timeout: 5s
       retries: 10
       start_period: 15s
+    restart: unless-stopped
 
   workflow-worker:
     build:
@@ -373,6 +389,7 @@ services:
       timeout: 5s
       retries: 10
       start_period: 30s
+    restart: unless-stopped
 
   librarian:
     build:
@@ -398,6 +415,7 @@ services:
       timeout: 5s
       retries: 10
       start_period: 30s
+    restart: unless-stopped
 
   memory:
     build:
@@ -421,6 +439,7 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+    restart: unless-stopped
 
   claude-sandbox:
     build:
@@ -446,7 +465,20 @@ services:
       - "127.0.0.1:8080:80"
     volumes:
       - ../landing.html:/usr/share/nginx/html/index.html:ro
-      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      # Mount the whole directory (not the file) so inode replacements are
+      # visible inside the container without requiring a full restart.
+      - ./nginx/:/etc/nginx/conf.d/:ro
+    depends_on:
+      auth:
+        condition: service_healthy
+      admin:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
     restart: unless-stopped
 
 volumes:
