@@ -1,7 +1,7 @@
 # services/league/app/routers/leaderboard.py
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,7 +17,8 @@ async def get_leaderboard(
     session: AsyncSession = Depends(get_session),
     _user=Depends(require_dev_auth),
 ):
-    result = await session.execute(text("""
+    result = await session.execute(
+        text("""
         SELECT
             lb.engineer_id,
             u.email,
@@ -35,7 +36,9 @@ async def get_leaderboard(
         LEFT JOIN areas a ON a.id = t.area_id
         WHERE lb.season_id = :sid
         ORDER BY lb.composite_score DESC
-    """), {"sid": str(season_id)})
+    """),
+        {"sid": str(season_id)},
+    )
     rows = result.mappings().all()
     return [
         {
@@ -59,11 +62,20 @@ async def my_rank(
     session: AsyncSession = Depends(get_session),
     user=Depends(require_dev_auth),
 ):
-    row = (await session.execute(text("""
+    row = (
+        (
+            await session.execute(
+                text("""
         SELECT composite_score, rank, points_earned
         FROM league_leaderboard
         WHERE season_id = :sid AND engineer_id = :uid
-    """), {"sid": str(season_id), "uid": user["user_id"]})).mappings().one_or_none()
+    """),
+                {"sid": str(season_id), "uid": user["user_id"]},
+            )
+        )
+        .mappings()
+        .one_or_none()
+    )
     if not row:
         return {"rank": None, "composite_score": 0.0, "points_earned": 0}
     return {

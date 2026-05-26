@@ -1,6 +1,7 @@
 # services/league/tests/conftest.py
 """Ensure the league service's app module is importable when pytest collects
 from the repo root (multiple services share the 'app' package name)."""
+
 import sys
 from pathlib import Path
 
@@ -10,12 +11,12 @@ for _k in list(sys.modules.keys()):
         del sys.modules[_k]
 sys.path.insert(0, _SERVICE_ROOT)
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch  # noqa: E402
 
-import pytest
-from httpx import AsyncClient, ASGITransport
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.pool import StaticPool
+import pytest  # noqa: E402
+from httpx import ASGITransport, AsyncClient  # noqa: E402
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine  # noqa: E402
+from sqlalchemy.pool import StaticPool  # noqa: E402
 
 # ── in-memory SQLite async engine for tests ──────────────────────────────────
 TEST_DB_URL = "sqlite+aiosqlite:///:memory:"
@@ -25,12 +26,14 @@ TEST_DB_URL = "sqlite+aiosqlite:///:memory:"
 def event_loop_policy():
     """Use default asyncio policy."""
     import asyncio
+
     return asyncio.DefaultEventLoopPolicy()
 
 
 @pytest.fixture
 async def db_engine():
     from app.db import Base
+
     engine = create_async_engine(
         TEST_DB_URL,
         connect_args={"check_same_thread": False},
@@ -66,13 +69,15 @@ def mock_redis():
 def mock_litellm():
     """Mock httpx client for litellm calls."""
     client = AsyncMock()
-    client.post = AsyncMock(return_value=MagicMock(
-        status_code=200,
-        json=lambda: {
-            "choices": [{"message": {"content": "mocked response"}}],
-            "usage": {"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30},
-        },
-    ))
+    client.post = AsyncMock(
+        return_value=MagicMock(
+            status_code=200,
+            json=lambda: {
+                "choices": [{"message": {"content": "mocked response"}}],
+                "usage": {"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30},
+            },
+        )
+    )
     return client
 
 

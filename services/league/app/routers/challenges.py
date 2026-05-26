@@ -51,11 +51,14 @@ async def list_challenges(
     session: AsyncSession = Depends(get_session),
     _user=Depends(require_dev_auth),
 ):
-    result = await session.execute(text(f"""
+    result = await session.execute(
+        text(f"""
         SELECT {_PUBLIC_COLS} FROM league_challenges
         WHERE season_id = :season_id
         ORDER BY created_at
-    """), {"season_id": str(season_id)})
+    """),
+        {"season_id": str(season_id)},
+    )
     return [_challenge_to_dict(row) for row in result.mappings().all()]
 
 
@@ -65,9 +68,18 @@ async def get_challenge(
     session: AsyncSession = Depends(get_session),
     _user=Depends(require_dev_auth),
 ):
-    row = (await session.execute(text(f"""
+    row = (
+        (
+            await session.execute(
+                text(f"""
         SELECT {_PUBLIC_COLS} FROM league_challenges WHERE id = :id
-    """), {"id": str(challenge_id)})).mappings().one_or_none()
+    """),
+                {"id": str(challenge_id)},
+            )
+        )
+        .mappings()
+        .one_or_none()
+    )
     if not row:
         raise HTTPException(status_code=404, detail="Challenge not found")
     return _challenge_to_dict(row, include_hidden=False)
@@ -80,7 +92,8 @@ async def create_challenge(
     session: AsyncSession = Depends(get_session),
     _admin=Depends(require_admin_auth),
 ):
-    result = await session.execute(text("""
+    result = await session.execute(
+        text("""
         INSERT INTO league_challenges
           (season_id, title, goal, training_inputs, hidden_test_suite,
            allowed_models, max_tokens_budget, max_league_attempts)
@@ -89,16 +102,18 @@ async def create_challenge(
            CAST(:training_inputs AS jsonb), CAST(:hidden_test_suite AS jsonb),
            :allowed_models, :max_tokens_budget, :max_league_attempts)
         RETURNING *
-    """), {
-        "season_id": str(season_id),
-        "title": body.title,
-        "goal": body.goal,
-        "training_inputs": json.dumps(body.training_inputs),
-        "hidden_test_suite": json.dumps(body.hidden_test_suite),
-        "allowed_models": body.allowed_models,
-        "max_tokens_budget": body.max_tokens_budget,
-        "max_league_attempts": body.max_league_attempts,
-    })
+    """),
+        {
+            "season_id": str(season_id),
+            "title": body.title,
+            "goal": body.goal,
+            "training_inputs": json.dumps(body.training_inputs),
+            "hidden_test_suite": json.dumps(body.hidden_test_suite),
+            "allowed_models": body.allowed_models,
+            "max_tokens_budget": body.max_tokens_budget,
+            "max_league_attempts": body.max_league_attempts,
+        },
+    )
     await session.commit()
     row = result.mappings().one()
     return _challenge_to_dict(row, include_hidden=True)
@@ -114,12 +129,13 @@ async def update_challenge_status(
     new_status = body.get("status")
     if new_status not in ("draft", "active", "closed"):
         raise HTTPException(status_code=422, detail="status must be draft, active, or closed")
-    await session.execute(text(
-        "UPDATE league_challenges SET status = :s, scores_revealed_at = CASE WHEN :s = 'closed' THEN NOW() ELSE scores_revealed_at END WHERE id = :id"
-    ), {"s": new_status, "id": str(challenge_id)})
+    await session.execute(
+        text("UPDATE league_challenges SET status = :s, scores_revealed_at = CASE WHEN :s = 'closed' THEN NOW() ELSE scores_revealed_at END WHERE id = :id"), {"s": new_status, "id": str(challenge_id)}
+    )
 
     if new_status == "closed":
-        await session.execute(text("""
+        await session.execute(
+            text("""
             WITH ranked AS (
                 SELECT season_id, engineer_id,
                        RANK() OVER (PARTITION BY season_id ORDER BY composite_score DESC) AS new_rank
@@ -130,7 +146,9 @@ async def update_challenge_status(
             SET rank = ranked.new_rank
             FROM ranked
             WHERE lb.season_id = ranked.season_id AND lb.engineer_id = ranked.engineer_id
-        """), {"cid": str(challenge_id)})
+        """),
+            {"cid": str(challenge_id)},
+        )
 
     await session.commit()
     return {"id": str(challenge_id), "status": new_status}

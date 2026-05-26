@@ -45,8 +45,7 @@ class WeightsUpdate(BaseModel):
 
     @model_validator(mode="after")
     def check_sum(self):
-        weights = [self.quality, self.robustness, self.token_efficiency,
-                   self.speed, self.cost_efficiency, self.improvement_rate, self.creativity]
+        weights = [self.quality, self.robustness, self.token_efficiency, self.speed, self.cost_efficiency, self.improvement_rate, self.creativity]
         if any(w < 0 for w in weights):
             raise ValueError("weights must be non-negative")
         total = sum(weights)
@@ -70,9 +69,7 @@ def _season_to_dict(row: Any) -> dict:
 
 @router.get("")
 async def list_seasons(session: AsyncSession = Depends(get_session)):
-    result = await session.execute(text(
-        "SELECT * FROM league_seasons ORDER BY starts_at DESC"
-    ))
+    result = await session.execute(text("SELECT * FROM league_seasons ORDER BY starts_at DESC"))
     return [_season_to_dict(row) for row in result.mappings().all()]
 
 
@@ -82,17 +79,20 @@ async def create_season(
     session: AsyncSession = Depends(get_session),
     _admin=Depends(require_admin_auth),
 ):
-    result = await session.execute(text("""
+    result = await session.execute(
+        text("""
         INSERT INTO league_seasons (name, status, starts_at, ends_at, scoring_weights, season_multiplier)
         VALUES (:name, 'upcoming', :starts_at, :ends_at, CAST(:weights AS jsonb), :multiplier)
         RETURNING *
-    """), {
-        "name": body.name,
-        "starts_at": body.starts_at,
-        "ends_at": body.ends_at,
-        "weights": json.dumps(body.scoring_weights),
-        "multiplier": body.season_multiplier,
-    })
+    """),
+        {
+            "name": body.name,
+            "starts_at": body.starts_at,
+            "ends_at": body.ends_at,
+            "weights": json.dumps(body.scoring_weights),
+            "multiplier": body.season_multiplier,
+        },
+    )
     await session.commit()
     return _season_to_dict(result.mappings().one())
 
@@ -104,23 +104,35 @@ async def update_weights(
     session: AsyncSession = Depends(get_session),
     _admin=Depends(require_admin_auth),
 ):
-    row = (await session.execute(
-        text("SELECT * FROM league_seasons WHERE id = :id"),
-        {"id": str(season_id)},
-    )).mappings().one_or_none()
+    row = (
+        (
+            await session.execute(
+                text("SELECT * FROM league_seasons WHERE id = :id"),
+                {"id": str(season_id)},
+            )
+        )
+        .mappings()
+        .one_or_none()
+    )
     if not row:
         raise HTTPException(status_code=404, detail="Season not found")
     if row["status"] != "upcoming":
         raise HTTPException(status_code=409, detail="Cannot change weights once season is active or closed")
     weights = {
-        "quality": body.quality, "robustness": body.robustness,
-        "token_efficiency": body.token_efficiency, "speed": body.speed,
-        "cost_efficiency": body.cost_efficiency, "improvement_rate": body.improvement_rate,
+        "quality": body.quality,
+        "robustness": body.robustness,
+        "token_efficiency": body.token_efficiency,
+        "speed": body.speed,
+        "cost_efficiency": body.cost_efficiency,
+        "improvement_rate": body.improvement_rate,
         "creativity": body.creativity,
     }
-    await session.execute(text("""
+    await session.execute(
+        text("""
         UPDATE league_seasons SET scoring_weights = CAST(:w AS jsonb) WHERE id = :id
-    """), {"w": json.dumps(weights), "id": str(season_id)})
+    """),
+        {"w": json.dumps(weights), "id": str(season_id)},
+    )
     await session.commit()
     return {"id": str(season_id), "scoring_weights": weights}
 
@@ -135,8 +147,6 @@ async def update_status(
     new_status = body.get("status")
     if new_status not in ("upcoming", "active", "closed"):
         raise HTTPException(status_code=422, detail="status must be upcoming, active, or closed")
-    await session.execute(text(
-        "UPDATE league_seasons SET status = :s WHERE id = :id"
-    ), {"s": new_status, "id": str(season_id)})
+    await session.execute(text("UPDATE league_seasons SET status = :s WHERE id = :id"), {"s": new_status, "id": str(season_id)})
     await session.commit()
     return {"id": str(season_id), "status": new_status}

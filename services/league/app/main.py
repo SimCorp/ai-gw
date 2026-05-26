@@ -7,15 +7,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
+import app.models  # noqa: F401 — registers all ORM models with Base.metadata
 from app.config import settings
 from app.db import engine
-import app.models  # noqa: F401 — registers all ORM models with Base.metadata
-from app.routers import seasons as seasons_router
 from app.routers import challenges as challenges_router
-from app.routers import submissions as submissions_router
 from app.routers import leaderboard as leaderboard_router
-from app.routers import store as store_router
 from app.routers import proposals as proposals_router
+from app.routers import seasons as seasons_router
+from app.routers import store as store_router
+from app.routers import submissions as submissions_router
 
 
 @asynccontextmanager

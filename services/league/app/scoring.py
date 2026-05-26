@@ -3,25 +3,24 @@
 import types
 from collections.abc import Mapping
 
-DEFAULT_WEIGHTS: types.MappingProxyType = types.MappingProxyType({
-    "quality": 0.35,
-    "robustness": 0.20,
-    "token_efficiency": 0.15,
-    "speed": 0.10,
-    "cost_efficiency": 0.10,
-    "improvement_rate": 0.05,
-    "creativity": 0.05,
-})
+DEFAULT_WEIGHTS: types.MappingProxyType = types.MappingProxyType(
+    {
+        "quality": 0.35,
+        "robustness": 0.20,
+        "token_efficiency": 0.15,
+        "speed": 0.10,
+        "cost_efficiency": 0.10,
+        "improvement_rate": 0.05,
+        "creativity": 0.05,
+    }
+)
 
 
 def score_quality_exact(results: list[dict]) -> float:
     """Score quality by exact string match. results = [{expected, actual}, ...]"""
     if not results:
         return 0.0
-    passed = sum(
-        1 for r in results
-        if str(r.get("actual", "")).strip() == str(r.get("expected", "")).strip()
-    )
+    passed = sum(1 for r in results if str(r.get("actual", "")).strip() == str(r.get("expected", "")).strip())
     return passed * 100.0 / len(results)
 
 

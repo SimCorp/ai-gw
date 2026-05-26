@@ -1,18 +1,17 @@
 # services/league/tests/test_submissions.py
-import hashlib
-import json
 import os
 import uuid
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch, ANY
 from fastapi.testclient import TestClient
 
 os.environ.setdefault("DEV_BYPASS_AUTH", "true")
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
 
-from app.main import app
 from app.db import get_session
+from app.main import app
 
 _CHALLENGE_ID = "22222222-2222-2222-2222-222222222222"
 _SEASON_ID = "11111111-1111-1111-1111-111111111111"
@@ -22,6 +21,7 @@ _USER_ID = "00000000-0000-0000-0000-000000000001"
 def _make_session_override(mock_session):
     async def _override():
         yield mock_session
+
     return _override
 
 
@@ -48,8 +48,13 @@ def _mock_active_challenge():
             {"input": "Test input", "expected": "test_output"},
         ],
         "scoring_weights": {
-            "quality": 0.35, "robustness": 0.20, "token_efficiency": 0.15,
-            "speed": 0.10, "cost_efficiency": 0.10, "improvement_rate": 0.05, "creativity": 0.05,
+            "quality": 0.35,
+            "robustness": 0.20,
+            "token_efficiency": 0.15,
+            "speed": 0.10,
+            "cost_efficiency": 0.10,
+            "improvement_rate": 0.05,
+            "creativity": 0.05,
         },
         "season_multiplier": 1.0,
     }
@@ -83,14 +88,16 @@ def test_training_submission_returns_scores_immediately():
     sub_id_result = MagicMock()
     sub_id_result.scalar.return_value = str(uuid.uuid4())
 
-    mock_session.execute = AsyncMock(side_effect=[
-        challenge_result,
-        prior_best_result,
-        attempt_num_result,
-        sub_id_result,
-        AsyncMock(),  # INSERT score
-        AsyncMock(),  # INSERT xp
-    ])
+    mock_session.execute = AsyncMock(
+        side_effect=[
+            challenge_result,
+            prior_best_result,
+            attempt_num_result,
+            sub_id_result,
+            AsyncMock(),  # INSERT score
+            AsyncMock(),  # INSERT xp
+        ]
+    )
     mock_session.commit = AsyncMock()
 
     litellm_responses = [
@@ -99,15 +106,16 @@ def test_training_submission_returns_scores_immediately():
 
     app.dependency_overrides[get_session] = _make_session_override(mock_session)
     try:
-        with patch("app.main.aioredis.from_url", return_value=_mock_redis()), \
-             patch("app.routers.submissions._call_litellm", new_callable=AsyncMock,
-                   side_effect=litellm_responses):
+        with patch("app.main.aioredis.from_url", return_value=_mock_redis()), patch("app.routers.submissions._call_litellm", new_callable=AsyncMock, side_effect=litellm_responses):
             with TestClient(app) as client:
-                resp = client.post(f"/challenges/{_CHALLENGE_ID}/submit", json={
-                    "mode": "training",
-                    "system_prompt": "You are a classifier. Output only the category.",
-                    "tool_config": [],
-                })
+                resp = client.post(
+                    f"/challenges/{_CHALLENGE_ID}/submit",
+                    json={
+                        "mode": "training",
+                        "system_prompt": "You are a classifier. Output only the category.",
+                        "tool_config": [],
+                    },
+                )
     finally:
         app.dependency_overrides.pop(get_session, None)
 
@@ -136,16 +144,18 @@ def test_league_submission_hides_scores_until_deadline():
     sub_id_result = MagicMock()
     sub_id_result.scalar.return_value = str(uuid.uuid4())
 
-    mock_session.execute = AsyncMock(side_effect=[
-        challenge_result,
-        attempt_count_result,
-        prior_best_result,
-        attempt_num_result,
-        sub_id_result,
-        AsyncMock(),  # INSERT score
-        AsyncMock(),  # INSERT leaderboard upsert
-        AsyncMock(),  # INSERT points_ledger (delta > 0 since prior_best is None)
-    ])
+    mock_session.execute = AsyncMock(
+        side_effect=[
+            challenge_result,
+            attempt_count_result,
+            prior_best_result,
+            attempt_num_result,
+            sub_id_result,
+            AsyncMock(),  # INSERT score
+            AsyncMock(),  # INSERT leaderboard upsert
+            AsyncMock(),  # INSERT points_ledger (delta > 0 since prior_best is None)
+        ]
+    )
     mock_session.commit = AsyncMock()
 
     litellm_responses = [
@@ -155,15 +165,16 @@ def test_league_submission_hides_scores_until_deadline():
 
     app.dependency_overrides[get_session] = _make_session_override(mock_session)
     try:
-        with patch("app.main.aioredis.from_url", return_value=_mock_redis()), \
-             patch("app.routers.submissions._call_litellm", new_callable=AsyncMock,
-                   side_effect=litellm_responses):
+        with patch("app.main.aioredis.from_url", return_value=_mock_redis()), patch("app.routers.submissions._call_litellm", new_callable=AsyncMock, side_effect=litellm_responses):
             with TestClient(app) as client:
-                resp = client.post(f"/challenges/{_CHALLENGE_ID}/submit", json={
-                    "mode": "league",
-                    "system_prompt": "Classify intent.",
-                    "tool_config": [],
-                })
+                resp = client.post(
+                    f"/challenges/{_CHALLENGE_ID}/submit",
+                    json={
+                        "mode": "league",
+                        "system_prompt": "Classify intent.",
+                        "tool_config": [],
+                    },
+                )
     finally:
         app.dependency_overrides.pop(get_session, None)
 
@@ -183,20 +194,25 @@ def test_league_submission_blocks_over_limit():
     attempt_count_result = MagicMock()
     attempt_count_result.scalar.return_value = 3  # already at limit
 
-    mock_session.execute = AsyncMock(side_effect=[
-        challenge_result,
-        attempt_count_result,
-    ])
+    mock_session.execute = AsyncMock(
+        side_effect=[
+            challenge_result,
+            attempt_count_result,
+        ]
+    )
 
     app.dependency_overrides[get_session] = _make_session_override(mock_session)
     try:
         with patch("app.main.aioredis.from_url", return_value=_mock_redis()):
             with TestClient(app) as client:
-                resp = client.post(f"/challenges/{_CHALLENGE_ID}/submit", json={
-                    "mode": "league",
-                    "system_prompt": "Classify intent.",
-                    "tool_config": [],
-                })
+                resp = client.post(
+                    f"/challenges/{_CHALLENGE_ID}/submit",
+                    json={
+                        "mode": "league",
+                        "system_prompt": "Classify intent.",
+                        "tool_config": [],
+                    },
+                )
     finally:
         app.dependency_overrides.pop(get_session, None)
 
@@ -216,11 +232,14 @@ def test_submission_on_inactive_challenge_rejected():
     try:
         with patch("app.main.aioredis.from_url", return_value=_mock_redis()):
             with TestClient(app) as client:
-                resp = client.post(f"/challenges/{_CHALLENGE_ID}/submit", json={
-                    "mode": "training",
-                    "system_prompt": "test",
-                    "tool_config": [],
-                })
+                resp = client.post(
+                    f"/challenges/{_CHALLENGE_ID}/submit",
+                    json={
+                        "mode": "training",
+                        "system_prompt": "test",
+                        "tool_config": [],
+                    },
+                )
     finally:
         app.dependency_overrides.pop(get_session, None)
 

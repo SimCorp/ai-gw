@@ -2,7 +2,6 @@
 import hashlib
 import json
 import time
-import uuid
 from uuid import UUID
 
 import httpx
@@ -69,26 +68,30 @@ async def _run_test_suite(
     for case in test_cases:
         try:
             run = await _call_litellm(system_prompt, case["input"], model, max_tokens)
-            results.append({
-                "input": case["input"],
-                "expected": case["expected"],
-                "actual": run["output"].strip(),
-                "tokens": run["tokens"],
-                "latency_ms": run["latency_ms"],
-                "cost_usd": run.get("cost_usd", 0.0),
-                "weight": case.get("weight", 1.0),
-            })
+            results.append(
+                {
+                    "input": case["input"],
+                    "expected": case["expected"],
+                    "actual": run["output"].strip(),
+                    "tokens": run["tokens"],
+                    "latency_ms": run["latency_ms"],
+                    "cost_usd": run.get("cost_usd", 0.0),
+                    "weight": case.get("weight", 1.0),
+                }
+            )
         except Exception as exc:
-            results.append({
-                "input": case["input"],
-                "expected": case["expected"],
-                "actual": "",
-                "tokens": 0,
-                "latency_ms": 0,
-                "cost_usd": 0.0,
-                "weight": case.get("weight", 1.0),
-                "error": str(exc),
-            })
+            results.append(
+                {
+                    "input": case["input"],
+                    "expected": case["expected"],
+                    "actual": "",
+                    "tokens": 0,
+                    "latency_ms": 0,
+                    "cost_usd": 0.0,
+                    "weight": case.get("weight", 1.0),
+                    "error": str(exc),
+                }
+            )
     return results
 
 
@@ -136,39 +139,67 @@ async def submit(
     if body.mode not in ("training", "league"):
         raise HTTPException(status_code=422, detail="mode must be 'training' or 'league'")
 
-    row = (await session.execute(text("""
+    row = (
+        (
+            await session.execute(
+                text("""
         SELECT c.*, s.scoring_weights, s.season_multiplier
         FROM league_challenges c
         JOIN league_seasons s ON s.id = c.season_id
         WHERE c.id = :id
-    """), {"id": str(challenge_id)})).mappings().one_or_none()
+    """),
+                {"id": str(challenge_id)},
+            )
+        )
+        .mappings()
+        .one_or_none()
+    )
     if not row:
         raise HTTPException(status_code=404, detail="Challenge not found")
     if row["status"] != "active":
         raise HTTPException(status_code=409, detail="Challenge is not active")
 
     if body.mode == "league":
-        attempt_count = (await session.execute(text("""
+        attempt_count = (
+            await session.execute(
+                text("""
             SELECT COUNT(*) FROM league_submissions
             WHERE challenge_id = :cid AND engineer_id = :uid AND mode = 'league'
-        """), {"cid": str(challenge_id), "uid": user["user_id"]})).scalar()
+        """),
+                {"cid": str(challenge_id), "uid": user["user_id"]},
+            )
+        ).scalar()
         if attempt_count >= row["max_league_attempts"]:
             raise HTTPException(status_code=429, detail=f"League attempt limit of {row['max_league_attempts']} reached")
 
-    prior_row = (await session.execute(text("""
+    prior_row = (
+        (
+            await session.execute(
+                text("""
         SELECT MAX(sc.composite) AS best
         FROM league_submissions sub
         JOIN league_scores sc ON sc.submission_id = sub.id
         WHERE sub.challenge_id = :cid AND sub.engineer_id = :uid AND sub.mode = 'league'
-    """), {"cid": str(challenge_id), "uid": user["user_id"]})).mappings().one_or_none()
+    """),
+                {"cid": str(challenge_id), "uid": user["user_id"]},
+            )
+        )
+        .mappings()
+        .one_or_none()
+    )
     prior_best = float(prior_row["best"]) if prior_row and prior_row["best"] is not None else None
 
     test_cases = row["hidden_test_suite"] if body.mode == "league" else row["training_inputs"]
-    attempt_num = (await session.execute(text("""
+    attempt_num = (
+        await session.execute(
+            text("""
         SELECT COALESCE(MAX(attempt_number), 0) + 1
         FROM league_submissions
         WHERE challenge_id = :cid AND engineer_id = :uid AND mode = :mode
-    """), {"cid": str(challenge_id), "uid": user["user_id"], "mode": body.mode})).scalar()
+    """),
+            {"cid": str(challenge_id), "uid": user["user_id"], "mode": body.mode},
+        )
+    ).scalar()
 
     model = row["allowed_models"][0]
     run_results = await _run_test_suite(body.system_prompt, test_cases, model, row["max_tokens_budget"])
@@ -182,59 +213,74 @@ async def submit(
         results_to_store = [{k: v for k, v in r.items() if k != "expected"} for r in run_results]
 
     prompt_hash = hashlib.sha256(body.system_prompt.encode()).hexdigest()
-    sub_result = await session.execute(text("""
+    sub_result = await session.execute(
+        text("""
         INSERT INTO league_submissions
           (challenge_id, engineer_id, mode, system_prompt, tool_config, attempt_number, run_results, prompt_hash)
         VALUES
           (:cid, :uid, :mode, :prompt, CAST(:tools AS jsonb), :attempt, CAST(:results AS jsonb), :hash)
         RETURNING id
-    """), {
-        "cid": str(challenge_id),
-        "uid": user["user_id"],
-        "mode": body.mode,
-        "prompt": body.system_prompt,
-        "tools": json.dumps(body.tool_config),
-        "attempt": attempt_num,
-        "results": json.dumps(results_to_store),
-        "hash": prompt_hash,
-    })
+    """),
+        {
+            "cid": str(challenge_id),
+            "uid": user["user_id"],
+            "mode": body.mode,
+            "prompt": body.system_prompt,
+            "tools": json.dumps(body.tool_config),
+            "attempt": attempt_num,
+            "results": json.dumps(results_to_store),
+            "hash": prompt_hash,
+        },
+    )
     submission_id = sub_result.scalar()
 
-    await session.execute(text("""
+    await session.execute(
+        text("""
         INSERT INTO league_scores
           (submission_id, quality, robustness, token_efficiency, speed,
            cost_efficiency, improvement_rate, creativity, composite)
         VALUES
           (:sid, :quality, :robustness, :token_efficiency, :speed,
            :cost_efficiency, :improvement_rate, :creativity, :composite)
-    """), {"sid": str(submission_id), **{k: round(v, 2) for k, v in scores.items()}})
+    """),
+        {"sid": str(submission_id), **{k: round(v, 2) for k, v in scores.items()}},
+    )
 
     if body.mode == "league":
         season_id = str(row["season_id"])
         multiplier = float(row["season_multiplier"])
         pts = int(scores["composite"] * multiplier)
-        await session.execute(text("""
+        await session.execute(
+            text("""
             INSERT INTO league_leaderboard (season_id, engineer_id, composite_score, points_earned, updated_at)
             VALUES (:sid, :uid, :score, :pts, NOW())
             ON CONFLICT (season_id, engineer_id) DO UPDATE
               SET composite_score = GREATEST(league_leaderboard.composite_score, EXCLUDED.composite_score),
                   points_earned = GREATEST(league_leaderboard.points_earned, EXCLUDED.points_earned),
                   updated_at = NOW()
-        """), {"sid": season_id, "uid": user["user_id"], "score": round(scores["composite"], 2), "pts": pts})
+        """),
+            {"sid": season_id, "uid": user["user_id"], "score": round(scores["composite"], 2), "pts": pts},
+        )
 
         if prior_best is None or scores["composite"] > prior_best:
             delta = pts - (int(prior_best * multiplier) if prior_best else 0)
             if delta > 0:
-                await session.execute(text("""
+                await session.execute(
+                    text("""
                     INSERT INTO league_points_ledger (engineer_id, delta, reason, ref_id)
                     VALUES (:uid, :delta, 'league_submission_reward', :ref)
-                """), {"uid": user["user_id"], "delta": delta, "ref": str(submission_id)})
+                """),
+                    {"uid": user["user_id"], "delta": delta, "ref": str(submission_id)},
+                )
 
     if body.mode == "training":
-        await session.execute(text("""
+        await session.execute(
+            text("""
             INSERT INTO league_points_ledger (engineer_id, delta, reason, ref_id)
             VALUES (:uid, 50, 'training_xp_reward', :ref)
-        """), {"uid": user["user_id"], "ref": str(submission_id)})
+        """),
+            {"uid": user["user_id"], "ref": str(submission_id)},
+        )
 
     await session.commit()
 

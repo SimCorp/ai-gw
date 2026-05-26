@@ -1,7 +1,7 @@
 import json
 import secrets
 
-from fastapi import Depends, Header, HTTPException, Request
+from fastapi import Header, HTTPException, Request
 
 from app.config import settings
 

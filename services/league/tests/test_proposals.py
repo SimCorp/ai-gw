@@ -1,14 +1,13 @@
 # services/league/tests/test_proposals.py
 import os
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 os.environ.setdefault("DEV_BYPASS_AUTH", "true")
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
 
-from app.main import app
 from app.db import get_session
+from app.main import app
 
 _USER_ID = "00000000-0000-0000-0000-000000000001"
 _PROPOSAL_ID = "44444444-4444-4444-4444-444444444444"
@@ -17,6 +16,7 @@ _PROPOSAL_ID = "44444444-4444-4444-4444-444444444444"
 def _make_session_override(mock_session):
     async def _override():
         yield mock_session
+
     return _override
 
 
@@ -38,12 +38,16 @@ def test_create_proposal_returns_201():
     try:
         with patch("app.main.aioredis.from_url", return_value=_mock_redis()):
             from fastapi.testclient import TestClient
+
             with TestClient(app) as client:
-                resp = client.post("/proposals", json={
-                    "title": "Trade note summarizer",
-                    "goal": "Summarize trade notes",
-                    "notes": "Would be useful for FI team",
-                })
+                resp = client.post(
+                    "/proposals",
+                    json={
+                        "title": "Trade note summarizer",
+                        "goal": "Summarize trade notes",
+                        "notes": "Would be useful for FI team",
+                    },
+                )
     finally:
         app.dependency_overrides.pop(get_session, None)
 
@@ -55,13 +59,15 @@ def test_create_proposal_returns_201():
 
 def test_list_proposals_requires_admin(monkeypatch):
     """Without admin auth the endpoint should return 403."""
-    import os
     monkeypatch.setenv("DEV_BYPASS_AUTH", "false")
     # Reload settings so auth picks up new value
     import importlib
+
     import app.config as cfg_mod
+
     importlib.reload(cfg_mod)
     import app.auth as auth_mod
+
     importlib.reload(auth_mod)
 
     mock_session = AsyncMock()
@@ -69,6 +75,7 @@ def test_list_proposals_requires_admin(monkeypatch):
     try:
         with patch("app.main.aioredis.from_url", return_value=_mock_redis()):
             from fastapi.testclient import TestClient
+
             with TestClient(app, raise_server_exceptions=False) as client:
                 resp = client.get("/proposals")
     finally:
@@ -94,6 +101,7 @@ def test_review_proposal_approve():
     try:
         with patch("app.main.aioredis.from_url", return_value=_mock_redis()):
             from fastapi.testclient import TestClient
+
             with TestClient(app) as client:
                 resp = client.patch(
                     f"/proposals/{_PROPOSAL_ID}/review",
@@ -112,6 +120,7 @@ def test_review_proposal_invalid_status():
     try:
         with patch("app.main.aioredis.from_url", return_value=_mock_redis()):
             from fastapi.testclient import TestClient
+
             with TestClient(app) as client:
                 resp = client.patch(
                     f"/proposals/{_PROPOSAL_ID}/review",
@@ -134,6 +143,7 @@ def test_review_proposal_not_found():
     try:
         with patch("app.main.aioredis.from_url", return_value=_mock_redis()):
             from fastapi.testclient import TestClient
+
             with TestClient(app) as client:
                 resp = client.patch(
                     f"/proposals/{_PROPOSAL_ID}/review",

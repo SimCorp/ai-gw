@@ -1,12 +1,12 @@
 # services/league/tests/test_scoring.py
 import pytest
 from app.scoring import (
-    score_quality_exact,
-    score_efficiency,
-    score_robustness,
-    score_improvement_rate,
-    compute_composite,
     DEFAULT_WEIGHTS,
+    compute_composite,
+    score_efficiency,
+    score_improvement_rate,
+    score_quality_exact,
+    score_robustness,
 )
 
 

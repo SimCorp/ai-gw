@@ -28,12 +28,14 @@ async def list_proposals(
     session: AsyncSession = Depends(get_session),
     _admin=Depends(require_admin_auth),
 ):
-    result = await session.execute(text("""
+    result = await session.execute(
+        text("""
         SELECT p.*, u.email AS proposer_name
         FROM league_challenge_proposals p
         JOIN users u ON u.id = p.proposed_by
         ORDER BY p.created_at DESC
-    """))
+    """)
+    )
     return [
         {
             "id": str(r["id"]),
@@ -57,11 +59,14 @@ async def create_proposal(
     session: AsyncSession = Depends(get_session),
     user=Depends(require_dev_auth),
 ):
-    result = await session.execute(text("""
+    result = await session.execute(
+        text("""
         INSERT INTO league_challenge_proposals (proposed_by, title, goal, notes)
         VALUES (:uid, :title, :goal, :notes)
         RETURNING id
-    """), {"uid": user["user_id"], "title": body.title, "goal": body.goal, "notes": body.notes})
+    """),
+        {"uid": user["user_id"], "title": body.title, "goal": body.goal, "notes": body.notes},
+    )
     await session.commit()
     return {"id": str(result.scalar()), "status": "proposed"}
 
@@ -75,17 +80,20 @@ async def review_proposal(
 ):
     if body.status not in ("approved", "rejected"):
         raise HTTPException(status_code=422, detail="status must be 'approved' or 'rejected'")
-    result = await session.execute(text("""
+    result = await session.execute(
+        text("""
         UPDATE league_challenge_proposals
         SET status = :status, reviewed_by = :reviewer, reviewer_notes = :notes
         WHERE id = :id
         RETURNING id, status
-    """), {
-        "status": body.status,
-        "reviewer": admin["user_id"],
-        "notes": body.reviewer_notes,
-        "id": str(proposal_id),
-    })
+    """),
+        {
+            "status": body.status,
+            "reviewer": admin["user_id"],
+            "notes": body.reviewer_notes,
+            "id": str(proposal_id),
+        },
+    )
     await session.commit()
     row = result.mappings().one_or_none()
     if not row:

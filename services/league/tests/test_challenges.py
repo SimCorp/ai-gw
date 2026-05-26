@@ -1,20 +1,21 @@
 # services/league/tests/test_challenges.py
 import os
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
 from fastapi.testclient import TestClient
 
 os.environ.setdefault("DEV_BYPASS_AUTH", "true")
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
 
-from app.main import app
 from app.db import get_session
+from app.main import app
 
 
 def _make_session_override(mock_session):
     async def _override():
         yield mock_session
+
     return _override
 
 
@@ -85,6 +86,7 @@ def test_challenge_detail_hides_hidden_test_suite():
 def test_create_challenge_requires_admin():
     """Without DEV_BYPASS_AUTH, creating a challenge should require admin."""
     import app.config as cfg_mod
+
     cfg_mod.settings.dev_bypass_auth = False
 
     mock_session = AsyncMock()

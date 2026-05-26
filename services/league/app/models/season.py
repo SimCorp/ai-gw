@@ -20,11 +20,7 @@ class Season(Base):
     scoring_weights: Mapped[dict] = mapped_column(
         JSONB,
         nullable=False,
-        server_default=text(
-            "'{\"quality\":0.35,\"robustness\":0.20,\"token_efficiency\":0.15,"
-            "\"speed\":0.10,\"cost_efficiency\":0.10,\"improvement_rate\":0.05,"
-            "\"creativity\":0.05}'"
-        ),
+        server_default=text('\'{"quality":0.35,"robustness":0.20,"token_efficiency":0.15,"speed":0.10,"cost_efficiency":0.10,"improvement_rate":0.05,"creativity":0.05}\''),
     )
     season_multiplier: Mapped[Decimal] = mapped_column(Numeric(4, 2), nullable=False, server_default=text("1.0"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("NOW()"))

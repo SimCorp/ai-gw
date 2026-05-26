@@ -1,15 +1,15 @@
 # services/league/tests/test_store.py
 import os
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
 from fastapi.testclient import TestClient
 
 os.environ.setdefault("DEV_BYPASS_AUTH", "true")
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
 
-from app.main import app
 from app.db import get_session
+from app.main import app
 
 _USER_ID = "00000000-0000-0000-0000-000000000001"
 _ITEM_ID = "33333333-3333-3333-3333-333333333333"
@@ -18,6 +18,7 @@ _ITEM_ID = "33333333-3333-3333-3333-333333333333"
 def _make_session_override(mock_session):
     async def _override():
         yield mock_session
+
     return _override
 
 
@@ -50,8 +51,11 @@ def test_purchase_deducts_points_and_creates_purchase():
     mock_session = AsyncMock()
 
     item_row = {
-        "id": _ITEM_ID, "point_cost": 800, "active": True,
-        "exclusive_season_id": None, "exclusive_top_n": None,
+        "id": _ITEM_ID,
+        "point_cost": 800,
+        "active": True,
+        "exclusive_season_id": None,
+        "exclusive_top_n": None,
     }
     balance_result = MagicMock()
     balance_result.scalar.return_value = 1840
@@ -60,13 +64,15 @@ def test_purchase_deducts_points_and_creates_purchase():
     already_owned_result = MagicMock()
     already_owned_result.scalar.return_value = 0
 
-    mock_session.execute = AsyncMock(side_effect=[
-        item_result,
-        balance_result,
-        already_owned_result,
-        AsyncMock(),  # insert purchase
-        AsyncMock(),  # insert ledger debit
-    ])
+    mock_session.execute = AsyncMock(
+        side_effect=[
+            item_result,
+            balance_result,
+            already_owned_result,
+            AsyncMock(),  # insert purchase
+            AsyncMock(),  # insert ledger debit
+        ]
+    )
     mock_session.commit = AsyncMock()
 
     app.dependency_overrides[get_session] = _make_session_override(mock_session)
@@ -84,7 +90,9 @@ def test_purchase_deducts_points_and_creates_purchase():
 def test_purchase_exclusive_item_rejected():
     mock_session = AsyncMock()
     item_row = {
-        "id": _ITEM_ID, "point_cost": 0, "active": True,
+        "id": _ITEM_ID,
+        "point_cost": 0,
+        "active": True,
         "exclusive_season_id": "11111111-1111-1111-1111-111111111111",
         "exclusive_top_n": 3,
     }
@@ -107,8 +115,11 @@ def test_purchase_exclusive_item_rejected():
 def test_purchase_fails_on_insufficient_points():
     mock_session = AsyncMock()
     item_row = {
-        "id": _ITEM_ID, "point_cost": 2000, "active": True,
-        "exclusive_season_id": None, "exclusive_top_n": None,
+        "id": _ITEM_ID,
+        "point_cost": 2000,
+        "active": True,
+        "exclusive_season_id": None,
+        "exclusive_top_n": None,
     }
     item_result = MagicMock()
     item_result.mappings.return_value.one_or_none.return_value = item_row

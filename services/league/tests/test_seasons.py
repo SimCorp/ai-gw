@@ -1,21 +1,21 @@
 # services/league/tests/test_seasons.py
-import json
 import os
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
 from fastapi.testclient import TestClient
 
 os.environ.setdefault("DEV_BYPASS_AUTH", "true")
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
 
-from app.main import app
 from app.db import get_session
+from app.main import app
 
 
 def _make_session_override(mock_session):
     async def _override():
         yield mock_session
+
     return _override
 
 
@@ -34,9 +34,12 @@ def _mock_season_row():
         "starts_at": "2026-04-01T00:00:00+00:00",
         "ends_at": "2026-06-30T23:59:59+00:00",
         "scoring_weights": {
-            "quality": 0.35, "robustness": 0.20,
-            "token_efficiency": 0.15, "speed": 0.10,
-            "cost_efficiency": 0.10, "improvement_rate": 0.05,
+            "quality": 0.35,
+            "robustness": 0.20,
+            "token_efficiency": 0.15,
+            "speed": 0.10,
+            "cost_efficiency": 0.10,
+            "improvement_rate": 0.05,
             "creativity": 0.05,
         },
         "season_multiplier": "1.00",
@@ -101,9 +104,12 @@ def test_update_weights_rejected_when_season_active():
                 resp = client.patch(
                     "/seasons/11111111-1111-1111-1111-111111111111/weights",
                     json={
-                        "quality": 0.35, "robustness": 0.20,
-                        "token_efficiency": 0.15, "speed": 0.10,
-                        "cost_efficiency": 0.10, "improvement_rate": 0.05,
+                        "quality": 0.35,
+                        "robustness": 0.20,
+                        "token_efficiency": 0.15,
+                        "speed": 0.10,
+                        "cost_efficiency": 0.10,
+                        "improvement_rate": 0.05,
                         "creativity": 0.05,
                     },
                     headers={"X-Admin-Token": ""},
