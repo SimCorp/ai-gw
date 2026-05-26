@@ -14,7 +14,7 @@ const securityHeaders = [
       "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob:",
-      `connect-src 'self' ${adminApi}`,
+      `connect-src 'self' ${adminApi} http://localhost:8080`,
       "font-src 'self'",
       "frame-ancestors 'none'",
     ].join("; "),
@@ -22,6 +22,7 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  basePath: "/admin-portal",
   output: "standalone",
   transpilePackages: ["@aigw/ui", "@aigw/charts", "@aigw/hooks", "@aigw/contracts"],
   async headers() {

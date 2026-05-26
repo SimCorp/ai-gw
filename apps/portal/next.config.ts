@@ -12,7 +12,7 @@ const securityHeaders = [
       "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob:",
-      "connect-src 'self' http://localhost:8005",
+      "connect-src 'self' http://localhost:8005 http://localhost:8080",
       "font-src 'self'",
       "frame-ancestors 'none'",
     ].join("; "),
@@ -20,6 +20,7 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  basePath: "/portal",
   output: "standalone",
   transpilePackages: ["@aigw/ui", "@aigw/charts", "@aigw/hooks", "@aigw/contracts"],
   async headers() {
