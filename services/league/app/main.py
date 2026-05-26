@@ -10,6 +10,7 @@ from sqlalchemy import text
 from app.config import settings
 from app.db import engine
 import app.models  # noqa: F401 — registers all ORM models with Base.metadata
+from app.routers import seasons as seasons_router
 
 
 @asynccontextmanager
@@ -35,6 +36,9 @@ app.add_middleware(
     allow_headers=["Content-Type", "Authorization", "X-Admin-Token"],
     allow_credentials=True,
 )
+
+
+app.include_router(seasons_router.router)
 
 
 @app.get("/health", tags=["health"])
