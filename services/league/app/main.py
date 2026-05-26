@@ -9,6 +9,7 @@ from sqlalchemy import text
 
 from app.config import settings
 from app.db import engine
+import app.models  # noqa: F401 — registers all ORM models with Base.metadata
 
 
 @asynccontextmanager
