@@ -123,9 +123,7 @@ async def lifespan(app: FastAPI):
                 await conn.execute(text("""
                     INSERT INTO users (email, display_name, password_hash, hash_type, status, must_change_password)
                     VALUES ('admin@simcorp.com', 'Default Admin', :hash, 'bcrypt', 'active', TRUE)
-                    ON CONFLICT (email) DO UPDATE
-                        SET must_change_password = TRUE
-                        WHERE users.password_hash = :hash
+                    ON CONFLICT (email) DO NOTHING
                 """), {"hash": _default_hash})
                 await conn.execute(text("""
                     INSERT INTO user_roles (user_id, role, scope_type)
@@ -137,9 +135,7 @@ async def lifespan(app: FastAPI):
                 await conn.execute(text("""
                     INSERT INTO admin_users (email, display_name, password_hash, role, must_change_password)
                     VALUES ('admin@simcorp.com', 'Default Admin', :hash, 'superadmin', TRUE)
-                    ON CONFLICT (email) DO UPDATE
-                        SET must_change_password = TRUE
-                        WHERE admin_users.password_hash = :hash
+                    ON CONFLICT (email) DO NOTHING
                 """), {"hash": _default_hash})
 
     # Seed a default team if none exists (dev convenience)
