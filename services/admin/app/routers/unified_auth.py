@@ -29,7 +29,7 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db import get_session
+from app.db import get_session, async_session_maker
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -111,6 +111,32 @@ async def get_current_user(
     data = await _get_session_data(token, redis)
     if not data:
         raise HTTPException(status_code=401, detail="Session expired or invalid")
+
+    # Bug 2 fix: reload session payload from DB if team assignment changed
+    if await redis.get(f"user_team_changed:{data['user_id']}"):
+        async with async_session_maker() as db_session:
+            row = (await db_session.execute(
+                text("""
+                    SELECT u.id, u.email, u.display_name, u.status, u.primary_team_id,
+                           t.name AS team_name
+                    FROM users u
+                    LEFT JOIN teams t ON t.id = u.primary_team_id
+                    WHERE u.id = CAST(:uid AS uuid)
+                """),
+                {"uid": data["user_id"]},
+            )).mappings().first()
+            if row:
+                roles = await _load_user_roles(db_session, data["user_id"])
+                new_payload = await _build_session_payload(row, roles)
+                new_payload["team_name"] = row["team_name"]
+                new_payload["issued_at"] = data.get("issued_at", 0)
+                await redis.setex(_session_key(token), _SESSION_TTL, json.dumps(new_payload))
+                data = new_payload
+        await redis.delete(f"user_team_changed:{data['user_id']}")
+
+    if request is not None:
+        request.state.current_user = data
+
     return data
 
 

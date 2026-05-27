@@ -7,7 +7,13 @@ from app.models.audit_log import AuditLog
 
 
 def _actor(request: Request) -> str:
-    """Resolve audit actor from request state set by require_admin_auth."""
+    """Resolve audit actor from request state."""
+    # New unified auth: get_current_user sets this
+    user = getattr(request.state, "current_user", None)
+    if user:
+        return user.get("email", "unknown")
+
+    # Legacy: admin_auth set by require_admin_auth
     auth_info = getattr(request.state, "admin_auth", None)
     if auth_info:
         return auth_info.get("actor", "unknown")
