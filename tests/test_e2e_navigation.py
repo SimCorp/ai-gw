@@ -57,7 +57,28 @@ def _reset_admin_password(email: str) -> None:
     )
 
 
+def _ensure_dev_account() -> None:
+    """Create dev@simcorp.com if it doesn't exist (fresh DB after migration)."""
+    import subprocess
+    subprocess.run(
+        [
+            "docker", "exec", "ai-gateway-postgres-1",
+            "psql", "-U", "aigateway", "-d", "aigateway", "-c",
+            # bcrypt hash of "password" — same as admin seed
+            "INSERT INTO users (email, display_name, password_hash, hash_type, status, must_change_password) "
+            "VALUES ('dev@simcorp.com', 'Test Developer', "
+            "'$2b$12$97tEM5lfcioIn4w9wDRHQe3qQNeU9OIBDImBuWj6wQRF30UCpIWom', "
+            "'bcrypt', 'active', FALSE) ON CONFLICT (email) DO NOTHING; "
+            "INSERT INTO user_roles (user_id, role, scope_type) "
+            "SELECT id, 'developer', 'global' FROM users WHERE email='dev@simcorp.com' "
+            "ON CONFLICT DO NOTHING;",
+        ],
+        capture_output=True,
+    )
+
+
 def _get_dev_token() -> str:
+    _ensure_dev_account()
     req = urllib.request.Request(
         f"{HUB}/admin/dev-auth/login",
         data=json.dumps({"email": "dev@simcorp.com", "password": "password"}).encode(),
