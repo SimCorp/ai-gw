@@ -137,6 +137,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   <NavItem href="/admin/alerts" label="Alerts" />
                 </NavSection>
 
+                <NavSection label="League">
+                  <NavItem href="/admin/league/seasons" label="Seasons" />
+                  <NavItem href="/admin/league/challenges" label="Challenges" />
+                  <NavItem href="/admin/league/proposals" label="Proposals" />
+                  <NavItem href="/admin/league/store" label="Store editor" />
+                </NavSection>
+
                 <NavSection label="Settings">
                   <NavItem href="/admin/settings/entra" label="Entra ID groups" />
                 </NavSection>

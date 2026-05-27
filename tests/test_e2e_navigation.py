@@ -207,6 +207,10 @@ ADMIN_NAV = [
     ("/admin/providers",         "Providers"),
     ("/admin/reports",           "Cost Reports"),
     ("/admin/alerts",            "Alerts"),
+    ("/admin/league/seasons",    "Seasons"),
+    ("/admin/league/challenges", "Challenge Builder"),
+    ("/admin/league/proposals",  "Community Proposals"),
+    ("/admin/league/store",      "Store Editor"),
     ("/admin/settings/entra",    "Entra ID"),
 ]
 
@@ -280,6 +284,10 @@ PORTAL_NAV = [
     ("/portal/docs",        "Quickstart"),
     ("/portal/transformation", "AI Transformation"),
     ("/portal/settings",    "Settings"),
+    ("/portal/league",          "Challenges"),
+    ("/portal/league/leaderboard", "Leaderboard"),
+    ("/portal/league/results",  "My Results"),
+    ("/portal/league/store",    "Store"),
 ]
 
 
@@ -345,6 +353,10 @@ class TestAdminSidebarClicks:
         ("Guardrails",    "/admin-portal/admin/guardrails"),
         ("Policies",      "/admin-portal/admin/policies"),
         ("Audit log",     "/admin-portal/admin/audit"),
+        ("Seasons",       "/admin-portal/admin/league/seasons"),
+        ("Challenges",    "/admin-portal/admin/league/challenges"),
+        ("Proposals",     "/admin-portal/admin/league/proposals"),
+        ("Store editor",  "/admin-portal/admin/league/store"),
     ]
 
     @pytest.mark.parametrize("label,expected_path", SIDEBAR_LINKS,
@@ -376,6 +388,10 @@ class TestPortalSidebarClicks:
         ("Agents",            "/portal/agents"),
         ("Quickstart",        "/portal/docs"),
         ("Settings",          "/portal/settings"),
+        ("Challenges",        "/portal/league"),
+        ("Leaderboard",       "/portal/league/leaderboard"),
+        ("My Results",        "/portal/league/results"),
+        ("Store",             "/portal/league/store"),
     ]
 
     @pytest.mark.parametrize("label,expected_path", SIDEBAR_LINKS,

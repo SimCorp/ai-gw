@@ -23,6 +23,15 @@ const NAV = [
     ],
   },
   {
+    group: "League",
+    items: [
+      { href: "/portal/league",              label: "Challenges",   icon: <SwordIcon /> },
+      { href: "/portal/league/leaderboard",  label: "Leaderboard",  icon: <TrophyIcon /> },
+      { href: "/portal/league/results",      label: "My Results",   icon: <ResultsIcon /> },
+      { href: "/portal/league/store",        label: "Store",        icon: <StoreIcon /> },
+    ],
+  },
+  {
     group: "Account",
     items: [
       { href: "/portal/usage",          label: "Usage & spend",   icon: <ChartIcon /> },
@@ -40,8 +49,11 @@ export default function PortalShell() {
   const teamRef = useRef<HTMLDivElement>(null);
   const userRef = useRef<HTMLDivElement>(null);
 
-  const isActive = (href: string) =>
-    href === "/portal" ? path === "/portal" : path.startsWith(href);
+  const isActive = (href: string) => {
+    if (href === "/portal") return path === "/portal";
+    if (href === "/portal/league") return path === "/portal/league";
+    return path.startsWith(href);
+  };
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -352,6 +364,37 @@ function TransformIcon() {
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
       <path d="M2 12 L6 8 L9 10 L14 4"/>
       <path d="M11 4h3v3"/>
+    </svg>
+  );
+}
+function SwordIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M3 13l10-10M10 3h3v3M5 11l-2 2"/>
+    </svg>
+  );
+}
+function TrophyIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M5 2h6v5a3 3 0 01-6 0V2z"/>
+      <path d="M5 4H3a2 2 0 002 2M11 4h2a2 2 0 01-2 2M8 9v3M5 14h6"/>
+    </svg>
+  );
+}
+function ResultsIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <rect x="2" y="3" width="12" height="10" rx="1.5"/>
+      <path d="M5 8h6M5 11h4M5 5h3"/>
+    </svg>
+  );
+}
+function StoreIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M2 5h12l-1.5 7H3.5L2 5z"/>
+      <path d="M1 2h14M6 5v4M10 5v4"/>
     </svg>
   );
 }
