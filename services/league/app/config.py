@@ -10,7 +10,11 @@ class Settings(BaseSettings):
     admin_token: str = ""
     litellm_url: str = "http://litellm:8003"
     litellm_master_key: str = "sk-litellm-local-dev"
-    cors_origins: list[str] = ["http://localhost:3001", "http://localhost:3002"]
+    cors_origins: list[str] = [
+        "http://localhost:3001",
+        "http://localhost:3002",
+        "http://localhost:8080",
+    ]
     training_rate_limit_per_hour: int = 10
 
 

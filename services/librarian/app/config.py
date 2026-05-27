@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     # CORS origins allowed to call the librarian directly from the browser.
     # Default is the portal origin only; set CORS_ORIGINS=* only if you need
     # to allow all origins (operator's explicit choice).
-    cors_origins: str = "http://localhost:3002"
+    cors_origins: str = "http://localhost:3002,http://localhost:8080"
 
     # Service token for /ingest and /mcp/tools/ingest endpoints.
     # Leave empty to allow unauthenticated access in dev mode (fail open).

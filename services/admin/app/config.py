@@ -33,7 +33,11 @@ class Settings(BaseSettings):
     identity_key_secret: str = "dev-identity-key-secret-change-in-prod"
 
     # CORS — override in production to restrict allowed origins
-    cors_origins: list[str] = ["http://localhost:3001", "http://localhost:3002"]
+    cors_origins: list[str] = [
+        "http://localhost:3001",
+        "http://localhost:3002",
+        "http://localhost:8080",
+    ]
 
     # Email domain restriction — empty list allows all domains
     allowed_email_domains: list[str] = []
