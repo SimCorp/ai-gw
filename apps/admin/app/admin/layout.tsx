@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthGuard } from './_components/AuthGuard';
@@ -159,7 +160,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 function NavSectionLink({ href, label, children }: { href: string; label: string; children?: React.ReactNode }) {
   return (
     <div style={{ marginBottom: 4 }}>
-      <a
+      <Link
         href={href}
         style={{
           display: 'block',
@@ -170,7 +171,7 @@ function NavSectionLink({ href, label, children }: { href: string; label: string
         }}
         onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'var(--side-fg)'; }}
         onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--side-fg-mute)'; }}
-      >{label}</a>
+      >{label}</Link>
       {children}
     </div>
   );
@@ -191,7 +192,7 @@ function NavSection({ label, children }: { label: string; children: React.ReactN
 
 function NavItem({ href, label }: { href: string; label: string }) {
   return (
-    <a
+    <Link
       href={href}
       style={{
         display: 'block',
@@ -206,6 +207,6 @@ function NavItem({ href, label }: { href: string; label: string }) {
       onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = ''; }}
     >
       {label}
-    </a>
+    </Link>
   );
 }
