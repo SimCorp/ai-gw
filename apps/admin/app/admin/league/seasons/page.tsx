@@ -43,6 +43,112 @@ function StatusPill({ status }: { status: SeasonStatus }) {
   );
 }
 
+interface EditSeasonModalProps {
+  season: Season;
+  onClose: () => void;
+  onSaved: () => void;
+}
+
+function EditSeasonModal({ season, onClose, onSaved }: EditSeasonModalProps) {
+  const [status, setStatus] = useState<SeasonStatus>(season.status);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  // Status transitions are one-way: upcoming → active → closed
+  const ALL: SeasonStatus[] = ['upcoming', 'active', 'closed'];
+  const minIndex = ALL.indexOf(season.status);
+  const allowed = ALL.slice(minIndex);
+
+  async function handleSave() {
+    if (status === season.status) { onClose(); return; }
+    setSaving(true);
+    setError('');
+    try {
+      const res = await fetch(`${LEAGUE}/seasons/${season.id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.detail ?? 'Failed'); }
+      onSaved();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to update season');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+    }}>
+      <div style={{
+        background: 'var(--surface)', border: '1px solid var(--rule)',
+        borderRadius: 12, padding: '24px', width: 440, boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
+      }}>
+        <h2 style={{ margin: '0 0 4px', fontSize: 17, fontWeight: 600 }}>Edit Season</h2>
+        <p style={{ margin: '0 0 20px', fontSize: 13, color: 'var(--fg-3)' }}>{season.name}</p>
+        {error && (
+          <div style={{ marginBottom: 14, padding: '9px 12px', borderRadius: 6, fontSize: 13,
+            background: 'rgba(220,38,38,0.1)', border: '1px solid rgba(220,38,38,0.3)', color: '#FCA5A5' }}>
+            {error}
+          </div>
+        )}
+        <label style={{ display: 'block', fontSize: 12.5, fontWeight: 500, color: 'var(--fg-2)', marginBottom: 16 }}>
+          Status
+          <div style={{ marginTop: 8, display: 'flex', gap: 6 }}>
+            {ALL.map(s => {
+              const disabled = !allowed.includes(s);
+              const selected = s === status;
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => !disabled && setStatus(s)}
+                  style={{
+                    flex: 1, padding: '8px 12px', borderRadius: 6, fontSize: 12.5, fontWeight: 600,
+                    border: `1px solid ${selected ? STATUS_COLORS[s] : 'var(--rule)'}`,
+                    background: selected ? `color-mix(in srgb, ${STATUS_COLORS[s]} 20%, transparent)` : 'transparent',
+                    color: disabled ? 'var(--fg-3)' : (selected ? STATUS_COLORS[s] : 'var(--fg-2)'),
+                    cursor: disabled ? 'not-allowed' : 'pointer',
+                    opacity: disabled ? 0.5 : 1,
+                  }}
+                >
+                  {s}
+                </button>
+              );
+            })}
+          </div>
+          <div style={{ fontSize: 11.5, color: 'var(--fg-3)', marginTop: 8 }}>
+            {season.status === 'upcoming' && 'Activate to start accepting submissions, or close without activating.'}
+            {season.status === 'active' && 'Close the season to finalize the leaderboard. This cannot be undone.'}
+            {season.status === 'closed' && 'This season is closed — no further changes possible.'}
+          </div>
+        </label>
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+          <button onClick={onClose} style={{
+            padding: '8px 16px', borderRadius: 6, border: '1px solid var(--rule)',
+            background: 'transparent', color: 'var(--fg-2)', cursor: 'pointer', fontSize: 13,
+          }}>Cancel</button>
+          <button
+            onClick={handleSave}
+            disabled={saving || status === season.status || season.status === 'closed'}
+            style={{
+              padding: '8px 18px', borderRadius: 6, border: 'none',
+              background: 'var(--sc-blue, #083EA7)', color: '#fff',
+              cursor: (saving || status === season.status || season.status === 'closed') ? 'not-allowed' : 'pointer',
+              fontSize: 13, fontWeight: 600,
+              opacity: (saving || status === season.status || season.status === 'closed') ? 0.5 : 1,
+            }}
+          >{saving ? 'Saving…' : 'Save changes'}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 interface CreateSeasonModalProps {
   onClose: () => void;
   onSaved: () => void;
@@ -155,6 +261,7 @@ function CreateSeasonModal({ onClose, onSaved }: CreateSeasonModalProps) {
 export default function SeasonsPage() {
   const qc = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
+  const [editing, setEditing] = useState<Season | null>(null);
 
   const { data, isLoading, error } = useQuery<Season[]>({
     queryKey: ['league-seasons'],
@@ -203,10 +310,18 @@ export default function SeasonsPage() {
                 </div>
               </div>
               <StatusPill status={s.status} />
-              <button style={{
-                padding: '6px 14px', borderRadius: 6, border: '1px solid var(--rule)',
-                background: 'transparent', color: 'var(--fg-2)', cursor: 'pointer', fontSize: 12.5,
-              }}>Edit</button>
+              <button
+                onClick={() => setEditing(s)}
+                disabled={s.status === 'closed'}
+                style={{
+                  padding: '6px 14px', borderRadius: 6, border: '1px solid var(--rule)',
+                  background: 'transparent',
+                  color: s.status === 'closed' ? 'var(--fg-3)' : 'var(--fg-2)',
+                  cursor: s.status === 'closed' ? 'not-allowed' : 'pointer',
+                  fontSize: 12.5,
+                  opacity: s.status === 'closed' ? 0.5 : 1,
+                }}
+              >Edit</button>
             </div>
           ))}
         </div>
@@ -216,6 +331,14 @@ export default function SeasonsPage() {
         <CreateSeasonModal
           onClose={() => setShowCreate(false)}
           onSaved={() => { setShowCreate(false); qc.invalidateQueries({ queryKey: ['league-seasons'] }); }}
+        />
+      )}
+
+      {editing && (
+        <EditSeasonModal
+          season={editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => { setEditing(null); qc.invalidateQueries({ queryKey: ['league-seasons'] }); }}
         />
       )}
     </div>

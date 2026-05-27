@@ -16,6 +16,7 @@ interface StoreItem {
   asset_url: string;
   exclusive_season_id: string | null;
   exclusive_top_n: number | null;
+  active?: boolean;
 }
 
 const TYPE_LABELS: Record<ItemType, string> = {
@@ -135,14 +136,130 @@ function CreateItemModal({ onClose, onSaved }: CreateItemModalProps) {
   );
 }
 
+interface EditItemModalProps {
+  item: StoreItem;
+  onClose: () => void;
+  onSaved: () => void;
+}
+
+function EditItemModal({ item, onClose, onSaved }: EditItemModalProps) {
+  const [form, setForm] = useState({
+    name: item.name,
+    point_cost: String(item.point_cost),
+    asset_url: item.asset_url ?? '',
+    active: item.active !== false,
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  async function handleSave() {
+    setSaving(true);
+    setError('');
+    try {
+      const res = await fetch(`${LEAGUE}/store/items/${item.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: form.name,
+          point_cost: parseInt(form.point_cost),
+          asset_url: form.asset_url,
+          active: form.active,
+        }),
+      });
+      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.detail ?? 'Failed'); }
+      onSaved();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to update item');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const inputStyle: React.CSSProperties = {
+    width: '100%', boxSizing: 'border-box',
+    padding: '8px 10px', fontSize: 13,
+    background: 'var(--bg)', border: '1px solid var(--rule)',
+    borderRadius: 6, color: 'var(--fg-1)',
+  };
+
+  const isExclusive = !!item.exclusive_season_id;
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+    }}>
+      <div style={{
+        background: 'var(--surface)', border: '1px solid var(--rule)',
+        borderRadius: 12, padding: '24px', width: 440, boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
+      }}>
+        <h2 style={{ margin: '0 0 4px', fontSize: 17, fontWeight: 600 }}>Edit Store Item</h2>
+        <p style={{ margin: '0 0 20px', fontSize: 13, color: 'var(--fg-3)' }}>
+          {TYPE_LABELS[item.type]}{isExclusive ? ' · Exclusive — not purchasable' : ''}
+        </p>
+        {error && (
+          <div style={{ marginBottom: 14, padding: '9px 12px', borderRadius: 6, fontSize: 13,
+            background: 'rgba(220,38,38,0.1)', border: '1px solid rgba(220,38,38,0.3)', color: '#FCA5A5' }}>
+            {error}
+          </div>
+        )}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <label style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--fg-2)' }}>
+            Name
+            <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+              style={{ ...inputStyle, marginTop: 5 }} />
+          </label>
+          <label style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--fg-2)' }}>
+            Point cost {isExclusive && <span style={{ color: 'var(--fg-3)' }}>(ignored for exclusive items)</span>}
+            <input
+              type="number" min="0" step="50"
+              value={form.point_cost}
+              disabled={isExclusive}
+              onChange={e => setForm(f => ({ ...f, point_cost: e.target.value }))}
+              style={{ ...inputStyle, marginTop: 5, opacity: isExclusive ? 0.6 : 1 }}
+            />
+          </label>
+          <label style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--fg-2)' }}>
+            Asset URL
+            <input value={form.asset_url}
+              onChange={e => setForm(f => ({ ...f, asset_url: e.target.value }))}
+              placeholder="https://…" style={{ ...inputStyle, marginTop: 5 }} />
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--fg-1)', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={form.active}
+              onChange={e => setForm(f => ({ ...f, active: e.target.checked }))}
+              style={{ cursor: 'pointer', accentColor: 'var(--sc-blue, #083EA7)' }}
+            />
+            Active — appears in the developer store
+          </label>
+        </div>
+        <div style={{ display: 'flex', gap: 10, marginTop: 22, justifyContent: 'flex-end' }}>
+          <button onClick={onClose} style={{
+            padding: '8px 16px', borderRadius: 6, border: '1px solid var(--rule)',
+            background: 'transparent', color: 'var(--fg-2)', cursor: 'pointer', fontSize: 13,
+          }}>Cancel</button>
+          <button onClick={handleSave} disabled={saving} style={{
+            padding: '8px 18px', borderRadius: 6, border: 'none',
+            background: 'var(--sc-blue, #083EA7)', color: '#fff', cursor: saving ? 'not-allowed' : 'pointer',
+            fontSize: 13, fontWeight: 600, opacity: saving ? 0.7 : 1,
+          }}>{saving ? 'Saving…' : 'Save changes'}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function StoreEditorPage() {
   const qc = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
+  const [editing, setEditing] = useState<StoreItem | null>(null);
   const [filterType, setFilterType] = useState<'all' | ItemType>('all');
 
   const { data, isLoading, error } = useQuery<StoreItem[]>({
     queryKey: ['league-store'],
-    queryFn: () => fetch(`${LEAGUE}/store/items`).then(r => r.json()),
+    queryFn: () => fetch(`${LEAGUE}/store/items?include_inactive=true`).then(r => r.json()),
   });
 
   const items = Array.isArray(data) ? data : (data as { items?: StoreItem[] })?.items ?? [];
@@ -206,12 +323,24 @@ export default function StoreEditorPage() {
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
-          {filtered.map(item => (
+          {filtered.map(item => {
+            const isInactive = item.active === false;
+            return (
             <div key={item.id} style={{
-              background: 'var(--surface)', border: '1px solid var(--rule)',
+              background: 'var(--surface)',
+              border: `1px solid ${isInactive ? 'var(--bad, #DC2626)' : 'var(--rule)'}`,
               borderRadius: 10, padding: '16px',
               display: 'flex', flexDirection: 'column', gap: 10,
+              opacity: isInactive ? 0.65 : 1,
+              position: 'relative',
             }}>
+              {isInactive && (
+                <div style={{
+                  position: 'absolute', top: 8, right: 8,
+                  fontSize: 10, fontWeight: 700, color: 'var(--bad, #DC2626)',
+                  background: 'rgba(220,38,38,0.15)', padding: '2px 6px', borderRadius: 4,
+                }}>INACTIVE</div>
+              )}
               <div style={{ fontSize: 32, textAlign: 'center' }}>{TYPE_ICONS[item.type]}</div>
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 3 }}>{item.name}</div>
@@ -227,13 +356,17 @@ export default function StoreEditorPage() {
                 {item.exclusive_season_id && (
                   <span style={{ fontSize: 11, color: 'var(--fg-3)', fontStyle: 'italic' }}>exclusive</span>
                 )}
-                <button style={{
-                  padding: '4px 10px', borderRadius: 5, border: '1px solid var(--rule)',
-                  background: 'transparent', color: 'var(--fg-2)', cursor: 'pointer', fontSize: 12,
-                }}>Edit</button>
+                <button
+                  onClick={() => setEditing(item)}
+                  style={{
+                    padding: '4px 10px', borderRadius: 5, border: '1px solid var(--rule)',
+                    background: 'transparent', color: 'var(--fg-2)', cursor: 'pointer', fontSize: 12,
+                  }}
+                >Edit</button>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -241,6 +374,14 @@ export default function StoreEditorPage() {
         <CreateItemModal
           onClose={() => setShowCreate(false)}
           onSaved={() => { setShowCreate(false); qc.invalidateQueries({ queryKey: ['league-store'] }); }}
+        />
+      )}
+
+      {editing && (
+        <EditItemModal
+          item={editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => { setEditing(null); qc.invalidateQueries({ queryKey: ['league-store'] }); }}
         />
       )}
     </div>
