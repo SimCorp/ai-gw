@@ -14,7 +14,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade():
-    op.execute("""
+    op.execute(r"""
         CREATE TABLE IF NOT EXISTS league_seasons (
             id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             name            TEXT NOT NULL,
@@ -22,7 +22,7 @@ def upgrade():
                             CHECK (status IN ('upcoming', 'active', 'closed')),
             starts_at       TIMESTAMPTZ NOT NULL,
             ends_at         TIMESTAMPTZ NOT NULL CHECK (ends_at > starts_at),
-            scoring_weights JSONB NOT NULL DEFAULT '{"quality":0.35,"robustness":0.20,"token_efficiency":0.15,"speed":0.10,"cost_efficiency":0.10,"improvement_rate":0.05,"creativity":0.05}',
+            scoring_weights JSONB NOT NULL DEFAULT '{"quality"\:0.35,"robustness"\:0.20,"token_efficiency"\:0.15,"speed"\:0.10,"cost_efficiency"\:0.10,"improvement_rate"\:0.05,"creativity"\:0.05}',
             season_multiplier NUMERIC(4,2) NOT NULL DEFAULT 1.0,
             created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
         )
