@@ -53,7 +53,7 @@ export default function LeaderboardPage() {
   const { data, isLoading } = useQuery<LeaderboardEntry[]>({
     queryKey: ["portal-leaderboard", seasonId],
     enabled: !!seasonId,
-    queryFn: () => fetch(`${LEAGUE}/leaderboard?season_id=${seasonId}`).then(r => r.json()),
+    queryFn: () => fetch(`${LEAGUE}/seasons/${seasonId}/leaderboard`).then(r => r.json()),
   });
 
   const entries = Array.isArray(data) ? data : (data as { entries?: LeaderboardEntry[] })?.entries ?? [];

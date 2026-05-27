@@ -69,11 +69,12 @@ function CreateChallengeModal({ seasons, onClose, onSaved }: CreateChallengeModa
     setSaving(true);
     setError('');
     try {
-      const res = await fetch(`${LEAGUE}/challenges`, {
+      const res = await fetch(`${LEAGUE}/seasons/${form.season_id}/challenges`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...form,
+          title: form.title,
+          goal: form.goal,
           max_league_attempts: parseInt(form.max_league_attempts),
           max_tokens_budget: parseInt(form.max_tokens_budget),
           allowed_models: form.allowed_models.split(',').map(s => s.trim()).filter(Boolean),
@@ -180,17 +181,25 @@ export default function ChallengesPage() {
     queryFn: () => fetch(`${LEAGUE}/seasons`).then(r => r.json()),
   });
 
+  const seasons = Array.isArray(seasonsData) ? seasonsData : (seasonsData as { seasons?: Season[] })?.seasons ?? [];
+
+  // No "all seasons" endpoint exists — fan out across seasons when filter is "all"
   const { data, isLoading, error } = useQuery<Challenge[]>({
-    queryKey: ['league-challenges', filterSeason],
-    queryFn: () => {
-      const url = filterSeason === 'all'
-        ? `${LEAGUE}/challenges`
-        : `${LEAGUE}/challenges?season_id=${filterSeason}`;
-      return fetch(url).then(r => r.json());
+    queryKey: ['league-challenges', filterSeason, seasons.map(s => s.id).join(',')],
+    enabled: filterSeason !== 'all' || seasons.length > 0,
+    queryFn: async () => {
+      if (filterSeason !== 'all') {
+        return fetch(`${LEAGUE}/seasons/${filterSeason}/challenges`).then(r => r.json());
+      }
+      const lists = await Promise.all(
+        seasons.map(s =>
+          fetch(`${LEAGUE}/seasons/${s.id}/challenges`).then(r => r.ok ? r.json() : [])
+        )
+      );
+      return lists.flat();
     },
   });
 
-  const seasons = Array.isArray(seasonsData) ? seasonsData : (seasonsData as { seasons?: Season[] })?.seasons ?? [];
   const challenges = Array.isArray(data) ? data : (data as { challenges?: Challenge[] })?.challenges ?? [];
 
   if (isLoading) return <LoadingState />;

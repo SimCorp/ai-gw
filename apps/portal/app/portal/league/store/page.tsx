@@ -25,7 +25,7 @@ interface PointBalance {
 }
 
 interface Purchase {
-  item_id: string;
+  id: string;
 }
 
 const TYPE_ICONS: Record<ItemType, string> = {
@@ -50,7 +50,7 @@ export default function StorePage() {
 
   const { data: storeData, isLoading } = useQuery<StoreItem[]>({
     queryKey: ["portal-store"],
-    queryFn: () => fetch(`${LEAGUE}/store`).then(r => r.json()),
+    queryFn: () => fetch(`${LEAGUE}/store/items`).then(r => r.json()),
   });
 
   const { data: balanceData } = useQuery<PointBalance>({
@@ -60,15 +60,15 @@ export default function StorePage() {
 
   const { data: purchasesData } = useQuery<Purchase[]>({
     queryKey: ["portal-purchases"],
-    queryFn: () => fetch(`${LEAGUE}/store/purchases/mine`).then(r => r.json()),
+    queryFn: () => fetch(`${LEAGUE}/store/owned`).then(r => r.json()),
   });
 
   const items = Array.isArray(storeData) ? storeData : (storeData as { items?: StoreItem[] })?.items ?? [];
   const balance = balanceData?.balance ?? 0;
   const ownedIds = new Set(
     Array.isArray(purchasesData)
-      ? purchasesData.map(p => p.item_id)
-      : (purchasesData as { purchases?: Purchase[] })?.purchases?.map(p => p.item_id) ?? []
+      ? purchasesData.map(p => p.id)
+      : (purchasesData as { purchases?: Purchase[] })?.purchases?.map(p => p.id) ?? []
   );
 
   const filtered = filterType === "all" ? items : items.filter(i => i.type === filterType);
@@ -77,10 +77,8 @@ export default function StorePage() {
     setBuying(item.id);
     setBuyError(null);
     try {
-      const res = await fetch(`${LEAGUE}/store/purchase`, {
+      const res = await fetch(`${LEAGUE}/store/purchase/${item.id}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ item_id: item.id }),
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));

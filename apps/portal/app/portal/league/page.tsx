@@ -61,7 +61,7 @@ export default function LeaguePage() {
   const { data: challengesData, isLoading: challengesLoading } = useQuery<Challenge[]>({
     queryKey: ["portal-league-challenges", selectedSeasonId],
     enabled: !!selectedSeasonId,
-    queryFn: () => fetch(`${LEAGUE}/challenges?season_id=${selectedSeasonId}`).then(r => r.json()),
+    queryFn: () => fetch(`${LEAGUE}/seasons/${selectedSeasonId}/challenges`).then(r => r.json()),
   });
 
   const challenges = Array.isArray(challengesData)

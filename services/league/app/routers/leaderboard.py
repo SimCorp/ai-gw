@@ -31,8 +31,7 @@ async def get_leaderboard(
             lb.updated_at
         FROM league_leaderboard lb
         JOIN users u ON u.id = lb.engineer_id
-        LEFT JOIN developers d ON d.user_id = u.id
-        LEFT JOIN teams t ON t.id = d.team_id
+        LEFT JOIN teams t ON t.id = u.primary_team_id
         LEFT JOIN areas a ON a.id = t.area_id
         WHERE lb.season_id = :sid
         ORDER BY lb.composite_score DESC

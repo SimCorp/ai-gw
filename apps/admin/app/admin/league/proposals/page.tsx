@@ -14,6 +14,7 @@ interface Proposal {
   goal: string;
   status: ProposalStatus;
   proposed_by: string;
+  proposer_name?: string;
   created_at: string;
   reviewer_notes?: string;
 }
@@ -39,7 +40,7 @@ function StatusPill({ status }: { status: ProposalStatus }) {
 
 async function reviewProposal(id: string, action: 'approved' | 'rejected', notes: string) {
   const res = await fetch(`${LEAGUE}/proposals/${id}/review`, {
-    method: 'POST',
+    method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ status: action, reviewer_notes: notes }),
   });
@@ -80,7 +81,7 @@ function ReviewModal({ proposal, onClose, onSaved }: ReviewModalProps) {
         borderRadius: 12, padding: '24px', width: 500, boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
       }}>
         <h2 style={{ margin: '0 0 4px', fontSize: 17, fontWeight: 600 }}>Review Proposal</h2>
-        <p style={{ margin: '0 0 20px', fontSize: 13, color: 'var(--fg-3)' }}>from {proposal.proposed_by}</p>
+        <p style={{ margin: '0 0 20px', fontSize: 13, color: 'var(--fg-3)' }}>from {proposal.proposer_name ?? proposal.proposed_by}</p>
 
         <div style={{
           background: 'var(--bg)', border: '1px solid var(--rule)', borderRadius: 8, padding: '14px',
@@ -203,7 +204,7 @@ export default function ProposalsPage() {
                 </div>
                 <div style={{ fontSize: 12.5, color: 'var(--fg-3)', marginBottom: 6 }}>{p.goal}</div>
                 <div style={{ fontSize: 11.5, color: 'var(--fg-3)' }}>
-                  Submitted by {p.proposed_by} · {new Date(p.created_at).toLocaleDateString()}
+                  Submitted by {p.proposer_name ?? p.proposed_by} · {new Date(p.created_at).toLocaleDateString()}
                 </div>
                 {p.reviewer_notes && (
                   <div style={{ marginTop: 8, fontSize: 12.5, color: 'var(--fg-2)', fontStyle: 'italic' }}>

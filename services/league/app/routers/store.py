@@ -2,13 +2,48 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import require_dev_auth
+from app.auth import require_admin_auth, require_dev_auth
 from app.db import get_session
 
 router = APIRouter(prefix="/store", tags=["store"])
+
+
+class StoreItemCreate(BaseModel):
+    name: str
+    type: str = Field(pattern="^(badge|card_border|avatar_frame|title)$")
+    point_cost: int = Field(ge=0, default=0)
+    asset_url: str = ""
+
+
+@router.post("/items", status_code=201)
+async def create_item(
+    body: StoreItemCreate,
+    session: AsyncSession = Depends(get_session),
+    _admin=Depends(require_admin_auth),
+):
+    result = await session.execute(
+        text("""
+        INSERT INTO league_store_items (name, type, point_cost, asset_url)
+        VALUES (:name, :type, :cost, :url)
+        RETURNING id, name, type, point_cost, asset_url, exclusive_season_id, exclusive_top_n
+    """),
+        {"name": body.name, "type": body.type, "cost": body.point_cost, "url": body.asset_url},
+    )
+    await session.commit()
+    r = result.mappings().one()
+    return {
+        "id": str(r["id"]),
+        "name": r["name"],
+        "type": r["type"],
+        "point_cost": r["point_cost"],
+        "asset_url": r["asset_url"],
+        "exclusive_season_id": str(r["exclusive_season_id"]) if r["exclusive_season_id"] else None,
+        "exclusive_top_n": r["exclusive_top_n"],
+    }
 
 
 @router.get("/balance")

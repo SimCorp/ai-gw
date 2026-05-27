@@ -258,7 +258,10 @@ services:
       DATABASE_URL: "postgresql+asyncpg://aigateway:aigateway@postgres:5432/aigateway"
       REDIS_URL: "redis://redis:6379/0"
       LITELLM_URL: "http://litellm:8003"
-      DEV_BYPASS_AUTH: "false"
+      # In local dev, bypass JWT validation so seeded league pages render
+      # without wiring per-request Authorization headers in portal fetches.
+      # Production must run with DEV_BYPASS_AUTH=false.
+      DEV_BYPASS_AUTH: "true"
     depends_on:
       db-migrate:
         condition: service_completed_successfully

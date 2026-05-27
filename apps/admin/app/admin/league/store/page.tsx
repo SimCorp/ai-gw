@@ -52,7 +52,7 @@ function CreateItemModal({ onClose, onSaved }: CreateItemModalProps) {
     setSaving(true);
     setError('');
     try {
-      const res = await fetch(`${LEAGUE}/store`, {
+      const res = await fetch(`${LEAGUE}/store/items`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...form, point_cost: parseInt(form.point_cost) }),
@@ -142,7 +142,7 @@ export default function StoreEditorPage() {
 
   const { data, isLoading, error } = useQuery<StoreItem[]>({
     queryKey: ['league-store'],
-    queryFn: () => fetch(`${LEAGUE}/store`).then(r => r.json()),
+    queryFn: () => fetch(`${LEAGUE}/store/items`).then(r => r.json()),
   });
 
   const items = Array.isArray(data) ? data : (data as { items?: StoreItem[] })?.items ?? [];

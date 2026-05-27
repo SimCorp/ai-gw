@@ -5,7 +5,7 @@ import time
 from uuid import UUID
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -291,3 +291,74 @@ async def submit(
             "submission_id": str(submission_id),
             "message": "Submission received. Scores will be revealed when the challenge closes.",
         }
+
+
+@router.get("/submissions/mine")
+async def list_my_submissions(
+    session: AsyncSession = Depends(get_session),
+    user=Depends(require_dev_auth),
+    challenge_id: UUID | None = Query(default=None),
+):
+    """Return the calling engineer's submissions joined with scores.
+
+    For league-mode rows, scores are returned only if the challenge is closed
+    (scores_revealed_at is set). Training rows always include scores.
+    """
+    if challenge_id is not None:
+        result = await session.execute(
+            text("""
+            SELECT sub.id, sub.challenge_id, c.title AS challenge_title,
+                   sub.mode, sub.attempt_number, sub.submitted_at,
+                   c.scores_revealed_at, c.status AS challenge_status,
+                   sc.quality, sc.robustness, sc.token_efficiency, sc.speed,
+                   sc.cost_efficiency, sc.improvement_rate, sc.creativity, sc.composite
+            FROM league_submissions sub
+            JOIN league_challenges c ON c.id = sub.challenge_id
+            LEFT JOIN league_scores sc ON sc.submission_id = sub.id
+            WHERE sub.engineer_id = :uid AND sub.challenge_id = :cid
+            ORDER BY sub.submitted_at DESC
+        """),
+            {"uid": user["user_id"], "cid": str(challenge_id)},
+        )
+    else:
+        result = await session.execute(
+            text("""
+            SELECT sub.id, sub.challenge_id, c.title AS challenge_title,
+                   sub.mode, sub.attempt_number, sub.submitted_at,
+                   c.scores_revealed_at, c.status AS challenge_status,
+                   sc.quality, sc.robustness, sc.token_efficiency, sc.speed,
+                   sc.cost_efficiency, sc.improvement_rate, sc.creativity, sc.composite
+            FROM league_submissions sub
+            JOIN league_challenges c ON c.id = sub.challenge_id
+            LEFT JOIN league_scores sc ON sc.submission_id = sub.id
+            WHERE sub.engineer_id = :uid
+            ORDER BY sub.submitted_at DESC
+        """),
+            {"uid": user["user_id"]},
+        )
+
+    out = []
+    for r in result.mappings().all():
+        # Hide scores for in-flight league submissions
+        reveal = r["mode"] == "training" or r["scores_revealed_at"] is not None
+        item = {
+            "id": str(r["id"]),
+            "challenge_id": str(r["challenge_id"]),
+            "challenge_title": r["challenge_title"],
+            "mode": r["mode"],
+            "attempt_number": r["attempt_number"],
+            "submitted_at": r["submitted_at"].isoformat(),
+        }
+        if reveal and r["composite"] is not None:
+            item["scores"] = {
+                "quality": float(r["quality"]),
+                "robustness": float(r["robustness"]),
+                "token_efficiency": float(r["token_efficiency"]),
+                "speed": float(r["speed"]),
+                "cost_efficiency": float(r["cost_efficiency"]),
+                "improvement_rate": float(r["improvement_rate"]),
+                "creativity": float(r["creativity"]),
+                "composite": float(r["composite"]),
+            }
+        out.append(item)
+    return out
