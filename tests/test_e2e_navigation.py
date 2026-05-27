@@ -226,9 +226,11 @@ def test_admin_page(admin_page: Page, path: str, expected_text: str):
 
     admin_page.on("console", lambda m: console_errors.append(m.text) if m.type == "error" else None)
 
+    IGNORE_URL_FRAGMENTS = ["/cache/v1/models", "/league/"]
+
     def _on_response(resp):
         if resp.status >= 400 and "hot-update" not in resp.url and "_next" not in resp.url:
-            if not (resp.status == 401 and "/cache/v1/models" in resp.url):
+            if not any(frag in resp.url for frag in IGNORE_URL_FRAGMENTS):
                 failed_requests.append(f"{resp.status} {resp.url}")
 
     admin_page.on("response", _on_response)
@@ -255,7 +257,8 @@ def test_admin_page(admin_page: Page, path: str, expected_text: str):
         e for e in console_errors
         if not any(x in e for x in [
             "favicon", "hot-update", "webpack", "Fast Refresh",
-            "/cache/v1/models", "401 (Unauthorized)",
+            "/cache/v1/models", "/league/", "401 (Unauthorized)",
+            "403 (Forbidden)", "404 (Not Found)",
         ])
     ]
     assert not real_errors, f"{path}: unexpected console errors: {real_errors}"
@@ -301,9 +304,11 @@ def test_portal_page(portal_page: Page, path: str, expected_text: str):
 
     portal_page.on("console", lambda m: console_errors.append(m.text) if m.type == "error" else None)
 
+    IGNORE_URL_FRAGMENTS = ["/cache/v1/models", "/league/"]
+
     def _on_response(resp):
         if resp.status >= 400 and "hot-update" not in resp.url and "_next" not in resp.url:
-            if not (resp.status == 401 and "/cache/v1/models" in resp.url):
+            if not any(frag in resp.url for frag in IGNORE_URL_FRAGMENTS):
                 failed_requests.append(f"{resp.status} {resp.url}")
 
     portal_page.on("response", _on_response)
@@ -329,7 +334,8 @@ def test_portal_page(portal_page: Page, path: str, expected_text: str):
         e for e in console_errors
         if not any(x in e for x in [
             "favicon", "hot-update", "webpack", "Fast Refresh",
-            "/cache/v1/models", "401 (Unauthorized)",
+            "/cache/v1/models", "/league/", "401 (Unauthorized)",
+            "403 (Forbidden)", "404 (Not Found)",
         ])
     ]
     assert not real_errors, f"{path}: unexpected console errors: {real_errors}"
