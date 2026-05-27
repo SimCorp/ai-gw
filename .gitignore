@@ -23,3 +23,7 @@ storybook-static/
 
 # Persistent bind-mount data (survives Docker Desktop restarts)
 data/
+.superpowers/
+
+# Ephemeral Claude Code agent worktrees (created/cleaned per-session)
+.claude/worktrees/
