@@ -311,6 +311,8 @@ services:
       NEXT_PUBLIC_IDENTITY_BASE_URL: "http://localhost:8080/identity"
       NEXT_PUBLIC_LIBRARIAN_BASE_URL: "http://localhost:8080/librarian"
       NEXT_PUBLIC_MEMORY_BASE_URL: "http://localhost:8080/memory"
+      NEXT_PUBLIC_LITELLM_BASE_URL: "http://localhost:8080/litellm"
+      NEXT_PUBLIC_LITELLM_KEY: "sk-litellm-local-dev"
     depends_on:
       admin:
         condition: service_healthy

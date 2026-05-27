@@ -10,10 +10,10 @@ const securityHeaders = [
     value: [
       "default-src 'self'",
       "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-      "style-src 'self' 'unsafe-inline'",
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "img-src 'self' data: blob:",
       "connect-src 'self' http://localhost:8005 http://localhost:8080",
-      "font-src 'self'",
+      "font-src 'self' https://fonts.gstatic.com",
       "frame-ancestors 'none'",
     ].join("; "),
   },

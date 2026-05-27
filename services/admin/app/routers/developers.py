@@ -200,10 +200,15 @@ async def get_developer_stats(
 
 @router.get("/{developer_id}/teams")
 async def get_developer_teams(developer_id: UUID, session: AsyncSession = Depends(get_session)):
-    # Verify developer exists
+    dev_id_str = str(developer_id)
+    # Accept both legacy developers table (pre-0010) and unified users table (post-0010)
     dev_exists = (await session.execute(
         text("SELECT id FROM developers WHERE id = :id"), {"id": developer_id}
     )).one_or_none()
+    if not dev_exists:
+        dev_exists = (await session.execute(
+            text("SELECT id FROM users WHERE id = CAST(:id AS uuid)"), {"id": dev_id_str}
+        )).one_or_none()
     if not dev_exists:
         raise HTTPException(status_code=404, detail="Developer not found")
 
@@ -216,9 +221,10 @@ async def get_developer_teams(developer_id: UUID, session: AsyncSession = Depend
             JOIN teams t ON t.id = tm.team_id
             LEFT JOIN areas a ON a.id = t.area_id
             WHERE tm.developer_id = :developer_id
+               OR tm.user_id = :dev_id_str
             ORDER BY t.name
         """),
-        {"developer_id": developer_id},
+        {"developer_id": developer_id, "dev_id_str": dev_id_str},
     )).mappings().all()
 
     return [
