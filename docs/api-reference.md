@@ -24,17 +24,17 @@ Enterprise AI gateway for the SimCorp Developer Platform. This reference covers 
 
 ### Base URLs
 
-| Surface | Base URL | Notes |
-|---|---|---|
-| Inference (primary) | `http://localhost:8002` | Cache service; proxies to LiteLLM after auth |
-| Auth service | `http://localhost:8001` | Internal — not called directly by API clients |
-| LiteLLM | `http://localhost:8003` | Internal — not called directly by API clients |
-| Admin REST API | `http://localhost:8005` | JSON endpoints for platform operators |
-| Developer portal | `http://localhost:3002/portal` | Browser UI; email+password auth |
-| Admin portal | `http://localhost:3001/admin/dashboard` | Teams, guardrails, audit, quotas |
-| claude-sandbox (SSH) | `ssh claude@localhost -p 2222` | `make sandbox`; run `go` inside to configure and launch Claude |
+| Surface | Base URL (nginx) | Direct port | Notes |
+|---|---|---|---|
+| Inference (primary) | `http://localhost:8080/cache/` | `http://localhost:8002` | Cache service; proxies to LiteLLM after auth |
+| Auth service | `http://localhost:8080/auth/` | `http://localhost:8001` | Internal — not called directly by API clients |
+| LiteLLM | `http://localhost:8080/litellm/` | `http://localhost:8003` | Internal — not called directly by API clients |
+| Admin REST API | `http://localhost:8080/admin/` | `http://localhost:8005` | JSON endpoints for platform operators |
+| Developer portal | `http://localhost:8080/portal/portal` | `http://localhost:3002/portal/portal` | Browser UI; email+password auth |
+| Admin portal | `http://localhost:8080/admin-portal/admin/dashboard` | `http://localhost:3001/admin-portal/admin/dashboard` | Teams, guardrails, audit, quotas |
+| claude-sandbox (SSH) | `ssh claude@localhost -p 2222` | — | `make sandbox`; run `go` inside to configure and launch Claude |
 
-All inference requests go through port **8002**. The cache service validates the bearer token with the auth service, checks for a cached response, then forwards cache misses to LiteLLM at :8003.
+All inference requests go through the nginx hub at **localhost:8080/cache/**. The cache service validates the bearer token with the auth service, checks for a cached response, then forwards cache misses to LiteLLM. Direct port access (`localhost:8002`) is also supported.
 
 ### Authentication
 
@@ -48,7 +48,7 @@ API keys start with the prefix `sk-` and are 32 bytes of URL-safe random data ap
 
 **Obtaining a key**
 
-- **Developer portal** — Register with email and password at `http://localhost:3002/portal` (self-service, no OIDC required). Once authenticated, visit `/portal/keys` to issue a key.
+- **Developer portal** — Register with email and password at `http://localhost:8080/portal/portal` (self-service, no OIDC required). Once authenticated, visit `/portal/keys` to issue a key.
 - **Admin REST API** — `POST /teams/{team_id}/keys` (requires `X-Admin-Token` header).
 
 ### Quick health check
@@ -59,7 +59,7 @@ Verify your key and the gateway are working end-to-end:
 import httpx
 
 resp = httpx.post(
-    "http://localhost:8002/v1/chat/completions",
+    "http://localhost:8080/cache/v1/chat/completions",
     headers={"Authorization": "Bearer sk-YOUR-KEY-HERE"},
     json={"model": "claude-haiku-4-5",
           "messages": [{"role": "user", "content": "ping"}],
@@ -83,16 +83,16 @@ The gateway follows the OpenAI API versioning convention. The current version is
 ## 2. Chat Completions — OpenAI-compatible
 
 ```
-POST http://localhost:8002/v1/chat/completions
+POST http://localhost:8080/cache/v1/chat/completions
 ```
 
-Fully OpenAI-compatible. Drop in any OpenAI SDK by pointing `base_url` at `http://localhost:8002`.
+Fully OpenAI-compatible. Drop in any OpenAI SDK by pointing `base_url` at `http://localhost:8080/cache/`.
 
 ### Request
 
 ```http
 POST /v1/chat/completions HTTP/1.1
-Host: localhost:8002
+Host: localhost:8080
 Authorization: Bearer sk-<your-key>
 Content-Type: application/json
 
@@ -166,7 +166,7 @@ from openai import OpenAI
 
 client = OpenAI(
     api_key="sk-your-key-here",
-    base_url="http://localhost:8002",
+    base_url="http://localhost:8080/cache/",
 )
 
 response = client.chat.completions.create(
@@ -187,7 +187,7 @@ print(response.choices[0].message.content)
 ## 3. Chat Completions — Anthropic-compatible
 
 ```
-POST http://localhost:8002/anthropic/v1/messages
+POST http://localhost:8080/cache/anthropic/v1/messages
 ```
 
 This endpoint is handled by LiteLLM's Anthropic-compatible proxy. The request and response shapes follow the [Anthropic Messages API](https://docs.anthropic.com/en/api/messages) exactly.
@@ -196,7 +196,7 @@ This endpoint is handled by LiteLLM's Anthropic-compatible proxy. The request an
 
 ```http
 POST /anthropic/v1/messages HTTP/1.1
-Host: localhost:8002
+Host: localhost:8080
 Authorization: Bearer sk-<your-key>
 Content-Type: application/json
 anthropic-version: 2023-06-01
@@ -258,7 +258,7 @@ import anthropic
 
 client = anthropic.Anthropic(
     api_key="sk-your-key-here",
-    base_url="http://localhost:8002",
+    base_url="http://localhost:8080/cache/",
 )
 
 message = client.messages.create(
@@ -276,7 +276,7 @@ print(message.content[0].text)
 
 ## 3a. Developer Portal
 
-The self-service portal at `http://localhost:3002/portal` provides browser-based access:
+The self-service portal at `http://localhost:8080/portal/portal` provides browser-based access:
 
 | Route | Method | Purpose |
 |---|---|---|
@@ -308,7 +308,7 @@ from openai import OpenAI
 
 client = OpenAI(
     api_key="sk-your-key-here",
-    base_url="http://localhost:8002",
+    base_url="http://localhost:8080/cache/",
 )
 
 with client.chat.completions.stream(
@@ -327,7 +327,7 @@ import anthropic
 
 client = anthropic.Anthropic(
     api_key="sk-your-key-here",
-    base_url="http://localhost:8002",
+    base_url="http://localhost:8080/cache/",
 )
 
 with client.messages.stream(
@@ -356,7 +356,7 @@ data: [DONE]
 ## 5. Models
 
 ```
-GET http://localhost:8002/v1/models
+GET http://localhost:8080/cache/v1/models
 ```
 
 Returns the list of models configured in LiteLLM. Authentication is required.
@@ -365,7 +365,7 @@ Returns the list of models configured in LiteLLM. Authentication is required.
 
 ```http
 GET /v1/models HTTP/1.1
-Host: localhost:8002
+Host: localhost:8080
 Authorization: Bearer sk-<your-key>
 ```
 
@@ -454,7 +454,7 @@ Model IDs: `copilot-gpt-4o`, `copilot-gpt-4o-mini`, `copilot-o3-mini`, `copilot-
 
 ```bash
 # GitHub Copilot via gateway
-curl http://localhost:8002/v1/chat/completions \
+curl http://localhost:8080/cache/v1/chat/completions \
   -H "Authorization: Bearer sk-your-api-key" \
   -H "Content-Type: application/json" \
   -d '{"model": "copilot-gpt-4o", "messages": [{"role": "user", "content": "Hello"}]}'
@@ -475,7 +475,7 @@ See https://portal.azure.com → Azure OpenAI → Keys and Endpoint.
 
 ```bash
 # Azure AI Foundry via gateway
-curl http://localhost:8002/v1/chat/completions \
+curl http://localhost:8080/cache/v1/chat/completions \
   -H "Authorization: Bearer sk-your-api-key" \
   -H "Content-Type: application/json" \
   -d '{"model": "azure-gpt-4o", "messages": [{"role": "user", "content": "Hello"}]}'
@@ -593,7 +593,7 @@ import time
 import httpx
 
 def chat_with_retry(payload: dict, api_key: str, max_attempts: int = 3) -> dict:
-    url = "http://localhost:8002/v1/chat/completions"
+    url = "http://localhost:8080/cache/v1/chat/completions"
     headers = {"Authorization": f"Bearer {api_key}"}
 
     for attempt in range(max_attempts):
@@ -645,7 +645,7 @@ When the cache is bypassed, the response header will be `x-cache: BYPASS` (not `
 
 ```bash
 # Using x-cache: bypass
-curl http://localhost:8002/v1/chat/completions \
+curl http://localhost:8080/cache/v1/chat/completions \
   -H "Authorization: Bearer sk-YOUR-KEY-HERE" \
   -H "x-cache: bypass" \
   -H "Content-Type: application/json" \
@@ -699,7 +699,7 @@ For per-request bypass, use the `x-cache: bypass` or `Cache-Control: no-cache` h
 
 ## 10. Admin REST API
 
-The admin REST API is available at `http://localhost:8005`. All endpoints require the `X-Admin-Token` header (value from the `ADMIN_TOKEN` environment variable). When `DEV_BYPASS_AUTH=true` (local development), the header is not checked.
+The admin REST API is available at `http://localhost:8080/admin/` (also directly at `http://localhost:8005`). All endpoints require the `X-Admin-Token` header (value from the `ADMIN_TOKEN` environment variable). When `DEV_BYPASS_AUTH=true` (local development), the header is not checked.
 
 ```
 X-Admin-Token: <admin-token>

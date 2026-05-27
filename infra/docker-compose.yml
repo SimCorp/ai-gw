@@ -19,6 +19,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    restart: unless-stopped
 
   redis:
     image: redis/redis-stack:7.2.0-v14
@@ -29,6 +30,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    restart: unless-stopped
 
   # ── Redis Sentinel (HA profile) ───────────────────────────────────────────────
   # Enable with: docker compose --profile sentinel up
@@ -112,6 +114,7 @@ services:
     volumes:
       - ./dex/config.yaml:/etc/dex/config.yaml:ro
     command: ["dex", "serve", "/etc/dex/config.yaml"]
+    restart: unless-stopped
 
   ollama:
     image: ollama/ollama:latest
@@ -244,6 +247,36 @@ services:
       start_period: 30s
     restart: unless-stopped
 
+  league:
+    build:
+      context: ../services/league
+    ports:
+      - "127.0.0.1:8010:8010"
+    env_file: ../.env
+    environment:
+      ENVIRONMENT: development
+      DATABASE_URL: "postgresql+asyncpg://aigateway:aigateway@postgres:5432/aigateway"
+      REDIS_URL: "redis://redis:6379/0"
+      LITELLM_URL: "http://litellm:8003"
+      # In local dev, bypass JWT validation so seeded league pages render
+      # without wiring per-request Authorization headers in portal fetches.
+      # Production must run with DEV_BYPASS_AUTH=false.
+      DEV_BYPASS_AUTH: "true"
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      litellm:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8010/health')\" 2>/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    restart: unless-stopped
+
   admin-portal:
     image: node:20-alpine
     working_dir: /app/apps/admin
@@ -254,10 +287,16 @@ services:
       - "127.0.0.1:3001:3001"
     environment:
       NEXT_TELEMETRY_DISABLED: "1"
-      NEXT_PUBLIC_ADMIN_API: "http://localhost:8005"
+      NEXT_PUBLIC_ADMIN_API: "http://localhost:8080/admin"
     depends_on:
       admin:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3001/admin-portal/ || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
     restart: unless-stopped
 
   portal:
@@ -270,14 +309,22 @@ services:
       - "127.0.0.1:3002:3002"
     environment:
       NEXT_TELEMETRY_DISABLED: "1"
-      NEXT_PUBLIC_ADMIN_BASE_URL: "http://localhost:8005"
-      NEXT_PUBLIC_CACHE_BASE_URL: "http://localhost:8002"
-      NEXT_PUBLIC_IDENTITY_BASE_URL: "http://localhost:8006"
-      NEXT_PUBLIC_LIBRARIAN_BASE_URL: "http://localhost:8008"
-      NEXT_PUBLIC_MEMORY_BASE_URL: "http://localhost:8009"
+      NEXT_PUBLIC_ADMIN_BASE_URL: "http://localhost:8080/admin"
+      NEXT_PUBLIC_CACHE_BASE_URL: "http://localhost:8080/cache"
+      NEXT_PUBLIC_IDENTITY_BASE_URL: "http://localhost:8080/identity"
+      NEXT_PUBLIC_LIBRARIAN_BASE_URL: "http://localhost:8080/librarian"
+      NEXT_PUBLIC_MEMORY_BASE_URL: "http://localhost:8080/memory"
+      NEXT_PUBLIC_LITELLM_BASE_URL: "http://localhost:8080/litellm"
+      NEXT_PUBLIC_LITELLM_KEY: "sk-litellm-local-dev"
     depends_on:
       admin:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3002/portal/ || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
     restart: unless-stopped
 
   agent-relay:
@@ -297,6 +344,7 @@ services:
       timeout: 5s
       retries: 10
       start_period: 15s
+    restart: unless-stopped
 
   workflow-worker:
     build:
@@ -346,6 +394,7 @@ services:
       timeout: 5s
       retries: 10
       start_period: 30s
+    restart: unless-stopped
 
   librarian:
     build:
@@ -371,6 +420,7 @@ services:
       timeout: 5s
       retries: 10
       start_period: 30s
+    restart: unless-stopped
 
   memory:
     build:
@@ -394,6 +444,7 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+    restart: unless-stopped
 
   claude-sandbox:
     build:
@@ -418,7 +469,21 @@ services:
     ports:
       - "127.0.0.1:8080:80"
     volumes:
-      - ../landing.html:/usr/share/nginx/html/index.html:ro
+      # Directory mounts (not file mounts) so inode replacements from editor
+      # writes are visible inside the container without a full restart.
+      - ./html/:/usr/share/nginx/html/:ro
+      - ./nginx/:/etc/nginx/conf.d/:ro
+    depends_on:
+      auth:
+        condition: service_healthy
+      admin:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
     restart: unless-stopped
 
 volumes:

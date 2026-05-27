@@ -112,34 +112,41 @@ async def lifespan(app: FastAPI):
     # The db-migrate compose service runs `alembic upgrade head` before this
     # service starts; we do not run create_all() or DDL here anymore.
 
-    # Seed default admin account only in dev/test/ci environments.
-    # In production, admin accounts must be created explicitly via the provisioning script.
+    # Seed default accounts only in dev/test/ci environments.
+    # In production, accounts must be created explicitly via the provisioning script.
     if os.getenv("ENVIRONMENT", "production") in ("development", "test", "ci"):
+        # bcrypt hash of "password"
         _default_hash = '$2b$12$97tEM5lfcioIn4w9wDRHQe3qQNeU9OIBDImBuWj6wQRF30UCpIWom'
         async with engine.begin() as conn:
-            # Insert/update into unified users table (migration 0010 creates it)
-            # Falls back gracefully if the table doesn't exist yet (first boot before migration)
             try:
+                # Admin account — must_change_password=FALSE so local dev works immediately
                 await conn.execute(text("""
                     INSERT INTO users (email, display_name, password_hash, hash_type, status, must_change_password)
-                    VALUES ('admin@simcorp.com', 'Default Admin', :hash, 'bcrypt', 'active', TRUE)
-                    ON CONFLICT (email) DO UPDATE
-                        SET must_change_password = TRUE
-                        WHERE users.password_hash = :hash
+                    VALUES ('admin@simcorp.com', 'Default Admin', :hash, 'bcrypt', 'active', FALSE)
+                    ON CONFLICT (email) DO NOTHING
                 """), {"hash": _default_hash})
                 await conn.execute(text("""
                     INSERT INTO user_roles (user_id, role, scope_type)
                     SELECT id, 'platform_admin', 'global' FROM users WHERE email = 'admin@simcorp.com'
                     ON CONFLICT DO NOTHING
                 """))
+                # Developer test account for local dev and E2E tests
+                await conn.execute(text("""
+                    INSERT INTO users (email, display_name, password_hash, hash_type, status, must_change_password)
+                    VALUES ('dev@simcorp.com', 'Test Developer', :hash, 'bcrypt', 'active', FALSE)
+                    ON CONFLICT (email) DO NOTHING
+                """), {"hash": _default_hash})
+                await conn.execute(text("""
+                    INSERT INTO user_roles (user_id, role, scope_type)
+                    SELECT id, 'developer', 'global' FROM users WHERE email = 'dev@simcorp.com'
+                    ON CONFLICT DO NOTHING
+                """))
             except Exception:
                 # users table not yet created (before migration 0010) — seed admin_users as fallback
                 await conn.execute(text("""
                     INSERT INTO admin_users (email, display_name, password_hash, role, must_change_password)
-                    VALUES ('admin@simcorp.com', 'Default Admin', :hash, 'superadmin', TRUE)
-                    ON CONFLICT (email) DO UPDATE
-                        SET must_change_password = TRUE
-                        WHERE admin_users.password_hash = :hash
+                    VALUES ('admin@simcorp.com', 'Default Admin', :hash, 'superadmin', FALSE)
+                    ON CONFLICT (email) DO NOTHING
                 """), {"hash": _default_hash})
 
     # Seed a default team if none exists (dev convenience)

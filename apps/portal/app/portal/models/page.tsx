@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useState, useEffect } from "react";
 
-const LITELLM_BASE = "http://localhost:8003";
-const LITELLM_KEY = "sk-litellm-local-dev";
+const LITELLM_BASE = process.env.NEXT_PUBLIC_LITELLM_BASE_URL ?? "http://localhost:8080/litellm";
+const LITELLM_KEY = process.env.NEXT_PUBLIC_LITELLM_KEY ?? "sk-litellm-local-dev";
 const ADMIN_BASE = process.env.NEXT_PUBLIC_ADMIN_BASE_URL ?? "http://localhost:8005";
 
 interface LiteLLMModel {

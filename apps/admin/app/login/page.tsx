@@ -263,11 +263,16 @@ export default function LoginPage() {
                 required
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                placeholder="admin@simcorp.com"
+                placeholder="you@simcorp.com"
                 style={inputStyle}
                 onFocus={e => { e.currentTarget.style.borderColor = 'var(--sc-blue, #083EA7)'; }}
                 onBlur={e => { e.currentTarget.style.borderColor = 'var(--side-rule, #232950)'; }}
               />
+              {process.env.NODE_ENV !== 'production' && (
+                <div style={{ fontSize: 11, color: 'var(--fg-3, #666)', marginTop: 4 }}>
+                  Local dev: <code style={{ fontFamily: 'monospace' }}>admin@simcorp.com</code> / <code style={{ fontFamily: 'monospace' }}>password</code>
+                </div>
+              )}
             </div>
 
             <div style={{ marginBottom: 20 }}>
