@@ -1,13 +1,28 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "../_lib/authContext";
 
 const ADMIN_BASE = process.env.NEXT_PUBLIC_ADMIN_BASE_URL ?? "http://localhost:8005";
 
+interface CitedSource {
+  contribution_id?: string;
+  title: string;
+  source_url?: string | null;
+}
+
+interface AskPrefill {
+  title: string;
+  description: string;
+}
+
 interface Message {
   role: "user" | "assistant";
   content: string;
+  type?: "text" | "ask_cta";
+  prefill?: AskPrefill | null;
+  cited_sources?: CitedSource[];
 }
 
 const STARTERS = [
@@ -19,6 +34,7 @@ const STARTERS = [
 
 export default function AiHelpWidget() {
   const { token } = useAuth();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -51,7 +67,23 @@ export default function AiHelpWidget() {
       });
       if (!res.ok) throw new Error(`${res.status}`);
       const data = await res.json();
-      setMessages([...next, { role: "assistant", content: data.reply }]);
+      // New shape: {type, reply, content, cited_sources, message?, prefill?}
+      // Legacy: {reply}
+      const kind: "text" | "ask_cta" = data.type === "ask_cta" ? "ask_cta" : "text";
+      const body =
+        kind === "ask_cta"
+          ? (data.message ?? data.reply ?? data.content ?? "")
+          : (data.reply ?? data.content ?? "");
+      setMessages([
+        ...next,
+        {
+          role: "assistant",
+          content: body,
+          type: kind,
+          prefill: kind === "ask_cta" ? (data.prefill ?? null) : null,
+          cited_sources: Array.isArray(data.cited_sources) ? data.cited_sources : [],
+        },
+      ]);
     } catch {
       setMessages([...next, { role: "assistant", content: "Sorry, I couldn't reach the AI backend right now. Try again in a moment." }]);
     } finally {
@@ -144,7 +176,8 @@ export default function AiHelpWidget() {
             {messages.map((m, i) => (
               <div key={i} style={{
                 display: "flex",
-                justifyContent: m.role === "user" ? "flex-end" : "flex-start",
+                flexDirection: "column",
+                alignItems: m.role === "user" ? "flex-end" : "flex-start",
               }}>
                 <div style={{
                   maxWidth: "85%",
@@ -160,6 +193,61 @@ export default function AiHelpWidget() {
                 }}>
                   {m.content}
                 </div>
+                {m.role === "assistant" && m.type === "ask_cta" && m.prefill && (
+                  <button
+                    onClick={() => {
+                      const qs = new URLSearchParams({
+                        title: m.prefill?.title ?? "",
+                        description: m.prefill?.description ?? "",
+                      });
+                      setOpen(false);
+                      router.push(`/portal/champions/asks/new?${qs.toString()}`);
+                    }}
+                    style={{
+                      marginTop: 6,
+                      padding: "6px 12px",
+                      background: "var(--sc-blue, #0A7BD7)",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: 8,
+                      cursor: "pointer",
+                      fontSize: 12.5,
+                      fontFamily: "inherit",
+                    }}
+                  >
+                    Ask a champion →
+                  </button>
+                )}
+                {m.role === "assistant" && m.cited_sources && m.cited_sources.length > 0 && (
+                  <div style={{ marginTop: 6, display: "flex", flexWrap: "wrap", gap: 4 }}>
+                    {m.cited_sources.map((s, j) => {
+                      const label = `Source: ${s.title}`;
+                      const chipStyle: React.CSSProperties = {
+                        fontSize: 11,
+                        padding: "2px 8px",
+                        borderRadius: 999,
+                        background: "var(--surface-soft, rgba(0,0,0,0.05))",
+                        color: "var(--fg-3, #666)",
+                        textDecoration: "none",
+                        border: "1px solid var(--rule, #e5e7eb)",
+                        display: "inline-block",
+                      };
+                      return s.source_url ? (
+                        <a
+                          key={j}
+                          href={s.source_url}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                          style={chipStyle}
+                        >
+                          {label}
+                        </a>
+                      ) : (
+                        <span key={j} style={chipStyle}>{label}</span>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             ))}
 
