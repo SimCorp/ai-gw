@@ -39,6 +39,21 @@ class AskConfirm(BaseModel):
     asker_id: UUID
 
 
+class BookingCreate(BaseModel):
+    requested_by: UUID
+    slot_text: str
+    topic: str | None = None
+    team_id: UUID | None = None
+
+
+class BookingChampionAction(BaseModel):
+    champion_id: UUID
+
+
+class BookingCancel(BaseModel):
+    actor_id: UUID
+
+
 class UpvoteBody(BaseModel):
     developer_id: UUID
 
@@ -440,3 +455,194 @@ async def profile(developer_id: UUID, session: AsyncSession = Depends(get_sessio
         "office_hours_text": row["office_hours_text"],
         "active": row["active"],
     }
+
+
+# ---------- Wave 3: bookings ----------
+
+@router.post("/{champion_id}/book", status_code=201)
+async def create_booking(
+    champion_id: UUID,
+    body: BookingCreate,
+    session: AsyncSession = Depends(get_session),
+):
+    inserted_id = (await session.execute(
+        text("""
+            INSERT INTO champion_bookings (champion_id, requested_by, slot_text, topic, team_id, status)
+            VALUES (:champion_id, :requested_by, :slot_text, :topic, :team_id, 'requested')
+            RETURNING id
+        """),
+        {
+            "champion_id": str(champion_id),
+            "requested_by": str(body.requested_by),
+            "slot_text": body.slot_text,
+            "topic": body.topic,
+            "team_id": str(body.team_id) if body.team_id else None,
+        },
+    )).scalar_one()
+    await session.commit()
+    return {"booking_id": str(inserted_id)}
+
+
+@router.get("/{champion_id}/bookings")
+async def list_bookings(champion_id: UUID, session: AsyncSession = Depends(get_session)):
+    result = await session.execute(
+        text("""
+            SELECT id, champion_id, requested_by, slot_text, topic, team_id, status, created_at
+            FROM champion_bookings
+            WHERE champion_id = :cid
+            ORDER BY created_at DESC
+            LIMIT 200
+        """),
+        {"cid": str(champion_id)},
+    )
+    return [
+        {
+            "id": str(r["id"]),
+            "champion_id": str(r["champion_id"]),
+            "requested_by": str(r["requested_by"]),
+            "slot_text": r["slot_text"],
+            "topic": r["topic"],
+            "team_id": str(r["team_id"]) if r["team_id"] else None,
+            "status": r["status"],
+            "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+        }
+        for r in result.mappings().all()
+    ]
+
+
+@router.post("/bookings/{booking_id}/confirm")
+async def confirm_booking(
+    booking_id: UUID,
+    body: BookingChampionAction,
+    session: AsyncSession = Depends(get_session),
+):
+    result = await session.execute(
+        text("""
+            UPDATE champion_bookings
+            SET status = 'confirmed'
+            WHERE id = :bid AND champion_id = :cid AND status = 'requested'
+        """),
+        {"bid": str(booking_id), "cid": str(body.champion_id)},
+    )
+    await session.commit()
+    if result.rowcount == 0:
+        raise HTTPException(status_code=409, detail="booking not in requested state or not for this champion")
+    return {"ok": True, "id": str(booking_id), "status": "confirmed"}
+
+
+@router.post("/bookings/{booking_id}/done")
+async def done_booking(
+    booking_id: UUID,
+    body: BookingChampionAction,
+    session: AsyncSession = Depends(get_session),
+):
+    result = await session.execute(
+        text("""
+            UPDATE champion_bookings
+            SET status = 'done'
+            WHERE id = :bid AND champion_id = :cid AND status = 'confirmed'
+        """),
+        {"bid": str(booking_id), "cid": str(body.champion_id)},
+    )
+    await session.commit()
+    if result.rowcount == 0:
+        raise HTTPException(status_code=409, detail="booking not in confirmed state or not for this champion")
+
+    try:
+        await grant_points(
+            engineer_id=str(body.champion_id),
+            delta=150,
+            reason="champion_office_hours",
+            ref_id=str(booking_id),
+        )
+    except RuntimeError:
+        pass
+
+    return {"ok": True, "id": str(booking_id), "status": "done"}
+
+
+@router.post("/bookings/{booking_id}/cancel")
+async def cancel_booking(
+    booking_id: UUID,
+    body: BookingCancel,
+    session: AsyncSession = Depends(get_session),
+):
+    result = await session.execute(
+        text("""
+            UPDATE champion_bookings
+            SET status = 'cancelled'
+            WHERE id = :bid AND status IN ('requested', 'confirmed')
+        """),
+        {"bid": str(booking_id)},
+    )
+    await session.commit()
+    if result.rowcount == 0:
+        raise HTTPException(status_code=409, detail="booking not cancellable")
+    return {"ok": True, "id": str(booking_id), "status": "cancelled", "actor_id": str(body.actor_id)}
+
+
+# ---------- Wave 3: smart routing ----------
+
+@router.post("/asks/{ask_id}/route")
+async def route_ask(ask_id: UUID, session: AsyncSession = Depends(get_session)):
+    ask_row = (await session.execute(
+        text("SELECT id, tags FROM champion_asks WHERE id = :id"),
+        {"id": str(ask_id)},
+    )).mappings().one_or_none()
+    if ask_row is None:
+        raise HTTPException(status_code=404, detail="ask not found")
+
+    ask_tags = set(ask_row["tags"] or [])
+
+    rows = (await session.execute(text("""
+        SELECT c.developer_id,
+               c.focus_areas,
+               MAX(cc.submitted_at) AS last_submitted_at
+        FROM champions c
+        LEFT JOIN champion_contributions cc ON cc.champion_id = c.developer_id
+        WHERE c.active = TRUE
+        GROUP BY c.developer_id, c.focus_areas
+    """))).mappings().all()
+
+    from datetime import datetime, timedelta, timezone
+    now = datetime.now(timezone.utc)
+
+    scored = []
+    for r in rows:
+        focus = list(r["focus_areas"] or [])
+        overlap = len(ask_tags.intersection(focus))
+        focus_score = overlap / max(1, len(focus))
+
+        last = r["last_submitted_at"]
+        if last is None:
+            recency_score = 0.3
+        else:
+            # Ensure tz-aware comparison
+            if last.tzinfo is None:
+                last = last.replace(tzinfo=timezone.utc)
+            age = now - last
+            if age <= timedelta(days=7):
+                recency_score = 1.0
+            elif age <= timedelta(days=30):
+                recency_score = 0.6
+            else:
+                recency_score = 0.3
+
+        score = focus_score * 0.6 + recency_score * 0.4
+        scored.append({
+            "developer_id": str(r["developer_id"]),
+            "score": round(score, 4),
+            "focus_areas": focus,
+        })
+
+    scored.sort(key=lambda x: (-x["score"], x["developer_id"]))
+    top3 = scored[:3]
+
+    if top3:
+        await session.execute(
+            text("UPDATE champion_asks SET routed_to = :ids WHERE id = :id"),
+            {"ids": [s["developer_id"] for s in top3], "id": str(ask_id)},
+        )
+        await session.commit()
+
+    return {"ask_id": str(ask_id), "suggestions": top3}

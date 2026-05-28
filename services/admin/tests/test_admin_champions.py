@@ -125,3 +125,84 @@ async def test_resolve_flag_returns_404_when_missing(client, mock_session):
         json={"action": "dismiss"},
     )
     assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Wave 3: activity dashboard
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_activity_returns_org_and_per_champion(client, mock_session):
+    org_row = {
+        "active_champions": 5,
+        "contributions_total": 42,
+        "contributions_30d": 10,
+        "asks_open": 3,
+        "asks_resolved_30d": 7,
+        "bookings_done_30d": 4,
+    }
+    per_champion = [
+        {
+            "developer_id": "00000000-0000-0000-0000-000000000001",
+            "contributions": 12,
+            "asks_resolved": 4,
+            "bookings_done": 2,
+            "points_30d": 850,
+        },
+        {
+            "developer_id": "00000000-0000-0000-0000-000000000002",
+            "contributions": 3,
+            "asks_resolved": 1,
+            "bookings_done": 0,
+            "points_30d": 200,
+        },
+    ]
+    org_result = MagicMock()
+    org_result.mappings.return_value.one.return_value = org_row
+    per_result = MagicMock()
+    per_result.mappings.return_value.all.return_value = per_champion
+    mock_session.execute.side_effect = [org_result, per_result]
+
+    resp = await client.get("/admin/champions/activity")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["org"]["active_champions"] == 5
+    assert body["org"]["contributions_30d"] == 10
+    assert body["org"]["bookings_done_30d"] == 4
+    assert len(body["per_champion"]) == 2
+    assert body["per_champion"][0]["points_30d"] == 850
+    # ensure the per-champion query references league_points_ledger and champion_ prefix filter
+    per_sql = str(mock_session.execute.await_args_list[1].args[0])
+    assert "league_points_ledger" in per_sql
+    assert "champion_" in per_sql
+
+
+@pytest.mark.asyncio
+async def test_activity_handles_null_points(client, mock_session):
+    org_row = {
+        "active_champions": 1,
+        "contributions_total": 0,
+        "contributions_30d": 0,
+        "asks_open": 0,
+        "asks_resolved_30d": 0,
+        "bookings_done_30d": 0,
+    }
+    # points_30d is None (no ledger rows) — COALESCE in router should default to 0
+    per_champion = [
+        {
+            "developer_id": "00000000-0000-0000-0000-000000000001",
+            "contributions": 0,
+            "asks_resolved": 0,
+            "bookings_done": 0,
+            "points_30d": None,
+        },
+    ]
+    org_result = MagicMock()
+    org_result.mappings.return_value.one.return_value = org_row
+    per_result = MagicMock()
+    per_result.mappings.return_value.all.return_value = per_champion
+    mock_session.execute.side_effect = [org_result, per_result]
+
+    resp = await client.get("/admin/champions/activity")
+    assert resp.status_code == 200
+    assert resp.json()["per_champion"][0]["points_30d"] == 0

@@ -308,3 +308,217 @@ async def test_flag_inserts_and_increments(client, mock_session):
     # second call increments flag_count
     second_sql = str(mock_session.execute.await_args_list[1].args[0])
     assert "flag_count = flag_count + 1" in second_sql
+
+
+# ---------------------------------------------------------------------------
+# Wave 3: bookings
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_create_booking_inserts_row(client, mock_session):
+    insert_result = MagicMock()
+    insert_result.scalar_one.return_value = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+    mock_session.execute.return_value = insert_result
+
+    resp = await client.post(
+        "/champions/00000000-0000-0000-0000-000000000001/book",
+        json={
+            "requested_by": "00000000-0000-0000-0000-000000000055",
+            "slot_text": "Tue 14:00",
+            "topic": "RAG",
+        },
+    )
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["booking_id"] == "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+    sql = str(mock_session.execute.await_args.args[0])
+    assert "INSERT INTO champion_bookings" in sql
+    assert "'requested'" in sql
+
+
+@pytest.mark.asyncio
+async def test_list_bookings_returns_rows(client, mock_session):
+    rows = [
+        {
+            "id": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+            "champion_id": "00000000-0000-0000-0000-000000000001",
+            "requested_by": "00000000-0000-0000-0000-000000000055",
+            "slot_text": "Tue 14:00",
+            "topic": "RAG",
+            "team_id": None,
+            "status": "requested",
+            "created_at": None,
+        }
+    ]
+    result = MagicMock()
+    result.mappings.return_value.all.return_value = rows
+    mock_session.execute.return_value = result
+
+    resp = await client.get("/champions/00000000-0000-0000-0000-000000000001/bookings")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body) == 1
+    assert body[0]["status"] == "requested"
+
+
+@pytest.mark.asyncio
+async def test_confirm_booking_success(client, mock_session):
+    result = MagicMock()
+    result.rowcount = 1
+    mock_session.execute.return_value = result
+
+    resp = await client.post(
+        "/champions/bookings/bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb/confirm",
+        json={"champion_id": "00000000-0000-0000-0000-000000000001"},
+    )
+    assert resp.status_code == 200
+    sql = str(mock_session.execute.await_args.args[0])
+    assert "status = 'confirmed'" in sql
+    assert "status = 'requested'" in sql
+
+
+@pytest.mark.asyncio
+async def test_confirm_booking_conflict_when_not_requested(client, mock_session):
+    result = MagicMock()
+    result.rowcount = 0
+    mock_session.execute.return_value = result
+
+    resp = await client.post(
+        "/champions/bookings/bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb/confirm",
+        json={"champion_id": "00000000-0000-0000-0000-000000000001"},
+    )
+    assert resp.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_done_booking_grants_points(client, mock_session):
+    result = MagicMock()
+    result.rowcount = 1
+    mock_session.execute.return_value = result
+
+    with patch("app.routers.champions.grant_points", new=AsyncMock()) as gp:
+        resp = await client.post(
+            "/champions/bookings/bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb/done",
+            json={"champion_id": "00000000-0000-0000-0000-000000000001"},
+        )
+    assert resp.status_code == 200
+    gp.assert_awaited_once()
+    kw = gp.await_args.kwargs
+    assert kw["delta"] == 150
+    assert kw["reason"] == "champion_office_hours"
+    assert kw["engineer_id"] == "00000000-0000-0000-0000-000000000001"
+
+
+@pytest.mark.asyncio
+async def test_done_booking_conflict_when_not_confirmed(client, mock_session):
+    result = MagicMock()
+    result.rowcount = 0
+    mock_session.execute.return_value = result
+
+    with patch("app.routers.champions.grant_points", new=AsyncMock()) as gp:
+        resp = await client.post(
+            "/champions/bookings/bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb/done",
+            json={"champion_id": "00000000-0000-0000-0000-000000000001"},
+        )
+    assert resp.status_code == 409
+    gp.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_cancel_booking_sets_cancelled(client, mock_session):
+    result = MagicMock()
+    result.rowcount = 1
+    mock_session.execute.return_value = result
+
+    resp = await client.post(
+        "/champions/bookings/bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb/cancel",
+        json={"actor_id": "00000000-0000-0000-0000-000000000055"},
+    )
+    assert resp.status_code == 200
+    sql = str(mock_session.execute.await_args.args[0])
+    assert "status = 'cancelled'" in sql
+
+
+@pytest.mark.asyncio
+async def test_cancel_booking_conflict_when_terminal(client, mock_session):
+    result = MagicMock()
+    result.rowcount = 0
+    mock_session.execute.return_value = result
+
+    resp = await client.post(
+        "/champions/bookings/bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb/cancel",
+        json={"actor_id": "00000000-0000-0000-0000-000000000055"},
+    )
+    assert resp.status_code == 409
+
+
+# ---------------------------------------------------------------------------
+# Wave 3: smart routing
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_route_ask_picks_top_3_by_score(client, mock_session):
+    from datetime import datetime, timedelta, timezone
+
+    now = datetime.now(timezone.utc)
+    ask_lookup = MagicMock()
+    ask_lookup.mappings.return_value.one_or_none.return_value = {
+        "id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+        "tags": ["rag", "agentic"],
+    }
+
+    # 5 champions: vary focus overlap and recency
+    champ_rows = [
+        # high overlap + very recent (top)
+        {"developer_id": "11111111-1111-1111-1111-111111111111",
+         "focus_areas": ["rag", "agentic"], "last_submitted_at": now - timedelta(days=1)},
+        # high overlap, old contribution
+        {"developer_id": "22222222-2222-2222-2222-222222222222",
+         "focus_areas": ["rag", "agentic"], "last_submitted_at": now - timedelta(days=90)},
+        # partial overlap, recent
+        {"developer_id": "33333333-3333-3333-3333-333333333333",
+         "focus_areas": ["rag", "ml", "infra"], "last_submitted_at": now - timedelta(days=2)},
+        # no overlap, recent
+        {"developer_id": "44444444-4444-4444-4444-444444444444",
+         "focus_areas": ["frontend"], "last_submitted_at": now - timedelta(days=1)},
+        # no overlap, no activity
+        {"developer_id": "55555555-5555-5555-5555-555555555555",
+         "focus_areas": ["devops"], "last_submitted_at": None},
+    ]
+    champ_result = MagicMock()
+    champ_result.mappings.return_value.all.return_value = champ_rows
+    update_result = MagicMock()
+    mock_session.execute.side_effect = [ask_lookup, champ_result, update_result]
+
+    resp = await client.post(
+        "/champions/asks/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/route",
+        json={},
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert len(body["suggestions"]) == 3
+    ids = [s["developer_id"] for s in body["suggestions"]]
+    # champ 1 (full overlap + recent) must be first
+    assert ids[0] == "11111111-1111-1111-1111-111111111111"
+    # champ 4 (no overlap) and champ 5 (no overlap, no activity) ranked lowest
+    assert "44444444-4444-4444-4444-444444444444" not in ids
+    assert "55555555-5555-5555-5555-555555555555" not in ids
+    # scores monotonically non-increasing
+    scores = [s["score"] for s in body["suggestions"]]
+    assert scores == sorted(scores, reverse=True)
+    # third execute call is the UPDATE champion_asks ... routed_to
+    update_sql = str(mock_session.execute.await_args_list[2].args[0])
+    assert "UPDATE champion_asks" in update_sql
+    assert "routed_to" in update_sql
+
+
+@pytest.mark.asyncio
+async def test_route_ask_404_when_missing(client, mock_session):
+    lookup = MagicMock()
+    lookup.mappings.return_value.one_or_none.return_value = None
+    mock_session.execute.return_value = lookup
+
+    resp = await client.post(
+        "/champions/asks/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/route",
+        json={},
+    )
+    assert resp.status_code == 404
