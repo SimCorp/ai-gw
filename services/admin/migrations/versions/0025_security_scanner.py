@@ -22,8 +22,8 @@ def upgrade():
         sa.Column("allowed_scan_types", ARRAY(TEXT), nullable=False, server_default=sa.text("ARRAY['ai','api','network']::text[]")),
         sa.Column("status", sa.Text(), nullable=False, server_default="pending_approval"),
         sa.Column("approved_by", UUID(), sa.ForeignKey("users.id"), nullable=True),
-        sa.Column("approved_at", sa.TIMESTAMPTZ(), nullable=True),
-        sa.Column("created_at", sa.TIMESTAMPTZ(), nullable=False, server_default=sa.func.now()),
+        sa.Column("approved_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
         sa.Column("created_by", UUID(), sa.ForeignKey("users.id"), nullable=False),
         sa.Column("notes", sa.Text(), nullable=True),
     )
@@ -38,9 +38,9 @@ def upgrade():
         sa.Column("status", sa.Text(), nullable=False, server_default="queued"),
         sa.Column("trigger", sa.Text(), nullable=False, server_default="manual"),
         sa.Column("ci_ref", sa.Text(), nullable=True),
-        sa.Column("queued_at", sa.TIMESTAMPTZ(), nullable=False, server_default=sa.func.now()),
-        sa.Column("started_at", sa.TIMESTAMPTZ(), nullable=True),
-        sa.Column("finished_at", sa.TIMESTAMPTZ(), nullable=True),
+        sa.Column("queued_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("finished_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("error_message", sa.Text(), nullable=True),
         sa.Column("worker_id", sa.Text(), nullable=True),
         sa.Column("partial_results", sa.Boolean(), nullable=False, server_default="false"),
@@ -56,7 +56,7 @@ def upgrade():
         sa.Column("description", sa.Text(), nullable=False),
         sa.Column("evidence", JSONB(), nullable=True),
         sa.Column("remediation", sa.Text(), nullable=True),
-        sa.Column("created_at", sa.TIMESTAMPTZ(), nullable=False, server_default=sa.func.now()),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
     )
     op.create_index("ix_scan_findings_job_id", "scan_findings", ["job_id"])
     op.create_index("ix_scan_findings_severity", "scan_findings", ["severity"])
