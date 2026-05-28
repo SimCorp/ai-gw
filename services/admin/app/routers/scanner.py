@@ -30,6 +30,10 @@ class QuotaUpdate(BaseModel):
     max_tier: str | None = None
 
 
+class RevokeBody(BaseModel):
+    notes: str | None = None
+
+
 _INTERNAL_IP_PREFIXES = ("10.", "172.16.", "172.17.", "172.18.", "172.19.",
     "172.20.", "172.21.", "172.22.", "172.23.", "172.24.", "172.25.", "172.26.",
     "172.27.", "172.28.", "172.29.", "172.30.", "172.31.", "192.168.", "127.")
@@ -128,7 +132,7 @@ async def approve_target(
 @router.post("/targets/{target_id}/revoke")
 async def revoke_target(
     target_id: str,
-    body: dict = {},
+    body: RevokeBody = RevokeBody(),
     session: AsyncSession = Depends(get_session),
 ):
     result = await session.execute(
@@ -136,7 +140,7 @@ async def revoke_target(
             UPDATE scan_targets SET status = 'revoked', notes = :notes
             WHERE id = CAST(:id AS uuid) RETURNING id
         """),
-        {"id": target_id, "notes": body.get("notes")},
+        {"id": target_id, "notes": body.notes},
     )
     if not result.mappings().first():
         raise HTTPException(status_code=404, detail="Target not found")
@@ -159,11 +163,21 @@ async def update_quota(
     updates = body.model_dump(exclude_none=True)
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
+    # Explicit whitelist mapping prevents dynamic key injection into SQL.
+    _QUOTA_SQL_KEYS: dict[str, str] = {
+        "daily_limit": "daily_limit",
+        "allow_external_targets": "allow_external_targets",
+        "max_tier": "max_tier",
+    }
     set_parts = []
     params: dict[str, Any] = {"team_id": team_id}
     for k, v in updates.items():
-        set_parts.append(f"scanner_quota = scanner_quota || jsonb_build_object('{k}', :{k}::jsonb)")
-        params[k] = json.dumps(v)
+        sql_key = _QUOTA_SQL_KEYS[k]  # KeyError is impossible — keys come from QuotaUpdate.model_dump()
+        param_name = f"quota_{sql_key}"
+        set_parts.append(
+            f"scanner_quota = scanner_quota || jsonb_build_object('{sql_key}', :{param_name}::jsonb)"
+        )
+        params[param_name] = json.dumps(v)
     result = await session.execute(
         text(f"UPDATE teams SET {', '.join(set_parts)} WHERE id = CAST(:team_id AS uuid) RETURNING scanner_quota"),
         params,
