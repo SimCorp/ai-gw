@@ -103,9 +103,9 @@ async def submit_job(
     raw_uid = identity.get("user_id") or identity.get("sub") or ""
     try:
         _uuid.UUID(raw_uid)
-        user_id = raw_uid
+        user_id: str | None = raw_uid
     except (ValueError, AttributeError):
-        raise HTTPException(status_code=401, detail="Identity does not contain a valid user UUID")
+        user_id = None  # API key callers have no user UUID; requested_by is nullable
     redis = request.app.state.redis
 
     await _check_kill_switch(redis)
@@ -122,14 +122,14 @@ async def submit_job(
             INSERT INTO scan_jobs
                 (node_id, target_id, requested_by, scan_types, tier, trigger, ci_ref)
             VALUES
-                (CAST(:node_id AS uuid), CAST(:target_id AS uuid), CAST(:user_id AS uuid),
+                (CAST(:node_id AS uuid), CAST(:target_id AS uuid), :requested_by,
                  :scan_types, :tier, :trigger, :ci_ref)
             RETURNING id
         """),
         {
             "node_id": node_id,
             "target_id": body.target_id,
-            "user_id": user_id,
+            "requested_by": _uuid.UUID(user_id) if user_id else None,
             "scan_types": list(scan_types),
             "tier": body.tier,
             "trigger": body.trigger,
