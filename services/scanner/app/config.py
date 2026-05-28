@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     scan_job_queue_key: str = "scanner:jobs:queue"
     max_container_timeout_seconds: int = 900
     environment: str = "development"
+    docker_network: str = "aigateway"
 
     class Config:
         env_file = ".env"

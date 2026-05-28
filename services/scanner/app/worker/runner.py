@@ -60,7 +60,7 @@ def _run_container(image: str, command: list[str], timeout: int = settings.max_c
         command=command,
         detach=True,
         remove=False,
-        network="ai-gw_default",
+        network=settings.docker_network,
     )
     try:
         container.wait(timeout=timeout)
