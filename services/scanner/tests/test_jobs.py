@@ -127,3 +127,16 @@ async def test_submit_job_tier_not_allowed(client, mock_redis):
             "tier": "deep",
         }, headers={"Authorization": "Bearer test-token"})
     assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_internal_endpoint_rejects_bad_secret():
+    from app.main import app
+    from httpx import AsyncClient, ASGITransport
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        resp = await c.post(
+            "/internal/jobs/some-id/complete",
+            json={"status": "completed"},
+            headers={"Authorization": "Bearer wrong-secret"},
+        )
+    assert resp.status_code == 403
