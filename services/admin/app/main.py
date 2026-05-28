@@ -305,6 +305,10 @@ async def lifespan(app: FastAPI):
         async with async_session_maker() as session:
             await run_workday_sync(session)
 
+    async def _run_auto_confirm_asks():
+        from app.jobs.auto_confirm_asks import run_auto_confirm
+        await run_auto_confirm()
+
     _scheduler.add_job(
         _run_weekly_digest,
         CronTrigger(day_of_week="mon", hour=7, minute=0),
@@ -315,6 +319,12 @@ async def lifespan(app: FastAPI):
         _run_workday_sync,
         CronTrigger(hour=2, minute=0),
         id="workday_sync",
+        replace_existing=True,
+    )
+    _scheduler.add_job(
+        _run_auto_confirm_asks,
+        CronTrigger(hour=3, minute=0),
+        id="auto_confirm_asks",
         replace_existing=True,
     )
     _scheduler.start()
