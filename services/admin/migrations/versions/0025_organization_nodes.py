@@ -228,18 +228,36 @@ def upgrade() -> None:
     # plugin_team_overrides.team_id
     op.execute("ALTER TABLE plugin_team_overrides DROP CONSTRAINT IF EXISTS plugin_team_overrides_team_id_fkey")
 
+    # access_grants.grantor_team_id and grantee_team_id
+    op.execute("ALTER TABLE access_grants DROP CONSTRAINT IF EXISTS access_grants_grantor_team_id_fkey")
+    op.execute("ALTER TABLE access_grants DROP CONSTRAINT IF EXISTS access_grants_grantee_team_id_fkey")
+
+    # scan_jobs.team_id and scan_targets.team_id (added by scanner migration)
+    op.execute("ALTER TABLE scan_jobs DROP CONSTRAINT IF EXISTS scan_jobs_team_id_fkey")
+    op.execute("ALTER TABLE scan_targets DROP CONSTRAINT IF EXISTS scan_targets_team_id_fkey")
+
+    # teams.unit_id (teams refs units — must drop before dropping units)
+    op.execute("ALTER TABLE teams DROP CONSTRAINT IF EXISTS teams_unit_id_fkey")
+
     # teams.area_id (teams refs areas — must drop before dropping areas)
     op.execute("ALTER TABLE teams DROP CONSTRAINT IF EXISTS teams_area_id_fkey")
+
+    # units.parent_unit_id (self-reference added in migration 0013)
+    op.execute("ALTER TABLE units DROP CONSTRAINT IF EXISTS units_parent_unit_id_fkey")
 
     # units.area_id
     op.execute("ALTER TABLE units DROP CONSTRAINT IF EXISTS units_area_id_fkey")
 
+    # access_grants has two FKs to teams
+    op.execute("ALTER TABLE access_grants DROP CONSTRAINT IF EXISTS access_grants_grantee_team_id_fkey")
+    op.execute("ALTER TABLE access_grants DROP CONSTRAINT IF EXISTS access_grants_grantor_team_id_fkey")
+
     # ------------------------------------------------------------------ #
-    # 12. Drop units, teams, areas                                        #
+    # 12. Drop units, teams, areas (CASCADE catches any remaining FKs)   #
     # ------------------------------------------------------------------ #
-    op.execute("DROP TABLE IF EXISTS units")
-    op.execute("DROP TABLE IF EXISTS teams")
-    op.execute("DROP TABLE IF EXISTS areas")
+    op.execute("DROP TABLE IF EXISTS units CASCADE")
+    op.execute("DROP TABLE IF EXISTS teams CASCADE")
+    op.execute("DROP TABLE IF EXISTS areas CASCADE")
 
 
 def downgrade() -> None:

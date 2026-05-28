@@ -639,7 +639,7 @@ async def set_policy(
         text(f"""
             INSERT INTO policies (node_id, {col_list}, updated_at)
             VALUES (CAST(:nid AS uuid), {val_list}, NOW())
-            ON CONFLICT ON CONSTRAINT policies_node_null_proj_uidx
+            ON CONFLICT (node_id) WHERE project_id IS NULL
             DO UPDATE SET {update_clause}, updated_at = NOW()
         """),
         params,
