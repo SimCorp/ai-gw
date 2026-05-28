@@ -285,6 +285,10 @@ services:
     env_file: ../.env
     environment:
       ENVIRONMENT: development
+      AUTH_URL: http://auth:8001
+      DATABASE_URL: "postgresql+asyncpg://aigateway:aigateway@postgres:5432/aigateway"
+      REDIS_URL: "redis://redis:6379/0"
+      SCANNER_WORKER_SECRET: ${SCANNER_WORKER_SECRET:-dev-worker-secret}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     extra_hosts:
