@@ -24,6 +24,7 @@ interface User {
   last_login_at: string | null;
   created_at: string;
   roles: RoleEntry[];
+  is_contractor?: boolean;
 }
 
 interface UsersResponse {
@@ -249,6 +250,16 @@ export default function UsersPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-users'] }),
   });
 
+  const forceResetMut = useMutation({
+    mutationFn: (userId: string) =>
+      apiFetch('/auth/admin/force-password-reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: userId }),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-users'] }),
+  });
+
   const revokeInviteMut = useMutation({
     mutationFn: (id: string) => apiFetch(`/auth/invitations/${id}`, { method: 'DELETE' }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['invitations'] }),
@@ -367,6 +378,13 @@ export default function UsersPage() {
                         </td>
                         <td>
                           {u.roles.map(r => <RoleBadge key={`${r.role}-${r.scope_id}`} role={r.role} />)}
+                          {u.is_contractor && (
+                            <span style={{
+                              display: 'inline-block', padding: '2px 7px', borderRadius: 4,
+                              fontSize: 11, fontWeight: 600, marginRight: 4,
+                              background: 'rgba(251,155,42,0.15)', color: '#FB9B2A',
+                            }}>Contractor</span>
+                          )}
                           {u.must_change_password && (
                             <span style={{ fontSize: 10, color: 'var(--warn)', fontWeight: 600 }}>pw change req.</span>
                           )}
@@ -381,14 +399,27 @@ export default function UsersPage() {
                                 className="btn btn--sm btn--ghost"
                                 style={{ color: 'var(--bad)' }}
                                 onClick={() => statusMut.mutate({ userId: u.id, status: 'suspended' })}
+                                disabled={statusMut.isPending}
                               >Suspend</button>
                             ) : (
                               <button
                                 className="btn btn--sm btn--ghost"
                                 style={{ color: 'var(--good)' }}
                                 onClick={() => statusMut.mutate({ userId: u.id, status: 'active' })}
+                                disabled={statusMut.isPending}
                               >Activate</button>
                             )}
+                            <button
+                              className="btn btn--sm btn--ghost"
+                              style={{ color: 'var(--warn)' }}
+                              onClick={() => {
+                                if (confirm(`Force password reset for ${u.email}?`)) {
+                                  forceResetMut.mutate(u.id);
+                                }
+                              }}
+                              disabled={forceResetMut.isPending}
+                              title="Force password reset on next login"
+                            >Force reset</button>
                           </div>
                         </td>
                       </tr>

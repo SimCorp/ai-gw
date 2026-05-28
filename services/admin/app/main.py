@@ -69,6 +69,7 @@ from app.routers import (
     units as units_router,
     genai_adoption as genai_adoption_router,
     entra as entra_router,
+    alerts as alerts_router,
 )
 
 
@@ -360,6 +361,7 @@ app.include_router(memory_admin_router.router, dependencies=_auth)
 app.include_router(transformation_router.dev_router)    # own auth: dev session
 app.include_router(transformation_router.admin_router, dependencies=_auth)
 app.include_router(genai_adoption_router.router, dependencies=_auth)
+app.include_router(alerts_router.router, dependencies=_auth)
 
 
 @app.get("/", include_in_schema=False)

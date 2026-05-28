@@ -47,6 +47,15 @@ _BUDGET_REDIS_TTL = 300  # seconds
 
 
 # ---------------------------------------------------------------------------
+# Area / unit budget schemas
+# ---------------------------------------------------------------------------
+
+class BudgetSet(BaseModel):
+    monthly_budget_usd: float | None = None
+    budget_alert_threshold: float | None = None  # 0.0–1.0
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
@@ -188,6 +197,25 @@ async def set_team_budget(
     team = await session.get(Team, team_id)
     if not team:
         raise HTTPException(status_code=404, detail="Team not found")
+
+    # Validate team budget against parent area hierarchy cap
+    if body.monthly_budget_usd is not None:
+        area_cap_row = (await session.execute(
+            text("""
+                SELECT a.monthly_budget_usd AS area_budget
+                FROM teams t
+                LEFT JOIN areas a ON a.id = t.area_id
+                WHERE t.id = CAST(:tid AS uuid)
+            """),
+            {"tid": str(team_id)},
+        )).mappings().first()
+        if area_cap_row:
+            area_budget = area_cap_row["area_budget"]
+            if area_budget is not None and body.monthly_budget_usd > float(area_budget):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Team budget ${body.monthly_budget_usd} exceeds area budget ${area_budget}",
+                )
 
     team.monthly_budget_usd = Decimal(str(body.monthly_budget_usd)) if body.monthly_budget_usd is not None else None
     team.budget_alert_pct = body.budget_alert_pct
@@ -480,6 +508,92 @@ async def set_notification_webhook(
     )
     await session.commit()
     return {"webhook_url": body.webhook_url, "enabled": bool(body.webhook_url)}
+
+
+# ---------------------------------------------------------------------------
+# Area budget endpoints (D14)
+# ---------------------------------------------------------------------------
+
+@router.get("/areas/{area_id}/budget")
+async def get_area_budget(
+    area_id: str,
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    row = (await session.execute(
+        text("SELECT id, name, monthly_budget_usd, budget_alert_threshold FROM areas WHERE id=CAST(:aid AS uuid)"),
+        {"aid": area_id},
+    )).mappings().first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Area not found")
+    return dict(row)
+
+
+@router.put("/areas/{area_id}/budget")
+async def set_area_budget(
+    area_id: str,
+    body: BudgetSet,
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    result = await session.execute(
+        text("""UPDATE areas SET monthly_budget_usd=:budget, budget_alert_threshold=:threshold
+                WHERE id=CAST(:aid AS uuid) RETURNING id"""),
+        {"budget": body.monthly_budget_usd, "threshold": body.budget_alert_threshold, "aid": area_id},
+    )
+    if result.first() is None:
+        raise HTTPException(status_code=404, detail="Area not found")
+    await session.commit()
+    return {"message": "Area budget updated"}
+
+
+# ---------------------------------------------------------------------------
+# Unit budget endpoints (D14)
+# ---------------------------------------------------------------------------
+
+@router.get("/units/{unit_id}/budget")
+async def get_unit_budget(
+    unit_id: str,
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    row = (await session.execute(
+        text("SELECT id, name, monthly_budget_usd, budget_alert_threshold FROM units WHERE id=CAST(:uid AS uuid)"),
+        {"uid": unit_id},
+    )).mappings().first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Unit not found")
+    return dict(row)
+
+
+@router.put("/units/{unit_id}/budget")
+async def set_unit_budget(
+    unit_id: str,
+    body: BudgetSet,
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    # Validate budget against parent area cap
+    if body.monthly_budget_usd is not None:
+        unit_row = (await session.execute(
+            text("SELECT area_id FROM units WHERE id=CAST(:uid AS uuid)"), {"uid": unit_id}
+        )).mappings().first()
+        if unit_row and unit_row["area_id"]:
+            area_budget = (await session.execute(
+                text("SELECT monthly_budget_usd FROM areas WHERE id=CAST(:aid AS uuid)"),
+                {"aid": str(unit_row["area_id"])},
+            )).scalar()
+            if area_budget is not None and body.monthly_budget_usd > float(area_budget):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Unit budget ${body.monthly_budget_usd} exceeds area budget ${area_budget}",
+                )
+
+    result = await session.execute(
+        text("""UPDATE units SET monthly_budget_usd=:budget, budget_alert_threshold=:threshold
+                WHERE id=CAST(:uid AS uuid) RETURNING id"""),
+        {"budget": body.monthly_budget_usd, "threshold": body.budget_alert_threshold, "uid": unit_id},
+    )
+    if result.first() is None:
+        raise HTTPException(status_code=404, detail="Unit not found")
+    await session.commit()
+    return {"message": "Unit budget updated"}
 
 
 @router.post("/org/notifications/test")

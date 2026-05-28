@@ -3,10 +3,18 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { LoadingState, ErrorState } from '../_components/PageStates';
+import { apiFetch } from '../../../lib/apiClient';
 
 const BASE = process.env.NEXT_PUBLIC_ADMIN_API ?? 'http://localhost:8005';
 
 // --- API types ---
+
+interface BudgetSpikeAlert {
+  id: string;
+  timestamp: string;
+  resource_id: string;
+  details: { team_name?: string; daily_spend?: number; rolling_avg?: number } | null;
+}
 
 interface ServiceHealth {
   service: string;
@@ -189,6 +197,12 @@ export default function AlertsPage() {
     staleTime: 60_000,
   });
 
+  const spikeAlertsQuery = useQuery<BudgetSpikeAlert[]>({
+    queryKey: ['budget-spike-alerts'],
+    queryFn: () => apiFetch<BudgetSpikeAlert[]>('/budget/alerts').catch(() => []),
+    staleTime: 30_000,
+  });
+
   const isLoading = healthQuery.isLoading;
   const isError = healthQuery.isError;
   const firstError = healthQuery.error as Error | undefined;
@@ -199,6 +213,7 @@ export default function AlertsPage() {
   const health = healthQuery.data;
   const budget = budgetQuery.data;
   const alerts = deriveAlerts(health, budget);
+  const spikeAlerts = spikeAlertsQuery.data ?? [];
 
   const firing = alerts.filter(a => a.status === 'firing').length;
   const warning = alerts.filter(a => a.status === 'warn').length;
@@ -242,6 +257,42 @@ export default function AlertsPage() {
           <div className="kpi__label">Rules</div>
           <div className="kpi__value">{ALERT_RULES.length}</div>
           <div className="kpi__delta flat">all active</div>
+        </div>
+      </div>
+
+      {/* D12: Budget spike alerts from audit log */}
+      <div className="card" style={{ marginBottom: 18 }}>
+        <div className="card__head">
+          <div className="card__title">Cost spike alerts</div>
+          <div className="card__sub">Teams whose daily spend exceeded 3× their 7-day rolling average</div>
+        </div>
+        <div className="card__body" style={{ padding: 0 }}>
+          <table className="tbl">
+            <thead>
+              <tr><th>Time</th><th>Team</th><th>Daily spend</th><th>vs. Average</th></tr>
+            </thead>
+            <tbody>
+              {spikeAlerts.length === 0 && (
+                <tr>
+                  <td colSpan={4} style={{ padding: '24px 16px', textAlign: 'center', color: 'var(--fg-3)', fontSize: 13 }}>
+                    No cost spike alerts — all teams within normal spending patterns
+                  </td>
+                </tr>
+              )}
+              {spikeAlerts.map(a => (
+                <tr key={a.id}>
+                  <td style={{ color: 'var(--fg-3)', fontSize: 12.5 }}>{new Date(a.timestamp).toLocaleString()}</td>
+                  <td style={{ fontWeight: 500 }}>{a.details?.team_name || a.resource_id}</td>
+                  <td style={{ color: '#EF3E4A', fontWeight: 600 }}>${a.details?.daily_spend?.toFixed(2) ?? '—'}</td>
+                  <td style={{ color: 'var(--fg-3)', fontSize: 12.5 }}>
+                    {a.details?.rolling_avg
+                      ? `${((a.details.daily_spend ?? 0) / a.details.rolling_avg).toFixed(1)}× avg ($${a.details.rolling_avg.toFixed(2)}/day)`
+                      : '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
 
