@@ -35,6 +35,7 @@ from app.models import (  # noqa: F401
 
 from app.routers import (
     admin_auth as admin_auth_router,
+    admin_ops as admin_ops_router,
     unified_auth as unified_auth_router,
     users as users_router,
     transformation as transformation_router,
@@ -284,8 +285,41 @@ async def lifespan(app: FastAPI):
     _pool = await _asyncpg.create_pool(_pg_dsn, min_size=1, max_size=3)
     _worker_task = asyncio.create_task(_opt_worker(_pool))
 
+    # Start APScheduler for periodic background jobs
+    from apscheduler.schedulers.asyncio import AsyncIOScheduler
+    from apscheduler.triggers.cron import CronTrigger
+
+    _scheduler = AsyncIOScheduler()
+
+    async def _run_weekly_digest():
+        from app.db import async_session_maker
+        from app.jobs.weekly_digest import send_weekly_digests
+        async with async_session_maker() as session:
+            await send_weekly_digests(session)
+
+    async def _run_workday_sync():
+        from app.db import async_session_maker
+        from app.jobs.workday_sync import run_workday_sync
+        async with async_session_maker() as session:
+            await run_workday_sync(session)
+
+    _scheduler.add_job(
+        _run_weekly_digest,
+        CronTrigger(day_of_week="mon", hour=7, minute=0),
+        id="weekly_digest",
+        replace_existing=True,
+    )
+    _scheduler.add_job(
+        _run_workday_sync,
+        CronTrigger(hour=2, minute=0),
+        id="workday_sync",
+        replace_existing=True,
+    )
+    _scheduler.start()
+
     yield
 
+    _scheduler.shutdown(wait=False)
     _worker_task.cancel()
     try:
         await _worker_task
@@ -366,6 +400,7 @@ app.include_router(genai_adoption_router.router, dependencies=_auth)
 app.include_router(alerts_router.router, dependencies=_auth)
 app.include_router(access_requests_router.router, dependencies=_auth)
 app.include_router(scim_router.router)  # SCIM uses its own SCIM_BEARER_TOKEN auth
+app.include_router(admin_ops_router.router, dependencies=_auth)
 
 
 @app.get("/", include_in_schema=False)
