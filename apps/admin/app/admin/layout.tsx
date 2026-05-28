@@ -98,9 +98,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
                 <NavSection label="Organisation">
                   <NavItem href="/admin/org" label="Org tree" />
-                  <NavItem href="/admin/areas" label="Areas" />
-                  <NavItem href="/admin/units" label="Units" />
-                  <NavItem href="/admin/teams" label="Teams" />
                   <NavItem href="/admin/users" label="Users" />
                 </NavSection>
 
