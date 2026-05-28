@@ -193,7 +193,7 @@ async def activity(
                       WHERE b.champion_id = c.developer_id AND b.status = 'done'), 0) AS bookings_done,
             COALESCE((SELECT SUM(delta) FROM league_points_ledger l
                       WHERE l.engineer_id = c.developer_id
-                        AND l.reason LIKE 'champion_%%'
+                        AND l.reason LIKE 'champion_%'
                         AND l.created_at >= NOW() - INTERVAL '30 days'), 0) AS points_30d
         FROM champions c
         WHERE c.active = TRUE
