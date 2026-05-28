@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 def _approved_target(scan_types=None):
     return {
         "id": "dddddddd-0000-0000-0000-000000000001",
-        "team_id": "aaaaaaaa-0000-0000-0000-000000000001",
+        "node_id": "aaaaaaaa-0000-0000-0000-000000000001",
         "status": "approved",
         "allowed_scan_types": scan_types or ["ai", "api", "network"],
         "url": "http://myapp.simcorp.internal",

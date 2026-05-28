@@ -14,7 +14,7 @@ class TargetCreate(BaseModel):
     label: str
     openapi_spec_url: str | None = None
     requested_scan_types: list[str] = ["ai", "api", "network"]
-    team_id: str
+    node_id: str
     created_by: str
 
 
@@ -49,14 +49,14 @@ def _is_external(url: str) -> bool:
 
 @router.get("/targets")
 async def list_targets(
-    team_id: str | None = Query(default=None),
+    node_id: str | None = Query(default=None),
     status: str | None = Query(default=None),
     session: AsyncSession = Depends(get_session),
 ):
     where_clauses, params = [], {}
-    if team_id:
-        where_clauses.append("team_id = CAST(:team_id AS uuid)")
-        params["team_id"] = team_id
+    if node_id:
+        where_clauses.append("node_id = CAST(:node_id AS uuid)")
+        params["node_id"] = node_id
     if status:
         where_clauses.append("status = :status")
         params["status"] = status
@@ -72,21 +72,21 @@ async def list_targets(
 async def register_target(body: TargetCreate, session: AsyncSession = Depends(get_session)):
     if _is_external(body.url):
         quota_row = (await session.execute(
-            text("SELECT scanner_quota FROM teams WHERE id = CAST(:tid AS uuid)"),
-            {"tid": body.team_id},
+            text("SELECT scanner_quota FROM organization_nodes WHERE id = CAST(:nid AS uuid)"),
+            {"nid": body.node_id},
         )).mappings().first()
         quota = quota_row["scanner_quota"] if quota_row else {}
         if not quota.get("allow_external_targets", False):
             raise HTTPException(status_code=403, detail="Team is not permitted to register external targets")
     result = await session.execute(
         text("""
-            INSERT INTO scan_targets (team_id, url, label, openapi_spec_url, allowed_scan_types, created_by)
-            VALUES (CAST(:team_id AS uuid), :url, :label, :openapi_spec_url,
+            INSERT INTO scan_targets (node_id, url, label, openapi_spec_url, allowed_scan_types, created_by)
+            VALUES (CAST(:node_id AS uuid), :url, :label, :openapi_spec_url,
                     :scan_types, CAST(:created_by AS uuid))
             RETURNING *
         """),
         {
-            "team_id": body.team_id,
+            "node_id": body.node_id,
             "url": body.url,
             "label": body.label,
             "openapi_spec_url": body.openapi_spec_url,
@@ -151,14 +151,14 @@ async def revoke_target(
 @router.get("/quotas")
 async def list_quotas(session: AsyncSession = Depends(get_session)):
     rows = (await session.execute(
-        text("SELECT id, name, scanner_quota FROM teams ORDER BY name")
+        text("SELECT id, name, scanner_quota FROM organization_nodes ORDER BY name")
     )).mappings().all()
     return [dict(r) for r in rows]
 
 
-@router.patch("/quotas/{team_id}")
+@router.patch("/quotas/{node_id}")
 async def update_quota(
-    team_id: str, body: QuotaUpdate, session: AsyncSession = Depends(get_session)
+    node_id: str, body: QuotaUpdate, session: AsyncSession = Depends(get_session)
 ):
     updates = body.model_dump(exclude_none=True)
     if not updates:
@@ -170,7 +170,7 @@ async def update_quota(
         "max_tier": "max_tier",
     }
     set_parts = []
-    params: dict[str, Any] = {"team_id": team_id}
+    params: dict[str, Any] = {"node_id": node_id}
     for k, v in updates.items():
         sql_key = _QUOTA_SQL_KEYS[k]  # KeyError is impossible — keys come from QuotaUpdate.model_dump()
         param_name = f"quota_{sql_key}"
@@ -179,7 +179,7 @@ async def update_quota(
         )
         params[param_name] = json.dumps(v)
     result = await session.execute(
-        text(f"UPDATE teams SET {', '.join(set_parts)} WHERE id = CAST(:team_id AS uuid) RETURNING scanner_quota"),
+        text(f"UPDATE organization_nodes SET {', '.join(set_parts)} WHERE id = CAST(:node_id AS uuid) RETURNING scanner_quota"),
         params,
     )
     row = result.mappings().first()

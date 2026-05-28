@@ -30,24 +30,24 @@ async def _check_kill_switch(redis) -> None:
         raise HTTPException(status_code=503, detail="Security scanning is temporarily disabled")
 
 
-async def _load_target(session: AsyncSession, target_id: str, team_id: str) -> dict:
+async def _load_target(session: AsyncSession, target_id: str, node_id: str) -> dict:
     row = (await session.execute(
         text("""
-            SELECT id, team_id, url, status, allowed_scan_types, openapi_spec_url
+            SELECT id, node_id, url, status, allowed_scan_types, openapi_spec_url
             FROM scan_targets
-            WHERE id = CAST(:id AS uuid) AND team_id = CAST(:team_id AS uuid) AND status = 'approved'
+            WHERE id = CAST(:id AS uuid) AND node_id = CAST(:node_id AS uuid) AND status = 'approved'
         """),
-        {"id": target_id, "team_id": team_id},
+        {"id": target_id, "node_id": node_id},
     )).mappings().first()
     if not row:
         raise HTTPException(status_code=403, detail="Target not found or not approved for this team")
     return dict(row)
 
 
-async def _check_quota(redis, session: AsyncSession, team_id: str, tier: str) -> None:
+async def _check_quota(redis, session: AsyncSession, node_id: str, tier: str) -> None:
     quota_row = (await session.execute(
-        text("SELECT scanner_quota FROM teams WHERE id = CAST(:id AS uuid)"),
-        {"id": team_id},
+        text("SELECT scanner_quota FROM organization_nodes WHERE id = CAST(:id AS uuid)"),
+        {"id": node_id},
     )).mappings().first()
     quota: dict = quota_row["scanner_quota"] if quota_row else {}
     daily_limit: int = quota.get("daily_limit", 3)
@@ -62,15 +62,15 @@ async def _check_quota(redis, session: AsyncSession, team_id: str, tier: str) ->
 
     # Check concurrent jobs (no side effects)
     running = (await session.execute(
-        text("SELECT COUNT(*) AS n FROM scan_jobs WHERE team_id = CAST(:tid AS uuid) AND status = 'running'"),
-        {"tid": team_id},
+        text("SELECT COUNT(*) AS n FROM scan_jobs WHERE node_id = CAST(:nid AS uuid) AND status = 'running'"),
+        {"nid": node_id},
     )).mappings().first()
     if running and running["n"] >= 2:
         raise HTTPException(status_code=429, detail="Concurrent job limit reached (max 2 running jobs per team)")
 
     # Only now touch the Redis counter
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    counter_key = f"scanner:quota:{team_id}:{today}"
+    counter_key = f"scanner:quota:{node_id}:{today}"
     current = await redis.incr(counter_key)
     if current == 1:
         tomorrow = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0) + timedelta(days=1)
@@ -99,7 +99,7 @@ async def submit_job(
     session: AsyncSession = Depends(get_session),
 ):
     identity = await get_identity(request)
-    team_id: str = identity["team_id"]
+    node_id: str = identity["team_id"]
     raw_uid = identity.get("user_id") or identity.get("sub") or ""
     try:
         _uuid.UUID(raw_uid)
@@ -109,8 +109,8 @@ async def submit_job(
     redis = request.app.state.redis
 
     await _check_kill_switch(redis)
-    target = await _load_target(session, body.target_id, team_id)
-    await _check_quota(redis, session, team_id, body.tier)
+    target = await _load_target(session, body.target_id, node_id)
+    await _check_quota(redis, session, node_id, body.tier)
 
     scan_types = body.scan_types or list(target["allowed_scan_types"])
     disallowed = set(scan_types) - set(target["allowed_scan_types"])
@@ -120,14 +120,14 @@ async def submit_job(
     result = await session.execute(
         text("""
             INSERT INTO scan_jobs
-                (team_id, target_id, requested_by, scan_types, tier, trigger, ci_ref)
+                (node_id, target_id, requested_by, scan_types, tier, trigger, ci_ref)
             VALUES
-                (CAST(:team_id AS uuid), CAST(:target_id AS uuid), CAST(:user_id AS uuid),
+                (CAST(:node_id AS uuid), CAST(:target_id AS uuid), CAST(:user_id AS uuid),
                  :scan_types, :tier, :trigger, :ci_ref)
             RETURNING id
         """),
         {
-            "team_id": team_id,
+            "node_id": node_id,
             "target_id": body.target_id,
             "user_id": user_id,
             "scan_types": list(scan_types),
@@ -145,7 +145,7 @@ async def submit_job(
         "openapi_spec_url": target.get("openapi_spec_url"),
         "scan_types": scan_types,
         "tier": body.tier,
-        "team_id": team_id,
+        "team_id": node_id,
     }))
 
     return {
@@ -163,9 +163,9 @@ async def list_jobs(
     session: AsyncSession = Depends(get_session),
 ):
     identity = await get_identity(request)
-    effective_team_id = identity["team_id"]
-    where_clauses = ["team_id = CAST(:team_id AS uuid)"]
-    params: dict[str, Any] = {"team_id": effective_team_id, "limit": limit}
+    effective_node_id = identity["team_id"]
+    where_clauses = ["node_id = CAST(:node_id AS uuid)"]
+    params: dict[str, Any] = {"node_id": effective_node_id, "limit": limit}
     if status:
         where_clauses.append("status = :status")
         params["status"] = status
@@ -185,8 +185,8 @@ async def get_job(
 ):
     identity = await get_identity(request)
     row = (await session.execute(
-        text("SELECT * FROM scan_jobs WHERE id = CAST(:id AS uuid) AND team_id = CAST(:team_id AS uuid)"),
-        {"id": job_id, "team_id": identity["team_id"]},
+        text("SELECT * FROM scan_jobs WHERE id = CAST(:id AS uuid) AND node_id = CAST(:node_id AS uuid)"),
+        {"id": job_id, "node_id": identity["team_id"]},
     )).mappings().first()
     if not row:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -204,11 +204,11 @@ async def cancel_job(
         text("""
             UPDATE scan_jobs SET status = 'cancelled', finished_at = NOW()
             WHERE id = CAST(:id AS uuid)
-              AND team_id = CAST(:team_id AS uuid)
+              AND node_id = CAST(:node_id AS uuid)
               AND status IN ('queued', 'running')
             RETURNING id
         """),
-        {"id": job_id, "team_id": identity["team_id"]},
+        {"id": job_id, "node_id": identity["team_id"]},
     )
     if not result.mappings().first():
         raise HTTPException(status_code=404, detail="Job not found or not cancellable")
@@ -259,8 +259,8 @@ async def get_results(
 ):
     identity = await get_identity(request)
     job_row = (await session.execute(
-        text("SELECT id, status FROM scan_jobs WHERE id = CAST(:id AS uuid) AND team_id = CAST(:team_id AS uuid)"),
-        {"id": job_id, "team_id": identity["team_id"]},
+        text("SELECT id, status FROM scan_jobs WHERE id = CAST(:id AS uuid) AND node_id = CAST(:node_id AS uuid)"),
+        {"id": job_id, "node_id": identity["team_id"]},
     )).mappings().first()
     if not job_row:
         raise HTTPException(status_code=404, detail="Job not found")

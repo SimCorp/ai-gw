@@ -42,7 +42,7 @@ async def test_register_external_target_blocked(client, mock_session):
     resp = await client.post("/scanner/targets", json={
         "url": "https://external.example.com/api",
         "label": "External",
-        "team_id": "aaaaaaaa-0000-0000-0000-000000000001",
+        "node_id": "aaaaaaaa-0000-0000-0000-000000000001",
         "created_by": "bbbbbbbb-0000-0000-0000-000000000001",
     })
     assert resp.status_code == 403

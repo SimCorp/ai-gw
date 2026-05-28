@@ -22,7 +22,7 @@ def upgrade():
     conn.execute(sa.text("""
         CREATE TABLE IF NOT EXISTS scan_targets (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            team_id UUID,
+            node_id UUID REFERENCES organization_nodes(id) ON DELETE SET NULL,
             url TEXT NOT NULL,
             label TEXT NOT NULL,
             openapi_spec_url TEXT,
@@ -38,7 +38,7 @@ def upgrade():
     conn.execute(sa.text("""
         CREATE TABLE IF NOT EXISTS scan_jobs (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            team_id UUID,
+            node_id UUID REFERENCES organization_nodes(id) ON DELETE SET NULL,
             target_id UUID REFERENCES scan_targets(id),
             requested_by UUID REFERENCES users(id) NOT NULL,
             scan_types TEXT[] NOT NULL,
@@ -70,13 +70,19 @@ def upgrade():
     """))
     conn.execute(sa.text("CREATE INDEX IF NOT EXISTS ix_scan_findings_job_id ON scan_findings(job_id)"))
     conn.execute(sa.text("CREATE INDEX IF NOT EXISTS ix_scan_findings_severity ON scan_findings(severity)"))
-    conn.execute(sa.text("CREATE INDEX IF NOT EXISTS ix_scan_jobs_team_id ON scan_jobs(team_id)"))
+    conn.execute(sa.text("CREATE INDEX IF NOT EXISTS ix_scan_jobs_node_id ON scan_jobs(node_id)"))
+    conn.execute(sa.text("""
+        ALTER TABLE organization_nodes
+        ADD COLUMN IF NOT EXISTS scanner_quota JSONB NOT NULL
+        DEFAULT '{"daily_limit": 3, "allow_external_targets": false, "max_tier": "quick"}'::jsonb
+    """))
 
 
 def downgrade():
     op.drop_index("ix_scan_findings_severity")
     op.drop_index("ix_scan_findings_job_id")
-    op.drop_index("ix_scan_jobs_team_id")
+    op.drop_index("ix_scan_jobs_node_id")
     op.drop_table("scan_findings")
     op.drop_table("scan_jobs")
     op.drop_table("scan_targets")
+    op.drop_column("organization_nodes", "scanner_quota")

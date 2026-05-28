@@ -22,7 +22,7 @@ async def validate_api_key(key: str, db: asyncpg.Connection, redis=None) -> dict
     try:
         row = await db.fetchrow(
             """
-            SELECT id, team_id, project_id, scope,
+            SELECT id, node_id AS team_id, project_id, scope,
                    COALESCE(scopes, ARRAY['ai-gw:inference:*']) AS scopes
             FROM api_keys
             WHERE key_hash = $1
