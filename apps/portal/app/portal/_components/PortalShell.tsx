@@ -19,6 +19,7 @@ const NAV = [
       { href: "/portal/mcp",        label: "MCP servers", icon: <McpIcon /> },
       { href: "/portal/plugins",    label: "Plugins",     icon: <PluginIcon /> },
       { href: "/portal/skills",     label: "Skills",      icon: <SkillIcon /> },
+      { href: "/portal/tools",      label: "Tools",       icon: <WrenchIcon /> },
       { href: "/portal/docs",       label: "Quickstart",  icon: <DocIcon /> },
       { href: "/portal/security",   label: "Security",    icon: <SecurityIcon /> },
     ],
@@ -371,6 +372,14 @@ function SecurityIcon() {
   );
 }
 
+function WrenchIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M10.5 2a3.5 3.5 0 0 0-3.36 4.48L2 11.5 2.5 14l2.5.5 5.02-5.14A3.5 3.5 0 1 0 10.5 2z"/>
+      <circle cx="10.5" cy="5.5" r="1"/>
+    </svg>
+  );
+}
 function TransformIcon() {
   return (
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
