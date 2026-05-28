@@ -27,7 +27,9 @@ class Settings(BaseSettings):
     cache_url: str = "http://cache:8002"
     litellm_url: str = "http://litellm:8003"
     observability_url: str = "http://observability:8004"
+    league_url: str = "http://league:8010"
     librarian_url: str = "http://librarian:8008"
+    librarian_service_token: str = ""
 
     # Secret used to encrypt the RSA identity signing key stored in Redis.
     # Use a long random string in production (e.g. openssl rand -hex 32).

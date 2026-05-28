@@ -1,13 +1,44 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "../_lib/authContext";
 
 const ADMIN_BASE = process.env.NEXT_PUBLIC_ADMIN_BASE_URL ?? "http://localhost:8005";
 
+interface CitedSource {
+  contribution_id?: string;
+  title: string;
+  source_url?: string | null;
+}
+
+interface AskPrefill {
+  title: string;
+  description: string;
+}
+
+interface ChampionCard {
+  developer_id: string;
+  focus_areas?: string[];
+  bio?: string | null;
+}
+
+interface ContentItem {
+  id?: string;
+  title: string;
+  summary?: string | null;
+  source_url?: string | null;
+}
+
 interface Message {
   role: "user" | "assistant";
   content: string;
+  type?: "text" | "ask_cta" | "champions" | "content" | "book_cta";
+  prefill?: AskPrefill | null;
+  cited_sources?: CitedSource[];
+  champions?: ChampionCard[];
+  items?: ContentItem[];
+  champion_id?: string | null;
 }
 
 const STARTERS = [
@@ -19,6 +50,7 @@ const STARTERS = [
 
 export default function AiHelpWidget() {
   const { token } = useAuth();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -51,7 +83,27 @@ export default function AiHelpWidget() {
       });
       if (!res.ok) throw new Error(`${res.status}`);
       const data = await res.json();
-      setMessages([...next, { role: "assistant", content: data.reply }]);
+      // Supported shapes: text | ask_cta | champions | content | book_cta
+      const t = data.type;
+      const kind: Message["type"] =
+        t === "ask_cta" || t === "champions" || t === "content" || t === "book_cta" ? t : "text";
+      const body =
+        kind === "ask_cta"
+          ? (data.message ?? data.reply ?? data.content ?? "")
+          : (data.reply ?? data.content ?? data.message ?? "");
+      setMessages([
+        ...next,
+        {
+          role: "assistant",
+          content: body,
+          type: kind,
+          prefill: kind === "ask_cta" ? (data.prefill ?? null) : null,
+          cited_sources: Array.isArray(data.cited_sources) ? data.cited_sources : [],
+          champions: Array.isArray(data.champions) ? data.champions : undefined,
+          items: Array.isArray(data.items) ? data.items : undefined,
+          champion_id: data.champion_id ?? null,
+        },
+      ]);
     } catch {
       setMessages([...next, { role: "assistant", content: "Sorry, I couldn't reach the AI backend right now. Try again in a moment." }]);
     } finally {
@@ -144,7 +196,8 @@ export default function AiHelpWidget() {
             {messages.map((m, i) => (
               <div key={i} style={{
                 display: "flex",
-                justifyContent: m.role === "user" ? "flex-end" : "flex-start",
+                flexDirection: "column",
+                alignItems: m.role === "user" ? "flex-end" : "flex-start",
               }}>
                 <div style={{
                   maxWidth: "85%",
@@ -160,6 +213,150 @@ export default function AiHelpWidget() {
                 }}>
                   {m.content}
                 </div>
+                {m.role === "assistant" && m.type === "ask_cta" && m.prefill && (
+                  <button
+                    onClick={() => {
+                      const qs = new URLSearchParams({
+                        title: m.prefill?.title ?? "",
+                        description: m.prefill?.description ?? "",
+                      });
+                      setOpen(false);
+                      router.push(`/portal/champions/asks/new?${qs.toString()}`);
+                    }}
+                    style={{
+                      marginTop: 6,
+                      padding: "6px 12px",
+                      background: "var(--sc-blue, #0A7BD7)",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: 8,
+                      cursor: "pointer",
+                      fontSize: 12.5,
+                      fontFamily: "inherit",
+                    }}
+                  >
+                    Ask a champion →
+                  </button>
+                )}
+                {m.role === "assistant" && m.type === "champions" && m.champions && m.champions.length > 0 && (
+                  <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 6, width: "100%" }}>
+                    {m.champions.map((c) => (
+                      <a
+                        key={c.developer_id}
+                        href={`/portal/champions/${c.developer_id}`}
+                        onClick={() => setOpen(false)}
+                        style={{
+                          display: "block",
+                          padding: "8px 10px",
+                          border: "1px solid var(--rule, #e5e7eb)",
+                          borderRadius: 8,
+                          background: "var(--surface, #fff)",
+                          textDecoration: "none",
+                          color: "var(--fg-1, #111)",
+                        }}
+                      >
+                        <div style={{ fontSize: 12.5, fontWeight: 600 }}>
+                          Champion {c.developer_id.slice(0, 8)}
+                        </div>
+                        {c.focus_areas && c.focus_areas.length > 0 && (
+                          <div style={{ marginTop: 4, display: "flex", flexWrap: "wrap", gap: 4 }}>
+                            {c.focus_areas.map((f) => (
+                              <span key={f} style={{
+                                fontSize: 10.5, padding: "1px 6px", borderRadius: 999,
+                                background: "rgba(10,123,215,0.10)",
+                                color: "var(--sc-blue, #0A7BD7)",
+                              }}>{f}</span>
+                            ))}
+                          </div>
+                        )}
+                      </a>
+                    ))}
+                  </div>
+                )}
+
+                {m.role === "assistant" && m.type === "content" && m.items && m.items.length > 0 && (
+                  <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 6, width: "100%" }}>
+                    {m.items.map((it, j) => (
+                      <div
+                        key={it.id ?? j}
+                        style={{
+                          padding: "8px 10px",
+                          border: "1px solid var(--rule, #e5e7eb)",
+                          borderRadius: 8,
+                          background: "var(--surface, #fff)",
+                        }}
+                      >
+                        <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--fg-1, #111)" }}>{it.title}</div>
+                        {it.summary && (
+                          <div style={{ fontSize: 11.5, color: "var(--fg-3, #666)", marginTop: 3, lineHeight: 1.5 }}>{it.summary}</div>
+                        )}
+                        {it.source_url && (
+                          <a
+                            href={it.source_url}
+                            target="_blank"
+                            rel="noreferrer noopener"
+                            style={{ fontSize: 11, color: "var(--sc-blue, #0A7BD7)", marginTop: 4, display: "inline-block" }}
+                          >
+                            Open source →
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {m.role === "assistant" && m.type === "book_cta" && m.champion_id && (
+                  <button
+                    onClick={() => {
+                      setOpen(false);
+                      router.push(`/portal/champions/${m.champion_id}`);
+                    }}
+                    style={{
+                      marginTop: 6,
+                      padding: "6px 12px",
+                      background: "var(--sc-blue, #0A7BD7)",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: 8,
+                      cursor: "pointer",
+                      fontSize: 12.5,
+                      fontFamily: "inherit",
+                    }}
+                  >
+                    Open profile →
+                  </button>
+                )}
+
+                {m.role === "assistant" && m.cited_sources && m.cited_sources.length > 0 && (
+                  <div style={{ marginTop: 6, display: "flex", flexWrap: "wrap", gap: 4 }}>
+                    {m.cited_sources.map((s, j) => {
+                      const label = `Source: ${s.title}`;
+                      const chipStyle: React.CSSProperties = {
+                        fontSize: 11,
+                        padding: "2px 8px",
+                        borderRadius: 999,
+                        background: "var(--surface-soft, rgba(0,0,0,0.05))",
+                        color: "var(--fg-3, #666)",
+                        textDecoration: "none",
+                        border: "1px solid var(--rule, #e5e7eb)",
+                        display: "inline-block",
+                      };
+                      return s.source_url ? (
+                        <a
+                          key={j}
+                          href={s.source_url}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                          style={chipStyle}
+                        >
+                          {label}
+                        </a>
+                      ) : (
+                        <span key={j} style={chipStyle}>{label}</span>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             ))}
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { useAuth } from "../_lib/authContext";
 
 const ADMIN_BASE = process.env.NEXT_PUBLIC_ADMIN_BASE_URL ?? "http://localhost:8005";
@@ -53,6 +54,95 @@ function ScoreRing({ score }: { score: number }) {
       <text x={56} y={52} textAnchor="middle" fontSize={26} fontWeight={700} fill="var(--fg-1)">{score}</text>
       <text x={56} y={68} textAnchor="middle" fontSize={11} fill="var(--fg-3)">/ 100</text>
     </svg>
+  );
+}
+
+interface ChampionSummary {
+  developer_id: string;
+  bio: string | null;
+  focus_areas: string[];
+  active: boolean;
+}
+
+function ChampionsGapPanel({ score, agenticPct }: { score: number; agenticPct: number }) {
+  const [champions, setChampions] = useState<ChampionSummary[] | null>(null);
+  useEffect(() => {
+    fetch(`${ADMIN_BASE}/champions`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d: ChampionSummary[]) => setChampions(Array.isArray(d) ? d : []))
+      .catch(() => setChampions([]));
+  }, []);
+
+  // Pick weakest dimensions from score signals
+  const gaps: string[] = [];
+  if (agenticPct < 50) gaps.push("agentic");
+  if (score < 40) gaps.push("agents", "workflows", "prompts");
+
+  if (!champions) return null;
+  const active = champions.filter((c) => c.active);
+  let picked: ChampionSummary[];
+  let label: string;
+  if (gaps.length > 0) {
+    const scored = active
+      .map((c) => ({
+        c,
+        overlap: c.focus_areas.filter((f) =>
+          gaps.some((g) => f.toLowerCase().includes(g) || g.includes(f.toLowerCase()))
+        ).length,
+      }))
+      .sort((a, b) => b.overlap - a.overlap);
+    const matches = scored.filter((s) => s.overlap > 0).slice(0, 3).map((s) => s.c);
+    if (matches.length > 0) {
+      picked = matches;
+      label = "Champions for your gap areas";
+    } else {
+      picked = active.slice(0, 3);
+      label = "Champions you might learn from";
+    }
+  } else {
+    picked = active.slice(0, 3);
+    label = "Champions you might learn from";
+  }
+  if (picked.length === 0) return null;
+
+  return (
+    <div className="card" style={{ padding: "20px 24px" }}>
+      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--fg-2)", marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: 11.5, color: "var(--fg-3)", marginBottom: 14 }}>
+        Reach out — they&apos;ve been where you are.
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 10 }}>
+        {picked.map((c) => (
+          <Link
+            key={c.developer_id}
+            href={`/portal/champions/${c.developer_id}`}
+            style={{
+              display: "block", padding: "12px 14px",
+              border: "1px solid var(--rule)", borderRadius: 8,
+              background: "var(--surface)", textDecoration: "none",
+              color: "var(--fg-1)",
+            }}
+          >
+            <div style={{ fontSize: 13, fontWeight: 600 }}>Champion {c.developer_id.slice(0, 8)}</div>
+            {c.focus_areas.length > 0 && (
+              <div style={{ marginTop: 6, display: "flex", flexWrap: "wrap", gap: 4 }}>
+                {c.focus_areas.slice(0, 4).map((f) => (
+                  <span key={f} style={{
+                    fontSize: 10.5, padding: "1px 6px", borderRadius: 999,
+                    background: "rgba(8,62,167,0.08)", color: "var(--sc-blue)",
+                  }}>{f}</span>
+                ))}
+              </div>
+            )}
+            {c.bio && (
+              <div style={{ fontSize: 11.5, color: "var(--fg-3)", marginTop: 6, lineHeight: 1.4 }}>
+                {c.bio.length > 100 ? c.bio.slice(0, 100) + "…" : c.bio}
+              </div>
+            )}
+          </Link>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -205,6 +295,9 @@ export default function TransformationPage() {
                 </div>
                 <WeeklyChart data={data.weekly} />
               </div>
+
+              {/* Champions surfacing */}
+              <ChampionsGapPanel score={data.score} agenticPct={data.stats.agentic_session_pct} />
 
               {/* Achievements */}
               <div className="card" style={{ padding: "20px 24px" }}>

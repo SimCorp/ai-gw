@@ -74,6 +74,8 @@ from app.routers import (
     alerts as alerts_router,
     scim as scim_router,
     access_requests as access_requests_router,
+    admin_champions as admin_champions_router,
+    champions as champions_router,
     scanner as scanner_router,
 )
 
@@ -281,6 +283,10 @@ async def lifespan(app: FastAPI):
         async with async_session_maker() as session:
             await run_workday_sync(session)
 
+    async def _run_auto_confirm_asks():
+        from app.jobs.auto_confirm_asks import run_auto_confirm
+        await run_auto_confirm()
+
     _scheduler.add_job(
         _run_weekly_digest,
         CronTrigger(day_of_week="mon", hour=7, minute=0),
@@ -291,6 +297,12 @@ async def lifespan(app: FastAPI):
         _run_workday_sync,
         CronTrigger(hour=2, minute=0),
         id="workday_sync",
+        replace_existing=True,
+    )
+    _scheduler.add_job(
+        _run_auto_confirm_asks,
+        CronTrigger(hour=3, minute=0),
+        id="auto_confirm_asks",
         replace_existing=True,
     )
     _scheduler.start()
@@ -378,6 +390,8 @@ app.include_router(alerts_router.router, dependencies=_auth)
 app.include_router(access_requests_router.router, dependencies=_auth)
 app.include_router(scim_router.router)  # SCIM uses its own SCIM_BEARER_TOKEN auth
 app.include_router(admin_ops_router.router, dependencies=_auth)
+app.include_router(admin_champions_router.router)  # own auth: require_admin_auth
+app.include_router(champions_router.router)  # developer-facing — no admin token required
 app.include_router(scanner_router.router, dependencies=_auth)
 
 

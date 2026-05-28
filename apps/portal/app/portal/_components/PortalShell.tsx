@@ -37,6 +37,8 @@ const NAV = [
     items: [
       { href: "/portal/usage",          label: "Usage & spend",   icon: <ChartIcon /> },
       { href: "/portal/transformation", label: "AI Transformation", icon: <TransformIcon /> },
+      { href: "/portal/champions",      label: "Champions",         icon: <TrophyIcon /> },
+      { href: "/portal/champions/bookings", label: "Bookings",      icon: <ResultsIcon /> },
       { href: "/portal/settings",       label: "Settings",         icon: <SettingsIcon /> },
     ],
   },
