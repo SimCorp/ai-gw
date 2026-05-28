@@ -301,6 +301,11 @@ services:
       retries: 10
     restart: unless-stopped
 
+  it-tools:
+    image: ghcr.io/corentinth/it-tools:2023.12.21-7d90d6a
+    restart: unless-stopped
+    # No published port — accessed only through nginx at /tools-app/
+
   admin-portal:
     image: node:20-alpine
     working_dir: /app/apps/admin
