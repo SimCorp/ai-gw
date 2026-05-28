@@ -277,6 +277,30 @@ services:
       start_period: 15s
     restart: unless-stopped
 
+  scanner:
+    build:
+      context: ../services/scanner
+    ports:
+      - "127.0.0.1:8011:8011"
+    env_file: ../.env
+    environment:
+      ENVIRONMENT: development
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8011/health')\" 2>/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
   admin-portal:
     image: node:20-alpine
     working_dir: /app/apps/admin
