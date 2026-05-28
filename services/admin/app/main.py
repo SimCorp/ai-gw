@@ -70,6 +70,8 @@ from app.routers import (
     genai_adoption as genai_adoption_router,
     entra as entra_router,
     alerts as alerts_router,
+    scim as scim_router,
+    access_requests as access_requests_router,
 )
 
 
@@ -362,6 +364,8 @@ app.include_router(transformation_router.dev_router)    # own auth: dev session
 app.include_router(transformation_router.admin_router, dependencies=_auth)
 app.include_router(genai_adoption_router.router, dependencies=_auth)
 app.include_router(alerts_router.router, dependencies=_auth)
+app.include_router(access_requests_router.router, dependencies=_auth)
+app.include_router(scim_router.router)  # SCIM uses its own SCIM_BEARER_TOKEN auth
 
 
 @app.get("/", include_in_schema=False)

@@ -4,7 +4,7 @@ import sqlalchemy as sa
 from typing import Sequence, Union
 
 revision = "0024"
-down_revision: Union[str, Sequence[str]] = ("0019", "0021", "0022", "0023")
+down_revision = "0023"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

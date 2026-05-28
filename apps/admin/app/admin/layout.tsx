@@ -146,6 +146,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
                 <NavSection label="Settings">
                   <NavItem href="/admin/settings/entra" label="Entra ID groups" />
+                  <NavItem href="/admin/settings/sessions" label="Sessions" />
                 </NavSection>
               </div>
 

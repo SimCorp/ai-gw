@@ -112,6 +112,29 @@ async def get_current_user(
     if not data:
         raise HTTPException(status_code=401, detail="Session expired or invalid")
 
+    # Reject sessions issued before a password change (D3)
+    if data.get("issued_at"):
+        import datetime as _dt
+        cached = await redis.get(f"pwd_changed:{data['user_id']}")
+        if cached:
+            changed_ts = _dt.datetime.fromisoformat(
+                cached if isinstance(cached, str) else cached.decode()
+            ).timestamp()
+            if data["issued_at"] < changed_ts:
+                raise HTTPException(status_code=401, detail="Session invalidated — password changed")
+
+    # Contractor access expiry check
+    if data.get("access_expires_at"):
+        import datetime as _dt2
+        try:
+            expires = _dt2.datetime.fromisoformat(data["access_expires_at"])
+            if expires.tzinfo is None:
+                expires = expires.replace(tzinfo=_dt2.timezone.utc)
+            if _dt2.datetime.now(_dt2.timezone.utc) > expires:
+                raise HTTPException(status_code=401, detail="Contractor access has expired")
+        except ValueError:
+            pass
+
     # Bug 2 fix: reload session payload from DB if team assignment changed
     if await redis.get(f"user_team_changed:{data['user_id']}"):
         async with async_session_maker() as db_session:
@@ -249,6 +272,31 @@ class ChangePasswordRequest(BaseModel):
         return v
 
 
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+    @field_validator("email")
+    @classmethod
+    def normalise(cls, v: str) -> str:
+        return v.lower().strip()
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str = Field(..., min_length=12, max_length=128)
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_strength(cls, v: str) -> str:
+        _validate_password_strength(v)
+        return v
+
+
+class ForceResetRequest(BaseModel):
+    user_id: str
+    temporary_password: str | None = None
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -269,6 +317,7 @@ async def _build_session_payload(row, roles: list[dict]) -> dict:
     is_platform_admin = any(r["role"] == "platform_admin" for r in roles)
     managed_area_ids = [r["scope_id"] for r in roles if r["role"] == "area_owner" and r.get("scope_id")]
     managed_team_ids = [r["scope_id"] for r in roles if r["role"] == "team_admin" and r.get("scope_id")]
+    access_expires = row.get("access_expires_at")
     return {
         "user_id": str(row["id"]),
         "email": row["email"],
@@ -278,6 +327,9 @@ async def _build_session_payload(row, roles: list[dict]) -> dict:
         "is_platform_admin": is_platform_admin,
         "managed_area_ids": managed_area_ids,
         "managed_team_ids": managed_team_ids,
+        "is_contractor": bool(row.get("is_contractor", False)),
+        "access_expires_at": access_expires.isoformat() if access_expires else None,
+        "allowed_models": list(row["allowed_models"]) if row.get("allowed_models") else None,
     }
 
 
@@ -303,6 +355,7 @@ async def login(
         text("""
             SELECT u.id, u.email, u.display_name, u.password_hash, u.hash_type,
                    u.status, u.must_change_password, u.primary_team_id,
+                   u.is_contractor, u.access_expires_at, u.allowed_models,
                    t.name AS team_name
             FROM users u
             LEFT JOIN teams t ON t.id = u.primary_team_id
@@ -317,6 +370,13 @@ async def login(
     hash_type = row["hash_type"] if row else "bcrypt"
 
     if not _verify_password(body.password, stored_hash, hash_type) or not row:
+        from app import audit as _audit
+        try:
+            await _audit.record(session, request, "login_failure", "user", None,
+                                {"email": body.email, "ip": str(request.client.host) if request and request.client else None})
+            await session.commit()
+        except Exception:
+            pass
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
     if row["status"] != "active":
@@ -336,6 +396,10 @@ async def login(
     )
     await session.commit()
 
+    from app import audit as _audit
+    await _audit.record(session, request, "login_success", "user", str(row["id"]),
+                        {"email": body.email, "ip": str(request.client.host) if request and request.client else None})
+
     roles = await _load_user_roles(session, str(row["id"]))
     payload = await _build_session_payload(row, roles)
     payload["team_name"] = row["team_name"]
@@ -349,7 +413,16 @@ async def login(
     else:
         ttl = _SESSION_TTL_DEV
 
+    import time as _time
+    payload["issued_at"] = _time.time()
+
     token = await _issue_session(request.app.state.redis, payload, ttl)
+
+    # Track session in per-user sorted set for session listing (D4)
+    token_prefix = hashlib.sha256(token.encode()).hexdigest()[:16]
+    sessions_key = f"user_sessions:{payload['user_id']}"
+    await request.app.state.redis.zadd(sessions_key, {token_prefix: _time.time()})
+    await request.app.state.redis.expire(sessions_key, ttl)
 
     return {
         "token": token,
@@ -412,10 +485,16 @@ async def me(user: dict = Depends(get_current_user)):
 async def logout(
     request: Request,
     authorization: str | None = Header(default=None),
+    current_user: dict = Depends(get_current_user),
 ):
     if authorization and authorization.startswith("Bearer "):
         token = authorization.removeprefix("Bearer ").strip()
-        await request.app.state.redis.delete(_session_key(token))
+        redis = request.app.state.redis
+        await redis.delete(_session_key(token))
+        # Remove from user sessions sorted set (D4)
+        token_prefix = hashlib.sha256(token.encode()).hexdigest()[:16]
+        sessions_key = f"user_sessions:{current_user['user_id']}"
+        await redis.zrem(sessions_key, token_prefix)
     return {"ok": True}
 
 
@@ -531,6 +610,7 @@ async def revoke_role(
 async def set_user_status(
     user_id: str,
     status: str,
+    request: Request,
     admin: dict = Depends(require_platform_admin),
     session: AsyncSession = Depends(get_session),
 ):
@@ -540,8 +620,258 @@ async def set_user_status(
         text("UPDATE users SET status = :status, updated_at = NOW() WHERE id = CAST(:uid AS uuid)"),
         {"status": status, "uid": user_id},
     )
+    # Invalidate all sessions for suspended users (D3)
+    if status == "suspended":
+        import datetime as _dt
+        await request.app.state.redis.setex(
+            f"pwd_changed:{user_id}", 86400,
+            _dt.datetime.now(_dt.timezone.utc).isoformat(),
+        )
     await session.commit()
     return {"ok": True}
+
+
+@router.patch("/users/{user_id}/profile")
+async def update_user_profile(
+    user_id: str,
+    body: dict,
+    current_user: dict = Depends(require_platform_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    allowed = {"display_name", "primary_team_id"}
+    updates = {k: v for k, v in body.items() if k in allowed}
+    if not updates:
+        raise HTTPException(status_code=422, detail="No valid fields to update")
+    set_clause = ", ".join(f"{k} = :{k}" for k in updates)
+    await session.execute(
+        text(f"UPDATE users SET {set_clause}, updated_at=NOW() WHERE id = CAST(:uid AS uuid)"),
+        {**updates, "uid": user_id},
+    )
+    await session.commit()
+    return {"updated": list(updates.keys())}
+
+
+# ---------------------------------------------------------------------------
+# D3 — Password reset (forgot / reset / force-reset)
+# ---------------------------------------------------------------------------
+
+@router.post("/forgot-password")
+async def forgot_password(
+    body: ForgotPasswordRequest,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+):
+    """Always returns 200 to prevent email enumeration."""
+    import os
+    redis = request.app.state.redis
+    row = (await session.execute(
+        text("SELECT id, display_name, email FROM users WHERE email = :e AND status = 'active'"),
+        {"e": body.email},
+    )).mappings().first()
+
+    raw_token = None
+    reset_url = None
+    if row:
+        raw_token = secrets.token_urlsafe(32)
+        token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+        await redis.setex(f"reset:{token_hash}", 3600, str(row["id"]))
+
+        portal_url = os.getenv("PORTAL_BASE_URL", "http://localhost:3001")
+        reset_url = f"{portal_url}/reset-password?token={raw_token}"
+
+        from app.email import send_email, password_reset_html
+        await send_email(
+            row["email"],
+            "Reset your AI Gateway password",
+            password_reset_html(portal_url, reset_url, row["display_name"] or row["email"]),
+        )
+
+    # In dev mode, return the token directly
+    dev_mode = os.getenv("DEV_BYPASS_AUTH", "false").lower() == "true"
+    if dev_mode and row and raw_token:
+        return {"message": "Reset link sent (dev mode)", "token": raw_token, "reset_url": reset_url}
+    return {"message": "If that email exists, a reset link has been sent"}
+
+
+@router.post("/reset-password")
+async def reset_password(
+    body: ResetPasswordRequest,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+):
+    import os
+    import datetime as _dt
+    redis = request.app.state.redis
+    token_hash = hashlib.sha256(body.token.encode()).hexdigest()
+    user_id = await redis.get(f"reset:{token_hash}")
+    if not user_id:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+
+    user_id_str = user_id if isinstance(user_id, str) else user_id.decode()
+    new_hash = _hash_bcrypt(body.new_password)
+    await session.execute(
+        text("""
+            UPDATE users
+            SET password_hash = :h, hash_type = 'bcrypt',
+                must_change_password = FALSE,
+                password_changed_at = NOW()
+            WHERE id = CAST(:uid AS uuid)
+        """),
+        {"h": new_hash, "uid": user_id_str},
+    )
+    await session.commit()
+    await redis.delete(f"reset:{token_hash}")
+
+    # Cache the new timestamp so get_current_user can reject stale sessions fast
+    await redis.setex(f"pwd_changed:{user_id_str}", 7200,
+                      _dt.datetime.now(_dt.timezone.utc).isoformat())
+
+    row = (await session.execute(
+        text("SELECT email, display_name FROM users WHERE id = CAST(:uid AS uuid)"),
+        {"uid": user_id_str},
+    )).mappings().first()
+    if row:
+        portal_url = os.getenv("PORTAL_BASE_URL", "http://localhost:3001")
+        from app.email import send_email, password_changed_html
+        await send_email(row["email"], "Your password was changed",
+                         password_changed_html(portal_url, row["display_name"] or row["email"]))
+
+    return {"message": "Password reset successfully"}
+
+
+@router.post("/admin/force-password-reset")
+async def force_password_reset(
+    body: ForceResetRequest,
+    request: Request,
+    current_user: dict = Depends(require_platform_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    import datetime as _dt
+    redis = request.app.state.redis
+
+    if body.temporary_password:
+        _validate_password_strength(body.temporary_password)
+        new_hash = _hash_bcrypt(body.temporary_password)
+        await session.execute(
+            text("""UPDATE users SET must_change_password=TRUE, password_changed_at=NOW(),
+                    password_hash=:h, hash_type='bcrypt'
+                    WHERE id = CAST(:uid AS uuid)"""),
+            {"h": new_hash, "uid": body.user_id},
+        )
+    else:
+        await session.execute(
+            text("UPDATE users SET must_change_password=TRUE, password_changed_at=NOW() WHERE id = CAST(:uid AS uuid)"),
+            {"uid": body.user_id},
+        )
+
+    # Generate an out-of-band reset token
+    raw_token = secrets.token_urlsafe(32)
+    token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+    await redis.setex(f"reset:{token_hash}", 3600, body.user_id)
+
+    # Cache invalidation — force logout of all existing sessions
+    await redis.setex(f"pwd_changed:{body.user_id}", 7200,
+                      _dt.datetime.now(_dt.timezone.utc).isoformat())
+
+    await session.commit()
+    return {"reset_token": raw_token, "message": "User must change password on next login"}
+
+
+# ---------------------------------------------------------------------------
+# D4 — Session visibility & management
+# ---------------------------------------------------------------------------
+
+@router.get("/sessions")
+async def list_sessions(
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
+    redis = request.app.state.redis
+    sessions_key = f"user_sessions:{current_user['user_id']}"
+    # Use zrange with WITHSCORES — returns all sessions sorted by score (login time)
+    entries = await redis.zrange(sessions_key, 0, -1, withscores=True)
+    result = []
+    for sid_raw, score in entries:
+        sid = sid_raw if isinstance(sid_raw, str) else sid_raw.decode()
+        result.append({
+            "session_id": sid,
+            "issued_at": score,
+        })
+    return result
+
+
+@router.delete("/sessions")
+async def logout_all_other_sessions(
+    request: Request,
+    authorization: str | None = Header(default=None),
+    current_user: dict = Depends(get_current_user),
+):
+    """Expire all sessions for current user except the current one."""
+    redis = request.app.state.redis
+    current_token = (authorization or "").removeprefix("Bearer ").strip()
+    current_prefix = hashlib.sha256(current_token.encode()).hexdigest()[:16]
+    sessions_key = f"user_sessions:{current_user['user_id']}"
+    all_sessions = await redis.zrange(sessions_key, 0, -1)
+    for sid_raw in all_sessions:
+        sid = sid_raw if isinstance(sid_raw, str) else sid_raw.decode()
+        if sid != current_prefix:
+            await redis.zrem(sessions_key, sid)
+    return {"message": "All other sessions revoked"}
+
+
+@router.delete("/sessions/{session_id}")
+async def revoke_session(
+    session_id: str,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
+    redis = request.app.state.redis
+    sessions_key = f"user_sessions:{current_user['user_id']}"
+    await redis.zrem(sessions_key, session_id)
+    return {"message": "Session revoked"}
+
+
+# ---------------------------------------------------------------------------
+# Contractor settings
+# ---------------------------------------------------------------------------
+
+class ContractorUpdateRequest(BaseModel):
+    is_contractor: bool | None = None
+    access_expires_at: str | None = None
+    allowed_models: list[str] | None = None
+
+
+@router.patch("/users/{user_id}/contractor")
+async def update_contractor_settings(
+    user_id: str,
+    body: ContractorUpdateRequest,
+    current_user: dict = Depends(require_platform_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    updates = {}
+    if body.is_contractor is not None:
+        updates["is_contractor"] = body.is_contractor
+    if body.access_expires_at is not None:
+        updates["access_expires_at"] = body.access_expires_at
+    if body.allowed_models is not None:
+        updates["allowed_models"] = body.allowed_models
+    if not updates:
+        raise HTTPException(422, "No fields to update")
+    set_parts = []
+    params: dict = {"uid": user_id}
+    for k, v in updates.items():
+        if k == "allowed_models":
+            set_parts.append(f"{k} = CAST(:{k} AS text[])")
+            params[k] = v
+        else:
+            set_parts.append(f"{k} = :{k}")
+            params[k] = v
+    await session.execute(
+        text(f"UPDATE users SET {', '.join(set_parts)} WHERE id = CAST(:uid AS uuid)"),
+        params,
+    )
+    await session.commit()
+    return {"updated": list(updates.keys())}
 
 
 # ---------------------------------------------------------------------------
@@ -771,6 +1101,87 @@ async def accept_invitation(
     }
     token = await _issue_session(request.app.state.redis, payload, _SESSION_TTL_DEV)
     return {"token": token, "user": payload}
+
+
+# ---------------------------------------------------------------------------
+# Bulk invite (CSV upload)
+# ---------------------------------------------------------------------------
+
+import csv as _csv
+import io as _io
+
+
+@router.post("/invitations/bulk")
+async def bulk_invite(
+    file: "UploadFile" = None,
+    current_user: dict = Depends(require_platform_admin),
+    request: Request = None,
+    session: AsyncSession = Depends(get_session),
+):
+    """CSV columns: email, role, scope_type (optional), scope_id (optional)."""
+    from fastapi import UploadFile, File
+    import os, uuid as _uuid
+    from datetime import datetime, timezone as _tz, timedelta as _td
+
+    if file is None:
+        raise HTTPException(422, "No file uploaded")
+    content = await file.read()
+    try:
+        reader = _csv.DictReader(_io.StringIO(content.decode("utf-8-sig")))
+    except Exception:
+        raise HTTPException(422, "Could not decode CSV — ensure UTF-8 encoding")
+
+    sent, skipped, errors = 0, 0, []
+    for i, row in enumerate(reader, start=2):
+        email = (row.get("email") or "").strip().lower()
+        role = (row.get("role") or "developer").strip()
+        scope_type = (row.get("scope_type") or "global").strip()
+        scope_id = (row.get("scope_id") or "").strip() or None
+
+        if not email or not _EMAIL_RE.match(email):
+            errors.append({"row": i, "reason": f"Invalid email: {email!r}"})
+            continue
+        if role not in _VALID_ROLES:
+            errors.append({"row": i, "reason": f"Invalid role: {role!r}"})
+            continue
+
+        existing = (await session.execute(
+            text("SELECT 1 FROM users WHERE email=:e UNION SELECT 1 FROM user_invitations WHERE email=:e AND accepted_at IS NULL"),
+            {"e": email},
+        )).first()
+        if existing:
+            skipped += 1
+            continue
+
+        raw_token = secrets.token_urlsafe(32)
+        token_hash = _hashlib.sha256(raw_token.encode()).hexdigest()
+        expires_at = datetime.now(_tz.utc) + _td(days=7)
+
+        await session.execute(
+            text("""
+                INSERT INTO user_invitations
+                    (id, email, role, scope_type, scope_id, token_hash, invited_by, expires_at)
+                VALUES (CAST(:id AS uuid), :email, :role, :scope_type,
+                        CAST(:scope_id AS uuid), :token_hash, CAST(:by AS uuid), :expires_at)
+            """),
+            {"id": str(_uuid.uuid4()), "email": email, "role": role,
+             "scope_type": scope_type, "scope_id": scope_id,
+             "token_hash": token_hash, "by": current_user["user_id"], "expires_at": expires_at},
+        )
+
+        portal_url = os.getenv("PORTAL_BASE_URL", "http://localhost:3001")
+        invite_link = f"{portal_url}/accept-invite?token={raw_token}"
+        try:
+            from app.email import send_email
+            await send_email(email, "You've been invited to AI Gateway",
+                f"<html><body><p>Invited as <strong>{role}</strong>. "
+                f"<a href='{invite_link}'>Accept invitation</a> (expires 7 days).</p></body></html>")
+        except Exception:
+            pass
+        sent += 1
+
+    await session.commit()
+    return {"sent": sent, "skipped": skipped, "errors": errors}
 
 
 # ---------------------------------------------------------------------------
