@@ -20,6 +20,7 @@ const NAV = [
       { href: "/portal/plugins",    label: "Plugins",     icon: <PluginIcon /> },
       { href: "/portal/skills",     label: "Skills",      icon: <SkillIcon /> },
       { href: "/portal/docs",       label: "Quickstart",  icon: <DocIcon /> },
+      { href: "/portal/security",   label: "Security",    icon: <SecurityIcon /> },
     ],
   },
   {
@@ -355,6 +356,15 @@ function SettingsIcon() {
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
       <circle cx="8" cy="8" r="2.5"/>
       <path d="M8 1.5v1M8 13.5v1M1.5 8h1M13.5 8h1M3.2 3.2l.7.7M12.1 12.1l.7.7M3.2 12.8l.7-.7M12.1 3.9l.7-.7"/>
+    </svg>
+  );
+}
+
+function SecurityIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M8 1.5 L13.5 4 V8.5 C13.5 11.5 11 13.5 8 14.5 C5 13.5 2.5 11.5 2.5 8.5 V4 Z"/>
+      <path d="M5.5 8 L7 9.5 L10.5 6"/>
     </svg>
   );
 }
