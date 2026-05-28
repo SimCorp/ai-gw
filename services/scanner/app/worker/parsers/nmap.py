@@ -31,7 +31,10 @@ def parse_nmap_xml(xml_output: str) -> list[dict]:
             state = port_elem.find("state")
             if state is None or state.get("state") != "open":
                 continue
-            port_num = int(port_elem.get("portid", 0))
+            portid = port_elem.get("portid")
+            if not portid:
+                continue
+            port_num = int(portid)
             service = port_elem.find("service")
             service_name = service.get("name", "unknown") if service is not None else "unknown"
             service_product = service.get("product", "") if service is not None else ""
