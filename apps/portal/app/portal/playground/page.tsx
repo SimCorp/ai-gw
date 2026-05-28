@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { useAuth } from "../_lib/authContext";
+import RelatedChampionContent from "../_components/RelatedChampionContent";
 
 const CACHE_BASE = process.env.NEXT_PUBLIC_CACHE_BASE_URL ?? "http://localhost:8002";
 const ADMIN_BASE = process.env.NEXT_PUBLIC_ADMIN_BASE_URL ?? "http://localhost:8005";
@@ -442,6 +443,7 @@ export default function PlaygroundPage() {
           </div>
         </aside>
       </div>
+      <RelatedChampionContent tags={["playground", "prompts"]} />
     </main>
   );
 }

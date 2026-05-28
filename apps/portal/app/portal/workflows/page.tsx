@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useTeam } from '../_lib/teamContext';
+import RelatedChampionContent from '../_components/RelatedChampionContent';
 
 const BASE = process.env.NEXT_PUBLIC_ADMIN_BASE_URL ?? 'http://localhost:8005';
 
@@ -86,6 +87,7 @@ export default function WorkflowsPage() {
           </div>
         </div>
       ))}
+      <RelatedChampionContent tags={["workflows"]} />
     </main>
   );
 }

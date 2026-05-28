@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import { useAuth } from "../../_lib/authContext";
 
 const ADMIN_BASE = process.env.NEXT_PUBLIC_ADMIN_BASE_URL ?? "http://localhost:8005";
 
@@ -17,9 +18,45 @@ interface ChampionProfile {
 export default function ChampionProfilePage() {
   const params = useParams<{ id: string }>();
   const id = params?.id;
+  const { developer } = useAuth();
   const [profile, setProfile] = useState<ChampionProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [bookingOpen, setBookingOpen] = useState(false);
+  const [slotText, setSlotText] = useState("");
+  const [topic, setTopic] = useState("");
+  const [bookingSubmitting, setBookingSubmitting] = useState(false);
+  const [bookingResult, setBookingResult] = useState<string | null>(null);
+
+  async function submitBooking() {
+    if (!id || !developer) return;
+    setBookingSubmitting(true);
+    setBookingResult(null);
+    try {
+      const res = await fetch(`${ADMIN_BASE}/champions/${id}/book`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          requested_by: developer.developer_id,
+          slot_text: slotText,
+          topic: topic || null,
+          team_id: developer.team_id ?? null,
+        }),
+      });
+      if (!res.ok) {
+        setBookingResult(`Error ${res.status}`);
+      } else {
+        setBookingResult("Request sent.");
+        setSlotText("");
+        setTopic("");
+        setBookingOpen(false);
+      }
+    } catch (e) {
+      setBookingResult(String(e));
+    } finally {
+      setBookingSubmitting(false);
+    }
+  }
 
   useEffect(() => {
     if (!id) return;
@@ -122,6 +159,70 @@ export default function ChampionProfilePage() {
               </div>
             </div>
           )}
+
+          <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--rule)" }}>
+            {!bookingOpen ? (
+              <button
+                onClick={() => setBookingOpen(true)}
+                className="btn btn--primary"
+                style={{ fontSize: 13 }}
+              >
+                Book a session
+              </button>
+            ) : (
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>Request a session</div>
+                <textarea
+                  value={slotText}
+                  onChange={(e) => setSlotText(e.target.value)}
+                  placeholder="Proposed time (e.g. Tue 14:00 or Thu morning)"
+                  rows={2}
+                  style={{
+                    display: "block", width: "100%", marginBottom: 8,
+                    padding: "7px 10px", fontSize: 13, fontFamily: "inherit",
+                    border: "1px solid var(--rule)", borderRadius: 6,
+                    background: "var(--surface)", color: "var(--fg-1)", resize: "vertical",
+                  }}
+                />
+                <input
+                  value={topic}
+                  onChange={(e) => setTopic(e.target.value)}
+                  placeholder="Topic (optional)"
+                  style={{
+                    display: "block", width: "100%", marginBottom: 10,
+                    padding: "7px 10px", fontSize: 13, fontFamily: "inherit",
+                    border: "1px solid var(--rule)", borderRadius: 6,
+                    background: "var(--surface)", color: "var(--fg-1)",
+                  }}
+                />
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button
+                    onClick={submitBooking}
+                    disabled={!slotText.trim() || bookingSubmitting || !developer}
+                    className="btn btn--primary"
+                    style={{ fontSize: 13 }}
+                  >
+                    {bookingSubmitting ? "Sending…" : "Send request"}
+                  </button>
+                  <button
+                    onClick={() => setBookingOpen(false)}
+                    className="btn"
+                    style={{ fontSize: 13 }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+            {bookingResult && (
+              <div style={{
+                marginTop: 10, fontSize: 12,
+                color: bookingResult === "Request sent." ? "var(--good, #1F8A5B)" : "var(--bad)",
+              }}>
+                {bookingResult}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </main>

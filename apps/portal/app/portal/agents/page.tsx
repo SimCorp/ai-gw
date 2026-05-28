@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import RelatedChampionContent from '../_components/RelatedChampionContent';
 
 const BASE = process.env.NEXT_PUBLIC_ADMIN_BASE_URL ?? 'http://localhost:8005';
 const IDENTITY_BASE = process.env.NEXT_PUBLIC_IDENTITY_BASE_URL ?? 'http://localhost:8006';
@@ -250,6 +251,7 @@ export default function AgentsPage() {
           </div>
         ))}
       </div>
+      <RelatedChampionContent tags={["agents", "agentic"]} />
     </main>
   );
 }
