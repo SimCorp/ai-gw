@@ -106,6 +106,7 @@ async def test_submit_job_quota_exceeded(client, mock_redis):
             "tier": "quick",
         }, headers={"Authorization": "Bearer test-token"})
     assert resp.status_code == 429
+    assert "X-Quota-Resets-At" in resp.headers
 
 
 @pytest.mark.asyncio

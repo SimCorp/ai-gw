@@ -1,4 +1,5 @@
 import json
+import uuid as _uuid
 from datetime import datetime, timezone, timedelta
 import time
 from typing import Any
@@ -52,13 +53,14 @@ async def _check_quota(redis, session: AsyncSession, team_id: str, tier: str) ->
     daily_limit: int = quota.get("daily_limit", 3)
     max_tier: str = quota.get("max_tier", "quick")
 
+    # Check tier first (no side effects)
     if _TIER_ORDER.get(tier, 0) > _TIER_ORDER.get(max_tier, 0):
         raise HTTPException(
             status_code=403,
             detail=f"Tier '{tier}' not allowed; team quota permits up to '{max_tier}'",
         )
 
-    # Concurrent job limit: max 2 running jobs per team
+    # Check concurrent jobs (no side effects)
     running = (await session.execute(
         text("SELECT COUNT(*) AS n FROM scan_jobs WHERE team_id = CAST(:tid AS uuid) AND status = 'running'"),
         {"tid": team_id},
@@ -66,6 +68,7 @@ async def _check_quota(redis, session: AsyncSession, team_id: str, tier: str) ->
     if running and running["n"] >= 2:
         raise HTTPException(status_code=429, detail="Concurrent job limit reached (max 2 running jobs per team)")
 
+    # Only now touch the Redis counter
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     counter_key = f"scanner:quota:{team_id}:{today}"
     current = await redis.incr(counter_key)
@@ -97,7 +100,12 @@ async def submit_job(
 ):
     identity = await get_identity(request)
     team_id: str = identity["team_id"]
-    user_id: str = identity.get("user_id") or identity.get("sub") or "unknown"
+    raw_uid = identity.get("user_id") or identity.get("sub") or ""
+    try:
+        _uuid.UUID(raw_uid)
+        user_id = raw_uid
+    except (ValueError, AttributeError):
+        raise HTTPException(status_code=401, detail="Identity does not contain a valid user UUID")
     redis = request.app.state.redis
 
     await _check_kill_switch(redis)
@@ -150,13 +158,12 @@ async def submit_job(
 @router.get("")
 async def list_jobs(
     request: Request,
-    team_id: str | None = Query(default=None),
     status: str | None = Query(default=None),
     limit: int = Query(default=20, le=100),
     session: AsyncSession = Depends(get_session),
 ):
     identity = await get_identity(request)
-    effective_team_id = team_id or identity["team_id"]
+    effective_team_id = identity["team_id"]
     where_clauses = ["team_id = CAST(:team_id AS uuid)"]
     params: dict[str, Any] = {"team_id": effective_team_id, "limit": limit}
     if status:
