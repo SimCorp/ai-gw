@@ -16,10 +16,8 @@ async def validate_token(request: Request, token: str) -> dict[str, Any]:
         async with httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.post(
                 f"{settings.auth_url}/validate",
-                headers={
-                    "Authorization": f"Bearer {token}",
-                    "x-internal-key": settings.internal_api_key,
-                },
+                json={"token": token, "model": ""},
+                headers={"x-internal-key": settings.internal_api_key},
             )
         if resp.status_code in (401, 403):
             _auth_cache.pop(token, None)
