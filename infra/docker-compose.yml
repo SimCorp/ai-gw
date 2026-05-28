@@ -302,7 +302,6 @@ services:
     restart: unless-stopped
 
   it-tools:
-  it-tools:
     image: ghcr.io/corentinth/it-tools@sha256:8b8128748339583ca951af03dfe02a9a4d7363f61a216226fc28030731a5a61f
     restart: unless-stopped
     # No published port — accessed only through nginx at /tools-app/
