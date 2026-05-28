@@ -175,7 +175,7 @@ async def update_quota(
         sql_key = _QUOTA_SQL_KEYS[k]  # KeyError is impossible — keys come from QuotaUpdate.model_dump()
         param_name = f"quota_{sql_key}"
         set_parts.append(
-            f"scanner_quota = scanner_quota || jsonb_build_object('{sql_key}', :{param_name}::jsonb)"
+            f"scanner_quota = scanner_quota || jsonb_build_object('{sql_key}', CAST(:{param_name} AS jsonb))"
         )
         params[param_name] = json.dumps(v)
     result = await session.execute(
