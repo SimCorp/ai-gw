@@ -82,7 +82,7 @@ async def register_target(body: TargetCreate, session: AsyncSession = Depends(ge
         text("""
             INSERT INTO scan_targets (team_id, url, label, openapi_spec_url, allowed_scan_types, created_by)
             VALUES (CAST(:team_id AS uuid), :url, :label, :openapi_spec_url,
-                    CAST(:scan_types AS text[]), CAST(:created_by AS uuid))
+                    :scan_types, CAST(:created_by AS uuid))
             RETURNING *
         """),
         {
@@ -90,7 +90,7 @@ async def register_target(body: TargetCreate, session: AsyncSession = Depends(ge
             "url": body.url,
             "label": body.label,
             "openapi_spec_url": body.openapi_spec_url,
-            "scan_types": "{" + ",".join(body.requested_scan_types) + "}",
+            "scan_types": list(body.requested_scan_types),
             "created_by": body.created_by,
         },
     )
@@ -112,7 +112,7 @@ async def approve_target(
         text("""
             UPDATE scan_targets
             SET status = 'approved',
-                allowed_scan_types = CAST(:types AS text[]),
+                allowed_scan_types = :types,
                 approved_by = CAST(:approved_by AS uuid),
                 approved_at = NOW(),
                 notes = :notes
@@ -120,7 +120,7 @@ async def approve_target(
         """),
         {
             "id": target_id,
-            "types": "{" + ",".join(body.allowed_scan_types) + "}",
+            "types": list(body.allowed_scan_types),
             "approved_by": body.approved_by,
             "notes": body.notes,
         },

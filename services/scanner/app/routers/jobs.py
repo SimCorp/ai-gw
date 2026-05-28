@@ -123,14 +123,14 @@ async def submit_job(
                 (team_id, target_id, requested_by, scan_types, tier, trigger, ci_ref)
             VALUES
                 (CAST(:team_id AS uuid), CAST(:target_id AS uuid), CAST(:user_id AS uuid),
-                 CAST(:scan_types AS text[]), :tier, :trigger, :ci_ref)
+                 :scan_types, :tier, :trigger, :ci_ref)
             RETURNING id
         """),
         {
             "team_id": team_id,
             "target_id": body.target_id,
             "user_id": user_id,
-            "scan_types": "{" + ",".join(scan_types) + "}",
+            "scan_types": list(scan_types),
             "tier": body.tier,
             "trigger": body.trigger,
             "ci_ref": body.ci_ref,
