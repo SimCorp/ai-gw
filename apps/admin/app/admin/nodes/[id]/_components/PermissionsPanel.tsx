@@ -1,0 +1,229 @@
+'use client';
+
+import React, { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { apiFetch } from '../../../../../lib/apiClient';
+import { LoadingState, ErrorState } from '../../../_components/PageStates';
+
+interface RoleAssignment {
+  id: string;
+  entra_group_id: string;
+  entra_group_name: string | null;
+  role: string;
+  granted_at: string;
+}
+
+const ROLE_OPTIONS = [
+  'platform_admin',
+  'area_owner',
+  'unit_lead',
+  'team_admin',
+  'developer',
+  'viewer',
+];
+
+const ROLE_COLORS: Record<string, string> = {
+  platform_admin: '#EF3E4A',
+  area_owner: '#FB9B2A',
+  unit_lead: '#9D2E7B',
+  team_admin: '#0A7BD7',
+  developer: '#1D958E',
+  viewer: '#4B17B6',
+};
+
+const ROLE_LABELS: Record<string, string> = {
+  platform_admin: 'Platform Admin',
+  area_owner: 'Area Owner',
+  unit_lead: 'Unit Lead',
+  team_admin: 'Team Admin',
+  developer: 'Developer',
+  viewer: 'Viewer',
+};
+
+function RolePill({ role }: { role: string }) {
+  const color = ROLE_COLORS[role] ?? '#888';
+  return (
+    <span style={{
+      display: 'inline-block', padding: '2px 7px',
+      borderRadius: 10, fontSize: 11, fontWeight: 600,
+      background: color + '22', color, border: `1px solid ${color}44`,
+    }}>
+      {ROLE_LABELS[role] ?? role}
+    </span>
+  );
+}
+
+interface PermissionsPanelProps {
+  nodeId: string;
+}
+
+export function PermissionsPanel({ nodeId }: PermissionsPanelProps) {
+  const queryClient = useQueryClient();
+  const [showForm, setShowForm] = useState(false);
+  const [groupId, setGroupId] = useState('');
+  const [groupName, setGroupName] = useState('');
+  const [role, setRole] = useState('developer');
+
+  const { data, isLoading, error } = useQuery<RoleAssignment[]>({
+    queryKey: ['node-permissions', nodeId],
+    queryFn: () => apiFetch(`/nodes/${nodeId}/permissions`),
+    staleTime: 30_000,
+  });
+
+  const addMutation = useMutation({
+    mutationFn: (body: { entra_group_id: string; entra_group_name: string; role: string }) =>
+      apiFetch(`/nodes/${nodeId}/permissions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['node-permissions', nodeId] });
+      setShowForm(false);
+      setGroupId('');
+      setGroupName('');
+      setRole('developer');
+    },
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: (assignmentId: string) =>
+      apiFetch(`/nodes/${nodeId}/permissions/${assignmentId}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['node-permissions', nodeId] });
+    },
+  });
+
+  if (isLoading) return <LoadingState rows={4} />;
+  if (error) return <ErrorState error={error as Error} />;
+
+  const assignments = data ?? [];
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      {/* Inherited note */}
+      <div style={{
+        padding: '10px 14px', fontSize: 12, color: 'var(--fg-3)',
+        background: 'var(--surface-2)', border: '1px solid var(--rule)',
+        borderRadius: 7, borderLeft: '3px solid var(--sc-blue)',
+      }}>
+        Access inherited from ancestor nodes is not shown here — manage it on those nodes.
+      </div>
+
+      {/* Assignment list */}
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)' }}>
+            Entra groups on this node
+          </div>
+          <button
+            onClick={() => setShowForm(v => !v)}
+            style={{
+              padding: '5px 12px', fontSize: 12,
+              background: 'var(--sc-blue)', color: '#fff',
+              border: 'none', borderRadius: 5, cursor: 'pointer',
+            }}
+          >
+            + Assign Entra group
+          </button>
+        </div>
+
+        {showForm && (
+          <div style={{
+            display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center',
+            padding: '12px 14px', background: 'var(--surface-2)',
+            border: '1px solid var(--rule)', borderRadius: 7, marginBottom: 12,
+          }}>
+            <input
+              placeholder="Entra group ID (UUID)"
+              value={groupId}
+              onChange={e => setGroupId(e.target.value)}
+              style={{ flex: '2 1 220px', padding: '6px 10px', fontSize: 12, background: 'var(--surface)', border: '1px solid var(--rule)', borderRadius: 5, color: 'var(--fg)', fontFamily: 'monospace' }}
+            />
+            <input
+              placeholder="Display name (optional)"
+              value={groupName}
+              onChange={e => setGroupName(e.target.value)}
+              style={{ flex: '2 1 180px', padding: '6px 10px', fontSize: 12, background: 'var(--surface)', border: '1px solid var(--rule)', borderRadius: 5, color: 'var(--fg)' }}
+            />
+            <select
+              value={role}
+              onChange={e => setRole(e.target.value)}
+              style={{ flex: '1 1 140px', padding: '6px 10px', fontSize: 12, background: 'var(--surface)', border: '1px solid var(--rule)', borderRadius: 5, color: 'var(--fg)' }}
+            >
+              {ROLE_OPTIONS.map(r => (
+                <option key={r} value={r}>{ROLE_LABELS[r] ?? r}</option>
+              ))}
+            </select>
+            <button
+              onClick={() => addMutation.mutate({ entra_group_id: groupId.trim(), entra_group_name: groupName.trim(), role })}
+              disabled={!groupId.trim() || addMutation.isPending}
+              style={{ padding: '6px 12px', fontSize: 12, background: 'var(--sc-blue)', color: '#fff', border: 'none', borderRadius: 5, cursor: 'pointer' }}
+            >
+              Save
+            </button>
+            <button
+              onClick={() => setShowForm(false)}
+              style={{ padding: '6px 12px', fontSize: 12, background: 'transparent', color: 'var(--fg-3)', border: '1px solid var(--rule)', borderRadius: 5, cursor: 'pointer' }}
+            >
+              Cancel
+            </button>
+          </div>
+        )}
+
+        {assignments.length === 0 && !showForm ? (
+          <div style={{ fontSize: 12, color: 'var(--fg-3)', padding: '12px 0' }}>
+            No Entra groups assigned to this node.
+          </div>
+        ) : (
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--rule)', borderRadius: 8, overflow: 'hidden' }}>
+            {assignments.map((a, i) => (
+              <div key={a.id} style={{
+                display: 'flex', alignItems: 'center', gap: 12,
+                padding: '10px 14px',
+                borderBottom: i < assignments.length - 1 ? '1px solid var(--rule)' : 'none',
+              }}>
+                {/* Group icon */}
+                <span style={{ fontSize: 16, flexShrink: 0 }}>&#x1F465;</span>
+                {/* Name + ID */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--fg)' }}>
+                    {a.entra_group_name ?? 'Unnamed group'}
+                  </div>
+                  <div style={{
+                    fontSize: 11, color: 'var(--fg-3)',
+                    fontFamily: 'monospace',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    maxWidth: 320,
+                  }}>
+                    {a.entra_group_id}
+                  </div>
+                </div>
+                {/* Role */}
+                <RolePill role={a.role} />
+                {/* Remove */}
+                <button
+                  onClick={() => removeMutation.mutate(a.id)}
+                  disabled={removeMutation.isPending}
+                  style={{
+                    padding: '3px 9px', fontSize: 11, background: 'transparent',
+                    border: '1px solid var(--rule)', borderRadius: 4,
+                    color: 'var(--bad, #EF3E4A)', cursor: 'pointer',
+                  }}
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {(addMutation.isError || removeMutation.isError) && (
+          <div style={{ marginTop: 8, fontSize: 12, color: '#EF3E4A' }}>
+            {((addMutation.error ?? removeMutation.error) as Error).message}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

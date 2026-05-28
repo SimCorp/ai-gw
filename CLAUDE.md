@@ -29,6 +29,7 @@ These ports are pinned — they do not change. See `infra/html/index.html` for t
 | librarian | http://localhost:8080/librarian/ | http://localhost:8008 | Knowledge ingestion, chunking, semantic search |
 | memory | http://localhost:8080/memory/ | http://localhost:8009 | Persistent agent memory scoped to user/team |
 | league | http://localhost:8080/league/ | http://localhost:8010 | AI-League gamified challenge platform |
+| it-tools | http://localhost:8080/tools-app/ | — (internal) | Developer utility tools (proxied SPA) |
 | **Infrastructure** | | | |
 | redis | — | localhost:6379 | Cache + rate limit counters |
 | postgres | — | localhost:5432 | Teams, policies, cost records |
