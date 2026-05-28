@@ -86,8 +86,37 @@ def upgrade():
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
     )
 
+    # Expand the league_points_ledger.reason CHECK constraint to allow champion_* reasons.
+    # Original constraint was created in 0017_league_schema.py without an explicit name,
+    # so Postgres auto-generated 'league_points_ledger_reason_check'.
+    op.execute("ALTER TABLE league_points_ledger DROP CONSTRAINT league_points_ledger_reason_check")
+    op.execute("""
+        ALTER TABLE league_points_ledger ADD CONSTRAINT league_points_ledger_reason_check
+        CHECK (
+            reason IN (
+                'league_submission_reward',
+                'training_xp_reward',
+                'store_purchase',
+                'admin_grant',
+                'season_exclusive_grant'
+            )
+            OR reason LIKE 'champion\\_%' ESCAPE '\\'
+        )
+    """)
+
 
 def downgrade():
+    op.execute("ALTER TABLE league_points_ledger DROP CONSTRAINT league_points_ledger_reason_check")
+    op.execute("""
+        ALTER TABLE league_points_ledger ADD CONSTRAINT league_points_ledger_reason_check
+        CHECK (reason IN (
+            'league_submission_reward',
+            'training_xp_reward',
+            'store_purchase',
+            'admin_grant',
+            'season_exclusive_grant'
+        ))
+    """)
     op.drop_table("champion_flags")
     op.drop_index("ix_champion_upvotes_contribution", table_name="champion_upvotes")
     op.drop_table("champion_upvotes")
