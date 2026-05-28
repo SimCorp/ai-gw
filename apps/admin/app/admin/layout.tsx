@@ -108,6 +108,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   <NavItem href="/admin/genai-adoption" label="GenAI Adoption" />
                   <NavItem href="/admin/insights" label="AI Insights" />
                   <NavItem href="/admin/devops" label="DevOps Agent" />
+                  <NavItem href="/admin/champions" label="Champions" />
                 </NavSectionLink>
 
                 <NavSection label="Govern">
