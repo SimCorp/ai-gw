@@ -22,7 +22,6 @@ from __future__ import annotations
 from typing import Sequence, Union
 
 from alembic import op
-import sqlalchemy as sa
 
 revision: str = "0025"
 down_revision: Union[str, None] = "0024"

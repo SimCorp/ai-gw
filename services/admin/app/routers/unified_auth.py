@@ -4,15 +4,17 @@ Unified authentication and authorisation.
 Single /auth/* surface for all user types. Roles determine portal access.
 
 Session Redis key: session:{token}
-Payload: {user_id, email, display_name, roles, primary_team_id, team_name}
+Payload: {user_id, email, display_name, roles, primary_node_id}
 
-Roles:
-  platform_admin  — full admin portal access
-  area_owner      — manages an area + its teams (scoped)
-  team_admin      — manages a single team (scoped)
-  developer       — developer portal access
-  viewer          — read-only portal access
-  service_account — API key only, no portal
+Roles are now path-scoped via role_assignments + organization_nodes.
+Permission check (pure Python, zero DB):
+  can_access(user, target_path, min_role) — startswith match + role power
+
+NOTE: The following endpoints still reference the old user_roles table and
+will return errors until a follow-up migration is applied:
+  - grant_role / revoke_role / list_users (admin role management UI)
+  - create_invitation / accept_invitation / bulk_invite
+  - create_service_account / list_service_accounts
 """
 from __future__ import annotations
 
@@ -32,6 +34,56 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import get_session, async_session_maker
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+# ---------------------------------------------------------------------------
+# Path-based permission model
+# ---------------------------------------------------------------------------
+
+_ROLE_POWER = {
+    "platform_admin": 6,
+    "area_owner": 5,
+    "unit_lead": 4,
+    "team_admin": 3,
+    "developer": 2,
+    "viewer": 1,
+}
+
+
+def can_access(user: dict, target_path: str, min_role: str) -> bool:
+    """Return True if user has at least min_role power on any node whose path
+    is a prefix of target_path (i.e. the role is at or above the target node).
+    """
+    required = _ROLE_POWER.get(min_role, 0)
+    for r in user.get("roles", []):
+        node_path = r.get("node_path", "")
+        if node_path and target_path.startswith(node_path):
+            if _ROLE_POWER.get(r.get("role", ""), 0) >= required:
+                return True
+    return False
+
+
+def require_node_role(min_role: str = "viewer"):
+    """FastAPI dependency: validates that the current user has at least
+    min_role on the node identified by the `node_id` path parameter.
+
+    Returns {"id": str, "path": str} on success.
+    """
+    async def _dep(
+        node_id: str,
+        current_user: dict = Depends(get_current_user),
+        session: AsyncSession = Depends(get_session),
+    ):
+        row = (await session.execute(
+            text("SELECT id, path FROM organization_nodes WHERE id = CAST(:nid AS uuid)"),
+            {"nid": node_id},
+        )).first()
+        if not row:
+            raise HTTPException(404, "Node not found")
+        if not can_access(current_user, row[1], min_role):
+            raise HTTPException(403, "Insufficient permissions for this node")
+        return {"id": str(row[0]), "path": row[1]}
+    return _dep
+
 
 _SESSION_TTL = int(timedelta(hours=8).total_seconds())
 _SESSION_TTL_REMEMBER = int(timedelta(days=30).total_seconds())
@@ -135,26 +187,28 @@ async def get_current_user(
         except ValueError:
             pass
 
-    # Bug 2 fix: reload session payload from DB if team assignment changed
-    if await redis.get(f"user_team_changed:{data['user_id']}"):
+    # Reload session payload from DB if node assignment changed
+    if await redis.get(f"user_node_changed:{data['user_id']}") or await redis.get(f"user_team_changed:{data['user_id']}"):
         async with async_session_maker() as db_session:
             row = (await db_session.execute(
                 text("""
-                    SELECT u.id, u.email, u.display_name, u.status, u.primary_team_id,
-                           t.name AS team_name
+                    SELECT u.id, u.email, u.display_name, u.status, u.primary_node_id,
+                           n.name AS node_name
                     FROM users u
-                    LEFT JOIN teams t ON t.id = u.primary_team_id
+                    LEFT JOIN organization_nodes n ON n.id = u.primary_node_id
                     WHERE u.id = CAST(:uid AS uuid)
                 """),
                 {"uid": data["user_id"]},
             )).mappings().first()
             if row:
-                roles = await _load_user_roles(db_session, data["user_id"])
+                # Re-use existing roles from session (group IDs not available without re-login)
+                roles = data.get("roles", [])
                 new_payload = await _build_session_payload(row, roles)
-                new_payload["team_name"] = row["team_name"]
+                new_payload["node_name"] = row["node_name"]
                 new_payload["issued_at"] = data.get("issued_at", 0)
                 await redis.setex(_session_key(token), _SESSION_TTL, json.dumps(new_payload))
                 data = new_payload
+        await redis.delete(f"user_node_changed:{data['user_id']}")
         await redis.delete(f"user_team_changed:{data['user_id']}")
 
     if request is not None:
@@ -179,44 +233,31 @@ def require_developer(user: dict = Depends(get_current_user)) -> dict:
 
 def has_role(user: dict, role: str, scope_id: str | None = None) -> bool:
     for r in user.get("roles", []):
-        if r["role"] == role:
+        if r.get("role") == role:
             if scope_id is None or r.get("scope_id") == scope_id:
                 return True
     return False
 
 
-async def _can_manage_team(user: dict, team_id: str, session: AsyncSession) -> bool:
-    """Return True if user can create/update/delete the given team."""
-    if has_role(user, "platform_admin"):
-        return True
-    if has_role(user, "team_admin", team_id):
-        return True
-    # area_owner inherits management of all teams in their area
-    row = (await session.execute(
-        text("SELECT area_id FROM teams WHERE id = CAST(:tid AS uuid)"),
-        {"tid": team_id},
-    )).first()
-    if row and row[0] and has_role(user, "area_owner", str(row[0])):
-        return True
-    return False
+# ---------------------------------------------------------------------------
+# Deprecated stubs — kept for import compatibility with legacy routers
+# (areas.py, teams.py, units.py) that are no longer registered in main.py.
+# These will be removed once legacy routers are fully deleted.
+# ---------------------------------------------------------------------------
+
+async def _can_manage_team(user: dict, team_id: str, session=None) -> bool:
+    """Deprecated. Use can_access() with organization_nodes paths."""
+    return has_role(user, "platform_admin")
 
 
-async def _can_manage_unit(user: dict, unit_id: str, session: AsyncSession) -> bool:
-    """Return True if user can create/update/delete the given unit."""
-    if has_role(user, "platform_admin"):
-        return True
-    row = (await session.execute(
-        text("SELECT area_id FROM units WHERE id = CAST(:uid AS uuid)"),
-        {"uid": unit_id},
-    )).first()
-    if row and row[0] and has_role(user, "area_owner", str(row[0])):
-        return True
-    return False
+async def _can_manage_unit(user: dict, unit_id: str, session=None) -> bool:
+    """Deprecated. Use can_access() with organization_nodes paths."""
+    return has_role(user, "platform_admin")
 
 
 async def _can_manage_area(user: dict, area_id: str) -> bool:
-    """Return True if user can create/update/delete the given area."""
-    return has_role(user, "platform_admin") or has_role(user, "area_owner", area_id)
+    """Deprecated. Use can_access() with organization_nodes paths."""
+    return has_role(user, "platform_admin")
 
 
 # ---------------------------------------------------------------------------
@@ -301,32 +342,44 @@ class ForceResetRequest(BaseModel):
 # Helpers
 # ---------------------------------------------------------------------------
 
-async def _load_user_roles(session: AsyncSession, user_id: str) -> list[dict]:
+async def _load_role_assignments(session: AsyncSession, group_ids: list[str]) -> list[dict]:
+    """Load role assignments for a list of Entra group IDs.
+
+    Returns a list of {role, node_path, node_id, node_name} dicts.
+    """
+    if not group_ids:
+        return []
     rows = (await session.execute(
         text("""
-            SELECT role, scope_type, scope_id::text
-            FROM user_roles
-            WHERE user_id = CAST(:uid AS uuid)
+            SELECT ra.role, n.path AS node_path, n.id::text AS node_id, n.name AS node_name
+            FROM role_assignments ra
+            JOIN organization_nodes n ON n.id = ra.node_id
+            WHERE ra.entra_group_id = ANY(:gids)
         """),
-        {"uid": user_id},
+        {"gids": group_ids},
     )).mappings().all()
     return [dict(r) for r in rows]
 
 
+# Keep legacy alias so any remaining callers don't break immediately
+async def _load_user_roles(session: AsyncSession, user_id: str) -> list[dict]:
+    """Legacy shim — returns empty list. Callers that need real roles
+    should use _load_role_assignments() with Entra group IDs."""
+    return []
+
+
 async def _build_session_payload(row, roles: list[dict]) -> dict:
-    is_platform_admin = any(r["role"] == "platform_admin" for r in roles)
-    managed_area_ids = [r["scope_id"] for r in roles if r["role"] == "area_owner" and r.get("scope_id")]
-    managed_team_ids = [r["scope_id"] for r in roles if r["role"] == "team_admin" and r.get("scope_id")]
+    is_platform_admin = any(r.get("role") == "platform_admin" for r in roles)
     access_expires = row.get("access_expires_at")
     return {
         "user_id": str(row["id"]),
         "email": row["email"],
         "display_name": row["display_name"] or "",
         "roles": roles,
-        "primary_team_id": str(row["primary_team_id"]) if row.get("primary_team_id") else None,
+        "primary_node_id": str(row["primary_node_id"]) if row.get("primary_node_id") else None,
+        # Legacy field kept for backwards compat with in-flight Redis sessions
+        "primary_team_id": None,
         "is_platform_admin": is_platform_admin,
-        "managed_area_ids": managed_area_ids,
-        "managed_team_ids": managed_team_ids,
         "is_contractor": bool(row.get("is_contractor", False)),
         "access_expires_at": access_expires.isoformat() if access_expires else None,
         "allowed_models": list(row["allowed_models"]) if row.get("allowed_models") else None,
@@ -354,11 +407,11 @@ async def login(
     row = (await session.execute(
         text("""
             SELECT u.id, u.email, u.display_name, u.password_hash, u.hash_type,
-                   u.status, u.must_change_password, u.primary_team_id,
+                   u.status, u.must_change_password, u.primary_node_id,
                    u.is_contractor, u.access_expires_at, u.allowed_models,
-                   t.name AS team_name
+                   n.name AS node_name
             FROM users u
-            LEFT JOIN teams t ON t.id = u.primary_team_id
+            LEFT JOIN organization_nodes n ON n.id = u.primary_node_id
             WHERE u.email = :email
         """),
         {"email": body.email},
@@ -400,12 +453,21 @@ async def login(
     await _audit.record(session, request, "login_success", "user", str(row["id"]),
                         {"email": body.email, "ip": str(request.client.host) if request and request.client else None})
 
-    roles = await _load_user_roles(session, str(row["id"]))
+    # Dev escape hatch: ENVIRONMENT=development bcrypt login → synthetic platform_admin
+    import os as _os
+    _env = _os.getenv("ENVIRONMENT", "production")
+    if _env in ("development", "test", "ci"):
+        roles = [{"role": "platform_admin", "node_path": "/", "node_id": None, "node_name": "root"}]
+    else:
+        # Production: bcrypt users have no group membership — empty roles
+        # Access is granted via OIDC + role_assignments
+        roles = []
+
     payload = await _build_session_payload(row, roles)
-    payload["team_name"] = row["team_name"]
+    payload["node_name"] = row["node_name"]
 
     # TTL: admins get 8h/30d, developers get 7d/30d
-    is_admin = any(r["role"] == "platform_admin" for r in roles)
+    is_admin = any(r.get("role") == "platform_admin" for r in roles)
     if body.remember_me:
         ttl = _SESSION_TTL_REMEMBER
     elif is_admin:
@@ -457,20 +519,22 @@ async def register(
         """),
         {"id": user_id, "email": body.email, "display_name": body.display_name.strip(), "hash": pw_hash},
     )
-    await session.execute(
-        text("INSERT INTO user_roles (user_id, role, scope_type) VALUES (CAST(:uid AS uuid), 'developer', 'global')"),
-        {"uid": user_id},
-    )
     await session.commit()
 
-    roles = [{"role": "developer", "scope_type": "global", "scope_id": None}]
+    # New users registered via self-service get no node-scoped roles.
+    # They gain access when an admin assigns their Entra group to a node.
+    roles: list[dict] = []
     payload = {
         "user_id": user_id,
         "email": body.email,
         "display_name": body.display_name.strip(),
         "roles": roles,
-        "primary_team_id": None,
-        "team_name": None,
+        "primary_node_id": None,
+        "primary_team_id": None,  # legacy compat
+        "is_platform_admin": False,
+        "is_contractor": False,
+        "access_expires_at": None,
+        "allowed_models": None,
     }
     token = await _issue_session(request.app.state.redis, payload, _SESSION_TTL_DEV)
     return {"token": token, "user": payload, "must_change_password": False}
@@ -638,7 +702,7 @@ async def update_user_profile(
     current_user: dict = Depends(require_platform_admin),
     session: AsyncSession = Depends(get_session),
 ):
-    allowed = {"display_name", "primary_team_id"}
+    allowed = {"display_name", "primary_node_id"}
     updates = {k: v for k, v in body.items() if k in allowed}
     if not updates:
         raise HTTPException(status_code=422, detail="No valid fields to update")
@@ -1412,9 +1476,10 @@ async def oidc_callback(
     # Find or create user
     row = (await session.execute(
         text("""
-            SELECT u.id, u.status, u.display_name, u.primary_team_id, t.name AS team_name
+            SELECT u.id, u.status, u.display_name, u.primary_node_id,
+                   n.name AS node_name
             FROM users u
-            LEFT JOIN teams t ON t.id = u.primary_team_id
+            LEFT JOIN organization_nodes n ON n.id = u.primary_node_id
             WHERE u.email = :email
         """),
         {"email": email},
@@ -1430,63 +1495,40 @@ async def oidc_callback(
             """),
             {"id": user_id, "email": email, "dn": display_name},
         )
-        await session.execute(
-            text("INSERT INTO user_roles (user_id, role, scope_type) VALUES (CAST(:uid AS uuid), 'developer', 'global')"),
-            {"uid": user_id},
-        )
         await session.commit()
         user_id_str = user_id
-        team_name = None
-        primary_team_id = None
+        node_name = None
         status = "active"
     else:
         if row["status"] != "active":
             raise HTTPException(status_code=403, detail="Account is not active")
         user_id_str = str(row["id"])
-        team_name = row["team_name"]
-        primary_team_id = str(row["primary_team_id"]) if row.get("primary_team_id") else None
+        node_name = row["node_name"]
         status = row["status"]
 
     await session.execute(
         text("UPDATE users SET last_login_at = NOW() WHERE id = CAST(:id AS uuid)"),
         {"id": user_id_str},
     )
-
-    # Apply Entra group → role mappings from the groups claim
-    group_ids = claims.get("groups", [])
-    if group_ids:
-        try:
-            mappings = (await session.execute(
-                text("""
-                    SELECT role, scope_type, scope_id::text
-                    FROM entra_group_role_mappings
-                    WHERE entra_group_id = ANY(:gids)
-                """),
-                {"gids": group_ids},
-            )).mappings().all()
-            for m in mappings:
-                await session.execute(
-                    text("""
-                        INSERT INTO user_roles (user_id, role, scope_type, scope_id)
-                        VALUES (CAST(:uid AS uuid), :role, :scope_type, CAST(:scope_id AS uuid))
-                        ON CONFLICT DO NOTHING
-                    """),
-                    {"uid": user_id_str, "role": m["role"],
-                     "scope_type": m["scope_type"], "scope_id": m["scope_id"]},
-                )
-        except Exception:
-            await session.rollback()  # table may not exist before migration 0016
-
     await session.commit()
 
-    roles = await _load_user_roles(session, user_id_str)
+    # Load role assignments from Entra group membership (pure read, no writes to DB)
+    group_ids = claims.get("groups", [])
+    roles = await _load_role_assignments(session, group_ids)
+
     payload = {
         "user_id": user_id_str,
         "email": email,
         "display_name": display_name,
         "roles": roles,
-        "primary_team_id": primary_team_id,
-        "team_name": team_name,
+        "primary_node_id": None,
+        "primary_team_id": None,  # legacy compat
+        "node_name": node_name,
+        "group_ids": group_ids,
+        "is_platform_admin": any(r.get("role") == "platform_admin" for r in roles),
+        "is_contractor": False,
+        "access_expires_at": None,
+        "allowed_models": None,
     }
     token = await _issue_session(request.app.state.redis, payload, _SESSION_TTL_DEV)
 

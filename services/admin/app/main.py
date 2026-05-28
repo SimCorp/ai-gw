@@ -18,11 +18,15 @@ from app.db import engine
 from app.models import (  # noqa: F401
     agent as agent_model,
     api_key,
+    # area/unit/team kept for SQLAlchemy mapper resolution (relationship() on Team refs Area).
+    # The tables themselves are dropped in migration 0025.
     area as area_model,
     area_policy as area_policy_model,
     audit_log as audit_log_model,
     mcp as mcp_model,
     member,
+    org_node as org_node_model,
+    role_assignment as role_assignment_model,
     plugin as plugin_model,
     model_registry as model_registry_model,
     policy,
@@ -48,7 +52,7 @@ from app.routers import (
     insights as insights_router,
     memory_admin as memory_admin_router,
     api_keys as api_keys_module,
-    areas as areas_router,
+    nodes as nodes_router,
     audit_log,
     budget,
     dashboard,
@@ -56,7 +60,6 @@ from app.routers import (
     developers as developers_router,
     guardrails as guardrails_router,
     mcp as mcp_router,
-    members,
     plugins as plugins_router,
     model_registry,
     policies,
@@ -66,8 +69,6 @@ from app.routers import (
     settings as settings_router,
     workflows as workflows_router,
     system,
-    teams,
-    units as units_router,
     genai_adoption as genai_adoption_router,
     entra as entra_router,
     alerts as alerts_router,
@@ -125,27 +126,19 @@ async def lifespan(app: FastAPI):
         async with engine.begin() as conn:
             try:
                 # Admin account — must_change_password=FALSE so local dev works immediately
+                # Roles are granted via dev escape hatch (ENVIRONMENT=development)
+                # so no user_roles row is needed.
                 await conn.execute(text("""
                     INSERT INTO users (email, display_name, password_hash, hash_type, status, must_change_password)
                     VALUES ('admin@simcorp.com', 'Default Admin', :hash, 'bcrypt', 'active', FALSE)
                     ON CONFLICT (email) DO NOTHING
                 """), {"hash": _default_hash})
-                await conn.execute(text("""
-                    INSERT INTO user_roles (user_id, role, scope_type)
-                    SELECT id, 'platform_admin', 'global' FROM users WHERE email = 'admin@simcorp.com'
-                    ON CONFLICT DO NOTHING
-                """))
                 # Developer test account for local dev and E2E tests
                 await conn.execute(text("""
                     INSERT INTO users (email, display_name, password_hash, hash_type, status, must_change_password)
                     VALUES ('dev@simcorp.com', 'Test Developer', :hash, 'bcrypt', 'active', FALSE)
                     ON CONFLICT (email) DO NOTHING
                 """), {"hash": _default_hash})
-                await conn.execute(text("""
-                    INSERT INTO user_roles (user_id, role, scope_type)
-                    SELECT id, 'developer', 'global' FROM users WHERE email = 'dev@simcorp.com'
-                    ON CONFLICT DO NOTHING
-                """))
             except Exception:
                 # users table not yet created (before migration 0010) — seed admin_users as fallback
                 await conn.execute(text("""
@@ -153,16 +146,6 @@ async def lifespan(app: FastAPI):
                     VALUES ('admin@simcorp.com', 'Default Admin', :hash, 'superadmin', FALSE)
                     ON CONFLICT (email) DO NOTHING
                 """), {"hash": _default_hash})
-
-    # Seed a default team if none exists (dev convenience)
-    async with engine.begin() as conn:
-        team_count = (await conn.execute(text("SELECT COUNT(*) FROM teams"))).scalar()
-        if team_count == 0:
-            await conn.execute(text("""
-                INSERT INTO teams (id, name, slug)
-                VALUES (gen_random_uuid(), 'Engineering', 'engineering')
-                ON CONFLICT DO NOTHING
-            """))
 
     # Seed guardrails if table is empty
     async with engine.begin() as conn:
@@ -181,22 +164,6 @@ async def lifespan(app: FastAPI):
                         "config": _json.dumps(config),
                     },
                 )
-
-    # Seed default areas if table is empty
-    async with engine.begin() as conn:
-        count = (await conn.execute(text("SELECT COUNT(*) FROM areas"))).scalar()
-        if count == 0:
-            for name, slug, description, color in [
-                ("Engineering", "engineering", "Software engineering teams", "#0A7BD7"),
-                ("Risk & Compliance", "risk-compliance", "Risk management and compliance teams", "#EF3E4A"),
-                ("Finance", "finance", "Finance and treasury teams", "#1D958E"),
-                ("AI Transformation", "ai-transformation", "AI adoption, tooling, and transformation initiatives", "#4B17B6"),
-            ]:
-                await conn.execute(text("""
-                    INSERT INTO areas (name, slug, description, color)
-                    VALUES (:name, :slug, :description, :color)
-                    ON CONFLICT DO NOTHING
-                """), {"name": name, "slug": slug, "description": description, "color": color})
 
     # Seed model registry — always upsert so new entries are added without wiping existing ones
     async with engine.begin() as conn:
@@ -252,6 +219,16 @@ async def lifespan(app: FastAPI):
     # request is served without a generation delay.
     from app.identity_signing import get_or_create_signing_key as _get_signing_key
     await _get_signing_key(app.state.redis)
+
+    # Bootstrap root organization node (idempotent — creates only if missing)
+    try:
+        from app.db import async_session_maker as _asm
+        from app.routers.nodes import ensure_root_node as _ensure_root
+        async with _asm() as _ns:
+            await _ensure_root(_ns)
+    except Exception as _e:
+        import logging as _logging
+        _logging.getLogger(__name__).warning(f"Root node bootstrap skipped: {_e}")
 
     # Start Awesome Copilot catalog background sync (first sync + every 6h)
     from app.routers.copilot_catalog import start_background_sync as _start_catalog_sync
@@ -365,10 +342,9 @@ app.include_router(unified_auth_router.oidc_router) # public — OIDC SSO flow
 app.include_router(users_router.router, dependencies=_auth)  # admin user management UI
 app.include_router(settings_router.router, dependencies=_auth)
 app.include_router(dashboard.router, dependencies=_auth)
-app.include_router(areas_router.router, dependencies=_auth)
-app.include_router(units_router.router, dependencies=_auth)
-app.include_router(teams.router, dependencies=_auth)
-app.include_router(members.router, dependencies=_auth)
+app.include_router(nodes_router.router, dependencies=_auth)
+# members.py router (legacy /teams/{id}/members) is omitted — teams table removed.
+# Use /nodes/{id}/members instead.
 app.include_router(developers_router.router, dependencies=_auth)
 app.include_router(api_keys_module.router, dependencies=_auth)
 app.include_router(api_keys_module.portal_keys_router)  # portal: authenticated via dev session, no admin token
