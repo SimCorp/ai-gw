@@ -7,8 +7,8 @@ Sanitizes the inputs dict before writing to inputs.json to prevent:
 - Excessive key counts (complexity explosion)
 """
 import json
-import re
 import logging
+import re
 from typing import Any
 
 _log = logging.getLogger(__name__)

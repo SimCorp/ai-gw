@@ -140,7 +140,7 @@ export default function ProposalsPage() {
   const [reviewing, setReviewing] = useState<Proposal | null>(null);
   const [filter, setFilter] = useState<'all' | ProposalStatus>('pending');
 
-  const { data, isLoading, error } = useQuery<Proposal[]>({
+  const { data, isLoading, error } = useQuery<Proposal[] | { proposals?: Proposal[] }>({
     queryKey: ['league-proposals', filter],
     queryFn: () => {
       const url = filter === 'all'
@@ -150,10 +150,10 @@ export default function ProposalsPage() {
     },
   });
 
-  const proposals = Array.isArray(data) ? data : (data as { proposals?: Proposal[] })?.proposals ?? [];
+  const proposals = Array.isArray(data) ? data : data?.proposals ?? [];
 
   if (isLoading) return <LoadingState />;
-  if (error) return <ErrorState message="Could not load proposals" />;
+  if (error) return <ErrorState error={new Error("Could not load proposals")} />;
 
   return (
     <div className="page">

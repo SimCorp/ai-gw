@@ -8,8 +8,8 @@ from app.auth import require_admin_auth
 from app.db import get_session
 from app.routers.dev_auth import _get_current_developer
 from app.workers.optimization_worker import (
-    _run_optimization_agent,
     _flush_insights,
+    _run_optimization_agent,
 )
 
 router = APIRouter(prefix="/insights", tags=["insights"])
@@ -90,6 +90,7 @@ async def trigger_optimization_run(
 ):
     """Manually trigger an optimization analysis run (runs synchronously, may take ~30s)."""
     import asyncpg
+
     from app.config import settings
 
     dsn = settings.database_url.replace("postgresql+asyncpg://", "postgresql://")

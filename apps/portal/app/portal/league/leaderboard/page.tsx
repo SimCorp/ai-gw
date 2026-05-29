@@ -38,25 +38,25 @@ function RankBadge({ rank }: { rank: number }) {
 export default function LeaderboardPage() {
   const [selectedSeason, setSelectedSeason] = useState<string | null>(null);
 
-  const { data: seasonsData } = useQuery<Season[]>({
+  const { data: seasonsData } = useQuery<Season[] | { seasons?: Season[] }>({
     queryKey: ["portal-lb-seasons"],
     queryFn: () => fetch(`${LEAGUE}/seasons`).then(r => r.json()),
   });
 
   const seasons = Array.isArray(seasonsData)
     ? seasonsData
-    : (seasonsData as { seasons?: Season[] })?.seasons ?? [];
+    : seasonsData?.seasons ?? [];
 
   const activeSeason = seasons.find(s => s.status === "active") ?? seasons[0] ?? null;
   const seasonId = selectedSeason ?? activeSeason?.id ?? null;
 
-  const { data, isLoading } = useQuery<LeaderboardEntry[]>({
+  const { data, isLoading } = useQuery<LeaderboardEntry[] | { entries?: LeaderboardEntry[] }>({
     queryKey: ["portal-leaderboard", seasonId],
     enabled: !!seasonId,
     queryFn: () => fetch(`${LEAGUE}/seasons/${seasonId}/leaderboard`).then(r => r.json()),
   });
 
-  const entries = Array.isArray(data) ? data : (data as { entries?: LeaderboardEntry[] })?.entries ?? [];
+  const entries = Array.isArray(data) ? data : data?.entries ?? [];
 
   const topThree = entries.slice(0, 3);
   const rest = entries.slice(3);

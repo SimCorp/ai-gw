@@ -1,6 +1,5 @@
 import ipaddress
 import json
-import re
 import time
 from typing import Any
 from urllib.parse import urlparse

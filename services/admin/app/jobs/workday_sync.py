@@ -13,6 +13,7 @@ as the reference. In production, replace _get_workday_snapshot() with actual
 Workday API calls once a service account is provisioned.
 """
 from __future__ import annotations
+
 import logging
 import os
 

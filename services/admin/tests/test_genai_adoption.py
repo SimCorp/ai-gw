@@ -1,6 +1,7 @@
 """Tests for the /genai-adoption endpoints."""
 
 from unittest.mock import AsyncMock, MagicMock
+
 import pytest
 
 
@@ -215,12 +216,13 @@ async def test_period_validation(client, mock_session):
 @pytest.mark.asyncio
 async def test_insights_returns_structured_data(client, mock_session):
     """Insights endpoint returns summary/highlights/recommendations/risks when LLM responds."""
-    from unittest.mock import patch, AsyncMock as AM
     import json
+    from unittest.mock import AsyncMock as AM
+    from unittest.mock import patch
 
     # All DB calls return empty data so _gather_metrics completes without error
     mock_session.execute = AsyncMock(return_value=_mappings_result([
-        {"active_days": 15, "active_users": 0, "rare": 0, "occasional": 0, "regular": 0,
+        {"active_days": 15, "rare": 0, "occasional": 0, "regular": 0,
          "cohort": "high", "avg_quality_score": 4.0, "avg_inter_request_s": 120,
          "avg_turn_count": 6.0, "session_count": 100,
          "avg_error_rate_pct": 3.0, "avg_retry_rate_pct": 5.0, "cache_hit_rate_pct": 35.0,
@@ -262,10 +264,11 @@ async def test_insights_returns_structured_data(client, mock_session):
 @pytest.mark.asyncio
 async def test_insights_graceful_degradation(client, mock_session):
     """Insights endpoint returns a stub when the LLM call fails."""
-    from unittest.mock import patch, AsyncMock as AM
+    from unittest.mock import AsyncMock as AM
+    from unittest.mock import patch
 
     mock_session.execute = AsyncMock(return_value=_mappings_result([
-        {"active_days": 0, "active_users": 0, "rare": 0, "occasional": 0, "regular": 0,
+        {"active_days": 0, "rare": 0, "occasional": 0, "regular": 0,
          "cohort": "low", "avg_quality_score": None, "avg_inter_request_s": None,
          "avg_turn_count": None, "session_count": 0,
          "avg_error_rate_pct": None, "avg_retry_rate_pct": None, "cache_hit_rate_pct": None,

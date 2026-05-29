@@ -5,7 +5,8 @@ Auth: Bearer token via SCIM_BEARER_TOKEN env var (not user sessions).
 from __future__ import annotations
 
 import os
-from fastapi import APIRouter, Depends, HTTPException, Header, Request
+
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -115,6 +116,7 @@ async def create_user(
         })
 
     import secrets as _sec
+
     import bcrypt as _bc
     rand_pw = _sec.token_urlsafe(24)
     pw_hash = _bc.hashpw(rand_pw.encode(), _bc.gensalt(rounds=12)).decode()

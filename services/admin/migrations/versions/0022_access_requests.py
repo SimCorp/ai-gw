@@ -1,8 +1,9 @@
 """Access requests table for model access and budget approval workflows"""
-from alembic import op
-import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from typing import Sequence, Union
+
+import sqlalchemy as sa
+from alembic import op
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 
 revision = "0022"
 down_revision = "0021"

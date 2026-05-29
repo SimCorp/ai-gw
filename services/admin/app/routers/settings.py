@@ -1,19 +1,17 @@
 """Provider API key management — store keys in DB, push to LiteLLM at runtime."""
 import base64
 import os
-from typing import Any
 
 import httpx
 from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from fastapi import APIRouter, Depends, Request
-from sqlalchemy import select, text
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.db import get_session
-
 
 _LEGACY_SALT = b"ai-gw-provider-keys"
 _CIPHERTEXT_PREFIX = b"gAA"  # Fernet tokens start with this when base64-decoded
@@ -244,8 +242,9 @@ async def save_provider_keys(
             extra_val = (body.get(extra_var) or "").strip()
             if extra_val:
                 if extra_var.endswith(("_BASE", "_URL", "_ENDPOINT")):
-                    from app.routers.mcp import _validate_mcp_url
                     from fastapi import HTTPException as _HTTPException
+
+                    from app.routers.mcp import _validate_mcp_url
                     try:
                         _validate_mcp_url(extra_val)
                     except _HTTPException as exc:
@@ -310,7 +309,7 @@ async def test_provider(env_var: str, session: AsyncSession = Depends(get_sessio
 
 async def _fetch_provider_models(provider: dict, key: str, stored: dict[str, str]) -> list[dict]:
     """Call the provider's model list API and return [{id, name}]."""
-    env_var = provider["env_var"]
+    provider["env_var"]
     name = provider["name"]
     try:
         async with httpx.AsyncClient(timeout=15) as client:

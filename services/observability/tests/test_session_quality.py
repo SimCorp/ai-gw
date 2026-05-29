@@ -1,5 +1,4 @@
 """Unit tests for _session_quality_score in observability postgres worker."""
-import pytest
 
 from app.workers.postgres import _session_quality_score
 

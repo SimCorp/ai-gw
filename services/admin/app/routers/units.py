@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import audit
 from app.db import get_session
-from app.routers.unified_auth import get_current_user, _can_manage_unit, _can_manage_area
+from app.routers.unified_auth import _can_manage_area, _can_manage_unit, get_current_user
 
 router = APIRouter(prefix="/units", tags=["units"])
 

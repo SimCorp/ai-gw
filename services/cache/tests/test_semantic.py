@@ -1,13 +1,13 @@
 """Tests for app.semantic: _cosine, get, and set."""
 import json
 import math
-from unittest.mock import AsyncMock, call, patch
-
-import pytest
+from unittest.mock import AsyncMock
 
 from app.semantic import (
     _cosine,
     get,
+)
+from app.semantic import (
     set as sem_set,
 )
 

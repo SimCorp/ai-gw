@@ -6,9 +6,10 @@ Idempotent: runs GET first, only creates if missing (matched by name).
 Run: python services/admin/scripts/seed_workday_org.py
 Or inside docker: docker compose -f infra/docker-compose.yml exec admin python /app/scripts/seed_workday_org.py
 """
-import httpx
-import sys
 import os
+import sys
+
+import httpx
 
 BASE_URL = os.getenv("ADMIN_URL", "http://localhost:8005")
 EMAIL = os.getenv("ADMIN_EMAIL", "admin@simcorp.com")

@@ -1,5 +1,5 @@
-import secrets
 import json
+import secrets
 
 from fastapi import Depends, Header, HTTPException, Request
 

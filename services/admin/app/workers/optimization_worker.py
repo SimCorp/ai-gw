@@ -12,11 +12,9 @@ import asyncio
 import json
 import logging
 import time
-from datetime import datetime, timezone
 from typing import Any
 
 import httpx
-
 from app.config import settings
 
 _log = logging.getLogger(__name__)
@@ -236,7 +234,6 @@ _TOOLS = [
 # ---------------------------------------------------------------------------
 
 async def _tool_check_service_health(pool) -> dict:
-    from app.routers.devops_agent import _tool_check_service_health as _impl
     return {"note": "service health check requires request context; skipping in worker"}
 
 

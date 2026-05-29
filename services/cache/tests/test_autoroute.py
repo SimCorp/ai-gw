@@ -11,12 +11,29 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parents[1]))
 
-import json
-import pytest
 import httpx
+import pytest
 
 CACHE = "http://localhost:8002"
 ADMIN = "http://localhost:8005"
+
+
+def _stack_available() -> bool:
+    """These are integration tests that need the full compose stack (cache +
+    admin). Skip cleanly when it isn't running (e.g. the unit-test CI job, which
+    has no services, or a partial local stack)."""
+    try:
+        httpx.get(f"{CACHE}/health", timeout=1)
+        httpx.get(f"{ADMIN}/gateway-info", timeout=1)
+        return True
+    except Exception:
+        return False
+
+
+pytestmark = pytest.mark.skipif(
+    not _stack_available(),
+    reason="requires the running gateway stack (cache:8002, admin:8005)",
+)
 
 # Minimal chat payload
 _CHAT_BODY = {

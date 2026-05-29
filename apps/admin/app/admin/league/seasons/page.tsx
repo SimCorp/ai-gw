@@ -263,15 +263,15 @@ export default function SeasonsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [editing, setEditing] = useState<Season | null>(null);
 
-  const { data, isLoading, error } = useQuery<Season[]>({
+  const { data, isLoading, error } = useQuery<Season[] | { seasons?: Season[] }>({
     queryKey: ['league-seasons'],
     queryFn: () => fetch(`${LEAGUE}/seasons`).then(r => r.json()),
   });
 
-  const seasons = Array.isArray(data) ? data : (data as { seasons?: Season[] })?.seasons ?? [];
+  const seasons = Array.isArray(data) ? data : data?.seasons ?? [];
 
   if (isLoading) return <LoadingState />;
-  if (error) return <ErrorState message="Could not load seasons" />;
+  if (error) return <ErrorState error={new Error("Could not load seasons")} />;
 
   return (
     <div className="page">

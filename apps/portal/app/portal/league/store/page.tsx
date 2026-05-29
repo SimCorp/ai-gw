@@ -48,7 +48,7 @@ export default function StorePage() {
   const [buying, setBuying] = useState<string | null>(null);
   const [buyError, setBuyError] = useState<string | null>(null);
 
-  const { data: storeData, isLoading } = useQuery<StoreItem[]>({
+  const { data: storeData, isLoading } = useQuery<StoreItem[] | { items?: StoreItem[] }>({
     queryKey: ["portal-store"],
     queryFn: () => fetch(`${LEAGUE}/store/items`).then(r => r.json()),
   });
@@ -58,17 +58,17 @@ export default function StorePage() {
     queryFn: () => fetch(`${LEAGUE}/store/balance`).then(r => r.json()),
   });
 
-  const { data: purchasesData } = useQuery<Purchase[]>({
+  const { data: purchasesData } = useQuery<Purchase[] | { purchases?: Purchase[] }>({
     queryKey: ["portal-purchases"],
     queryFn: () => fetch(`${LEAGUE}/store/owned`).then(r => r.json()),
   });
 
-  const items = Array.isArray(storeData) ? storeData : (storeData as { items?: StoreItem[] })?.items ?? [];
+  const items = Array.isArray(storeData) ? storeData : storeData?.items ?? [];
   const balance = balanceData?.balance ?? 0;
   const ownedIds = new Set(
     Array.isArray(purchasesData)
       ? purchasesData.map(p => p.id)
-      : (purchasesData as { purchases?: Purchase[] })?.purchases?.map(p => p.id) ?? []
+      : purchasesData?.purchases?.map(p => p.id) ?? []
   );
 
   const filtered = filterType === "all" ? items : items.filter(i => i.type === filterType);

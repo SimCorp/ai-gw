@@ -25,7 +25,6 @@ class Team(Base):
     area_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("areas.id", ondelete="SET NULL"), nullable=True)
 
     projects: Mapped[list["Project"]] = relationship("Project", back_populates="team", cascade="all, delete-orphan")
-    area: Mapped["Area | None"] = relationship("Area")
 
 
 class Project(Base):

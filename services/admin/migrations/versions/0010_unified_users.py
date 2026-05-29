@@ -8,7 +8,9 @@ Revises: 0009
 Create Date: 2026-05-13
 """
 from __future__ import annotations
+
 from typing import Sequence, Union
+
 from alembic import op
 
 revision: str = "0010"

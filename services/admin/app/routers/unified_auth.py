@@ -18,20 +18,21 @@ will return errors until a follow-up migration is applied:
 """
 from __future__ import annotations
 
+import csv as _csv
 import hashlib
+import io as _io
 import json
 import re
 import secrets
 from datetime import timedelta
-from uuid import UUID
 
 import bcrypt
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, File, Header, HTTPException, Request, UploadFile
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db import get_session, async_session_maker
+from app.db import async_session_maker, get_session
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -743,7 +744,7 @@ async def forgot_password(
         portal_url = os.getenv("PORTAL_BASE_URL", "http://localhost:3001")
         reset_url = f"{portal_url}/reset-password?token={raw_token}"
 
-        from app.email import send_email, password_reset_html
+        from app.email import password_reset_html, send_email
         await send_email(
             row["email"],
             "Reset your AI Gateway password",
@@ -763,8 +764,8 @@ async def reset_password(
     request: Request,
     session: AsyncSession = Depends(get_session),
 ):
-    import os
     import datetime as _dt
+    import os
     redis = request.app.state.redis
     token_hash = hashlib.sha256(body.token.encode()).hexdigest()
     user_id = await redis.get(f"reset:{token_hash}")
@@ -796,7 +797,7 @@ async def reset_password(
     )).mappings().first()
     if row:
         portal_url = os.getenv("PORTAL_BASE_URL", "http://localhost:3001")
-        from app.email import send_email, password_changed_html
+        from app.email import password_changed_html, send_email
         await send_email(row["email"], "Your password was changed",
                          password_changed_html(portal_url, row["display_name"] or row["email"]))
 
@@ -1009,7 +1010,9 @@ async def create_invitation(
     token = secrets.token_urlsafe(32)
     token_hash = _hash_token(token)
     invite_id = str(_uuid.uuid4())
-    from datetime import datetime, UTC as _UTC, timedelta as _td
+    from datetime import UTC as _UTC
+    from datetime import datetime
+    from datetime import timedelta as _td
     expires_at = datetime.now(_UTC) + _td(hours=48)
 
     await session.execute(
@@ -1171,21 +1174,20 @@ async def accept_invitation(
 # Bulk invite (CSV upload)
 # ---------------------------------------------------------------------------
 
-import csv as _csv
-import io as _io
-
 
 @router.post("/invitations/bulk")
 async def bulk_invite(
-    file: "UploadFile" = None,
+    file: UploadFile | None = File(None),
     current_user: dict = Depends(require_platform_admin),
     request: Request = None,
     session: AsyncSession = Depends(get_session),
 ):
     """CSV columns: email, role, scope_type (optional), scope_id (optional)."""
-    from fastapi import UploadFile, File
-    import os, uuid as _uuid
-    from datetime import datetime, timezone as _tz, timedelta as _td
+    import os
+    import uuid as _uuid
+    from datetime import datetime
+    from datetime import timedelta as _td
+    from datetime import timezone as _tz
 
     if file is None:
         raise HTTPException(422, "No file uploaded")
@@ -1218,7 +1220,7 @@ async def bulk_invite(
             continue
 
         raw_token = secrets.token_urlsafe(32)
-        token_hash = _hashlib.sha256(raw_token.encode()).hexdigest()
+        token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
         expires_at = datetime.now(_tz.utc) + _td(days=7)
 
         await session.execute(
@@ -1268,7 +1270,8 @@ async def create_service_account(
     if "platform_admin" not in roles and "team_admin" not in roles:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
-    import uuid as _uuid, hashlib as _hl
+    import hashlib as _hl
+    import uuid as _uuid
     sa_id = str(_uuid.uuid4())
     raw_key = f"sa_{secrets.token_urlsafe(32)}"
     key_prefix = raw_key[:12]
@@ -1402,8 +1405,9 @@ _OIDC_STATE_TTL = 300  # 5 minutes
 @oidc_router.get("/oidc/login")
 async def oidc_login(request: Request):
     """Redirect to the configured OIDC provider (Dex / Entra ID)."""
-    from app.config import settings as _cfg
     import urllib.parse as _up
+
+    from app.config import settings as _cfg
 
     state = secrets.token_urlsafe(16)
     await request.app.state.redis.setex(f"oidc_state:{state}", _OIDC_STATE_TTL, "1")
@@ -1427,9 +1431,10 @@ async def oidc_callback(
     request: Request,
     session: AsyncSession = Depends(get_session),
 ):
-    from app.config import settings as _cfg
-    import urllib.parse as _up
+
     import httpx as _httpx
+
+    from app.config import settings as _cfg
 
     # Validate state
     stored = await request.app.state.redis.get(f"oidc_state:{state}")
@@ -1498,13 +1503,11 @@ async def oidc_callback(
         await session.commit()
         user_id_str = user_id
         node_name = None
-        status = "active"
     else:
         if row["status"] != "active":
             raise HTTPException(status_code=403, detail="Account is not active")
         user_id_str = str(row["id"])
         node_name = row["node_name"]
-        status = row["status"]
 
     await session.execute(
         text("UPDATE users SET last_login_at = NOW() WHERE id = CAST(:id AS uuid)"),

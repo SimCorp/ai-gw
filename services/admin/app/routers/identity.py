@@ -10,7 +10,7 @@ import logging
 from datetime import datetime, timezone
 
 import jwt as _jwt
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
 from app.identity_signing import (

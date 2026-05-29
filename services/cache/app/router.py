@@ -11,7 +11,8 @@ from fastapi import APIRouter, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from app import exact, semantic
-from app.autoroute import record_request as _autoroute_record, select_best_model
+from app.autoroute import record_request as _autoroute_record
+from app.autoroute import select_best_model
 from app.config import settings
 from app.policy import CachePolicy, get_policy
 
@@ -286,7 +287,7 @@ async def _check_guardrails(
     http,
 ) -> None:
     """Run enabled guardrails against the prompt text. Fires hits async; blocks on block action."""
-    import re as _re, json as _j
+    import re as _re
     rules = await _load_guardrails(redis, team_id)
     for rule in rules:
         if not rule.get("enabled", True):
@@ -318,7 +319,6 @@ async def _check_guardrails(
             "severity": rule.get("severity", "high"),
         }))
         if action == "block":
-            from fastapi.responses import JSONResponse as _JR
             raise _BlockedByGuardrail(rule.get("name", "guardrail"))
 
 

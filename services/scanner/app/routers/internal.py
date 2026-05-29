@@ -1,8 +1,10 @@
 import json as _json
-from fastapi import APIRouter, Depends, HTTPException, Request
+
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.auth import require_worker_auth
 from app.db import get_session
 

@@ -1,10 +1,7 @@
 """Tests for /teams/{id}/policy and /policies endpoints."""
 
 import uuid
-from unittest.mock import AsyncMock, MagicMock
-
-import pytest
-
+from unittest.mock import MagicMock
 
 # ---------------------------------------------------------------------------
 # Helpers

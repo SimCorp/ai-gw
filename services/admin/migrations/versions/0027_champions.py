@@ -1,7 +1,8 @@
 """AI-Champions community: six tables"""
-from alembic import op
-import sqlalchemy as sa
 from typing import Sequence, Union
+
+import sqlalchemy as sa
+from alembic import op
 
 revision = "0027"
 down_revision = "0026"

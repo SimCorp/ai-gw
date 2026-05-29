@@ -2,16 +2,14 @@
 /keys/{id}/budget, /org/budget, and /budget/status endpoints."""
 
 import uuid
-from unittest.mock import AsyncMock, MagicMock, call
+from unittest.mock import MagicMock
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # Pure helper function tests
 # ---------------------------------------------------------------------------
-
-from app.routers.budget import _safe_pct, _remaining
+from app.routers.budget import _remaining, _safe_pct
 
 
 def test_safe_pct_normal():

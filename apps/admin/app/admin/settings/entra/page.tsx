@@ -108,7 +108,7 @@ export default function EntraSettingsPage() {
     : [];
 
   if (isLoading) return <LoadingState rows={4} />;
-  if (error) return <ErrorState message="Failed to load Entra group mappings" />;
+  if (error) return <ErrorState error={new Error("Failed to load Entra group mappings")} />;
 
   return (
     <div>

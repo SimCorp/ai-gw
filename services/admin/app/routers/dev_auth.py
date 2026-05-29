@@ -8,7 +8,7 @@ Session key: session:{token}  (unified format)
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, Field
@@ -18,16 +18,23 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.db import get_session
 from app.routers.unified_auth import (
+    ChangePasswordRequest,
     LoginRequest,
     RegisterRequest,
-    ChangePasswordRequest,
-    get_current_user,
-    login as _unified_login,
-    logout as _unified_logout,
-    register as _unified_register,
-    change_password as _unified_change_password,
-    require_developer,
     _session_key,
+    get_current_user,
+)
+from app.routers.unified_auth import (
+    change_password as _unified_change_password,
+)
+from app.routers.unified_auth import (
+    login as _unified_login,
+)
+from app.routers.unified_auth import (
+    logout as _unified_logout,
+)
+from app.routers.unified_auth import (
+    register as _unified_register,
 )
 
 router = APIRouter(prefix="/dev-auth", tags=["developer-auth"])

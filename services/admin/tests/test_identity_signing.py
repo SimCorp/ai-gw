@@ -5,18 +5,14 @@ All tests use mock Redis so no real Redis instance is required.
 from __future__ import annotations
 
 import time
-from unittest.mock import AsyncMock, MagicMock
 
 import jwt
 import pytest
-
 from app.identity_signing import (
     get_or_create_signing_key,
     issue_identity_token,
-    public_key_to_jwk,
     verify_identity_token,
 )
-
 
 # ---------------------------------------------------------------------------
 # Shared fixture: a minimal stateful fake Redis
@@ -120,8 +116,8 @@ async def test_jwks_endpoint_returns_public_key(fake_redis):
     os.environ.setdefault("DEV_BYPASS_AUTH", "true")
     os.environ.setdefault("ENVIRONMENT", "development")
 
-    from httpx import ASGITransport, AsyncClient
     from app.main import app
+    from httpx import ASGITransport, AsyncClient
 
     # Wire up the fake redis so the endpoint can find the signing key
     app.state.redis = fake_redis
@@ -161,10 +157,12 @@ async def test_tampered_token_rejected(fake_redis):
         ttl_seconds=3600,
     )
 
-    # Flip a character in the signature segment (the last part)
+    # Flip a character in the signature segment (the FIRST part).
+    # The last base64url char only encodes a few trailing bits, so flipping it
+    # can decode to identical signature bytes — that made this test flaky in CI.
+    # The first char always maps to real bits, so the bytes always change.
     header, payload, sig = token.split(".")
-    # Alter the signature by replacing the last char with a different one
-    bad_sig = sig[:-1] + ("A" if sig[-1] != "A" else "B")
+    bad_sig = ("A" if sig[0] != "A" else "B") + sig[1:]
     tampered_token = f"{header}.{payload}.{bad_sig}"
 
     private_key, _ = await get_or_create_signing_key(fake_redis)

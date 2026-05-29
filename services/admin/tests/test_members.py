@@ -16,7 +16,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-
 FAKE_USER = {
     "user_id": str(uuid.uuid4()),
     "email": "admin@simcorp.com",
@@ -27,9 +26,9 @@ FAKE_USER = {
 
 @pytest.fixture
 async def member_client(mock_session):
-    from app.main import app
-    from app.db import get_session
     from app.auth import require_admin_auth
+    from app.db import get_session
+    from app.main import app
     from app.routers.unified_auth import get_current_user
 
     async def override_session():

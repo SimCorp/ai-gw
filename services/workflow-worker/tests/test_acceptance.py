@@ -194,9 +194,6 @@ def test_rate_limit(team_id, echo_agent_id):
     """101st run submission within the rate-limit window returns 429."""
     # Flush the counter first by using a fresh team-scoped slug pair
     # (Rate limit counter uses team_id; use a synthetic team_id that won't conflict)
-    import hashlib
-    # Use a fake team_id that has a fresh counter
-    fake_team = "00000000-0000-0000-0000-" + hashlib.md5(b"rate-limit-test").hexdigest()[:12]
 
     # Create a minimal workflow the 101 runs can reference (real workflow needed)
     wf_id, _ = _make_workflow(team_id,

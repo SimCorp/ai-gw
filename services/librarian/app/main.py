@@ -16,7 +16,6 @@ import logging
 import re
 import uuid
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
 from typing import Any
 
 import asyncpg
@@ -1066,7 +1065,7 @@ async def mcp_sse(request: Request):
     for any JSON-RPC calls the client makes to that URL.
     """
     import asyncio as _asyncio
-    import json as _json
+
     from fastapi.responses import StreamingResponse as _SSE
 
     queue: _asyncio.Queue[str | None] = _asyncio.Queue()

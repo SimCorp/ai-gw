@@ -1,9 +1,9 @@
 # services/admin/migrations/versions/0025_security_scanner.py
 """Add security scanner tables"""
-from alembic import op
-import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import UUID, JSONB, ARRAY, TEXT
 from typing import Sequence, Union
+
+import sqlalchemy as sa
+from alembic import op
 
 revision = "0026"
 down_revision = "0025"

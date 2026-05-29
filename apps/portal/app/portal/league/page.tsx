@@ -46,19 +46,19 @@ function StatusPill({ status }: { status: ChallengeStatus }) {
 export default function LeaguePage() {
   const [activeSeason, setActiveSeason] = useState<string | null>(null);
 
-  const { data: seasonsData, isLoading: seasonsLoading } = useQuery<Season[]>({
+  const { data: seasonsData, isLoading: seasonsLoading } = useQuery<Season[] | { seasons?: Season[] }>({
     queryKey: ["portal-league-seasons"],
     queryFn: () => fetch(`${LEAGUE}/seasons`).then(r => r.json()),
   });
 
   const seasons = Array.isArray(seasonsData)
     ? seasonsData
-    : (seasonsData as { seasons?: Season[] })?.seasons ?? [];
+    : seasonsData?.seasons ?? [];
 
   const currentSeason = seasons.find(s => s.status === "active") ?? seasons[0] ?? null;
   const selectedSeasonId = activeSeason ?? currentSeason?.id ?? null;
 
-  const { data: challengesData, isLoading: challengesLoading } = useQuery<Challenge[]>({
+  const { data: challengesData, isLoading: challengesLoading } = useQuery<Challenge[] | { challenges?: Challenge[] }>({
     queryKey: ["portal-league-challenges", selectedSeasonId],
     enabled: !!selectedSeasonId,
     queryFn: () => fetch(`${LEAGUE}/seasons/${selectedSeasonId}/challenges`).then(r => r.json()),
@@ -66,7 +66,7 @@ export default function LeaguePage() {
 
   const challenges = Array.isArray(challengesData)
     ? challengesData
-    : (challengesData as { challenges?: Challenge[] })?.challenges ?? [];
+    : challengesData?.challenges ?? [];
 
   const activeChallenges = challenges.filter(c => c.status === "active");
   const closedChallenges = challenges.filter(c => c.status === "closed");

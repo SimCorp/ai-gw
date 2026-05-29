@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app import audit
 from app.db import get_session
 from app.models.team import Project, Team
-from app.routers.unified_auth import get_current_user, _can_manage_team, _can_manage_area
+from app.routers.unified_auth import _can_manage_area, _can_manage_team, get_current_user
 
 router = APIRouter(prefix="/teams", tags=["teams"])
 

@@ -1,9 +1,8 @@
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
-
-import asyncio
 
 from app.bus import make_bus
 from app.config import settings

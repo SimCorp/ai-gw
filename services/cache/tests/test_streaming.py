@@ -1,14 +1,13 @@
 """Unit tests for SSE parsers and intent classifier in cache router."""
 import json
-import pytest
 
+import pytest
 from app.router import (
     _classify_intent,
     _parse_sse_usage_anthropic,
     _parse_sse_usage_openai,
     _replay_as_sse,
 )
-
 
 # ---------------------------------------------------------------------------
 # _parse_sse_usage_openai

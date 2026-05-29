@@ -5,11 +5,14 @@ Alert config is persisted in org_settings (same pattern as budget.py).
 Alert history is read from audit_log rows with action='budget_spike_alert'.
 """
 from __future__ import annotations
+
 import json
+
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.db import get_session
 
 router = APIRouter(prefix="/budget/alerts", tags=["alerts"])

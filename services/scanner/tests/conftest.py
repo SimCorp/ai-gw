@@ -1,7 +1,8 @@
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from httpx import AsyncClient, ASGITransport
-from unittest.mock import AsyncMock, MagicMock, patch
 from app.main import app
+from httpx import ASGITransport, AsyncClient
 
 
 @pytest.fixture

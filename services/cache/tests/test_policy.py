@@ -2,10 +2,8 @@
 from unittest.mock import AsyncMock
 
 import pytest
-
 from app.config import settings as _defaults
 from app.policy import CachePolicy, get_policy
-
 
 # ---------------------------------------------------------------------------
 # Helpers

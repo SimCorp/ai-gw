@@ -23,13 +23,15 @@ import httpx
 from redis.asyncio import Redis
 
 from app.config import Settings
-from app.dag import ready_successors, is_terminal, node as dag_node, should_loop
-from app.events import node_started, node_log, node_finished, run_finished
+from app.dag import is_terminal, ready_successors, should_loop
+from app.dag import node as dag_node
+from app.events import node_finished, node_log, node_started, run_finished
 from app.runtime import RunResult
 from app.runtime.docker import DockerRuntime
 from app.runtime.relay import RelayRuntime
 from app.sanitizer import sanitize_inputs as _sanitize_inputs
-from app.threat_detection import load_patterns_from_admin as _load_threat_patterns, scan_outputs as _scan_outputs
+from app.threat_detection import load_patterns_from_admin as _load_threat_patterns
+from app.threat_detection import scan_outputs as _scan_outputs
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 _log = logging.getLogger("workflow-worker")

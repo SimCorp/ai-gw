@@ -1,4 +1,5 @@
 import asyncio
+import json as _json
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -7,7 +8,6 @@ from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from app.redis_utils import make_redis
 from sqlalchemy import text
 
 from app.auth import require_admin_auth
@@ -17,71 +17,114 @@ from app.db import engine
 # Import all ORM models so they're available to routers and Alembic env
 from app.models import (  # noqa: F401
     agent as agent_model,
-    api_key,
-    # area/unit/team kept for SQLAlchemy mapper resolution (relationship() on Team refs Area).
-    # The tables themselves are dropped in migration 0025.
-    area as area_model,
-    area_policy as area_policy_model,
-    audit_log as audit_log_model,
-    mcp as mcp_model,
-    member,
-    org_node as org_node_model,
-    role_assignment as role_assignment_model,
-    plugin as plugin_model,
-    model_registry as model_registry_model,
-    policy,
-    pricing as pricing_model,
-    team,
-    unit as unit_model,
-    workflow as workflow_model,
-    workflow_run as workflow_run_model,
 )
-
+from app.redis_utils import make_redis
+from app.routers import (
+    access_requests as access_requests_router,
+)
 from app.routers import (
     admin_auth as admin_auth_router,
+)
+from app.routers import (
+    admin_champions as admin_champions_router,
+)
+from app.routers import (
     admin_ops as admin_ops_router,
-    unified_auth as unified_auth_router,
-    users as users_router,
-    transformation as transformation_router,
+)
+from app.routers import (
     ai_help as ai_help_router,
-    config_api as config_api_router,
-    codemate as codemate_router,
-    copilot_catalog as copilot_catalog_router,
-    devops_agent as devops_agent_router,
-    identity as identity_router,
-    insights as insights_router,
-    memory_admin as memory_admin_router,
+)
+from app.routers import (
+    alerts as alerts_router,
+)
+from app.routers import (
     api_keys as api_keys_module,
-    nodes as nodes_router,
+)
+from app.routers import (
     audit_log,
     budget,
     dashboard,
     dev_auth,
-    developers as developers_router,
-    guardrails as guardrails_router,
-    mcp as mcp_router,
-    plugins as plugins_router,
     model_registry,
     policies,
     pricing,
-    reports as reports_router,
-    requests as requests_router,
-    settings as settings_router,
-    workflows as workflows_router,
     system,
-    genai_adoption as genai_adoption_router,
-    entra as entra_router,
-    alerts as alerts_router,
-    scim as scim_router,
-    access_requests as access_requests_router,
-    admin_champions as admin_champions_router,
+)
+from app.routers import (
     champions as champions_router,
+)
+from app.routers import (
+    codemate as codemate_router,
+)
+from app.routers import (
+    config_api as config_api_router,
+)
+from app.routers import (
+    copilot_catalog as copilot_catalog_router,
+)
+from app.routers import (
+    developers as developers_router,
+)
+from app.routers import (
+    devops_agent as devops_agent_router,
+)
+from app.routers import (
+    entra as entra_router,
+)
+from app.routers import (
+    genai_adoption as genai_adoption_router,
+)
+from app.routers import (
+    guardrails as guardrails_router,
+)
+from app.routers import (
+    identity as identity_router,
+)
+from app.routers import (
+    insights as insights_router,
+)
+from app.routers import (
+    mcp as mcp_router,
+)
+from app.routers import (
+    memory_admin as memory_admin_router,
+)
+from app.routers import (
+    nodes as nodes_router,
+)
+from app.routers import (
+    plugins as plugins_router,
+)
+from app.routers import (
+    reports as reports_router,
+)
+from app.routers import (
+    requests as requests_router,
+)
+from app.routers import (
     scanner as scanner_router,
+)
+from app.routers import (
+    scim as scim_router,
+)
+from app.routers import (
+    settings as settings_router,
+)
+from app.routers import (
     tools as tools_router,
 )
-
-
-import json as _json
+from app.routers import (
+    transformation as transformation_router,
+)
+from app.routers import (
+    unified_auth as unified_auth_router,
+)
+from app.routers import (
+    users as users_router,
+)
+from app.routers import (
+    workflows as workflows_router,
+)
 
 _GUARDRAIL_SEED = [
     ("PII Detector", "Blocks prompts containing personal identifiers: email, IBAN, credit card, CPR, SSN", "pii_detector", "input", "block", "critical", 10, {"patterns": ["email", "iban", "credit_card", "cpr", "ssn", "phone_eu"]}),
@@ -259,6 +302,7 @@ async def lifespan(app: FastAPI):
 
     # Start background optimization worker (runs every 6 hours)
     import asyncpg as _asyncpg
+
     from app.workers.optimization_worker import start_optimization_worker as _opt_worker
     _pg_dsn = app_settings.database_url.replace(
         "postgresql+asyncpg://", "postgresql://"

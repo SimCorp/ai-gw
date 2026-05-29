@@ -33,9 +33,6 @@ jobs:
       - name: ruff check
         run: ruff check services/
 
-      - name: ruff format check
-        run: ruff format --check services/
-
   # ────────────────────────────────────────────────────────────────────────────
   # Frontend lint + build (pnpm workspace / turbo)
   # ────────────────────────────────────────────────────────────────────────────

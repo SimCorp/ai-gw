@@ -51,7 +51,7 @@ export default function ApprovalsPage() {
   });
 
   if (isLoading) return <LoadingState rows={4} />;
-  if (error) return <ErrorState message="Failed to load access requests" />;
+  if (error) return <ErrorState error={new Error("Failed to load access requests")} />;
 
   return (
     <div>
