@@ -127,12 +127,21 @@ jobs:
           ANTHROPIC_API_KEY=sk-ant-ci-placeholder
           OPENAI_API_KEY=sk-ci-placeholder
           ENVIRONMENT=ci
+          # Services read these from .env (compose only sets them explicitly for
+          # db-migrate). Without them, auth/cache/etc. fall back to localhost
+          # defaults and can't reach Postgres/Redis → /ready 503 → unhealthy.
+          DATABASE_URL=postgresql+asyncpg://aigateway:aigateway@postgres:5432/aigateway
+          REDIS_URL=redis://redis:6379/0
           EOF
 
       - name: Start gateway stack
         run: docker compose -f infra/docker-compose.yml up --build --wait --timeout 180
         env:
           COMPOSE_ANSI: never
+
+      - name: Dump stack logs on failure
+        if: failure()
+        run: docker compose -f infra/docker-compose.yml logs --no-color --tail 100
 
       - uses: actions/setup-python@v5
         with:
