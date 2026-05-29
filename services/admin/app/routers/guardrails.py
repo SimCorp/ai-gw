@@ -90,7 +90,7 @@ _RECENT_HITS_BASE = """
         h.request_id, h.model,
         t.name AS team_name
     FROM guardrail_hits h
-    LEFT JOIN teams t ON t.id = h.team_id
+    LEFT JOIN organization_nodes t ON t.id = h.team_id
     {where}
     ORDER BY h.created_at DESC
     LIMIT :limit

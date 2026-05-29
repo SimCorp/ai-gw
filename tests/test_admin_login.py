@@ -142,6 +142,6 @@ async def test_change_password_wrong_current_returns_401():
         resp = await client.post(
             "/admin-auth/change-password",
             headers={"Authorization": f"Bearer {token}"},
-            json={"current_password": "wrongpassword", "new_password": "NewPass123!"},
+            json={"current_password": "wrongpassword", "new_password": "NewPassword123!"},
         )
     assert resp.status_code == 401

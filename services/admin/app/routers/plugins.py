@@ -132,7 +132,7 @@ async def get_plugin(plugin_id: str, session: AsyncSession = Depends(get_session
         text("""
             SELECT o.id, o.plugin_id, o.team_id, t.name AS team_name, o.enabled, o.created_at
             FROM plugin_team_overrides o
-            JOIN teams t ON t.id = o.team_id
+            JOIN organization_nodes t ON t.id = o.team_id
             WHERE o.plugin_id = CAST(:plugin_id AS uuid)
             ORDER BY t.name
         """),
@@ -211,7 +211,7 @@ async def list_plugin_teams(plugin_id: str, session: AsyncSession = Depends(get_
         text("""
             SELECT o.id, o.plugin_id, o.team_id, t.name AS team_name, o.enabled, o.created_at
             FROM plugin_team_overrides o
-            JOIN teams t ON t.id = o.team_id
+            JOIN organization_nodes t ON t.id = o.team_id
             WHERE o.plugin_id = CAST(:plugin_id AS uuid)
             ORDER BY t.name
         """),
@@ -234,7 +234,7 @@ async def set_plugin_team_override(
         raise HTTPException(status_code=404, detail="Plugin not found")
 
     team_row = (await session.execute(
-        text("SELECT id FROM teams WHERE id = CAST(:id AS uuid)"),
+        text("SELECT id FROM organization_nodes WHERE id = CAST(:id AS uuid) AND type = 'team'"),
         {"id": body.team_id},
     )).first()
     if not team_row:

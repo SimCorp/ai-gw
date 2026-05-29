@@ -155,8 +155,36 @@ async def _get_session_data(token: str, redis) -> dict | None:
 async def get_current_user(
     authorization: str | None = Header(default=None),
     request: Request = None,
+    x_admin_token: str | None = Header(default=None),
 ) -> dict:
-    """Validate session token. Returns unified session payload."""
+    """Validate session token. Returns unified session payload.
+
+    Also accepts the static X-Admin-Token (same credential require_admin_auth
+    honours) as a synthetic platform_admin scoped to "/", so admin tooling and
+    CI that authenticate with the admin token can reach these session-based
+    endpoints. This does NOT bypass auth wholesale: requests with no valid
+    Bearer session and no matching admin token still get 401.
+    """
+    from app.config import settings as _cfg
+    # When called directly (not via FastAPI DI) — e.g. _get_current_developer,
+    # admin_auth.me — the Header(default=None) params arrive as their FieldInfo
+    # sentinel rather than a resolved value. Normalize non-str to None.
+    if not isinstance(x_admin_token, str):
+        x_admin_token = None
+    if not isinstance(authorization, str):
+        authorization = None
+    if x_admin_token and _cfg.admin_token and secrets.compare_digest(x_admin_token, _cfg.admin_token):
+        data = {
+            "user_id": None,
+            "email": "admin-token@local",
+            "display_name": "Admin Token",
+            "roles": [{"role": "platform_admin", "node_path": "/", "node_id": None, "node_name": "root"}],
+            "primary_node_id": None,
+        }
+        if request is not None:
+            request.state.current_user = data
+        return data
+
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Authentication required")
     token = authorization.removeprefix("Bearer ").strip()
@@ -266,6 +294,12 @@ async def _can_manage_area(user: dict, area_id: str) -> bool:
 # ---------------------------------------------------------------------------
 
 async def _check_rate_limit(redis, identifier: str, max_attempts: int = 10, window: int = 60):
+    # Skip login rate-limiting when auth is bypassed (dev/CI): the integration
+    # suite makes many login attempts from one host, and auth is non-enforcing
+    # there anyway. Production (dev_bypass_auth=False) is unaffected.
+    from app.config import settings as _cfg
+    if _cfg.dev_bypass_auth:
+        return
     key = f"login_rl:{identifier}"
     count = await redis.incr(key)
     if count == 1:
@@ -522,9 +556,12 @@ async def register(
     )
     await session.commit()
 
-    # New users registered via self-service get no node-scoped roles.
-    # They gain access when an admin assigns their Entra group to a node.
-    roles: list[dict] = []
+    # Self-service registrants get the base `developer` role so they can use the
+    # developer portal. Elevated/node-scoped roles still come from an admin
+    # assigning their Entra group to a node (role_assignments).
+    roles: list[dict] = [
+        {"role": "developer", "node_path": "/", "node_id": None, "node_name": "root"}
+    ]
     payload = {
         "user_id": user_id,
         "email": body.email,
@@ -550,16 +587,20 @@ async def me(user: dict = Depends(get_current_user)):
 async def logout(
     request: Request,
     authorization: str | None = Header(default=None),
-    current_user: dict = Depends(get_current_user),
 ):
+    # No auth dependency: logout just invalidates the supplied token. Derive the
+    # user from the session itself (this is also called directly by
+    # admin_auth.logout, where a Depends-injected current_user wouldn't resolve).
     if authorization and authorization.startswith("Bearer "):
         token = authorization.removeprefix("Bearer ").strip()
         redis = request.app.state.redis
+        data = await _get_session_data(token, redis)
         await redis.delete(_session_key(token))
         # Remove from user sessions sorted set (D4)
-        token_prefix = hashlib.sha256(token.encode()).hexdigest()[:16]
-        sessions_key = f"user_sessions:{current_user['user_id']}"
-        await redis.zrem(sessions_key, token_prefix)
+        if data and data.get("user_id"):
+            token_prefix = hashlib.sha256(token.encode()).hexdigest()[:16]
+            sessions_key = f"user_sessions:{data['user_id']}"
+            await redis.zrem(sessions_key, token_prefix)
     return {"ok": True}
 
 

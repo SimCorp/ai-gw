@@ -35,7 +35,7 @@ async def list_developers(
         SELECT d.id, d.email, d.display_name, d.status, d.created_at,
                d.team_id, t.name AS team_name
         FROM developers d
-        LEFT JOIN teams t ON t.id = d.team_id
+        LEFT JOIN organization_nodes t ON t.id = d.team_id
         ORDER BY d.created_at DESC
     """))).mappings().all()
     return [
@@ -63,8 +63,9 @@ async def get_developer(
             SELECT d.id, d.email, d.display_name, d.status, d.created_at,
                    d.team_id, t.name AS team_name, a.name AS area_name, a.color AS area_color
             FROM developers d
-            LEFT JOIN teams t ON t.id = d.team_id
-            LEFT JOIN areas a ON a.id = t.area_id
+            LEFT JOIN organization_nodes t ON t.id = d.team_id
+            LEFT JOIN organization_nodes a
+                   ON a.type = 'area' AND t.path LIKE a.path || '/%'
             WHERE d.id = :id
         """),
         {"id": developer_id},
@@ -217,9 +218,10 @@ async def get_developer_teams(developer_id: UUID, session: AsyncSession = Depend
             SELECT tm.id AS membership_id, tm.role, tm.created_at AS joined_at,
                    t.id AS team_id, t.name AS team_name, t.slug AS team_slug,
                    a.name AS area_name, a.color AS area_color
-            FROM team_members tm
-            JOIN teams t ON t.id = tm.team_id
-            LEFT JOIN areas a ON a.id = t.area_id
+            FROM node_members tm
+            JOIN organization_nodes t ON t.id = tm.node_id
+            LEFT JOIN organization_nodes a
+                   ON a.type = 'area' AND t.path LIKE a.path || '/%'
             WHERE tm.developer_id = :developer_id
                OR tm.user_id = :dev_id_str
             ORDER BY t.name
@@ -313,7 +315,7 @@ async def at_risk_developers(
         JOIN dev_stats ds ON ds.developer_id = d.id
         LEFT JOIN dev_output do2 ON do2.developer_id = d.id
         LEFT JOIN session_quality sq ON sq.developer_id = d.id
-        LEFT JOIN teams t ON t.id = d.team_id
+        LEFT JOIN organization_nodes t ON t.id = d.team_id
         HAVING (
             ds.retry_rate > 0.3 OR
             ds.error_rate > 0.3 OR

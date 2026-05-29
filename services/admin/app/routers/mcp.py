@@ -206,7 +206,7 @@ async def get_server(server_id: str, session: AsyncSession = Depends(get_session
         text("""
             SELECT a.server_id, a.team_id, t.name AS team_name, a.granted_at
             FROM mcp_server_access a
-            JOIN teams t ON t.id = a.team_id
+            JOIN organization_nodes t ON t.id = a.team_id
             WHERE a.server_id = CAST(:server_id AS uuid)
             ORDER BY t.name
         """),
@@ -583,7 +583,7 @@ async def list_access(server_id: str, session: AsyncSession = Depends(get_sessio
         text("""
             SELECT a.server_id, a.team_id, t.name AS team_name, a.granted_at
             FROM mcp_server_access a
-            JOIN teams t ON t.id = a.team_id
+            JOIN organization_nodes t ON t.id = a.team_id
             WHERE a.server_id = CAST(:server_id AS uuid)
             ORDER BY t.name
         """),
@@ -606,7 +606,7 @@ async def grant_access(
         raise HTTPException(status_code=404, detail="MCP server not found")
 
     team_row = (await session.execute(
-        text("SELECT id FROM teams WHERE id = CAST(:id AS uuid)"),
+        text("SELECT id FROM organization_nodes WHERE id = CAST(:id AS uuid) AND type = 'team'"),
         {"id": body.team_id},
     )).first()
     if not team_row:

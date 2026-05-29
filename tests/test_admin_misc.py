@@ -135,13 +135,14 @@ async def test_audit_has_create_team_entry(admin_client, test_team):
     The test_team fixture creates a team which triggers an audit record.
     We query with resource_type=team and check action.
     """
-    # test_team fixture already created a team, so there should be audit entries
-    resp = await admin_client.get("/audit", params={"resource_type": "team", "limit": 50})
+    # test_team fixture creates an org node (type='team'), which emits a
+    # 'create_node' audit entry (resource_type='node') in the org-node model.
+    resp = await admin_client.get("/audit", params={"resource_type": "node", "limit": 50})
     assert resp.status_code == 200
     entries = resp.json()
     actions = [e.get("action", "") for e in entries]
-    assert any("create_team" in action for action in actions), (
-        f"Expected a 'create_team' audit entry, found actions: {actions[:10]}"
+    assert any("create_node" in action for action in actions), (
+        f"Expected a 'create_node' audit entry, found actions: {actions[:10]}"
     )
 
 

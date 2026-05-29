@@ -273,12 +273,18 @@ async def test_login_token_allows_me_access():
 
 
 @pytest.mark.asyncio
-async def test_select_team_returns_200(admin_client):
-    """POST /dev-auth/select-team?team_id=... requires team membership."""
+async def test_select_team_returns_200(admin_client, root_node_id):
+    """POST /dev-auth/select-team?team_id=... requires team membership.
+
+    Setup rewritten for the org-node refactor: the "team" is created via
+    POST /nodes (type='team') under the root, and membership via
+    POST /nodes/{id}/members with the developer's UUID. The select-team
+    assertions are unchanged — they exercise the lead-owned dev-auth backend.
+    """
     uid = uuid.uuid4().hex[:8]
     team_resp = await admin_client.post(
-        "/teams",
-        json={"name": f"portal-test-{uid}", "slug": f"portal-test-{uid}"},
+        "/nodes",
+        json={"name": f"portal-test-{uid}", "type": "team", "parent_id": root_node_id},
     )
     assert team_resp.status_code == 201
     team_id = team_resp.json()["id"]
@@ -288,12 +294,14 @@ async def test_select_team_returns_200(admin_client):
         async with httpx.AsyncClient(base_url=ADMIN_URL, timeout=30.0) as client:
             reg_resp = await _register(client, email, "SecurePass123!")
             assert reg_resp.status_code == 201
-            token = reg_resp.json()["token"]
+            reg_data = reg_resp.json()
+            token = reg_data["token"]
+            developer_id = reg_data["developer_id"]
 
-            # Add developer as a team member (use email so members router links developer_id)
+            # Add developer as a node member (user_id is CAST to uuid server-side)
             member_resp = await admin_client.post(
-                f"/teams/{team_id}/members",
-                json={"user_id": email, "role": "member"},
+                f"/nodes/{team_id}/members",
+                json={"user_id": developer_id},
             )
             assert member_resp.status_code == 201, f"Failed to add member: {member_resp.text}"
 
@@ -307,7 +315,7 @@ async def test_select_team_returns_200(admin_client):
         data = sel_resp.json()
         assert data["team_id"] == team_id
     finally:
-        await admin_client.delete(f"/teams/{team_id}")
+        await admin_client.delete(f"/nodes/{team_id}")
 
 
 @pytest.mark.asyncio

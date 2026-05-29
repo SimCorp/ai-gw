@@ -135,7 +135,15 @@ jobs:
           EOF
 
       - name: Start gateway stack
-        run: docker compose -f infra/docker-compose.yml up --build --wait --timeout 180
+        # The integration tests exercise the API services only (auth, cache,
+        # litellm, observability, admin — see tests/conftest.py). Bring up just
+        # those + their deps (postgres, redis, db-migrate) rather than the whole
+        # stack, so the dev-only Next.js portal containers (which need a local
+        # `pnpm install` not present in CI) don't gate `--wait`. UI/e2e tests
+        # (test_e2e_navigation.py) are intentionally not part of this job.
+        run: >
+          docker compose -f infra/docker-compose.yml up --build --wait --timeout 180
+          auth cache litellm observability admin
         env:
           COMPOSE_ANSI: never
 
@@ -146,7 +154,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: pip
+          # No `cache: pip` here (unlike the unit-test jobs): the stack started
+          # above bind-mounts a root-owned data/postgres dir into the workspace,
+          # which breaks setup-python's cache directory scan with EACCES.
 
       - name: Install test dependencies
         run: pip install --quiet -r tests/requirements.txt

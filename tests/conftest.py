@@ -53,26 +53,60 @@ async def admin_client():
         yield client
 
 
-# ── Team + API key lifecycle ─────────────────────────────────────────────────
+# ── Org node + API key lifecycle ─────────────────────────────────────────────
+#
+# The org-node refactor replaced /teams, /areas, /units with a single /nodes
+# surface backed by the organization_nodes materialized-path tree
+# (services/admin/app/routers/nodes.py). A "team" is now just a node with
+# type='team'. The legacy /teams, /areas, /units routers are no longer
+# registered in main.py and return 404.
+#
+# Nodes cannot be created at the root level by this fixture (root creation
+# requires platform_admin and, more importantly, a root node cannot be deleted
+# — delete_node 400s when parent_id IS NULL). So the throwaway node is created
+# *under* the bootstrapped root node and torn down with DELETE /nodes/{id}.
 
 
 @pytest_asyncio.fixture
-async def test_team(admin_client: httpx.AsyncClient):
-    """Create a throwaway team, yield its ID, delete on teardown.
+async def root_node_id(admin_client: httpx.AsyncClient) -> str:
+    """Return the id of the bootstrapped root org node ("SimCorp").
 
-    A UUID suffix guarantees uniqueness even if a prior run crashed without
-    cleaning up.
+    The root node is created once at admin-service startup (ensure_root_node in
+    nodes.py). GET /nodes/tree returns the full tree ordered by path; the first
+    root entry is the bootstrapped root. Child nodes must be parented under it
+    so they can be deleted again (the root itself is undeletable).
+    """
+    resp = await admin_client.get("/nodes/tree")
+    assert resp.status_code == 200, f"Failed to fetch node tree: {resp.text}"
+    roots = resp.json()
+    assert roots, "No root node found in /nodes/tree — admin service bootstrap failed"
+    return roots[0]["id"]
+
+
+@pytest_asyncio.fixture
+async def test_team(admin_client: httpx.AsyncClient, root_node_id: str):
+    """Create a throwaway org node (type='team') under the root, yield its ID,
+    delete on teardown.
+
+    Named ``test_team`` for backwards-compat with existing tests; it is a
+    /nodes-backed team node. A UUID suffix guarantees uniqueness even if a prior
+    run crashed without cleaning up. Note: the node's slug is derived from its
+    name server-side (CreateNodeRequest has no slug field).
     """
     uid = uuid.uuid4().hex[:8]
-    payload = {"name": f"test-team-{uid}", "slug": f"test-team-{uid}"}
-    resp = await admin_client.post("/teams", json=payload)
-    assert resp.status_code == 201, f"Failed to create test team: {resp.text}"
-    team_id = resp.json()["id"]
+    payload = {
+        "name": f"test-team-{uid}",
+        "type": "team",
+        "parent_id": root_node_id,
+    }
+    resp = await admin_client.post("/nodes", json=payload)
+    assert resp.status_code == 201, f"Failed to create test node: {resp.text}"
+    node_id = resp.json()["id"]
 
-    yield team_id
+    yield node_id
 
-    # Teardown — delete the team (cascades to api_keys, projects)
-    await admin_client.delete(f"/teams/{team_id}")
+    # Teardown — delete the node (CASCADE handles descendants, api_keys, members)
+    await admin_client.delete(f"/nodes/{node_id}")
 
 
 @pytest_asyncio.fixture

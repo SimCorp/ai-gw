@@ -52,8 +52,8 @@ async def portal_list_keys(
     # Verify the developer is a member of the requested team
     membership = (await session.execute(
         text("""
-            SELECT 1 FROM team_members
-            WHERE team_id = CAST(:team_id AS uuid)
+            SELECT 1 FROM node_members
+            WHERE node_id = CAST(:team_id AS uuid)
               AND developer_id = CAST(:developer_id AS uuid)
         """),
         {"team_id": str(team_id), "developer_id": developer_id},
@@ -78,8 +78,8 @@ async def portal_create_key(
     developer_id = session_data["developer_id"]
     membership = (await session.execute(
         text("""
-            SELECT 1 FROM team_members
-            WHERE team_id = CAST(:team_id AS uuid)
+            SELECT 1 FROM node_members
+            WHERE node_id = CAST(:team_id AS uuid)
               AND developer_id = CAST(:developer_id AS uuid)
         """),
         {"team_id": str(team_id), "developer_id": developer_id},
@@ -125,8 +125,8 @@ async def portal_revoke_key(
     developer_id = session_data["developer_id"]
     membership = (await session.execute(
         text("""
-            SELECT 1 FROM team_members
-            WHERE team_id = CAST(:team_id AS uuid)
+            SELECT 1 FROM node_members
+            WHERE node_id = CAST(:team_id AS uuid)
               AND developer_id = CAST(:developer_id AS uuid)
         """),
         {"team_id": str(team_id), "developer_id": developer_id},

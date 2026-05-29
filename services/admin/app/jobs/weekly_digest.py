@@ -18,15 +18,18 @@ async def send_weekly_digests(session: AsyncSession) -> None:
     import os
     portal_url = os.getenv("PORTAL_BASE_URL", "http://localhost:3001")
 
-    # Get all team_admin users with their teams
+    # Get all team admins with their teams.
+    # Migration 0025 dropped user_roles/teams. Per-user role assignment now
+    # lives in node_members(node_id, user_id, role); the team-admin role on a
+    # node is 'admin' (CHECK role IN ('admin','member')). The old user_roles
+    # `expires_at` filter has no equivalent in node_members and is dropped.
     admins = (await session.execute(text("""
         SELECT DISTINCT u.id::text, u.email, u.display_name,
-               r.scope_id::text AS team_id,
+               t.id::text AS team_id,
                t.name AS team_name
         FROM users u
-        JOIN user_roles r ON r.user_id = u.id AND r.role = 'team_admin'
-                          AND (r.expires_at IS NULL OR r.expires_at > NOW())
-        JOIN teams t ON t.id = r.scope_id
+        JOIN node_members nm ON nm.user_id = u.id::text AND nm.role = 'admin'
+        JOIN organization_nodes t ON t.id = nm.node_id AND t.type = 'team'
         WHERE u.status = 'active' AND u.email IS NOT NULL
         ORDER BY u.email
     """))).mappings().all()
@@ -35,7 +38,7 @@ async def send_weekly_digests(session: AsyncSession) -> None:
         try:
             # Get spend data for this team over the last 7 days
             team_size = (await session.execute(text("""
-                SELECT COUNT(*) FROM team_members WHERE team_id = CAST(:tid AS uuid)
+                SELECT COUNT(*) FROM node_members WHERE node_id = CAST(:tid AS uuid)
             """), {"tid": admin["team_id"]})).scalar() or 0
 
             # Try to get actual spend — use a safe query that won't fail if table doesn't exist
@@ -57,7 +60,7 @@ async def send_weekly_digests(session: AsyncSession) -> None:
             # Get team budget
             try:
                 budget_row = (await session.execute(text("""
-                    SELECT monthly_budget_usd FROM teams WHERE id = CAST(:tid AS uuid)
+                    SELECT monthly_budget_usd FROM organization_nodes WHERE id = CAST(:tid AS uuid)
                 """), {"tid": admin["team_id"]})).first()
                 monthly_budget = float(budget_row[0]) if budget_row and budget_row[0] else None
             except Exception:

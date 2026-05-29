@@ -228,6 +228,7 @@ async def get_tree(
 @router.post("", status_code=201)
 async def create_node(
     body: CreateNodeRequest,
+    request: Request,
     current_user: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
@@ -274,6 +275,11 @@ async def create_node(
             "description": body.description,
             "location": body.location,
         },
+    )
+    from app import audit
+    await audit.record(
+        session, request, "create_node", "node", resource_id=node_id,
+        details={"name": body.name, "type": body.type, "parent_id": body.parent_id},
     )
     await session.commit()
     row = await _get_node_row(session, node_id)
@@ -488,7 +494,7 @@ async def list_members(
             SELECT nm.id, nm.node_id, nm.user_id, nm.role, nm.created_at,
                    u.email, u.display_name
             FROM node_members nm
-            LEFT JOIN users u ON u.id = nm.user_id
+            LEFT JOIN users u ON u.id::text = nm.user_id
             WHERE nm.node_id = CAST(:nid AS uuid)
             ORDER BY u.display_name, u.email
             LIMIT :limit OFFSET :offset
@@ -524,7 +530,7 @@ async def add_member(
     await session.execute(
         text("""
             INSERT INTO node_members (node_id, user_id)
-            VALUES (CAST(:nid AS uuid), CAST(:uid AS uuid))
+            VALUES (CAST(:nid AS uuid), :uid)
             ON CONFLICT (node_id, user_id) DO NOTHING
         """),
         {"nid": node_id, "uid": body.user_id},
@@ -547,7 +553,7 @@ async def remove_member(
     await session.execute(
         text("""
             DELETE FROM node_members
-            WHERE node_id = CAST(:nid AS uuid) AND user_id = CAST(:uid AS uuid)
+            WHERE node_id = CAST(:nid AS uuid) AND user_id = :uid
         """),
         {"nid": node_id, "uid": user_id},
     )

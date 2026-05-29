@@ -64,9 +64,11 @@ async def _cost_by_area(period: Period, session: AsyncSession) -> list[dict]:
                COALESCE(SUM(cr.tokens_input + cr.tokens_output), 0) AS total_tokens,
                COALESCE(ROUND(SUM(cr.cost_usd)::numeric, 6), 0) AS total_cost_usd,
                ROUND((AVG(CASE WHEN cr.cache_hit THEN 1.0 ELSE 0.0 END) * 100)::numeric, 1) AS cache_hit_pct
-        FROM areas a
-        LEFT JOIN teams t ON t.area_id = a.id
-        LEFT JOIN cost_records cr ON cr.team_id = t.id {since_fragment}
+        FROM organization_nodes a
+        LEFT JOIN organization_nodes t
+               ON t.type = 'team' AND t.path LIKE a.path || '/%'
+        LEFT JOIN cost_records cr ON cr.node_id = t.id {since_fragment}
+        WHERE a.type = 'area'
         GROUP BY a.id, a.name, a.color
         ORDER BY total_cost_usd DESC NULLS LAST
     """)
@@ -84,7 +86,7 @@ async def _cost_by_area(period: Period, session: AsyncSession) -> list[dict]:
         for r in rows
     ]
 
-    # "No area" bucket — teams without area_id
+    # "No area" bucket — team nodes with no ancestor of type 'area'
     since_fragment_no_alias, _ = _since_clause(period)
     # Rewrite alias for this query (cr alias already in place)
     no_area_sql = text(f"""
@@ -92,9 +94,13 @@ async def _cost_by_area(period: Period, session: AsyncSession) -> list[dict]:
                COALESCE(SUM(cr.tokens_input + cr.tokens_output), 0) AS total_tokens,
                COALESCE(ROUND(SUM(cr.cost_usd)::numeric, 6), 0) AS total_cost_usd,
                ROUND((AVG(CASE WHEN cr.cache_hit THEN 1.0 ELSE 0.0 END) * 100)::numeric, 1) AS cache_hit_pct
-        FROM teams t
-        LEFT JOIN cost_records cr ON cr.team_id = t.id {since_fragment}
-        WHERE t.area_id IS NULL
+        FROM organization_nodes t
+        LEFT JOIN cost_records cr ON cr.node_id = t.id {since_fragment}
+        WHERE t.type = 'team'
+          AND NOT EXISTS (
+              SELECT 1 FROM organization_nodes a
+              WHERE a.type = 'area' AND t.path LIKE a.path || '/%'
+          )
     """)
     no_area_row = (await session.execute(no_area_sql)).mappings().one()
     results.append({
@@ -120,9 +126,11 @@ async def _cost_by_team(period: Period, session: AsyncSession) -> list[dict]:
                COALESCE(SUM(cr.tokens_input + cr.tokens_output), 0) AS total_tokens,
                COALESCE(ROUND(SUM(cr.cost_usd)::numeric, 6), 0) AS total_cost_usd,
                ROUND((AVG(CASE WHEN cr.cache_hit THEN 1.0 ELSE 0.0 END) * 100)::numeric, 1) AS cache_hit_pct
-        FROM teams t
-        LEFT JOIN areas a ON a.id = t.area_id
-        LEFT JOIN cost_records cr ON cr.team_id = t.id {since_fragment}
+        FROM organization_nodes t
+        LEFT JOIN organization_nodes a
+               ON a.type = 'area' AND t.path LIKE a.path || '/%'
+        LEFT JOIN cost_records cr ON cr.node_id = t.id {since_fragment}
+        WHERE t.type = 'team'
         GROUP BY t.id, t.name, t.slug, a.id, a.name, a.color
         ORDER BY a.name NULLS LAST, total_cost_usd DESC NULLS LAST
     """)
@@ -164,7 +172,7 @@ async def developer_productivity_report(
                COUNT(CASE WHEN cr.request_error_type IS NOT NULL THEN 1 END) AS error_count,
                COUNT(DISTINCT cr.repo)                                       AS repo_count
         FROM developers d
-        LEFT JOIN teams t ON t.id = d.team_id
+        LEFT JOIN organization_nodes t ON t.id = d.team_id
         LEFT JOIN cost_records cr ON cr.developer_id = d.id {since_fragment}
         GROUP BY d.id, d.email, d.display_name, t.name
         ORDER BY cost_usd DESC NULLS LAST
@@ -260,7 +268,7 @@ async def outcome_efficiency_report(
         FROM developers d
         JOIN dev_cost dc ON dc.developer_id = d.id
         LEFT JOIN dev_output do2 ON do2.developer_id = d.id
-        LEFT JOIN teams t ON t.id = d.team_id
+        LEFT JOIN organization_nodes t ON t.id = d.team_id
         ORDER BY cost_per_pr ASC NULLS LAST, dc.cost_usd DESC
     """)
     rows = (await session.execute(sql)).mappings().all()
@@ -295,25 +303,25 @@ async def team_efficiency_report(
 
     sql = text(f"""
         WITH team_cost AS (
-            SELECT cr.team_id,
+            SELECT cr.node_id AS team_id,
                    COALESCE(ROUND(SUM(cr.cost_usd)::numeric, 6), 0) AS cost_usd,
                    COUNT(cr.id) AS request_count,
                    COUNT(DISTINCT cr.developer_id) AS active_developers,
                    ROUND((AVG(CASE WHEN cr.cache_hit THEN 1.0 ELSE 0.0 END)*100)::numeric, 1) AS cache_hit_pct
             FROM cost_records cr
             WHERE cr.developer_id IS NOT NULL {since_cr}
-            GROUP BY cr.team_id
+            GROUP BY cr.node_id
         ),
         team_output AS (
-            SELECT t2.team_id,
+            SELECT t2.node_id AS team_id,
                    SUM(doe.commit_count) AS total_commits,
                    COUNT(CASE WHEN doe.event_type IN ('pr_opened', 'pr_merged') THEN 1 END) AS total_prs,
                    COUNT(CASE WHEN doe.event_type = 'pr_merged' THEN 1 END) AS merged_prs
             FROM developer_output_events doe
             JOIN developers d2 ON d2.id = doe.developer_id
-            JOIN team_members t2 ON t2.developer_id = d2.id
+            JOIN node_members t2 ON t2.developer_id = d2.id
             WHERE doe.developer_id IS NOT NULL {since_doe}
-            GROUP BY t2.team_id
+            GROUP BY t2.node_id
         )
         SELECT t.id AS team_id, t.name AS team_name, a.name AS area_name, a.color AS area_color,
                tc.cost_usd, tc.request_count, tc.active_developers, tc.cache_hit_pct,
@@ -324,10 +332,12 @@ async def team_efficiency_report(
                     THEN ROUND((tc.cost_usd / to2.total_prs)::numeric, 4) END AS cost_per_pr,
                CASE WHEN COALESCE(to2.merged_prs, 0) > 0
                     THEN ROUND((tc.cost_usd / to2.merged_prs)::numeric, 4) END AS cost_per_merged_pr
-        FROM teams t
+        FROM organization_nodes t
         JOIN team_cost tc ON tc.team_id = t.id
         LEFT JOIN team_output to2 ON to2.team_id = t.id
-        LEFT JOIN areas a ON a.id = t.area_id
+        LEFT JOIN organization_nodes a
+               ON a.type = 'area' AND t.path LIKE a.path || '/%'
+        WHERE t.type = 'team'
         ORDER BY cost_per_pr ASC NULLS LAST
     """)
     rows = (await session.execute(sql)).mappings().all()
@@ -372,7 +382,7 @@ async def model_calibration_report(
                COALESCE(SUM(cr.tokens_input + cr.tokens_output), 0) AS total_tokens
         FROM cost_records cr
         JOIN developers d ON d.id = cr.developer_id
-        LEFT JOIN teams t ON t.id = d.team_id
+        LEFT JOIN organization_nodes t ON t.id = d.team_id
         WHERE cr.developer_id IS NOT NULL {since_cr}
         GROUP BY d.id, d.email, d.display_name, t.name, cr.model
         ORDER BY d.email, cost_usd DESC
@@ -448,7 +458,7 @@ async def session_quality_report(
                COALESCE(ROUND(SUM(s.total_cost)::numeric, 6), 0)     AS total_cost_usd
         FROM sessions s
         JOIN developers d ON d.id = s.developer_id
-        LEFT JOIN teams t ON t.id = d.team_id
+        LEFT JOIN organization_nodes t ON t.id = d.team_id
         WHERE s.developer_id IS NOT NULL
           AND s.quality_score BETWEEN :min_q AND :max_q
           {since}
@@ -518,7 +528,7 @@ async def guardrail_analytics(
         FROM guardrail_hits h
         JOIN api_keys ak ON ak.id = h.api_key_id
         JOIN developers d ON d.id = ak.developer_id
-        LEFT JOIN teams t ON t.id = d.team_id
+        LEFT JOIN organization_nodes t ON t.id = d.team_id
         JOIN guardrails g ON g.id = h.guardrail_id
         WHERE h.api_key_id IS NOT NULL AND ak.developer_id IS NOT NULL
           {since.replace("AND h.created_at", "AND h.created_at")}
