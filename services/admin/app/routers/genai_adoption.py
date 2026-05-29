@@ -90,10 +90,11 @@ async def adoption_by_team(
             COUNT(CASE WHEN ad.active_days BETWEEN 1 AND 3  THEN 1 END) AS rare,
             COUNT(CASE WHEN ad.active_days BETWEEN 4 AND 14 THEN 1 END) AS occasional,
             COUNT(CASE WHEN ad.active_days >= 15             THEN 1 END) AS regular
-        FROM teams t
+        FROM organization_nodes t
         LEFT JOIN developers d         ON d.team_id = t.id
         LEFT JOIN active_devs ad       ON ad.developer_id = d.id
         LEFT JOIN team_licensed tl     ON tl.team_id = t.id
+        WHERE t.type = 'team'
         GROUP BY t.id, t.name, tl.licensed_count
         ORDER BY active_users DESC NULLS LAST
     """))).mappings().all()
@@ -205,9 +206,10 @@ async def productivity_by_team(
             ROUND(AVG(s.avg_inter_request_s)::numeric,  0)        AS avg_inter_request_s,
             ROUND(AVG(s.turn_count)::numeric,           1)        AS avg_turn_count,
             COUNT(s.session_trace_id)                              AS session_count
-        FROM teams t
+        FROM organization_nodes t
         LEFT JOIN sessions s ON CAST(t.id AS TEXT) = s.team_id
           AND s.first_request_at >= NOW() - INTERVAL '{period_days} days'
+        WHERE t.type = 'team'
         GROUP BY t.id, t.name
         ORDER BY avg_quality_score DESC NULLS LAST
     """))).mappings().all()
@@ -334,12 +336,13 @@ async def quality_by_team(
                 SUM(dal.cache_hits)::float / GREATEST(SUM(dal.request_count), 1) * 100
             )::numeric, 1) AS cache_hit_rate_pct,
             COUNT(DISTINCT s.session_trace_id) AS session_count
-        FROM teams t
+        FROM organization_nodes t
         LEFT JOIN sessions s ON CAST(t.id AS TEXT) = s.team_id
           AND s.first_request_at >= NOW() - INTERVAL '{period_days} days'
         LEFT JOIN developers d ON d.team_id = t.id
         LEFT JOIN developer_activity_log dal ON dal.developer_id = d.id
           AND dal.date >= CURRENT_DATE - INTERVAL '{period_days} days'
+        WHERE t.type = 'team'
         GROUP BY t.id, t.name
         ORDER BY avg_error_rate_pct ASC NULLS LAST
     """))).mappings().all()
@@ -546,11 +549,12 @@ async def _gather_metrics(session: AsyncSession, period_days: int) -> dict:
                    ROUND(AVG(s.quality_score)::numeric, 2) AS avg_quality,
                    ROUND((AVG(CASE WHEN s.turn_count > 0
                        THEN s.error_count::float / s.turn_count * 100 END))::numeric, 1) AS error_rate_pct
-            FROM teams t
+            FROM organization_nodes t
             LEFT JOIN developers d ON d.team_id = t.id
             LEFT JOIN active_devs ad ON ad.developer_id = d.id
             LEFT JOIN sessions s ON CAST(t.id AS TEXT) = s.team_id
               AND s.first_request_at >= NOW() - INTERVAL '{period_days} days'
+            WHERE t.type = 'team'
             GROUP BY t.id, t.name
             HAVING COUNT(DISTINCT d.id) > 0
             ORDER BY active_users DESC NULLS LAST
@@ -590,7 +594,7 @@ async def team_adoption_score(
 ):
     """Return a composite AI adoption health score (0–100) for a team."""
     team_size = (await session.execute(
-        text("SELECT COUNT(*) FROM team_members WHERE team_id=CAST(:tid AS uuid)"),
+        text("SELECT COUNT(*) FROM node_members WHERE node_id=CAST(:tid AS uuid)"),
         {"tid": team_id},
     )).scalar() or 0
 

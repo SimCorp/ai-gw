@@ -25,7 +25,7 @@ HUB          = "http://localhost:8080"
 ADMIN_BASE   = f"{HUB}/admin-portal"
 PORTAL_BASE  = f"{HUB}/portal"
 ADMIN_EMAIL  = "admin@simcorp.com"
-ADMIN_PASS   = "password"
+ADMIN_PASS   = "Admin1234!"
 SCREENSHOTS  = "/tmp/e2e_screenshots"
 
 import os
@@ -185,9 +185,7 @@ ADMIN_NAV = [
     ("/admin/dashboard",         "Platform overview"),
     ("/admin/requests",          "Live requests"),
     ("/admin/org",               "Org Tree"),
-    ("/admin/areas",             "Areas"),
-    ("/admin/units",             "Units"),
-    ("/admin/teams",             "Teams"),
+    # areas/units/teams pages removed in the org-node refactor (unified into /admin/org)
     ("/admin/users",             "Users & Access"),
     ("/admin/transformation",    "AI Transformation"),
     ("/admin/genai-adoption",    "GenAI Adoption"),
@@ -354,7 +352,6 @@ class TestAdminSidebarClicks:
         ("Dashboard",     "/admin-portal/admin/dashboard"),
         ("Live requests", "/admin-portal/admin/requests"),
         ("Org tree",      "/admin-portal/admin/org"),
-        ("Teams",         "/admin-portal/admin/teams"),
         ("Users",         "/admin-portal/admin/users"),
         ("Guardrails",    "/admin-portal/admin/guardrails"),
         ("Policies",      "/admin-portal/admin/policies"),

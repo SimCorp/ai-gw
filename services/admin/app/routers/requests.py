@@ -30,7 +30,7 @@ async def list_requests(
     params: dict = {"limit": limit}
 
     if team_id is not None:
-        conditions.append("cr.team_id = CAST(:team_id AS uuid)")
+        conditions.append("cr.node_id = CAST(:team_id AS uuid)")
         params["team_id"] = team_id
     if model is not None:
         conditions.append("cr.model = :model")
@@ -53,7 +53,7 @@ async def list_requests(
             cr.cache_hit,
             cr.latency_ms
         FROM cost_records cr
-        JOIN teams t ON t.id = cr.team_id
+        LEFT JOIN organization_nodes t ON t.id = cr.node_id
         LEFT JOIN api_keys ak ON ak.id = cr.api_key_id
         WHERE {where}
         ORDER BY cr.created_at DESC
