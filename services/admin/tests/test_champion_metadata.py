@@ -1,8 +1,8 @@
 import json
-import pytest
-import httpx
 from unittest.mock import AsyncMock, patch
 
+import httpx
+import pytest
 from app.llm.champion_metadata import classify_content
 
 

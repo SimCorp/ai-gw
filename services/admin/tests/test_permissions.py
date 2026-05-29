@@ -8,7 +8,7 @@ can_access(user, target_path, min_role) returns True iff the user holds a role
 with power >= min_role on any node whose path is a prefix of target_path.
 """
 
-from app.routers.unified_auth import can_access, _ROLE_POWER
+from app.routers.unified_auth import _ROLE_POWER, can_access
 
 
 def _user(*roles):

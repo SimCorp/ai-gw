@@ -37,26 +37,20 @@ os.environ.setdefault("OIDC_ISSUER", "http://localhost:5556")
 os.environ.setdefault("OIDC_CLIENT_ID", "admin")
 os.environ.setdefault("OIDC_CLIENT_SECRET", "admin-secret")
 
+import asyncpg
 import pytest
 import pytest_asyncio
-import asyncpg
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from testcontainers.postgres import PostgresContainer
-
-from app.db import Base
 
 # Import ORM models so their tables are registered with Base.metadata
 from app.models import (  # noqa: F401
     api_key,
-    audit_log as audit_log_model,
     member,
-    model_registry as model_registry_model,
     policy,
-    pricing as pricing_model,
 )
 from app.routers.budget import _key_monthly_spend, _org_monthly_spend
-
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from testcontainers.postgres import PostgresContainer
 
 # ---------------------------------------------------------------------------
 # Module-scoped fixtures

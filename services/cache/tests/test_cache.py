@@ -4,7 +4,6 @@ from unittest.mock import AsyncMock
 import pytest
 from app import exact
 
-
 TEAM = "team1"
 PROJECT = "proj1"
 

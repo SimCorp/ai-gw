@@ -1,10 +1,9 @@
 """Tests for the cache service router (GET /v1/models, POST /v1/chat/completions)."""
-import json
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from httpx import AsyncClient, ASGITransport, Response as HttpxResponse
-
+from httpx import ASGITransport, AsyncClient
+from httpx import Response as HttpxResponse
 
 # ---------------------------------------------------------------------------
 # Helpers

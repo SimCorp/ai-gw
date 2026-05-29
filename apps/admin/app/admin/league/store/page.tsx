@@ -257,16 +257,16 @@ export default function StoreEditorPage() {
   const [editing, setEditing] = useState<StoreItem | null>(null);
   const [filterType, setFilterType] = useState<'all' | ItemType>('all');
 
-  const { data, isLoading, error } = useQuery<StoreItem[]>({
+  const { data, isLoading, error } = useQuery<StoreItem[] | { items?: StoreItem[] }>({
     queryKey: ['league-store'],
     queryFn: () => fetch(`${LEAGUE}/store/items?include_inactive=true`).then(r => r.json()),
   });
 
-  const items = Array.isArray(data) ? data : (data as { items?: StoreItem[] })?.items ?? [];
+  const items = Array.isArray(data) ? data : data?.items ?? [];
   const filtered = filterType === 'all' ? items : items.filter(i => i.type === filterType);
 
   if (isLoading) return <LoadingState />;
-  if (error) return <ErrorState message="Could not load store items" />;
+  if (error) return <ErrorState error={new Error("Could not load store items")} />;
 
   return (
     <div className="page">

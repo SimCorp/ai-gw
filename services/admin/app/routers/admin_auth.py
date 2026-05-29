@@ -8,19 +8,24 @@ Session key: session:{token}  (unified format)
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
-from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
 from app.routers.unified_auth import (
-    LoginRequest,
     ChangePasswordRequest,
-    get_current_user,
-    login as _unified_login,
-    logout as _unified_logout,
-    change_password as _unified_change_password,
-    require_platform_admin,
+    LoginRequest,
     _session_key,
+    get_current_user,
+    require_platform_admin,
+)
+from app.routers.unified_auth import (
+    change_password as _unified_change_password,
+)
+from app.routers.unified_auth import (
+    login as _unified_login,
+)
+from app.routers.unified_auth import (
+    logout as _unified_logout,
 )
 
 router = APIRouter(prefix="/admin-auth", tags=["admin-auth"])

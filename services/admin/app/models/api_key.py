@@ -3,6 +3,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import ARRAY, DateTime, ForeignKey, Index, Numeric, Text, text
+
 # Note: developer_id references developers.id (raw-SQL table, not ORM-mapped).
 # FK constraint exists in the DB via the baseline migration; the column is
 # declared here without a SQLAlchemy ForeignKey so autogenerate doesn't fail

@@ -1,7 +1,8 @@
 """Add scim_external_id for Azure Entra SCIM provisioning"""
-from alembic import op
-import sqlalchemy as sa
 from typing import Sequence, Union
+
+import sqlalchemy as sa
+from alembic import op
 
 revision = "0020"
 down_revision = "0019"

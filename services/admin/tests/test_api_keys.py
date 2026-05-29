@@ -1,10 +1,7 @@
 """Tests for /teams/{team_id}/keys endpoints."""
 
 import uuid
-from unittest.mock import AsyncMock, MagicMock
-
-import pytest
-
+from unittest.mock import MagicMock
 
 # ---------------------------------------------------------------------------
 # Helpers

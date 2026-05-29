@@ -4,8 +4,6 @@ import secrets
 from datetime import datetime, timezone
 from uuid import UUID
 
-from app.scopes import DEFAULT_KEY_SCOPES, has_scope, ROLE_SCOPES
-
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import select, text
@@ -14,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app import audit
 from app.db import get_session
 from app.models.api_key import APIKey
+from app.scopes import DEFAULT_KEY_SCOPES
 
 router = APIRouter(prefix="/teams/{team_id}/keys", tags=["api-keys"])
 

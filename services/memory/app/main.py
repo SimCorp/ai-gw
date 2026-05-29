@@ -11,7 +11,7 @@ from collections import deque
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
 from datetime import date, datetime
-from typing import Any, Callable, Awaitable
+from typing import Any, Awaitable, Callable
 
 import asyncpg
 import httpx
@@ -19,11 +19,9 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import Response
 from openai import AsyncOpenAI
 
-import asyncio
-
+import app.store as store
 from app.auth import resolve_developer
 from app.config import settings
-import app.store as store
 
 _log = logging.getLogger(__name__)
 

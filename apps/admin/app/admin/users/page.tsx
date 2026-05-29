@@ -107,7 +107,7 @@ function InviteModal({ onClose }: { onClose: () => void }) {
   const [copied, setCopied] = useState(false);
 
   const inviteMut = useMutation({
-    mutationFn: async () => apiFetch('/auth/invitations', {
+    mutationFn: async () => apiFetch<{ accept_url: string; token: string }>('/auth/invitations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, role, scope_type: 'global' }),
@@ -238,9 +238,9 @@ export default function UsersPage() {
     enabled: tab === 'invitations',
   });
 
-  const serviceAccountsQuery = useQuery({
+  const serviceAccountsQuery = useQuery<Record<string, unknown>[]>({
     queryKey: ['service-accounts'],
-    queryFn: () => apiFetch('/auth/service-accounts').catch(() => []),
+    queryFn: () => apiFetch<Record<string, unknown>[]>('/auth/service-accounts').catch(() => []),
     enabled: tab === 'service-accounts',
   });
 
@@ -511,7 +511,7 @@ export default function UsersPage() {
                       <td>
                         <div className="cell-2">
                           <span style={{ fontWeight: 500 }}>{sa.name as string}</span>
-                          {sa.description && <span style={{ color: 'var(--fg-3)', fontSize: 12 }}>{sa.description as string}</span>}
+                          {Boolean(sa.description) && <span style={{ color: 'var(--fg-3)', fontSize: 12 }}>{sa.description as string}</span>}
                         </div>
                       </td>
                       <td style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 12, color: 'var(--fg-2)' }}>

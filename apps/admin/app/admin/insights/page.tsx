@@ -125,7 +125,7 @@ export default function InsightsPage() {
   const [severityFilter, setSeverityFilter] = useState('');
   const [error, setError] = useState('');
 
-  const authHeader = () => {
+  const authHeader = (): Record<string, string> => {
     const t = getAdminToken();
     return t ? { Authorization: `Bearer ${t}` } : {};
   };
@@ -270,7 +270,7 @@ export default function InsightsPage() {
         <div style={{ padding: '48px 0', textAlign: 'center', color: 'var(--side-fg-mute, #8b8fa8)' }}>
           <div style={{ fontSize: 32, marginBottom: 12 }}>✦</div>
           <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 8 }}>No insights yet</div>
-          <div style={{ fontSize: 13 }}>Click "Run now" to trigger an optimization analysis.</div>
+          <div style={{ fontSize: 13 }}>Click &quot;Run now&quot; to trigger an optimization analysis.</div>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>

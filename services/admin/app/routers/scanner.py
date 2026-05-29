@@ -1,9 +1,11 @@
 import json
 from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.db import get_session
 
 router = APIRouter(prefix="/scanner", tags=["scanner"])

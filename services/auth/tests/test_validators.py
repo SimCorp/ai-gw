@@ -31,7 +31,9 @@ def mock_db():
 
 async def test_api_key_valid(mock_db):
     key = "sk-test-key-123"
-    mock_db.fetchrow = AsyncMock(return_value={"id": "key-uuid-1", "team_id": "team-1", "project_id": None})
+    mock_db.fetchrow = AsyncMock(return_value={
+        "id": "key-uuid-1", "team_id": "team-1", "project_id": None, "scopes": None,
+    })
 
     result = await validate_api_key(key, mock_db)
 

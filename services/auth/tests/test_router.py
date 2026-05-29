@@ -12,7 +12,7 @@ Patch targets:
 """
 
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import HTTPException
@@ -208,7 +208,6 @@ async def test_check_budget_org_alert_at_limit():
 
 async def test_check_budget_redis_exception_fail_open(monkeypatch):
     """Redis raises ConnectionError → fail-open by default (BUDGET_REDIS_FAILOPEN=true)."""
-    import os
 
     from app.router import check_budget
 
@@ -224,9 +223,8 @@ async def test_check_budget_redis_exception_fail_open(monkeypatch):
 
 async def test_check_budget_redis_exception_fail_closed(monkeypatch):
     """Redis raises ConnectionError → fail-closed when BUDGET_REDIS_FAILOPEN=false."""
-    from fastapi import HTTPException
-
     from app.router import check_budget
+    from fastapi import HTTPException
 
     monkeypatch.setenv("BUDGET_REDIS_FAILOPEN", "false")
 
@@ -363,7 +361,7 @@ async def test_validate_key_budget_exhausted_returns_429(client):
         patch(
             "app.router.check_budget",
             new=AsyncMock(
-                return_value=(False, f"API key monthly budget of $10 exhausted")
+                return_value=(False, "API key monthly budget of $10 exhausted")
             ),
         ),
     ):

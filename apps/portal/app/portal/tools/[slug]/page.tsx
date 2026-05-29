@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, use } from 'react';
 import Link from 'next/link';
 import { useAuth } from '../../_lib/authContext';
 
@@ -13,7 +13,8 @@ interface Tool {
   enabled: boolean;
 }
 
-export default function ToolPage({ params }: { params: { slug: string } }) {
+export default function ToolPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = use(params);
   const { token } = useAuth();
   const [tool, setTool] = useState<Tool | null>(null);
   const [notFound, setNotFound] = useState(false);
@@ -26,13 +27,13 @@ export default function ToolPage({ params }: { params: { slug: string } }) {
     })
       .then(r => r.ok ? r.json() : Promise.reject(r.status))
       .then((data: Tool[]) => {
-        const found = data.find(t => t.tool_id === params.slug);
+        const found = data.find(t => t.tool_id === slug);
         if (found) setTool(found);
         else setNotFound(true);
       })
       .catch(() => setNotFound(true))
       .finally(() => setLoading(false));
-  }, [token, params.slug]);
+  }, [token, slug]);
 
   if (loading) {
     return (
@@ -74,8 +75,8 @@ export default function ToolPage({ params }: { params: { slug: string } }) {
         )}
       </div>
       <iframe
-        src={`/tools-app/${params.slug}`}
-        title={tool?.label ?? params.slug}
+        src={`/tools-app/${slug}`}
+        title={tool?.label ?? slug}
         style={{
           flex: 1, border: 'none', borderRadius: 8,
           background: '#fff', minHeight: 600,

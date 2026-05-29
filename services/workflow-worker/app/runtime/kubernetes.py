@@ -32,12 +32,11 @@ installed and the cluster is configured.
 """
 from __future__ import annotations
 
-import json
 import logging
 import os
 from typing import Any
 
-from app.runtime import ContainerRuntime, RunResult
+from app.runtime import RunResult
 
 _log = logging.getLogger(__name__)
 

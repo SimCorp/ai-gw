@@ -16,7 +16,6 @@ import time
 import uuid
 
 import httpx
-import pytest
 
 ADMIN = os.getenv("ADMIN_URL", "http://localhost:8005")
 ADMIN_HEADERS = {"X-Admin-Token": os.environ["ADMIN_TOKEN"]} if os.getenv("ADMIN_TOKEN") else {}

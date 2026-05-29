@@ -10,7 +10,8 @@ def make_handler(connection_string: str):
     from opencensus.ext.azure import metrics_exporter
     from opencensus.stats import aggregation, measure, stats, view
 
-    exporter = metrics_exporter.new_metrics_exporter(connection_string=connection_string)
+    # Registers itself with the global view manager; no local reference needed.
+    metrics_exporter.new_metrics_exporter(connection_string=connection_string)
 
     m_latency = measure.MeasureFloat("gateway/latency_ms", "Request latency", "ms")
     m_tokens = measure.MeasureInt("gateway/tokens", "Total tokens", "tokens")

@@ -1,7 +1,9 @@
 """Tests for DAG compile-time security validation added in create_workflow_version."""
+import os
+import uuid
+
 import pytest
-from httpx import AsyncClient, ASGITransport
-import os, uuid
+from httpx import ASGITransport, AsyncClient
 
 os.environ.setdefault("DEV_BYPASS_AUTH", "true")
 os.environ.setdefault("ENVIRONMENT", "development")
@@ -15,9 +17,10 @@ os.environ.setdefault("OIDC_CLIENT_SECRET", "test")
 @pytest.fixture
 async def client():
     from unittest.mock import AsyncMock, MagicMock
-    from app.main import app
-    from app.db import get_session
+
     from app.auth import require_admin_auth
+    from app.db import get_session
+    from app.main import app
 
     session = AsyncMock()
     # Simulate workflow exists (latest_version=1) and version insert succeeds

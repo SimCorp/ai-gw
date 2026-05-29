@@ -1,7 +1,9 @@
 import time
 from typing import Any
+
 import httpx
-from fastapi import Request, HTTPException
+from fastapi import HTTPException, Request
+
 from app.config import settings
 
 _auth_cache: dict[str, tuple[dict, float]] = {}

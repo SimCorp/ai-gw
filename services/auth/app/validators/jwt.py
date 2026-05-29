@@ -9,7 +9,6 @@ from urllib.parse import urlparse
 import httpx
 import jwt
 from fastapi import HTTPException
-from jwt import PyJWKClient, PyJWKClientError
 
 from app.config import Settings
 
@@ -175,7 +174,8 @@ async def _validate_identity_jwt(token: str, settings: Settings, redis=None) -> 
         if len(parts) < 2:
             raise HTTPException(status_code=401, detail="Malformed token")
         padding = 4 - len(parts[1]) % 4
-        claims = json.loads(_b64.urlsafe_b64decode(parts[1] + "=" * padding))
+        # Decode to validate the token is well-formed; verification happens below.
+        json.loads(_b64.urlsafe_b64decode(parts[1] + "=" * padding))
     except Exception:
         raise HTTPException(status_code=401, detail="Malformed token")
 

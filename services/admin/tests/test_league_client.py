@@ -1,7 +1,7 @@
-import pytest
-import httpx
 from unittest.mock import AsyncMock, patch
 
+import httpx
+import pytest
 from app.league_client import grant_points
 
 

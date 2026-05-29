@@ -5,11 +5,9 @@ All store calls are mocked so no real DB is required.
 from __future__ import annotations
 
 import json
-from datetime import date
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 

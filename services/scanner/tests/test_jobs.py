@@ -1,5 +1,6 @@
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 
 def _approved_target(scan_types=None):
@@ -162,7 +163,7 @@ async def test_disallowed_scan_type_does_not_burn_quota(client, mock_redis):
 @pytest.mark.asyncio
 async def test_internal_endpoint_rejects_bad_secret():
     from app.main import app
-    from httpx import AsyncClient, ASGITransport
+    from httpx import ASGITransport, AsyncClient
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         resp = await c.post(
             "/internal/jobs/some-id/complete",

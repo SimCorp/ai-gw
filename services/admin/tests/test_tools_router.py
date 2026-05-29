@@ -4,7 +4,6 @@ from unittest.mock import MagicMock
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -122,10 +121,11 @@ async def test_get_tools_reachable_by_non_admin_authenticated_user(mock_session)
     require_authenticated_user, with no admin role present."""
     import json
     from unittest.mock import AsyncMock
-    from httpx import ASGITransport, AsyncClient
-    from app.main import app
-    from app.db import get_session
+
     from app import config as _config
+    from app.db import get_session
+    from app.main import app
+    from httpx import ASGITransport, AsyncClient
 
     async def override_session():
         yield mock_session
@@ -167,10 +167,11 @@ async def test_patch_tool_rejects_non_admin_session(mock_session):
     """PATCH /tools/{id} requires admin — a developer-only session is 403."""
     import json
     from unittest.mock import AsyncMock
-    from httpx import ASGITransport, AsyncClient
-    from app.main import app
-    from app.db import get_session
+
     from app import config as _config
+    from app.db import get_session
+    from app.main import app
+    from httpx import ASGITransport, AsyncClient
 
     async def override_session():
         yield mock_session
@@ -209,6 +210,7 @@ async def test_patch_tool_rejects_non_admin_session(mock_session):
 async def test_require_authenticated_user_dev_bypass_returns_dict():
     """app.auth.require_authenticated_user honours dev bypass → returns a dict."""
     from unittest.mock import MagicMock
+
     from app import config as _config
     from app.auth import require_authenticated_user
 
@@ -228,9 +230,10 @@ async def test_require_authenticated_user_dev_bypass_returns_dict():
 async def test_require_authenticated_user_missing_token_raises_401():
     """No bypass, no token → 401."""
     from unittest.mock import MagicMock
-    from fastapi import HTTPException
+
     from app import config as _config
     from app.auth import require_authenticated_user
+    from fastapi import HTTPException
 
     request = MagicMock()
     request.app.state.redis = None

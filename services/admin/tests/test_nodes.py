@@ -16,7 +16,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-
 FAKE_USER = {
     "user_id": str(uuid.uuid4()),
     "email": "admin@simcorp.com",
@@ -31,9 +30,9 @@ FAKE_USER = {
 
 @pytest.fixture
 async def node_client(mock_session):
-    from app.main import app
-    from app.db import get_session
     from app.auth import require_admin_auth
+    from app.db import get_session
+    from app.main import app
     from app.routers.unified_auth import get_current_user
 
     async def override_session():
@@ -163,8 +162,8 @@ async def test_get_tree_nests_children(node_client, mock_session):
 # ===========================================================================
 
 async def test_create_root_node_returns_201(node_client):
-    from app.main import app
     from app.db import get_session
+    from app.main import app
 
     new_row = _node_row(name="New Area", type="area", parent_id=None)
     # create_node (root branch): 1 INSERT, then _get_node_row SELECT.
@@ -185,8 +184,8 @@ async def test_create_root_node_returns_201(node_client):
 
 
 async def test_create_child_node_under_parent(node_client):
-    from app.main import app
     from app.db import get_session
+    from app.main import app
 
     parent_id = str(uuid.uuid4())
     parent_path = f"/{parent_id}"
@@ -216,8 +215,8 @@ async def test_create_child_node_under_parent(node_client):
 # ===========================================================================
 
 async def test_get_node_detail(node_client):
-    from app.main import app
     from app.db import get_session
+    from app.main import app
 
     nid = str(uuid.uuid4())
     row = _node_row(node_id=nid, name="Detail Node", parent_id=None)
@@ -254,8 +253,8 @@ async def test_get_node_not_found(node_client, mock_session):
 # ===========================================================================
 
 async def test_list_permissions(node_client):
-    from app.main import app
     from app.db import get_session
+    from app.main import app
 
     nid = str(uuid.uuid4())
     node = _node_row(node_id=nid)
@@ -287,8 +286,8 @@ async def test_list_permissions(node_client):
 
 
 async def test_add_permission_returns_201(node_client):
-    from app.main import app
     from app.db import get_session
+    from app.main import app
 
     nid = str(uuid.uuid4())
     node = _node_row(node_id=nid)
@@ -310,8 +309,8 @@ async def test_add_permission_returns_201(node_client):
 
 
 async def test_add_permission_invalid_role_returns_422(node_client):
-    from app.main import app
     from app.db import get_session
+    from app.main import app
 
     nid = str(uuid.uuid4())
     node = _node_row(node_id=nid)
@@ -329,8 +328,8 @@ async def test_add_permission_invalid_role_returns_422(node_client):
 
 
 async def test_remove_permission_returns_204(node_client):
-    from app.main import app
     from app.db import get_session
+    from app.main import app
 
     nid = str(uuid.uuid4())
     aid = str(uuid.uuid4())
@@ -353,8 +352,8 @@ async def test_remove_permission_returns_204(node_client):
 # ===========================================================================
 
 async def test_list_members(node_client):
-    from app.main import app
     from app.db import get_session
+    from app.main import app
 
     nid = str(uuid.uuid4())
     node = _node_row(node_id=nid)
@@ -384,8 +383,8 @@ async def test_list_members(node_client):
 
 
 async def test_add_member_returns_201(node_client):
-    from app.main import app
     from app.db import get_session
+    from app.main import app
 
     nid = str(uuid.uuid4())
     node = _node_row(node_id=nid)
@@ -407,8 +406,8 @@ async def test_add_member_returns_201(node_client):
 
 
 async def test_remove_member_returns_204(node_client):
-    from app.main import app
     from app.db import get_session
+    from app.main import app
 
     nid = str(uuid.uuid4())
     uid = str(uuid.uuid4())
@@ -431,8 +430,8 @@ async def test_remove_member_returns_204(node_client):
 # ===========================================================================
 
 async def test_put_budget_writes_through_to_redis(node_client):
-    from app.main import app
     from app.db import get_session
+    from app.main import app
 
     nid = str(uuid.uuid4())
     # parent_id=None so the parent-budget validation branch is skipped.
@@ -468,8 +467,8 @@ async def test_put_budget_writes_through_to_redis(node_client):
 
 
 async def test_get_budget(node_client):
-    from app.main import app
     from app.db import get_session
+    from app.main import app
 
     nid = str(uuid.uuid4())
     node = _node_row(node_id=nid, parent_id=None, monthly_budget_usd=1000.0,

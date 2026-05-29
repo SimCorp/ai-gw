@@ -1,7 +1,7 @@
 """Align scanner tables and organization_nodes with the org-nodes model"""
-from alembic import op
-import sqlalchemy as sa
 from typing import Sequence, Union
+
+from alembic import op
 
 revision = "0029"
 down_revision = "0028"

@@ -75,7 +75,7 @@ export default function ResultsPage() {
   const params = useSearchParams();
   const challengeFilter = params.get("challenge");
 
-  const { data, isLoading, error } = useQuery<Submission[]>({
+  const { data, isLoading, error } = useQuery<Submission[] | { submissions?: Submission[] }>({
     queryKey: ["portal-my-submissions", challengeFilter],
     queryFn: () => {
       const url = challengeFilter
@@ -85,7 +85,7 @@ export default function ResultsPage() {
     },
   });
 
-  const submissions = Array.isArray(data) ? data : (data as { submissions?: Submission[] })?.submissions ?? [];
+  const submissions = Array.isArray(data) ? data : data?.submissions ?? [];
   const leagueSubmissions = submissions.filter(s => s.mode === "league");
   const trainingSubmissions = submissions.filter(s => s.mode === "training");
 

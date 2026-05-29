@@ -13,7 +13,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
-from app.routers.unified_auth import get_current_user, require_platform_admin, has_role
+from app.routers.unified_auth import get_current_user, has_role
 
 router = APIRouter(prefix="/access-requests", tags=["access-requests"])
 

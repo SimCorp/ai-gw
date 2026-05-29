@@ -10,8 +10,8 @@ import httpx
 
 from app.config import settings
 from app.worker.parsers.garak import parse_garak_jsonl
-from app.worker.parsers.nuclei import parse_nuclei_json
 from app.worker.parsers.nmap import parse_nmap_xml
+from app.worker.parsers.nuclei import parse_nuclei_json
 
 log = logging.getLogger(__name__)
 WORKER_ID = f"{socket.gethostname()}-{os.getpid()}"

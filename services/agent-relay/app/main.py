@@ -31,7 +31,6 @@ from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from redis.asyncio import Redis
 

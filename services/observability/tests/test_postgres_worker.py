@@ -1,12 +1,10 @@
 """Tests for app.workers.postgres — cost estimation, budget counters, and handler."""
-import time
 import uuid
 from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
 import app.workers.postgres as pg_mod
+import pytest
 from app.models import GatewayEvent
 from app.workers.postgres import (
     _PRICING_TTL,

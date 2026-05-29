@@ -1,7 +1,8 @@
 """Add expiry and reason to user_roles (granted_by already exists as UUID column)"""
-from alembic import op
-import sqlalchemy as sa
 from typing import Sequence, Union
+
+import sqlalchemy as sa
+from alembic import op
 
 revision = "0023"
 down_revision = "0022"

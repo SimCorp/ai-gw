@@ -8,9 +8,8 @@ Fail-open by design: if the admin service is unreachable or patterns are
 unavailable, all outputs are allowed through (consistent with the Gateway's
 existing fail-open philosophy).
 """
-import re
-import json
 import logging
+import re
 from typing import Any
 
 _log = logging.getLogger(__name__)

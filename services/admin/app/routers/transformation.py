@@ -17,9 +17,9 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
+from app.jobs.agentic_classifier import run_classifier
 from app.routers.admin_auth import get_admin_session
 from app.routers.dev_auth import _get_current_developer
-from app.jobs.agentic_classifier import run_classifier
 
 dev_router = APIRouter(prefix="/dev-auth/me", tags=["transformation"])
 admin_router = APIRouter(prefix="/admin/transformation", tags=["transformation-admin"])

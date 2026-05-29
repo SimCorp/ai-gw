@@ -22,9 +22,9 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api_keys import delete_scoped_key_from_redis, issue_scoped_key, revoke_key
 from app.auth import require_admin_auth
 from app.db import get_session
-from app.api_keys import delete_scoped_key_from_redis, issue_scoped_key, revoke_key
 from app.events import workflow as wf_events
 
 _log = logging.getLogger(__name__)

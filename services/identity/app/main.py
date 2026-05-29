@@ -13,18 +13,16 @@ from __future__ import annotations
 import asyncio
 import logging
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import asyncpg
 import httpx
+from app.config import settings
 from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from redis.asyncio import Redis
-
-from app.config import settings
 
 log = logging.getLogger("identity")
 
@@ -136,7 +134,6 @@ async def _verify_identity_token(token: str, admin_url: str) -> bool:
     """
     try:
         import jwt as _jwt
-        from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
 
         async with httpx.AsyncClient(timeout=5) as client:
             resp = await client.get(f"{admin_url}/identity/jwks")
@@ -151,8 +148,8 @@ async def _verify_identity_token(token: str, admin_url: str) -> bool:
             return False
 
         # Try each key until one verifies successfully
-        from cryptography.hazmat.primitives.asymmetric import rsa as _rsa
         import base64 as _b64
+
 
         def _decode_b64url(s: str) -> int:
             # Add padding if needed

@@ -312,15 +312,15 @@ export default function ChallengesPage() {
     }
   }
 
-  const { data: seasonsData } = useQuery<Season[]>({
+  const { data: seasonsData } = useQuery<Season[] | { seasons?: Season[] }>({
     queryKey: ['league-seasons'],
     queryFn: () => fetch(`${LEAGUE}/seasons`).then(r => r.json()),
   });
 
-  const seasons = Array.isArray(seasonsData) ? seasonsData : (seasonsData as { seasons?: Season[] })?.seasons ?? [];
+  const seasons = Array.isArray(seasonsData) ? seasonsData : seasonsData?.seasons ?? [];
 
   // No "all seasons" endpoint exists — fan out across seasons when filter is "all"
-  const { data, isLoading, error } = useQuery<Challenge[]>({
+  const { data, isLoading, error } = useQuery<Challenge[] | { challenges?: Challenge[] }>({
     queryKey: ['league-challenges', filterSeason, seasons.map(s => s.id).join(',')],
     enabled: filterSeason !== 'all' || seasons.length > 0,
     queryFn: async () => {
@@ -336,10 +336,10 @@ export default function ChallengesPage() {
     },
   });
 
-  const challenges = Array.isArray(data) ? data : (data as { challenges?: Challenge[] })?.challenges ?? [];
+  const challenges = Array.isArray(data) ? data : data?.challenges ?? [];
 
   if (isLoading) return <LoadingState />;
-  if (error) return <ErrorState message="Could not load challenges" />;
+  if (error) return <ErrorState error={new Error("Could not load challenges")} />;
 
   return (
     <div className="page">

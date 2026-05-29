@@ -155,7 +155,7 @@ export default function AgentsPage() {
           {searchResults !== null && !searching && (
             <div style={{ marginTop: 10 }}>
               {searchResults.length === 0 ? (
-                <div style={{ fontSize: 12, color: 'var(--fg-3)' }}>No agents matched "{query}"</div>
+                <div style={{ fontSize: 12, color: 'var(--fg-3)' }}>No agents matched &quot;{query}&quot;</div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {searchResults.map(a => (

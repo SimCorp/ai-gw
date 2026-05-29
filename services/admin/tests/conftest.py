@@ -18,12 +18,11 @@ import os
 os.environ.setdefault("DEV_BYPASS_AUTH", "true")
 os.environ.setdefault("ENVIRONMENT", "development")
 
-import uuid
+
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-from unittest.mock import AsyncMock, MagicMock
-
 
 # ---------------------------------------------------------------------------
 # Session mock
@@ -48,9 +47,9 @@ async def mock_session():
 
 @pytest.fixture
 async def client(mock_session):
-    from app.main import app
-    from app.db import get_session
     from app.auth import require_admin_auth
+    from app.db import get_session
+    from app.main import app
 
     async def override_session():
         yield mock_session

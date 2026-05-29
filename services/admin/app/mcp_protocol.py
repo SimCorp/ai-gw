@@ -13,11 +13,10 @@ Spec: https://spec.modelcontextprotocol.io  (JSON-RPC 2.0, version 2024-11-05)
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
-from typing import Any, Callable, Awaitable
-
-import asyncio
+from typing import Any, Awaitable, Callable
 
 from fastapi import Request
 from fastapi.responses import Response, StreamingResponse
@@ -194,7 +193,6 @@ class MCPServer:
 
         This implementation uses an asyncio.Queue to bridge POST → SSE.
         """
-        server = self  # capture for the closure
 
         async def _sse_handler(request: Request) -> StreamingResponse:
             queue: asyncio.Queue[str | None] = asyncio.Queue()

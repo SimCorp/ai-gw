@@ -15,7 +15,6 @@ from typing import Any
 
 import asyncpg
 
-
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
 
@@ -104,7 +103,7 @@ async def update_drawer(
             values.append(val)
         idx += 1
 
-    set_clauses.append(f"updated_at = NOW()")
+    set_clauses.append("updated_at = NOW()")
     values.extend([drawer_id, developer_id])
 
     sql = (

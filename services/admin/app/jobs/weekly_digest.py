@@ -4,9 +4,11 @@ Runs every Monday 07:00 UTC.
 Queries usage data from spend_logs/audit_log and emails each team_admin.
 """
 from __future__ import annotations
+
 import logging
-from sqlalchemy.ext.asyncio import AsyncSession
+
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 log = logging.getLogger(__name__)
 
