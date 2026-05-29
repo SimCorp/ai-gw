@@ -199,7 +199,7 @@ async def select_team(
         text("""
             SELECT id FROM node_members
             WHERE node_id = CAST(:team_id AS uuid)
-              AND (user_id = CAST(:uid AS uuid) OR developer_id = CAST(:uid AS uuid))
+              AND (user_id = :uid OR developer_id = CAST(:uid AS uuid))
         """),
         {"team_id": team_id, "uid": developer["user_id"]},
     )).first()
