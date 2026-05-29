@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { LoadingState, ErrorState } from '../_components/PageStates';
+import { apiFetch } from '../../../lib/apiClient';
 
 interface Team {
   id: string;
@@ -140,12 +141,12 @@ export default function QuotasPage() {
 
   const { data: orgBudget, isLoading: loadingOrg, isError: errOrg, error: orgErr, refetch: refetchOrg } = useQuery<OrgBudget>({
     queryKey: ['org-budget'],
-    queryFn: () => fetch(`${BASE}/org/budget`).then(r => r.json()),
+    queryFn: () => apiFetch('/org/budget'),
   });
 
   const { data: teams, isLoading: loadingTeams, isError: errTeams, error: teamsErr, refetch: refetchTeams } = useQuery<Team[]>({
     queryKey: ['teams'],
-    queryFn: () => fetch(`${BASE}/teams`).then(r => r.json()),
+    queryFn: () => apiFetch('/nodes?type=team'),
   });
 
   const { data: budgetStatus } = useQuery<BudgetStatus>({

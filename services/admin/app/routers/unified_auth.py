@@ -653,11 +653,12 @@ async def list_users(
         SELECT u.id, u.email, u.display_name, u.status, u.must_change_password,
                u.last_login_at, u.created_at,
                COALESCE(
-                   json_agg(json_build_object('role', r.role, 'scope_type', r.scope_type, 'scope_id', r.scope_id::text))
-                   FILTER (WHERE r.role IS NOT NULL), '[]'
+                   json_agg(DISTINCT jsonb_build_object(
+                       'role', nm.role, 'scope_type', 'node', 'scope_id', nm.node_id::text))
+                   FILTER (WHERE nm.role IS NOT NULL), '[]'
                ) AS roles
         FROM users u
-        LEFT JOIN user_roles r ON r.user_id = u.id
+        LEFT JOIN node_members nm ON nm.user_id = u.id::text
         GROUP BY u.id
         ORDER BY u.created_at DESC
     """))).mappings().all()
@@ -681,20 +682,14 @@ async def grant_role(
     admin: dict = Depends(require_platform_admin),
     session: AsyncSession = Depends(get_session),
 ):
-    await session.execute(
-        text("""
-            INSERT INTO user_roles (user_id, role, scope_type, scope_id, granted_by)
-            VALUES (CAST(:uid AS uuid), :role, :scope_type,
-                    CAST(:scope_id AS uuid), CAST(:by AS uuid))
-            ON CONFLICT DO NOTHING
-        """),
-        {
-            "uid": user_id, "role": body.role, "scope_type": body.scope_type,
-            "scope_id": body.scope_id, "by": admin["user_id"],
-        },
+    # Per-user role grants were removed in migration 0025 (the user_roles table
+    # was dropped). Platform/area/team roles are now derived from Entra group
+    # mappings stored in role_assignments. There is no longer a per-user write path.
+    raise HTTPException(
+        status_code=501,
+        detail="Per-user role grants are managed via Entra group mappings "
+               "(role_assignments) now; assign the user's Entra group to a node instead.",
     )
-    await session.commit()
-    return {"ok": True}
 
 
 @router.delete("/users/{user_id}/roles/{role}")
@@ -704,12 +699,13 @@ async def revoke_role(
     admin: dict = Depends(require_platform_admin),
     session: AsyncSession = Depends(get_session),
 ):
-    await session.execute(
-        text("DELETE FROM user_roles WHERE user_id = CAST(:uid AS uuid) AND role = :role"),
-        {"uid": user_id, "role": role},
+    # Per-user role revocation was removed in migration 0025 (user_roles dropped).
+    # Roles are now derived from Entra group mappings (role_assignments).
+    raise HTTPException(
+        status_code=501,
+        detail="Per-user role revocation is managed via Entra group mappings "
+               "(role_assignments) now; remove the user's Entra group from the node instead.",
     )
-    await session.commit()
-    return {"ok": True}
 
 
 @router.patch("/users/{user_id}/status")
@@ -1184,14 +1180,9 @@ async def accept_invitation(
         {"id": user_id, "email": invite["email"],
          "display_name": body.display_name.strip(), "hash": pw_hash},
     )
-    await session.execute(
-        text("""
-            INSERT INTO user_roles (user_id, role, scope_type, scope_id)
-            VALUES (CAST(:uid AS uuid), :role, :scope_type, CAST(:scope_id AS uuid))
-        """),
-        {"uid": user_id, "role": invite["role"],
-         "scope_type": invite["scope_type"], "scope_id": invite["scope_id"]},
-    )
+    # Migration 0025 dropped user_roles; the invite's role is no longer persisted
+    # per-user. Role membership is now derived from Entra group mappings
+    # (role_assignments). The account is created above; roles resolve at login.
     await session.execute(
         text("UPDATE user_invitations SET accepted_at = NOW() WHERE id = CAST(:id AS uuid)"),
         {"id": str(invite["id"])},
@@ -1361,7 +1352,7 @@ async def list_service_accounts(
                    sa.last_used_at, sa.created_at,
                    u.email AS owner_email
             FROM service_accounts sa
-            LEFT JOIN teams t ON t.id = sa.team_id
+            LEFT JOIN organization_nodes t ON t.id = sa.team_id
             LEFT JOIN users u ON u.id = sa.owner_user_id
             ORDER BY sa.created_at DESC
         """))).mappings().all()
@@ -1374,7 +1365,7 @@ async def list_service_accounts(
                        sa.last_used_at, sa.created_at,
                        u.email AS owner_email
                 FROM service_accounts sa
-                LEFT JOIN teams t ON t.id = sa.team_id
+                LEFT JOIN organization_nodes t ON t.id = sa.team_id
                 LEFT JOIN users u ON u.id = sa.owner_user_id
                 WHERE sa.team_id = ANY(CAST(:scopes AS uuid[]))
                 ORDER BY sa.created_at DESC

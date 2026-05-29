@@ -7,6 +7,8 @@ Approving a model_access request automatically adds the model to the user's allo
 """
 from __future__ import annotations
 
+import uuid as _uuid
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import text
@@ -39,15 +41,25 @@ async def create_request(
     if body.request_type not in ("model_access", "budget_increase"):
         raise HTTPException(422, "request_type must be model_access or budget_increase")
 
+    # Migration 0025 dropped access_requests.resource_id and added node_id (uuid).
+    # The body's resource_id historically held either a model name (model_access)
+    # or a team_id (budget_increase). Only persist it as node_id when it parses
+    # as a valid uuid; otherwise store NULL rather than crashing.
+    node_id: str | None = None
+    try:
+        node_id = str(_uuid.UUID(body.resource_id))
+    except (ValueError, AttributeError, TypeError):
+        node_id = None
+
     await session.execute(
         text("""
-            INSERT INTO access_requests (user_id, request_type, resource_id, justification)
-            VALUES (CAST(:uid AS uuid), :type, :rid, :just)
+            INSERT INTO access_requests (user_id, request_type, node_id, justification)
+            VALUES (CAST(:uid AS uuid), :type, CAST(:nid AS uuid), :just)
         """),
         {
             "uid": current_user["user_id"],
             "type": body.request_type,
-            "rid": body.resource_id,
+            "nid": node_id,
             "just": body.justification,
         },
     )
@@ -77,7 +89,7 @@ async def list_requests(
 
     rows = (await session.execute(
         text(f"""
-            SELECT ar.id, ar.request_type, ar.resource_id, ar.justification,
+            SELECT ar.id, ar.request_type, ar.node_id, ar.justification,
                    ar.status, ar.reviewed_by, ar.reviewed_at, ar.review_note,
                    ar.created_at, u.email AS requester_email, u.display_name AS requester_name
             FROM access_requests ar
@@ -112,7 +124,7 @@ async def decide_request(
 
     row = (await session.execute(
         text("""
-            SELECT id, user_id::text, request_type, resource_id, status
+            SELECT id, user_id::text, request_type, node_id, status
             FROM access_requests
             WHERE id = CAST(:rid AS uuid)
         """),
@@ -140,20 +152,12 @@ async def decide_request(
         },
     )
 
-    # Auto-grant model access on approval
-    if body.status == "approved" and row["request_type"] == "model_access":
-        await session.execute(
-            text("""
-                UPDATE users
-                SET allowed_models =
-                    CASE
-                        WHEN allowed_models IS NULL THEN ARRAY[:model]::text[]
-                        ELSE array_append(allowed_models, :model)
-                    END
-                WHERE id = CAST(:uid AS uuid)
-            """),
-            {"model": row["resource_id"], "uid": row["user_id"]},
-        )
+    # Auto-grant model access on approval — DISABLED by migration 0025.
+    # The model name used to live in access_requests.resource_id (text), which was
+    # dropped; the replacement node_id is a uuid FK and does not persist a model
+    # name, so there is no longer a value to append to users.allowed_models.
+    # The request is still marked approved above; the model must be granted manually.
+    # (Re-enable once a column persisting the requested model name is reintroduced.)
 
     await session.commit()
     return {"message": f"Request {body.status}"}
