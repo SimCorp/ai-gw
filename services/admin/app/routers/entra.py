@@ -1,4 +1,17 @@
-"""Azure Entra ID group → gateway role mapping management."""
+"""Azure Entra ID group → gateway role mapping management.
+
+Backed by the unified ``role_assignments`` table (entra_group_id, role, node_id)
+introduced in the organization-nodes refactor (migration 0025). The old
+``entra_group_role_mappings`` table and its scope_type/scope_id model were
+dropped — a mapping's scope is now simply the organization node it targets:
+
+  * ``scope_type = 'global'`` → the root node (grants apply to the whole tree
+    via path-prefix inheritance in ``unified_auth.can_access``)
+  * ``scope_type = 'area' | 'unit' | 'team'`` → a node of that ``type``
+
+The legacy request/response shape (scope_type + scope_id + scope_name) is kept
+for backwards compatibility with the admin UI; it is derived from the node row.
+"""
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -7,7 +20,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
-from app.routers.unified_auth import get_current_user, require_platform_admin
+from app.routers.unified_auth import require_platform_admin
 
 router = APIRouter(prefix="/settings/entra", tags=["entra"])
 
@@ -22,9 +35,19 @@ class GroupMappingCreate(BaseModel):
 
 _VALID_ROLES = {
     "platform_admin", "area_owner", "unit_lead",
-    "team_admin", "developer", "viewer", "service_account",
+    "team_admin", "developer", "viewer",
 }
 _VALID_SCOPE_TYPES = {"global", "area", "unit", "team"}
+
+
+async def _root_node_id(session: AsyncSession) -> str:
+    row = (await session.execute(
+        text("SELECT id::text AS id FROM organization_nodes "
+             "WHERE type = 'root' ORDER BY created_at LIMIT 1")
+    )).mappings().first()
+    if not row:
+        raise HTTPException(status_code=500, detail="Root organization node missing")
+    return row["id"]
 
 
 @router.get("")
@@ -33,17 +56,15 @@ async def list_mappings(
     session: AsyncSession = Depends(get_session),
 ):
     rows = (await session.execute(text("""
-        SELECT m.id, m.entra_group_id, m.entra_group_name, m.role, m.scope_type,
-               m.scope_id::text, m.created_at,
-               u.email AS created_by_email,
-               CASE m.scope_type
-                   WHEN 'area' THEN (SELECT name FROM areas WHERE id = m.scope_id)
-                   WHEN 'unit' THEN (SELECT name FROM units WHERE id = m.scope_id)
-                   WHEN 'team' THEN (SELECT name FROM teams WHERE id = m.scope_id)
-               END AS scope_name
-        FROM entra_group_role_mappings m
-        LEFT JOIN users u ON u.id = m.created_by
-        ORDER BY m.entra_group_name, m.role
+        SELECT ra.id, ra.entra_group_id, ra.entra_group_name, ra.role,
+               ra.node_id::text AS scope_id, ra.granted_at AS created_at,
+               CASE WHEN n.type = 'root' THEN 'global' ELSE n.type END AS scope_type,
+               CASE WHEN n.type = 'root' THEN NULL ELSE n.name END AS scope_name,
+               u.email AS created_by_email
+        FROM role_assignments ra
+        JOIN organization_nodes n ON n.id = ra.node_id
+        LEFT JOIN users u ON u.id = ra.granted_by
+        ORDER BY ra.entra_group_name, ra.role
     """))).mappings().all()
     return [dict(r) for r in rows]
 
@@ -59,19 +80,30 @@ async def create_mapping(
     if body.scope_type not in _VALID_SCOPE_TYPES:
         raise HTTPException(status_code=422, detail=f"Invalid scope_type: {body.scope_type}")
 
+    # Resolve the scope to a concrete node: global → root, otherwise the given node.
+    if body.scope_type == "global":
+        node_id = await _root_node_id(session)
+    else:
+        if not body.scope_id:
+            raise HTTPException(
+                status_code=422,
+                detail=f"scope_id is required for scope_type '{body.scope_type}'",
+            )
+        node_id = body.scope_id
+
     row = (await session.execute(text("""
-        INSERT INTO entra_group_role_mappings
-            (entra_group_id, entra_group_name, role, scope_type, scope_id, created_by)
-        VALUES (:gid, :gname, :role, :scope_type, CAST(:scope_id AS uuid), CAST(:by AS uuid))
-        ON CONFLICT ON CONSTRAINT entra_group_role_mappings_unique DO UPDATE
+        INSERT INTO role_assignments
+            (entra_group_id, entra_group_name, role, node_id, granted_by)
+        VALUES (:gid, :gname, :role, CAST(:nid AS uuid), CAST(:by AS uuid))
+        ON CONFLICT (entra_group_id, role, node_id) DO UPDATE
             SET entra_group_name = EXCLUDED.entra_group_name
-        RETURNING id, entra_group_id, entra_group_name, role, scope_type, scope_id::text, created_at
+        RETURNING id, entra_group_id, entra_group_name, role,
+                  node_id::text AS scope_id, granted_at AS created_at
     """), {
         "gid": body.entra_group_id,
         "gname": body.entra_group_name,
         "role": body.role,
-        "scope_type": body.scope_type,
-        "scope_id": body.scope_id,
+        "nid": node_id,
         "by": admin["user_id"],
     })).mappings().one()
     await session.commit()
@@ -85,7 +117,7 @@ async def delete_mapping(
     session: AsyncSession = Depends(get_session),
 ):
     result = await session.execute(
-        text("DELETE FROM entra_group_role_mappings WHERE id = CAST(:id AS uuid) RETURNING id"),
+        text("DELETE FROM role_assignments WHERE id = CAST(:id AS uuid) RETURNING id"),
         {"id": mapping_id},
     )
     if not result.fetchone():

@@ -1,4 +1,15 @@
-"""Tests for /teams/{id}/members endpoints."""
+"""Tests for node membership endpoints (rewritten for the org-node refactor).
+
+The old /teams/{id}/members router was removed in migration 0025. Membership is
+now managed via /nodes/{id}/members in app/routers/nodes.py:
+    GET    /nodes/{id}/members
+    POST   /nodes/{id}/members            {"user_id": ...}
+    DELETE /nodes/{id}/members/{user_id}
+
+These endpoints authenticate via unified_auth.get_current_user (which does NOT
+honour DEV_BYPASS_AUTH), so we override it with a platform_admin fake scoped to
+root "/" — a prefix of every node path — so can_access() passes.
+"""
 
 import uuid
 from unittest.mock import AsyncMock, MagicMock
@@ -6,208 +17,223 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def _make_member_orm(team_id, user_id="user-123", role="member"):
-    m = MagicMock()
-    m.id = uuid.uuid4()
-    m.team_id = team_id
-    m.user_id = user_id
-    m.role = role
-    m.developer_id = None
-    m.created_at = None
-    return m
+FAKE_USER = {
+    "user_id": str(uuid.uuid4()),
+    "email": "admin@simcorp.com",
+    "display_name": "Admin",
+    "roles": [{"role": "platform_admin", "node_path": "/"}],
+}
 
 
-def _scalars_all(objs):
-    result = MagicMock()
-    result.scalars.return_value.all.return_value = objs
-    return result
+@pytest.fixture
+async def member_client(mock_session):
+    from app.main import app
+    from app.db import get_session
+    from app.auth import require_admin_auth
+    from app.routers.unified_auth import get_current_user
 
+    async def override_session():
+        yield mock_session
 
-def _scalar_one_or_none(obj):
-    result = MagicMock()
-    result.scalar_one_or_none.return_value = obj
-    return result
+    app.dependency_overrides[get_session] = override_session
+    app.dependency_overrides[require_admin_auth] = lambda: None
+    app.dependency_overrides[get_current_user] = lambda: FAKE_USER
+    app.state.redis = AsyncMock()
 
+    from httpx import ASGITransport, AsyncClient
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as c:
+        yield c
 
-def _one_or_none(obj):
-    """For direct .one_or_none() on result (developer lookup in add_member)."""
-    result = MagicMock()
-    result.one_or_none.return_value = obj
-    return result
+    app.dependency_overrides.clear()
 
 
 # ---------------------------------------------------------------------------
-# GET /teams/{id}/members
+# Row / result helpers
 # ---------------------------------------------------------------------------
 
-async def test_list_members_returns_200(client, mock_session):
-    team_id = uuid.uuid4()
-    member = _make_member_orm(team_id)
-    mock_session.execute.return_value = _scalars_all([member])
+def _node_row(node_id):
+    return {
+        "id": node_id,
+        "name": "Team",
+        "slug": "team",
+        "type": "team",
+        "parent_id": None,
+        "path": f"/{node_id}",
+        "color": None,
+        "description": None,
+        "location": None,
+        "monthly_budget_usd": None,
+        "budget_alert_threshold": None,
+        "created_at": None,
+    }
 
-    resp = await client.get(f"/teams/{team_id}/members")
 
+def _member_row(node_id, user_id=None, role="developer",
+                email="dev@simcorp.com", display_name="Dev User"):
+    return {
+        "id": str(uuid.uuid4()),
+        "node_id": node_id,
+        "user_id": user_id or str(uuid.uuid4()),
+        "role": role,
+        "created_at": None,
+        "email": email,
+        "display_name": display_name,
+    }
+
+
+def _result_mappings_first(row):
+    r = MagicMock()
+    r.mappings.return_value.first.return_value = row
+    return r
+
+
+def _result_mappings_all(rows):
+    r = MagicMock()
+    r.mappings.return_value.all.return_value = rows
+    return r
+
+
+def _sequence(*results):
+    sess = AsyncMock()
+    sess.execute = AsyncMock(side_effect=list(results))
+    sess.commit = AsyncMock()
+    return sess
+
+
+def _override(app, sess):
+    from app.db import get_session
+
+    async def override():
+        yield sess
+    app.dependency_overrides[get_session] = override
+
+
+# ===========================================================================
+# GET /nodes/{id}/members
+# ===========================================================================
+
+async def test_list_members_returns_200(member_client):
+    from app.main import app
+
+    nid = str(uuid.uuid4())
+    sess = _sequence(
+        _result_mappings_first(_node_row(nid)),                  # _get_node_row
+        _result_mappings_all([_member_row(nid), _member_row(nid)]),  # members
+    )
+    _override(app, sess)
+
+    resp = await member_client.get(f"/nodes/{nid}/members")
     assert resp.status_code == 200
     body = resp.json()
     assert isinstance(body, list)
+    assert len(body) == 2
+    assert body[0]["email"] == "dev@simcorp.com"
+    assert body[0]["node_id"] == nid
 
 
-async def test_list_members_empty(client, mock_session):
-    team_id = uuid.uuid4()
-    mock_session.execute.return_value = _scalars_all([])
+async def test_list_members_empty(member_client):
+    from app.main import app
 
-    resp = await client.get(f"/teams/{team_id}/members")
+    nid = str(uuid.uuid4())
+    sess = _sequence(
+        _result_mappings_first(_node_row(nid)),  # _get_node_row
+        _result_mappings_all([]),                # members
+    )
+    _override(app, sess)
 
+    resp = await member_client.get(f"/nodes/{nid}/members")
     assert resp.status_code == 200
     assert resp.json() == []
 
 
-# ---------------------------------------------------------------------------
-# POST /teams/{id}/members
-# ---------------------------------------------------------------------------
+async def test_list_members_node_not_found_returns_404(member_client):
+    from app.main import app
 
-async def test_add_member_valid_role_returns_201(client, mock_session):
-    team_id = uuid.uuid4()
-    member = _make_member_orm(team_id)
+    nid = str(uuid.uuid4())
+    sess = _sequence(_result_mappings_first(None))  # node missing
+    _override(app, sess)
 
-    import app.routers.members as members_module
-    original_class = members_module.TeamMember
-
-    class FakeMember:
-        def __init__(self, **kwargs):
-            self.id = member.id
-            self.team_id = kwargs.get("team_id", team_id)
-            self.user_id = kwargs.get("user_id", "user-123")
-            self.role = kwargs.get("role", "member")
-            self.developer_id = kwargs.get("developer_id", None)
-            self.created_at = None
-
-    members_module.TeamMember = FakeMember
-    # No developer lookup (no "@" in user_id), so single execute for audit
-    mock_session.execute.return_value = MagicMock()
-
-    try:
-        resp = await client.post(
-            f"/teams/{team_id}/members",
-            json={"user_id": "user-123", "role": "member"},
-        )
-    finally:
-        members_module.TeamMember = original_class
-
-    assert resp.status_code == 201
-
-
-async def test_add_member_invalid_role_returns_422(client, mock_session):
-    team_id = uuid.uuid4()
-
-    resp = await client.post(
-        f"/teams/{team_id}/members",
-        json={"user_id": "user-123", "role": "superuser"},
-    )
-
-    assert resp.status_code == 422
-
-
-async def test_add_member_email_triggers_developer_lookup(client, mock_session):
-    """When user_id contains '@', the router does a developer lookup."""
-    team_id = uuid.uuid4()
-    member = _make_member_orm(team_id, user_id="dev@example.com")
-
-    import app.routers.members as members_module
-    original_class = members_module.TeamMember
-
-    class FakeMember:
-        def __init__(self, **kwargs):
-            self.id = member.id
-            self.team_id = kwargs.get("team_id", team_id)
-            self.user_id = kwargs.get("user_id", "dev@example.com")
-            self.role = kwargs.get("role", "member")
-            self.developer_id = kwargs.get("developer_id", None)
-            self.created_at = None
-
-    members_module.TeamMember = FakeMember
-
-    # First execute: developer lookup; second: audit insert
-    dev_lookup_result = MagicMock()
-    dev_lookup_result.one_or_none.return_value = None  # developer not found → None
-    audit_result = MagicMock()
-    mock_session.execute.side_effect = [dev_lookup_result, audit_result]
-
-    try:
-        resp = await client.post(
-            f"/teams/{team_id}/members",
-            json={"user_id": "dev@example.com", "role": "admin"},
-        )
-    finally:
-        members_module.TeamMember = original_class
-
-    assert resp.status_code == 201
-    # developer lookup was attempted
-    assert mock_session.execute.call_count >= 1
-
-
-# ---------------------------------------------------------------------------
-# PUT /teams/{id}/members/{user_id}
-# ---------------------------------------------------------------------------
-
-async def test_update_member_role_found(client, mock_session):
-    team_id = uuid.uuid4()
-    user_id = "user-123"
-    member = _make_member_orm(team_id, user_id=user_id)
-    mock_session.execute.side_effect = [
-        _scalar_one_or_none(member),  # select member
-        MagicMock(),                   # audit insert
-    ]
-
-    resp = await client.put(
-        f"/teams/{team_id}/members/{user_id}",
-        json={"user_id": user_id, "role": "admin"},
-    )
-
-    assert resp.status_code == 200
-
-
-async def test_update_member_role_not_found(client, mock_session):
-    team_id = uuid.uuid4()
-    user_id = "ghost-user"
-    mock_session.execute.return_value = _scalar_one_or_none(None)
-
-    resp = await client.put(
-        f"/teams/{team_id}/members/{user_id}",
-        json={"user_id": user_id, "role": "member"},
-    )
-
+    resp = await member_client.get(f"/nodes/{nid}/members")
     assert resp.status_code == 404
 
 
-# ---------------------------------------------------------------------------
-# DELETE /teams/{id}/members/{user_id}
-# ---------------------------------------------------------------------------
+# ===========================================================================
+# POST /nodes/{id}/members
+# ===========================================================================
 
-async def test_remove_member_found_returns_204(client, mock_session):
-    team_id = uuid.uuid4()
-    user_id = "user-123"
-    member = _make_member_orm(team_id, user_id=user_id)
-    mock_session.execute.side_effect = [
-        _scalar_one_or_none(member),  # select member
-        MagicMock(),                   # audit insert
-    ]
+async def test_add_member_returns_201(member_client):
+    from app.main import app
 
-    resp = await client.delete(f"/teams/{team_id}/members/{user_id}")
+    nid = str(uuid.uuid4())
+    sess = _sequence(
+        _result_mappings_first(_node_row(nid)),  # _get_node_row
+        MagicMock(),                             # INSERT
+    )
+    _override(app, sess)
 
+    resp = await member_client.post(
+        f"/nodes/{nid}/members",
+        json={"user_id": str(uuid.uuid4())},
+    )
+    assert resp.status_code == 201
+    assert resp.json()["ok"] is True
+
+
+async def test_add_member_missing_user_id_returns_422(member_client):
+    from app.main import app
+
+    nid = str(uuid.uuid4())
+    # Body validation fails before any DB access, but _get_node_row would be the
+    # first call — pydantic rejects the empty body first, so no execute needed.
+    sess = _sequence()
+    _override(app, sess)
+
+    resp = await member_client.post(f"/nodes/{nid}/members", json={})
+    assert resp.status_code == 422
+
+
+async def test_add_member_node_not_found_returns_404(member_client):
+    from app.main import app
+
+    nid = str(uuid.uuid4())
+    sess = _sequence(_result_mappings_first(None))  # node missing
+    _override(app, sess)
+
+    resp = await member_client.post(
+        f"/nodes/{nid}/members",
+        json={"user_id": str(uuid.uuid4())},
+    )
+    assert resp.status_code == 404
+
+
+# ===========================================================================
+# DELETE /nodes/{id}/members/{user_id}
+# ===========================================================================
+
+async def test_remove_member_returns_204(member_client):
+    from app.main import app
+
+    nid = str(uuid.uuid4())
+    uid = str(uuid.uuid4())
+    sess = _sequence(
+        _result_mappings_first(_node_row(nid)),  # _get_node_row
+        MagicMock(),                             # DELETE
+    )
+    _override(app, sess)
+
+    resp = await member_client.delete(f"/nodes/{nid}/members/{uid}")
     assert resp.status_code == 204
-    mock_session.delete.assert_called_once_with(member)
 
 
-async def test_remove_member_not_found_returns_404(client, mock_session):
-    team_id = uuid.uuid4()
-    user_id = "ghost-user"
-    mock_session.execute.return_value = _scalar_one_or_none(None)
+async def test_remove_member_node_not_found_returns_404(member_client):
+    from app.main import app
 
-    resp = await client.delete(f"/teams/{team_id}/members/{user_id}")
+    nid = str(uuid.uuid4())
+    uid = str(uuid.uuid4())
+    sess = _sequence(_result_mappings_first(None))  # node missing
+    _override(app, sess)
 
+    resp = await member_client.delete(f"/nodes/{nid}/members/{uid}")
     assert resp.status_code == 404

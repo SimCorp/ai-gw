@@ -280,7 +280,7 @@ async def _tool_get_recent_errors(pool, limit: int = 20) -> list:
                    cr.latency_ms, cr.retry_count
             FROM cost_records cr
             LEFT JOIN developers d ON d.id = cr.developer_id
-            LEFT JOIN teams t ON t.id = cr.team_id
+            LEFT JOIN organization_nodes t ON t.id = cr.node_id
             WHERE cr.request_error_type IS NOT NULL
             ORDER BY cr.created_at DESC
             LIMIT {limit}
@@ -303,17 +303,17 @@ async def _tool_get_budget_status(pool) -> list:
     async with pool.acquire() as conn:
         rows = await conn.fetch("""
             SELECT t.name AS team_name,
-                   p.monthly_budget_usd,
+                   t.monthly_budget_usd,
                    COALESCE(ROUND(SUM(cr.cost_usd)::numeric, 4), 0) AS spent_usd,
-                   CASE WHEN p.monthly_budget_usd > 0
-                        THEN ROUND(SUM(cr.cost_usd) / p.monthly_budget_usd * 100, 1)
+                   CASE WHEN t.monthly_budget_usd > 0
+                        THEN ROUND(SUM(cr.cost_usd) / t.monthly_budget_usd * 100, 1)
                    END AS pct_used
-            FROM teams t
-            LEFT JOIN policies p ON p.team_id = t.id
-            LEFT JOIN cost_records cr ON cr.team_id = t.id
+            FROM organization_nodes t
+            LEFT JOIN cost_records cr ON cr.node_id = t.id
                 AND cr.created_at >= date_trunc('month', NOW())
-            WHERE p.monthly_budget_usd IS NOT NULL AND p.monthly_budget_usd > 0
-            GROUP BY t.name, p.monthly_budget_usd
+            WHERE t.type = 'team'
+              AND t.monthly_budget_usd IS NOT NULL AND t.monthly_budget_usd > 0
+            GROUP BY t.name, t.monthly_budget_usd
             ORDER BY pct_used DESC NULLS LAST
         """)
     return [
@@ -375,8 +375,9 @@ async def _tool_get_top_teams(pool, period: str = "mtd", limit: int = 10) -> lis
                    COALESCE(SUM(cr.tokens_input + cr.tokens_output), 0) AS total_tokens,
                    ROUND(SUM(cr.cost_usd)::numeric, 4) AS cost_usd,
                    ROUND(AVG(CASE WHEN cr.cache_hit THEN 1.0 ELSE 0.0 END)*100, 1) AS cache_hit_pct
-            FROM teams t
-            LEFT JOIN cost_records cr ON cr.team_id = t.id {_where}
+            FROM organization_nodes t
+            LEFT JOIN cost_records cr ON cr.node_id = t.id {_where}
+            WHERE t.type = 'team'
             GROUP BY t.name
             ORDER BY cost_usd DESC NULLS LAST
             LIMIT {limit}
@@ -396,9 +397,9 @@ async def _tool_get_top_teams(pool, period: str = "mtd", limit: int = 10) -> lis
 async def _tool_get_model_rightsizing(pool, period: str = "7d") -> list:
     _interval = {"7d": "7 days", "30d": "30 days", "mtd": "month"}.get(period, "7 days")
     _since = (
-        f"created_at >= date_trunc('month', NOW())"
+        "cr.created_at >= date_trunc('month', NOW())"
         if period == "mtd"
-        else f"created_at >= NOW() - INTERVAL '{_interval}'"
+        else f"cr.created_at >= NOW() - INTERVAL '{_interval}'"
     )
     # Identify opus usage for short prompts (likely simple tasks)
     async with pool.acquire() as conn:
@@ -410,7 +411,7 @@ async def _tool_get_model_rightsizing(pool, period: str = "7d") -> list:
                    -- Haiku is roughly 1/6th the cost of Opus
                    ROUND(SUM(cr.cost_usd) * (5.0/6.0)::numeric, 4) AS potential_savings_usd
             FROM cost_records cr
-            LEFT JOIN teams t ON t.id = cr.team_id
+            LEFT JOIN organization_nodes t ON t.id = cr.node_id
             WHERE {_since}
               AND cr.model ILIKE '%opus%'
               AND cr.tokens_input < 400
@@ -581,7 +582,8 @@ async def _flush_insights(pool, insights: list[dict]) -> int:
             team_id = None
             if ins.get("team_name"):
                 row = await conn.fetchrow(
-                    "SELECT id FROM teams WHERE name = $1", ins["team_name"]
+                    "SELECT id FROM organization_nodes WHERE name = $1 AND type = 'team'",
+                    ins["team_name"],
                 )
                 team_id = row["id"] if row else None
 

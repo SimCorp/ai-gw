@@ -296,7 +296,7 @@ async def org_transformation(
                     / NULLIF(COUNT(s.session_trace_id), 0) * 100, 1
                 ) AS agentic_session_pct_30d
             FROM developers d
-            LEFT JOIN teams t ON t.id = d.team_id
+            LEFT JOIN organization_nodes t ON t.id = d.team_id
             LEFT JOIN sessions s ON s.developer_id = d.id
                 AND s.first_request_at >= NOW() - INTERVAL '30 days'
                 AND s.session_type IS NOT NULL
@@ -323,7 +323,7 @@ async def org_transformation(
                 ) AS agentic_pct,
                 COUNT(da.achievement) AS achievement_count
             FROM developers d
-            LEFT JOIN teams t ON t.id = d.team_id
+            LEFT JOIN organization_nodes t ON t.id = d.team_id
             LEFT JOIN sessions s ON s.developer_id = d.id
                 AND s.first_request_at >= NOW() - INTERVAL '30 days'
                 AND s.session_type IS NOT NULL

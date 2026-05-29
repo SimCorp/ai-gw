@@ -42,19 +42,6 @@ def test_remaining_none_limit():
 # Helpers for mocking execute chains
 # ---------------------------------------------------------------------------
 
-def _make_team_orm(team_id=None, budget=None):
-    t = MagicMock()
-    t.id = team_id or uuid.uuid4()
-    t.name = "Test Team"
-    t.slug = "test-team"
-    t.created_at = None
-    t.monthly_budget_usd = budget
-    t.budget_alert_pct = 0.8
-    t.budget_action = "alert"
-    t.area_id = None
-    return t
-
-
 def _make_key_orm(team_id, revoked=False, budget=None):
     from unittest.mock import MagicMock
     k = MagicMock()
@@ -90,75 +77,9 @@ def _row_dict(**kwargs):
 
 
 # ---------------------------------------------------------------------------
-# GET /teams/{id}/budget
+# /teams/{id}/budget tests REMOVED — the per-team budget routes were superseded
+# by GET/PUT /nodes/{id}/budget (organization_nodes) in migration 0025.
 # ---------------------------------------------------------------------------
-
-async def test_get_team_budget_found(client, mock_session):
-    team_id = uuid.uuid4()
-    team = _make_team_orm(team_id, budget=None)
-    mock_session.get.return_value = team
-    # _team_monthly_spend calls session.execute once
-    mock_session.execute.return_value = _scalar_result(0.0)
-
-    resp = await client.get(f"/teams/{team_id}/budget")
-
-    assert resp.status_code == 200
-    body = resp.json()
-    assert body["team_id"] == str(team_id)
-    assert "monthly_budget_usd" in body
-    assert "current_spend_usd" in body
-
-
-async def test_get_team_budget_not_found(client, mock_session):
-    team_id = uuid.uuid4()
-    mock_session.get.return_value = None
-
-    resp = await client.get(f"/teams/{team_id}/budget")
-
-    assert resp.status_code == 404
-
-
-# ---------------------------------------------------------------------------
-# PUT /teams/{id}/budget
-# ---------------------------------------------------------------------------
-
-async def test_set_team_budget_calls_redis_set(client, mock_session):
-    team_id = uuid.uuid4()
-    team = _make_team_orm(team_id, budget=None)
-    mock_session.get.return_value = team
-    # execute called twice: audit insert + spend query (after refresh)
-    mock_session.execute.return_value = _scalar_result(0.0)
-
-    resp = await client.put(
-        f"/teams/{team_id}/budget",
-        json={"monthly_budget_usd": 500.0, "budget_alert_pct": 0.9, "budget_action": "block"},
-    )
-
-    assert resp.status_code == 200
-    body = resp.json()
-    assert body["team_id"] == str(team_id)
-    # Redis.set should have been called (budget_limit key and spend counter key)
-    from app.main import app as fastapi_app
-    redis = fastapi_app.state.redis
-    assert redis.set.called
-
-
-async def test_set_team_budget_none_calls_redis_delete(client, mock_session):
-    """Setting budget to null removes the Redis key (no-limit semantics)."""
-    team_id = uuid.uuid4()
-    team = _make_team_orm(team_id, budget=None)
-    mock_session.get.return_value = team
-    mock_session.execute.return_value = _scalar_result(0.0)
-
-    resp = await client.put(
-        f"/teams/{team_id}/budget",
-        json={"monthly_budget_usd": None},
-    )
-
-    assert resp.status_code == 200
-    from app.main import app as fastapi_app
-    redis = fastapi_app.state.redis
-    assert redis.delete.called
 
 
 # ---------------------------------------------------------------------------

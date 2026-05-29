@@ -3,6 +3,7 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
+import { useAuth } from '../../../_lib/authContext';
 
 const SCANNER_API = process.env.NEXT_PUBLIC_SCANNER_API ?? 'http://localhost:8011';
 
@@ -33,12 +34,16 @@ const SEVERITY_COLOR: Record<string, string> = {
 const SEVERITY_ORDER = ['critical', 'high', 'medium', 'low', 'info'];
 
 export default function ResultsPage() {
+  const { token } = useAuth();
   const { jobId } = useParams<{ jobId: string }>();
 
   const { data, isLoading } = useQuery<ResultsResponse>({
-    queryKey: ['scanner-results', jobId],
+    queryKey: ['scanner-results', jobId, token],
     queryFn: () =>
-      fetch(`${SCANNER_API}/jobs/${jobId}/results?limit=200`).then(r => r.json()),
+      fetch(`${SCANNER_API}/jobs/${jobId}/results?limit=200`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }).then(r => r.json()),
+    enabled: !!token,
   });
 
   const findings = data?.findings ?? [];

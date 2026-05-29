@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth import require_admin_auth, require_authenticated_user
 from app.db import get_session
 
 router = APIRouter(prefix="/tools", tags=["tools"])
@@ -16,6 +17,7 @@ class ToolToggle(BaseModel):
 async def list_tools(
     enabled_only: bool = Query(False),
     session: AsyncSession = Depends(get_session),
+    _user: dict = Depends(require_authenticated_user),
 ):
     query = "SELECT tool_id, label, category, enabled, updated_at FROM tool_config"
     if enabled_only:
@@ -30,6 +32,7 @@ async def toggle_tool(
     tool_id: str,
     body: ToolToggle,
     session: AsyncSession = Depends(get_session),
+    _admin: dict = Depends(require_admin_auth),
 ):
     result = await session.execute(
         text("""

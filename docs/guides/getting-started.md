@@ -35,7 +35,7 @@ docker compose -f infra/docker-compose.yml up --build
 
 **Expected output:**
 ```
-db-migrate | Successfully applied 0029 database migrations
+db-migrate | Successfully applied 0030 database migrations
 auth | [2024-01-22 15:30:00] INFO: Ready on port 8001
 admin | [2024-01-22 15:30:05] INFO: Ready on port 8005
 cache | [2024-01-22 15:30:10] INFO: Ready on port 8002

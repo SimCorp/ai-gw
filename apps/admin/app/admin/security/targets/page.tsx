@@ -2,9 +2,18 @@
 
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { getAdminToken } from '../../../../lib/adminAuth';
 
 const ADMIN_API = process.env.NEXT_PUBLIC_ADMIN_API ?? 'http://localhost:8005';
 const ALL_SCAN_TYPES = ['ai', 'api', 'network'];
+
+function authHeaders(json = false): HeadersInit {
+  const token = getAdminToken();
+  const h: Record<string, string> = {};
+  if (token) h.Authorization = `Bearer ${token}`;
+  if (json) h['Content-Type'] = 'application/json';
+  return h;
+}
 
 interface ScanTarget {
   id: string;
@@ -26,7 +35,7 @@ export default function TargetsPage() {
   const { data: targets = [], isLoading } = useQuery<ScanTarget[]>({
     queryKey: ['admin-scanner-targets', filter],
     queryFn: () =>
-      fetch(`${ADMIN_API}/scanner/targets${filter ? `?status=${filter}` : ''}`).then(r => r.json()),
+      fetch(`${ADMIN_API}/scanner/targets${filter ? `?status=${filter}` : ''}`, { headers: authHeaders() }).then(r => r.json()),
     refetchInterval: 10_000,
   });
 
@@ -34,7 +43,7 @@ export default function TargetsPage() {
     mutationFn: ({ id, types }: { id: string; types: string[] }) =>
       fetch(`${ADMIN_API}/scanner/targets/${id}/approve`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders(true),
         body: JSON.stringify({ allowed_scan_types: types }),
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-scanner-targets'] }),
@@ -42,7 +51,7 @@ export default function TargetsPage() {
 
   const revoke = useMutation({
     mutationFn: (id: string) =>
-      fetch(`${ADMIN_API}/scanner/targets/${id}/revoke`, { method: 'POST' }),
+      fetch(`${ADMIN_API}/scanner/targets/${id}/revoke`, { method: 'POST', headers: authHeaders() }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-scanner-targets'] }),
   });
 

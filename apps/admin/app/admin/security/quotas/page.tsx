@@ -2,8 +2,17 @@
 
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { getAdminToken } from '../../../../lib/adminAuth';
 
 const ADMIN_API = process.env.NEXT_PUBLIC_ADMIN_API ?? 'http://localhost:8005';
+
+function authHeaders(json = false): HeadersInit {
+  const token = getAdminToken();
+  const h: Record<string, string> = {};
+  if (token) h.Authorization = `Bearer ${token}`;
+  if (json) h['Content-Type'] = 'application/json';
+  return h;
+}
 
 interface TeamQuota {
   id: string;
@@ -21,14 +30,14 @@ export default function QuotasPage() {
 
   const { data: teams = [] } = useQuery<TeamQuota[]>({
     queryKey: ['admin-scanner-quotas'],
-    queryFn: () => fetch(`${ADMIN_API}/scanner/quotas`).then(r => r.json()),
+    queryFn: () => fetch(`${ADMIN_API}/scanner/quotas`, { headers: authHeaders() }).then(r => r.json()),
   });
 
   const updateQuota = useMutation({
     mutationFn: ({ teamId, patch }: { teamId: string; patch: Partial<TeamQuota['scanner_quota']> }) =>
       fetch(`${ADMIN_API}/scanner/quotas/${teamId}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders(true),
         body: JSON.stringify(patch),
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-scanner-quotas'] }),
@@ -36,7 +45,7 @@ export default function QuotasPage() {
 
   const toggleKillSwitch = async (enable: boolean) => {
     setKillSwitchPending(true);
-    await fetch(`${ADMIN_API}/scanner/kill-switch?enabled=${enable}`, { method: 'POST' });
+    await fetch(`${ADMIN_API}/scanner/kill-switch?enabled=${enable}`, { method: 'POST', headers: authHeaders() });
     setKillSwitchPending(false);
   };
 

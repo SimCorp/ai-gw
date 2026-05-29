@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '../../_lib/authContext';
 
 const ADMIN_API = process.env.NEXT_PUBLIC_ADMIN_API ?? 'http://localhost:8005';
 const SCANNER_API = process.env.NEXT_PUBLIC_SCANNER_API ?? 'http://localhost:8011';
@@ -35,6 +36,7 @@ const STATUS_COLOR: Record<string, string> = {
 };
 
 export default function ScansPage() {
+  const { token } = useAuth();
   const router = useRouter();
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
@@ -42,14 +44,20 @@ export default function ScansPage() {
   const [selectedTier, setSelectedTier] = useState('quick');
 
   const { data: targets = [] } = useQuery<ScanTarget[]>({
-    queryKey: ['portal-scanner-targets-approved', TEAM_ID],
+    queryKey: ['portal-scanner-targets-approved', TEAM_ID, token],
     queryFn: () =>
-      fetch(`${ADMIN_API}/scanner/targets?team_id=${TEAM_ID}&status=approved`).then(r => r.json()),
+      fetch(`${ADMIN_API}/scanner/targets?team_id=${TEAM_ID}&status=approved`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }).then(r => r.json()),
+    enabled: !!token,
   });
 
   const { data: jobs = [] } = useQuery<ScanJob[]>({
-    queryKey: ['portal-scanner-jobs'],
-    queryFn: () => fetch(`${SCANNER_API}/jobs`).then(r => r.json()),
+    queryKey: ['portal-scanner-jobs', token],
+    queryFn: () => fetch(`${SCANNER_API}/jobs`, {
+      headers: { Authorization: `Bearer ${token}` },
+    }).then(r => r.json()),
+    enabled: !!token,
     refetchInterval: 3_000,
   });
 
@@ -57,7 +65,7 @@ export default function ScansPage() {
     mutationFn: () =>
       fetch(`${SCANNER_API}/jobs`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ target_id: selectedTarget, tier: selectedTier }),
       }).then(r => r.json()),
     onSuccess: () => {

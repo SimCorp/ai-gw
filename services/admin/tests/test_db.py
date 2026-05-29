@@ -49,20 +49,13 @@ from app.db import Base
 # Import ORM models so their tables are registered with Base.metadata
 from app.models import (  # noqa: F401
     api_key,
-    area as area_model,
-    area_policy as area_policy_model,
     audit_log as audit_log_model,
     member,
     model_registry as model_registry_model,
     policy,
     pricing as pricing_model,
-    team,
 )
-from app.models.team import Team, Project
-from app.models.api_key import APIKey
-from app.models.policy import Policy
-from app.routers.teams import _team_row_to_dict
-from app.routers.budget import _team_monthly_spend, _key_monthly_spend, _org_monthly_spend
+from app.routers.budget import _key_monthly_spend, _org_monthly_spend
 
 
 # ---------------------------------------------------------------------------
@@ -72,7 +65,7 @@ from app.routers.budget import _team_monthly_spend, _key_monthly_spend, _org_mon
 @pytest_asyncio.fixture(loop_scope="module", scope="module")
 async def pg_container():
     """Start a Postgres 16 container once for all DB tests in this module."""
-    with PostgresContainer("postgres:16") as postgres:
+    with PostgresContainer("pgvector/pgvector:pg16") as postgres:
         yield postgres
 
 
@@ -127,14 +120,13 @@ async def session_maker(db_engine):
 _TRUNCATE_TABLES = [
     "guardrail_hits",
     "guardrails",
-    "area_policies",
     "cost_records",
     "policies",
     "api_keys",
     "projects",
-    "team_members",
-    "teams",
-    "areas",
+    "node_members",
+    "role_assignments",
+    "organization_nodes",
     "org_settings",
 ]
 
@@ -166,159 +158,159 @@ async def raw_conn(pg_container):
 # Helpers
 # ---------------------------------------------------------------------------
 
-async def _insert_team(session: AsyncSession, name="Test Team", slug=None, area_id=None) -> str:
+import uuid as _uuid
+
+
+async def _insert_node(session: AsyncSession, name="Test Team", slug=None,
+                       type="team", parent_id=None) -> str:
+    """Insert an organization_nodes row and return its id.
+
+    Replaces the old _insert_team / _insert_area helpers — teams/areas tables
+    were dropped in migration 0025 in favour of the organization_nodes tree.
+    """
     slug = slug or name.lower().replace(" ", "-")
-    row = (await session.execute(
-        text("INSERT INTO teams (name, slug, area_id) VALUES (:n, :s, :a) RETURNING id"),
-        {"n": name, "s": slug, "a": str(area_id) if area_id else None},
-    )).mappings().one()
+    nid = str(_uuid.uuid4())
+    if parent_id:
+        parent_path = (await session.execute(
+            text("SELECT path FROM organization_nodes WHERE id = CAST(:pid AS uuid)"),
+            {"pid": parent_id},
+        )).scalar_one()
+        path = f"{parent_path}/{nid}"
+    else:
+        path = f"/{nid}"
+    await session.execute(
+        text("""
+            INSERT INTO organization_nodes (id, name, slug, type, parent_id, path)
+            VALUES (CAST(:id AS uuid), :n, :s, :t, CAST(:pid AS uuid), :path)
+        """),
+        {"id": nid, "n": name, "s": slug, "t": type, "pid": parent_id, "path": path},
+    )
     await session.commit()
-    return str(row["id"])
+    return nid
 
 
-async def _insert_area(session: AsyncSession, name="Platform", slug=None) -> str:
-    slug = slug or name.lower()
-    row = (await session.execute(
-        text("INSERT INTO areas (name, slug) VALUES (:n, :s) RETURNING id"),
-        {"n": name, "s": slug},
-    )).mappings().one()
-    await session.commit()
-    return str(row["id"])
-
-
-async def _insert_cost_record(session: AsyncSession, team_id: str, cost: float,
+async def _insert_cost_record(session: AsyncSession, node_id: str, cost: float,
                                api_key_id: str = None, months_ago: int = 0) -> None:
     ts = f"NOW() - INTERVAL '{months_ago} months'" if months_ago else "NOW()"
     await session.execute(
         text(
-            f"INSERT INTO cost_records (team_id, model, cost_usd, api_key_id, created_at) "
-            f"VALUES (:tid, 'gpt-4o', :cost, :kid, {ts})"
+            f"INSERT INTO cost_records (node_id, model, cost_usd, api_key_id, created_at) "
+            f"VALUES (CAST(:nid AS uuid), 'gpt-4o', :cost, :kid, {ts})"
         ),
-        {"tid": team_id, "cost": cost, "kid": api_key_id},
+        {"nid": node_id, "cost": cost, "kid": api_key_id},
     )
     await session.commit()
 
 
 # ===========================================================================
-# TEAM CRUD
+# ORGANIZATION NODE CRUD
+#
+# Rewritten from the old TEAM CRUD section. The teams/areas tables (and the
+# _team_row_to_dict / area-join queries) were removed in migration 0025;
+# teams are now rows in organization_nodes. Tests covering the dropped
+# team↔area join and the ON DELETE CASCADE teams→projects FK are removed —
+# that functionality no longer exists (projects.team_id is now a plain
+# nullable column with no FK).
 # ===========================================================================
 
-async def test_insert_team_then_list_teams_returns_it(session):
-    """Insert a team via raw SQL; the list_teams query must find it."""
-    team_id = await _insert_team(session, "Alpha Squad", "alpha-squad")
+async def test_insert_node_then_list_returns_it(session):
+    """Insert a node via raw SQL; the list_nodes query must find it."""
+    node_id = await _insert_node(session, "Alpha Squad", "alpha-squad", type="team")
 
     rows = (await session.execute(text("""
-        SELECT t.id, t.name, t.slug, t.created_at, t.monthly_budget_usd,
-               t.budget_alert_pct, t.budget_action, t.area_id,
-               a.name AS area_name, a.slug AS area_slug, a.color AS area_color
-        FROM teams t LEFT JOIN areas a ON a.id = t.area_id
-        ORDER BY a.name NULLS LAST, t.name
+        SELECT id, name, slug, type, parent_id, path
+        FROM organization_nodes
+        ORDER BY path
     """))).mappings().all()
 
     assert len(rows) == 1
-    d = _team_row_to_dict(rows[0])
-    assert d["id"] == team_id
-    assert d["name"] == "Alpha Squad"
-    assert d["slug"] == "alpha-squad"
-    assert d["area_name"] is None
+    assert str(rows[0]["id"]) == node_id
+    assert rows[0]["name"] == "Alpha Squad"
+    assert rows[0]["slug"] == "alpha-squad"
+    assert rows[0]["type"] == "team"
+    assert rows[0]["parent_id"] is None
 
 
-async def test_team_row_to_dict_formats_correctly(session):
-    """_team_row_to_dict converts UUID to str, handles None budget."""
-    team_id = await _insert_team(session, "Beta Squad", "beta-squad")
+async def test_node_tree_path_materialization(session):
+    """A child node's path must be prefixed by its parent's path (materialized
+    path inheritance — the basis for can_access prefix matching)."""
+    area_id = await _insert_node(session, "Platform", "platform", type="area")
+    team_id = await _insert_node(session, "Core Team", "core-team",
+                                 type="team", parent_id=area_id)
 
-    row = (await session.execute(text("""
-        SELECT t.id, t.name, t.slug, t.created_at, t.monthly_budget_usd,
-               t.budget_alert_pct, t.budget_action, t.area_id,
-               a.name AS area_name, a.slug AS area_slug, a.color AS area_color
-        FROM teams t LEFT JOIN areas a ON a.id = t.area_id
-        WHERE t.id = CAST(:id AS uuid)
-    """), {"id": team_id})).mappings().one()
+    area_path = (await session.execute(
+        text("SELECT path FROM organization_nodes WHERE id = CAST(:id AS uuid)"),
+        {"id": area_id},
+    )).scalar_one()
+    team_path = (await session.execute(
+        text("SELECT path FROM organization_nodes WHERE id = CAST(:id AS uuid)"),
+        {"id": team_id},
+    )).scalar_one()
 
-    d = _team_row_to_dict(row)
-    assert isinstance(d["id"], str)
-    assert d["monthly_budget_usd"] is None
-    assert d["area_id"] is None
-    assert d["created_at"] is not None   # isoformat string
-
-
-async def test_list_teams_includes_area_join(session):
-    """Teams with an area_id expose area_name / area_slug from the LEFT JOIN."""
-    area_id = await _insert_area(session, "Platform", "platform")
-    await _insert_team(session, "Core Team", "core-team", area_id=area_id)
-
-    rows = (await session.execute(text("""
-        SELECT t.id, t.name, t.slug, t.created_at, t.monthly_budget_usd,
-               t.budget_alert_pct, t.budget_action, t.area_id,
-               a.name AS area_name, a.slug AS area_slug, a.color AS area_color
-        FROM teams t LEFT JOIN areas a ON a.id = t.area_id
-        ORDER BY a.name NULLS LAST, t.name
-    """))).mappings().all()
-
-    assert len(rows) == 1
-    d = _team_row_to_dict(rows[0])
-    assert d["area_name"] == "Platform"
-    assert d["area_slug"] == "platform"
-    assert d["area_id"] == area_id
+    assert team_path.startswith(area_path + "/")
+    assert team_path == f"{area_path}/{team_id}"
 
 
-async def test_create_team_via_orm_appears_in_list_query(session):
-    """ORM-created Team must be found by the raw list_teams SQL."""
-    team = Team(name="ORM Team", slug="orm-team")
-    session.add(team)
-    await session.commit()
-    await session.refresh(team)
+async def test_delete_parent_cascades_to_children(session):
+    """Deleting a parent node CASCADE-deletes descendants
+    (organization_nodes.parent_id ON DELETE CASCADE)."""
+    area_id = await _insert_node(session, "Doomed Area", "doomed-area", type="area")
+    await _insert_node(session, "Doomed Team", "doomed-team",
+                       type="team", parent_id=area_id)
 
-    rows = (await session.execute(text("""
-        SELECT t.id, t.name, t.slug, t.created_at, t.monthly_budget_usd,
-               t.budget_alert_pct, t.budget_action, t.area_id,
-               a.name AS area_name, a.slug AS area_slug, a.color AS area_color
-        FROM teams t LEFT JOIN areas a ON a.id = t.area_id
-        ORDER BY t.name
-    """))).mappings().all()
-
-    ids = [str(r["id"]) for r in rows]
-    assert str(team.id) in ids
-
-
-async def test_delete_team_cascades_to_projects(session):
-    """Deleting a team must CASCADE-delete its projects (ON DELETE CASCADE FK)."""
-    team_id = await _insert_team(session, "Doomed Team", "doomed-team")
-    await session.execute(
-        text("INSERT INTO projects (team_id, name, slug) VALUES (CAST(:tid AS uuid), :n, :s)"),
-        {"tid": team_id, "n": "Doomed Project", "s": "doomed-project"},
-    )
-    await session.commit()
-
-    # Confirm project exists
     count_before = (await session.execute(
-        text("SELECT COUNT(*) FROM projects WHERE team_id = CAST(:tid AS uuid)"),
-        {"tid": team_id},
+        text("SELECT COUNT(*) FROM organization_nodes WHERE parent_id = CAST(:pid AS uuid)"),
+        {"pid": area_id},
     )).scalar()
     assert count_before == 1
 
-    # Delete team
     await session.execute(
-        text("DELETE FROM teams WHERE id = CAST(:id AS uuid)"), {"id": team_id}
+        text("DELETE FROM organization_nodes WHERE id = CAST(:id AS uuid)"), {"id": area_id}
     )
     await session.commit()
 
-    count_after = (await session.execute(
-        text("SELECT COUNT(*) FROM projects WHERE team_id = CAST(:tid AS uuid)"),
-        {"tid": team_id},
+    total_after = (await session.execute(
+        text("SELECT COUNT(*) FROM organization_nodes")
     )).scalar()
-    assert count_after == 0
+    assert total_after == 0
 
 
-async def test_unique_slug_constraint_raises(session):
-    """Inserting two teams with the same slug must raise an integrity error."""
-    await _insert_team(session, "Team One", "shared-slug")
+async def test_unique_path_constraint_raises(session):
+    """organization_nodes.path is UNIQUE — two nodes cannot share a path."""
+    nid = await _insert_node(session, "Node One", "node-one", type="team")
+    dup_path = (await session.execute(
+        text("SELECT path FROM organization_nodes WHERE id = CAST(:id AS uuid)"),
+        {"id": nid},
+    )).scalar_one()
+
     import asyncpg as _apg
     from sqlalchemy.exc import IntegrityError
     with pytest.raises((IntegrityError, _apg.UniqueViolationError, Exception)):
         await session.execute(
-            text("INSERT INTO teams (name, slug) VALUES (:n, :s)"),
-            {"n": "Team Two", "s": "shared-slug"},
+            text("INSERT INTO organization_nodes (name, slug, type, path) "
+                 "VALUES (:n, :s, 'team', :p)"),
+            {"n": "Node Two", "s": "node-two", "p": dup_path},
+        )
+        await session.commit()
+
+
+async def test_unique_parent_slug_constraint_raises(session):
+    """organization_nodes has UNIQUE(parent_id, slug) — two siblings cannot
+    share a slug under the same parent."""
+    area_id = await _insert_node(session, "Parent Area", "parent-area", type="area")
+    await _insert_node(session, "Dup", "dup-slug", type="team", parent_id=area_id)
+
+    import asyncpg as _apg
+    from sqlalchemy.exc import IntegrityError
+    with pytest.raises((IntegrityError, _apg.UniqueViolationError, Exception)):
+        # Same slug under the same parent — distinct path so only the
+        # (parent_id, slug) constraint can fire.
+        await session.execute(
+            text("""
+                INSERT INTO organization_nodes (name, slug, type, parent_id, path)
+                VALUES (:n, 'dup-slug', 'team', CAST(:pid AS uuid), :path)
+            """),
+            {"n": "Dup Two", "pid": area_id, "path": f"/{area_id}/other"},
         )
         await session.commit()
 
@@ -327,78 +319,64 @@ async def test_unique_slug_constraint_raises(session):
 # BUDGET SQL
 # ===========================================================================
 
-async def test_team_monthly_spend_zero_for_no_records(session):
-    """No cost records → _team_monthly_spend returns 0.0."""
-    team_id = await _insert_team(session, "Budget Team", "budget-team")
-    from uuid import UUID
-    spend = await _team_monthly_spend(session, UUID(team_id))
-    assert spend == 0.0
-
-
-async def test_team_monthly_spend_sums_current_month_only(session):
-    """_team_monthly_spend sums current-month rows but ignores older ones."""
-    team_id = await _insert_team(session, "Spend Team", "spend-team")
-    await _insert_cost_record(session, team_id, 1.5, months_ago=0)
-    await _insert_cost_record(session, team_id, 0.75, months_ago=0)
-    await _insert_cost_record(session, team_id, 99.0, months_ago=2)  # must be excluded
-
-    from uuid import UUID
-    spend = await _team_monthly_spend(session, UUID(team_id))
-    assert abs(spend - 2.25) < 1e-6
+# _team_monthly_spend tests REMOVED — the helper queried cost_records.team_id,
+# a column dropped in migration 0025 (cost_records now uses node_id), and the
+# helper itself was removed. Per-node spend is covered by nodes.py budget rollup.
 
 
 async def test_key_monthly_spend_sums_correctly(session):
     """_key_monthly_spend aggregates by api_key_id, current month only."""
-    team_id = await _insert_team(session, "Key Spend Team", "key-spend-team")
-    # Create an API key row directly
+    node_id = await _insert_node(session, "Key Spend Team", "key-spend-team")
+    # Create an API key row directly (api_keys.team_id → node_id in migration 0025)
     row = (await session.execute(
         text(
-            "INSERT INTO api_keys (team_id, name, key_hash) "
-            "VALUES (CAST(:tid AS uuid), :n, :kh) RETURNING id"
+            "INSERT INTO api_keys (node_id, name, key_hash) "
+            "VALUES (CAST(:nid AS uuid), :n, :kh) RETURNING id"
         ),
-        {"tid": team_id, "n": "test-key", "kh": "hash-abc-123"},
+        {"nid": node_id, "n": "test-key", "kh": "hash-abc-123"},
     )).mappings().one()
     await session.commit()
     key_id = str(row["id"])
 
-    await _insert_cost_record(session, team_id, 0.5, api_key_id=key_id, months_ago=0)
-    await _insert_cost_record(session, team_id, 0.25, api_key_id=key_id, months_ago=0)
-    await _insert_cost_record(session, team_id, 10.0, api_key_id=key_id, months_ago=1)  # excluded
+    await _insert_cost_record(session, node_id, 0.5, api_key_id=key_id, months_ago=0)
+    await _insert_cost_record(session, node_id, 0.25, api_key_id=key_id, months_ago=0)
+    await _insert_cost_record(session, node_id, 10.0, api_key_id=key_id, months_ago=1)  # excluded
 
     from uuid import UUID
     spend = await _key_monthly_spend(session, UUID(key_id))
     assert abs(spend - 0.75) < 1e-6
 
 
-async def test_org_monthly_spend_sums_all_teams(session):
-    """_org_monthly_spend totals cost_records across all teams this month."""
-    t1 = await _insert_team(session, "Org Team 1", "org-team-1")
-    t2 = await _insert_team(session, "Org Team 2", "org-team-2")
-    await _insert_cost_record(session, t1, 1.0, months_ago=0)
-    await _insert_cost_record(session, t2, 2.0, months_ago=0)
-    await _insert_cost_record(session, t1, 50.0, months_ago=3)  # must be excluded
+async def test_org_monthly_spend_sums_all_nodes(session):
+    """_org_monthly_spend totals cost_records across all nodes this month."""
+    n1 = await _insert_node(session, "Org Team 1", "org-team-1")
+    n2 = await _insert_node(session, "Org Team 2", "org-team-2")
+    await _insert_cost_record(session, n1, 1.0, months_ago=0)
+    await _insert_cost_record(session, n2, 2.0, months_ago=0)
+    await _insert_cost_record(session, n1, 50.0, months_ago=3)  # must be excluded
 
     spend = await _org_monthly_spend(session)
     assert abs(spend - 3.0) < 1e-6
 
 
-async def test_budget_status_aggregates_multiple_teams(session):
-    """The budget_status GROUP BY query correctly computes per-team spend."""
-    t1 = await _insert_team(session, "Agg Team A", "agg-team-a")
-    t2 = await _insert_team(session, "Agg Team B", "agg-team-b")
-    await _insert_cost_record(session, t1, 2.0, months_ago=0)
-    await _insert_cost_record(session, t1, 3.0, months_ago=0)
-    await _insert_cost_record(session, t2, 1.5, months_ago=0)
+async def test_budget_status_aggregates_multiple_nodes(session):
+    """The budget_status GROUP BY query correctly computes per-node spend
+    (cost_records.team_id → node_id, joined to organization_nodes)."""
+    n1 = await _insert_node(session, "Agg Team A", "agg-team-a")
+    n2 = await _insert_node(session, "Agg Team B", "agg-team-b")
+    await _insert_cost_record(session, n1, 2.0, months_ago=0)
+    await _insert_cost_record(session, n1, 3.0, months_ago=0)
+    await _insert_cost_record(session, n2, 1.5, months_ago=0)
 
     rows = (await session.execute(text("""
-        SELECT t.id, t.name,
+        SELECT n.id, n.name,
                COALESCE(SUM(cr.cost_usd), 0) AS spend
-        FROM teams t
+        FROM organization_nodes n
         LEFT JOIN cost_records cr
-               ON cr.team_id = t.id
+               ON cr.node_id = n.id
               AND cr.created_at >= date_trunc('month', NOW())
-        GROUP BY t.id, t.name
-        ORDER BY t.name
+        GROUP BY n.id, n.name
+        ORDER BY n.name
     """))).mappings().all()
 
     by_name = {r["name"]: float(r["spend"]) for r in rows}
@@ -411,16 +389,19 @@ async def test_budget_status_aggregates_multiple_teams(session):
 # ===========================================================================
 
 async def test_upsert_policy_inserts_new_row(session):
-    """First upsert with project_id=None creates a policy row."""
-    team_id = await _insert_team(session, "Policy Team", "policy-team")
+    """First upsert with project_id=None creates a policy row.
 
-    # Uses the partial unique index: policies_team_null_proj_uidx ON (team_id) WHERE project_id IS NULL
+    policies.team_id was renamed to node_id in migration 0025, and the partial
+    unique indexes are now policies_node_null_proj_uidx / policies_node_proj_uidx.
+    """
+    node_id = await _insert_node(session, "Policy Team", "policy-team")
+
     await session.execute(
         text("""
-            INSERT INTO policies (team_id, project_id, cache_ttl_seconds, cache_similarity_threshold,
+            INSERT INTO policies (node_id, project_id, cache_ttl_seconds, cache_similarity_threshold,
                                   cache_opt_out, embedding_model, rate_limit_rpm, allowed_models)
-            VALUES (CAST(:tid AS uuid), NULL, 7200, 0.90, FALSE, 'text-embedding-3-small', 500, ARRAY[]::TEXT[])
-            ON CONFLICT (team_id) WHERE project_id IS NULL
+            VALUES (CAST(:nid AS uuid), NULL, 7200, 0.90, FALSE, 'text-embedding-3-small', 500, ARRAY[]::TEXT[])
+            ON CONFLICT (node_id) WHERE project_id IS NULL
             DO UPDATE
                 SET cache_ttl_seconds = EXCLUDED.cache_ttl_seconds,
                     cache_similarity_threshold = EXCLUDED.cache_similarity_threshold,
@@ -429,37 +410,37 @@ async def test_upsert_policy_inserts_new_row(session):
                     rate_limit_rpm = EXCLUDED.rate_limit_rpm,
                     allowed_models = EXCLUDED.allowed_models
         """),
-        {"tid": team_id},
+        {"nid": node_id},
     )
     await session.commit()
 
     count = (await session.execute(
-        text("SELECT COUNT(*) FROM policies WHERE team_id = CAST(:tid AS uuid)"),
-        {"tid": team_id},
+        text("SELECT COUNT(*) FROM policies WHERE node_id = CAST(:nid AS uuid)"),
+        {"nid": node_id},
     )).scalar()
     assert count == 1
 
 
 async def test_upsert_policy_second_call_updates_not_duplicates(session):
-    """Second upsert for same team_id+project_id=None updates instead of inserting."""
-    team_id = await _insert_team(session, "Upsert Team", "upsert-team")
+    """Second upsert for same node_id+project_id=None updates instead of inserting."""
+    node_id = await _insert_node(session, "Upsert Team", "upsert-team")
 
     upsert_sql = text("""
-        INSERT INTO policies (team_id, project_id, cache_ttl_seconds, cache_similarity_threshold,
+        INSERT INTO policies (node_id, project_id, cache_ttl_seconds, cache_similarity_threshold,
                               cache_opt_out, embedding_model, rate_limit_rpm, allowed_models)
-        VALUES (CAST(:tid AS uuid), NULL, :ttl, 0.95, FALSE, 'text-embedding-3-small', 1000, ARRAY[]::TEXT[])
-        ON CONFLICT (team_id) WHERE project_id IS NULL
+        VALUES (CAST(:nid AS uuid), NULL, :ttl, 0.95, FALSE, 'text-embedding-3-small', 1000, ARRAY[]::TEXT[])
+        ON CONFLICT (node_id) WHERE project_id IS NULL
         DO UPDATE SET cache_ttl_seconds = EXCLUDED.cache_ttl_seconds
     """)
 
-    await session.execute(upsert_sql, {"tid": team_id, "ttl": 3600})
+    await session.execute(upsert_sql, {"nid": node_id, "ttl": 3600})
     await session.commit()
-    await session.execute(upsert_sql, {"tid": team_id, "ttl": 7200})
+    await session.execute(upsert_sql, {"nid": node_id, "ttl": 7200})
     await session.commit()
 
     rows = (await session.execute(
-        text("SELECT cache_ttl_seconds FROM policies WHERE team_id = CAST(:tid AS uuid)"),
-        {"tid": team_id},
+        text("SELECT cache_ttl_seconds FROM policies WHERE node_id = CAST(:nid AS uuid)"),
+        {"nid": node_id},
     )).fetchall()
 
     assert len(rows) == 1
@@ -469,166 +450,86 @@ async def test_upsert_policy_second_call_updates_not_duplicates(session):
 async def test_upsert_policy_project_none_vs_uuid_creates_two_rows(session):
     """project_id=NULL and project_id=<uuid> must produce two separate policy rows.
 
-    The schema has two separate partial indexes for these cases:
-      - policies_team_null_proj_uidx ON (team_id) WHERE project_id IS NULL
-      - policies_team_proj_uidx ON (team_id, project_id) WHERE project_id IS NOT NULL
+    The schema has two separate partial indexes for these cases (migration 0025):
+      - policies_node_null_proj_uidx ON (node_id) WHERE project_id IS NULL
+      - policies_node_proj_uidx ON (node_id, project_id) WHERE project_id IS NOT NULL
     """
-    team_id = await _insert_team(session, "Dual Policy Team", "dual-policy-team")
+    node_id = await _insert_node(session, "Dual Policy Team", "dual-policy-team")
 
+    # projects.team_id is now a plain nullable column (FK to teams dropped); we
+    # only need a project id to key the project-level policy.
     proj_row = (await session.execute(
         text("INSERT INTO projects (team_id, name, slug) VALUES (CAST(:tid AS uuid), 'P', 'p') RETURNING id"),
-        {"tid": team_id},
+        {"tid": node_id},
     )).mappings().one()
     await session.commit()
     proj_id = str(proj_row["id"])
 
-    # Insert team-level policy (project_id IS NULL)
+    # Insert node-level policy (project_id IS NULL)
     await session.execute(
         text("""
-            INSERT INTO policies (team_id, project_id, cache_ttl_seconds, cache_similarity_threshold,
+            INSERT INTO policies (node_id, project_id, cache_ttl_seconds, cache_similarity_threshold,
                                   cache_opt_out, embedding_model, rate_limit_rpm, allowed_models)
-            VALUES (CAST(:tid AS uuid), NULL, 3600, 0.95, FALSE, 'text-embedding-3-small', 1000, ARRAY[]::TEXT[])
-            ON CONFLICT (team_id) WHERE project_id IS NULL
+            VALUES (CAST(:nid AS uuid), NULL, 3600, 0.95, FALSE, 'text-embedding-3-small', 1000, ARRAY[]::TEXT[])
+            ON CONFLICT (node_id) WHERE project_id IS NULL
             DO UPDATE SET cache_ttl_seconds = EXCLUDED.cache_ttl_seconds
         """),
-        {"tid": team_id},
+        {"nid": node_id},
     )
     # Insert project-level policy (project_id IS NOT NULL)
     await session.execute(
         text("""
-            INSERT INTO policies (team_id, project_id, cache_ttl_seconds, cache_similarity_threshold,
+            INSERT INTO policies (node_id, project_id, cache_ttl_seconds, cache_similarity_threshold,
                                   cache_opt_out, embedding_model, rate_limit_rpm, allowed_models)
-            VALUES (CAST(:tid AS uuid), CAST(:pid AS uuid), 1800, 0.80, FALSE, 'text-embedding-3-small', 500, ARRAY[]::TEXT[])
-            ON CONFLICT (team_id, project_id) WHERE project_id IS NOT NULL
+            VALUES (CAST(:nid AS uuid), CAST(:pid AS uuid), 1800, 0.80, FALSE, 'text-embedding-3-small', 500, ARRAY[]::TEXT[])
+            ON CONFLICT (node_id, project_id) WHERE project_id IS NOT NULL
             DO UPDATE SET cache_ttl_seconds = EXCLUDED.cache_ttl_seconds
         """),
-        {"tid": team_id, "pid": proj_id},
+        {"nid": node_id, "pid": proj_id},
     )
     await session.commit()
 
     count = (await session.execute(
-        text("SELECT COUNT(*) FROM policies WHERE team_id = CAST(:tid AS uuid)"),
-        {"tid": team_id},
+        text("SELECT COUNT(*) FROM policies WHERE node_id = CAST(:nid AS uuid)"),
+        {"nid": node_id},
     )).scalar()
     assert count == 2
 
 
 # ===========================================================================
-# AREAS SQL
+# AREAS SQL — REMOVED
+#
+# The areas and area_policies tables and the teams.area_id FK were dropped in
+# migration 0025. Area-as-a-row is now an organization_nodes row with
+# type='area', covered by the ORGANIZATION NODE CRUD tests above (tree path
+# materialization, cascade delete). The old team_count / SET-NULL / area_policy
+# upsert tests are gone because that schema no longer exists.
 # ===========================================================================
-
-async def test_create_area_list_shows_team_count_zero(session):
-    """Newly created area with no teams must show team_count=0 in list_areas query."""
-    await _insert_area(session, "Empty Area", "empty-area")
-
-    rows = (await session.execute(text("""
-        SELECT a.id, a.name, COUNT(t.id) AS team_count
-        FROM areas a
-        LEFT JOIN teams t ON t.area_id = a.id
-        GROUP BY a.id
-        ORDER BY a.name
-    """))).mappings().all()
-
-    assert len(rows) == 1
-    assert rows[0]["name"] == "Empty Area"
-    assert rows[0]["team_count"] == 0
-
-
-async def test_assign_teams_to_area_increments_team_count(session):
-    """Assigning two teams to an area must make team_count=2."""
-    area_id = await _insert_area(session, "Full Area", "full-area")
-    await _insert_team(session, "T1", "t1", area_id=area_id)
-    await _insert_team(session, "T2", "t2", area_id=area_id)
-
-    row = (await session.execute(text("""
-        SELECT COUNT(t.id) AS team_count
-        FROM areas a
-        LEFT JOIN teams t ON t.area_id = a.id
-        WHERE a.id = CAST(:aid AS uuid)
-        GROUP BY a.id
-    """), {"aid": area_id})).mappings().one()
-
-    assert row["team_count"] == 2
-
-
-async def test_delete_area_nullifies_team_area_id(session):
-    """Deleting an area sets teams.area_id to NULL (ON DELETE SET NULL FK).
-
-    The FK is intentionally SET NULL — area deletion must not block. Verify
-    the cascade semantics: the team survives, area_id becomes NULL.
-    """
-    area_id = await _insert_area(session, "Removable Area", "removable-area")
-    team_id = await _insert_team(session, "Orphan Team", "orphan-team", area_id=area_id)
-
-    # Confirm area_id is set before deletion
-    area_id_before = (await session.execute(
-        text("SELECT area_id FROM teams WHERE id = CAST(:tid AS uuid)"), {"tid": team_id}
-    )).scalar_one()
-    assert area_id_before is not None
-
-    # Delete the area — should succeed (SET NULL, not RESTRICT)
-    await session.execute(
-        text("DELETE FROM areas WHERE id = CAST(:id AS uuid)"), {"id": area_id}
-    )
-    await session.commit()
-
-    # Team still exists, area_id is now NULL
-    area_id_after = (await session.execute(
-        text("SELECT area_id FROM teams WHERE id = CAST(:tid AS uuid)"), {"tid": team_id}
-    )).scalar_one()
-    assert area_id_after is None
-
-
-async def test_area_policy_upsert_inserts_then_updates(session):
-    """First upsert creates an area_policies row; second updates it (no duplicate)."""
-    area_id = await _insert_area(session, "Policy Area", "policy-area")
-
-    upsert_sql = text("""
-        INSERT INTO area_policies (area_id, cache_ttl_seconds, cache_similarity_threshold,
-                                   cache_opt_out, embedding_model, rate_limit_rpm, allowed_models)
-        VALUES (CAST(:aid AS uuid), :ttl, 0.95, FALSE, 'text-embedding-3-small', 1000, ARRAY[]::TEXT[])
-        ON CONFLICT (area_id) DO UPDATE
-            SET cache_ttl_seconds = EXCLUDED.cache_ttl_seconds,
-                updated_at = NOW()
-    """)
-
-    await session.execute(upsert_sql, {"aid": area_id, "ttl": 3600})
-    await session.commit()
-    await session.execute(upsert_sql, {"aid": area_id, "ttl": 1800})
-    await session.commit()
-
-    rows = (await session.execute(
-        text("SELECT cache_ttl_seconds FROM area_policies WHERE area_id = CAST(:aid AS uuid)"),
-        {"aid": area_id},
-    )).fetchall()
-
-    assert len(rows) == 1
-    assert rows[0][0] == 1800
 
 
 # ===========================================================================
-# API KEYS
+# API KEYS  (api_keys.team_id → node_id in migration 0025)
 # ===========================================================================
 
 async def test_create_key_hashes_the_key(session):
     """create_key stores a sha256 hash — key_hash must differ from the raw key."""
-    team_id = await _insert_team(session, "Key Team", "key-team")
+    node_id = await _insert_node(session, "Key Team", "key-team")
     import secrets
     raw_key = "sk-" + secrets.token_urlsafe(32)
     key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
 
     await session.execute(
         text(
-            "INSERT INTO api_keys (team_id, name, key_hash) "
-            "VALUES (CAST(:tid AS uuid), :n, :kh)"
+            "INSERT INTO api_keys (node_id, name, key_hash) "
+            "VALUES (CAST(:nid AS uuid), :n, :kh)"
         ),
-        {"tid": team_id, "n": "my-key", "kh": key_hash},
+        {"nid": node_id, "n": "my-key", "kh": key_hash},
     )
     await session.commit()
 
     stored = (await session.execute(
-        text("SELECT key_hash FROM api_keys WHERE team_id = CAST(:tid AS uuid)"),
-        {"tid": team_id},
+        text("SELECT key_hash FROM api_keys WHERE node_id = CAST(:nid AS uuid)"),
+        {"nid": node_id},
     )).scalar_one()
 
     assert stored == key_hash
@@ -637,13 +538,13 @@ async def test_create_key_hashes_the_key(session):
 
 async def test_revoke_key_sets_revoked_at(session):
     """Revoking a key must set revoked_at to a non-NULL timestamp."""
-    team_id = await _insert_team(session, "Revoke Team", "revoke-team")
+    node_id = await _insert_node(session, "Revoke Team", "revoke-team")
     key_row = (await session.execute(
         text(
-            "INSERT INTO api_keys (team_id, name, key_hash) "
-            "VALUES (CAST(:tid AS uuid), :n, :kh) RETURNING id"
+            "INSERT INTO api_keys (node_id, name, key_hash) "
+            "VALUES (CAST(:nid AS uuid), :n, :kh) RETURNING id"
         ),
-        {"tid": team_id, "n": "rev-key", "kh": "hash-rev-000"},
+        {"nid": node_id, "n": "rev-key", "kh": "hash-rev-000"},
     )).mappings().one()
     await session.commit()
     key_id = str(key_row["id"])
@@ -664,32 +565,32 @@ async def test_revoke_key_sets_revoked_at(session):
 
 async def test_list_keys_filters_out_revoked(session):
     """Active key list must exclude rows where revoked_at IS NOT NULL."""
-    team_id = await _insert_team(session, "Filter Team", "filter-team")
+    node_id = await _insert_node(session, "Filter Team", "filter-team")
 
     # Active key
     await session.execute(
         text(
-            "INSERT INTO api_keys (team_id, name, key_hash) "
-            "VALUES (CAST(:tid AS uuid), :n, :kh)"
+            "INSERT INTO api_keys (node_id, name, key_hash) "
+            "VALUES (CAST(:nid AS uuid), :n, :kh)"
         ),
-        {"tid": team_id, "n": "active-key", "kh": "hash-active-001"},
+        {"nid": node_id, "n": "active-key", "kh": "hash-active-001"},
     )
     # Revoked key
     await session.execute(
         text(
-            "INSERT INTO api_keys (team_id, name, key_hash, revoked_at) "
-            "VALUES (CAST(:tid AS uuid), :n, :kh, NOW())"
+            "INSERT INTO api_keys (node_id, name, key_hash, revoked_at) "
+            "VALUES (CAST(:nid AS uuid), :n, :kh, NOW())"
         ),
-        {"tid": team_id, "n": "revoked-key", "kh": "hash-revoked-002"},
+        {"nid": node_id, "n": "revoked-key", "kh": "hash-revoked-002"},
     )
     await session.commit()
 
     active_keys = (await session.execute(
         text(
             "SELECT id FROM api_keys "
-            "WHERE team_id = CAST(:tid AS uuid) AND revoked_at IS NULL"
+            "WHERE node_id = CAST(:nid AS uuid) AND revoked_at IS NULL"
         ),
-        {"tid": team_id},
+        {"nid": node_id},
     )).fetchall()
 
     assert len(active_keys) == 1

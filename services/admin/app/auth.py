@@ -87,6 +87,55 @@ async def require_admin_auth(
     raise HTTPException(status_code=401, detail="Invalid or missing admin credentials")
 
 
+async def require_authenticated_user(
+    request: Request,
+    x_admin_token: str | None = Header(default=None),
+    authorization: str | None = Header(default=None),
+) -> dict:
+    """Accept ANY authenticated session (developer or admin), or a static admin token.
+
+    For endpoints every signed-in user may read — e.g. the developer tools
+    catalog (GET /tools). Honors dev_bypass_auth exactly like require_admin_auth
+    so local dev behaviour is unchanged. Does NOT enforce an admin role.
+    """
+    if settings.dev_bypass_auth:
+        result = {"actor": "dev-bypass", "role": "superadmin"}
+        request.state.admin_auth = result
+        return result
+
+    # Static admin token (CI/automation) is always accepted.
+    if x_admin_token and settings.admin_token:
+        if secrets.compare_digest(x_admin_token, settings.admin_token):
+            import hashlib
+            digest = hashlib.sha256(x_admin_token.encode()).hexdigest()[:12]
+            result = {"actor": f"token:{digest}", "role": "superadmin"}
+            request.state.admin_auth = result
+            return result
+
+    # Any valid bearer session — developer or admin.
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.removeprefix("Bearer ").strip()
+        redis = getattr(request.app.state, "redis", None)
+        if redis:
+            raw = (
+                await redis.get(f"session:{token}")
+                or await redis.get(f"admin_session:{token}")
+                or await redis.get(f"dev_session:{token}")
+            )
+            if raw:
+                data = json.loads(raw)
+                result = {
+                    "actor": data.get("email", "unknown"),
+                    "role": "viewer",
+                    "session": data,
+                    "user_id": data.get("user_id"),
+                }
+                request.state.current_user = data
+                return result
+
+    raise HTTPException(status_code=401, detail="Authentication required")
+
+
 def _check_role(auth: dict, minimum_role: str) -> None:
     role = auth.get("role", "viewer")
     if _ROLE_RANK.get(role, 0) < _ROLE_RANK.get(minimum_role, 0):
