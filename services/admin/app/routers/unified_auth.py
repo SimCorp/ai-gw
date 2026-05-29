@@ -154,19 +154,23 @@ async def _get_session_data(token: str, redis) -> dict | None:
 
 async def get_current_user(
     authorization: str | None = Header(default=None),
+    x_admin_token: str | None = Header(default=None),
     request: Request = None,
 ) -> dict:
-    """Validate session token. Returns unified session payload."""
-    # Dev/CI escape hatch: when auth is bypassed, return a synthetic
-    # platform_admin scoped to the root path "/" (mirrors the login mint for
-    # ENVIRONMENT in development/test/ci). Keeps the X-Admin-Token-only CI
-    # client working against the session-based /nodes endpoints.
+    """Validate session token. Returns unified session payload.
+
+    Also accepts the static X-Admin-Token (same credential require_admin_auth
+    honours) as a synthetic platform_admin scoped to "/", so admin tooling and
+    CI that authenticate with the admin token can reach these session-based
+    endpoints. This does NOT bypass auth wholesale: requests with no valid
+    Bearer session and no matching admin token still get 401.
+    """
     from app.config import settings as _cfg
-    if _cfg.dev_bypass_auth:
+    if x_admin_token and _cfg.admin_token and secrets.compare_digest(x_admin_token, _cfg.admin_token):
         data = {
             "user_id": None,
-            "email": "dev-bypass@local",
-            "display_name": "Dev Bypass",
+            "email": "admin-token@local",
+            "display_name": "Admin Token",
             "roles": [{"role": "platform_admin", "node_path": "/", "node_id": None, "node_name": "root"}],
             "primary_node_id": None,
         }
@@ -283,6 +287,12 @@ async def _can_manage_area(user: dict, area_id: str) -> bool:
 # ---------------------------------------------------------------------------
 
 async def _check_rate_limit(redis, identifier: str, max_attempts: int = 10, window: int = 60):
+    # Skip login rate-limiting when auth is bypassed (dev/CI): the integration
+    # suite makes many login attempts from one host, and auth is non-enforcing
+    # there anyway. Production (dev_bypass_auth=False) is unaffected.
+    from app.config import settings as _cfg
+    if _cfg.dev_bypass_auth:
+        return
     key = f"login_rl:{identifier}"
     count = await redis.incr(key)
     if count == 1:
@@ -567,16 +577,20 @@ async def me(user: dict = Depends(get_current_user)):
 async def logout(
     request: Request,
     authorization: str | None = Header(default=None),
-    current_user: dict = Depends(get_current_user),
 ):
+    # No auth dependency: logout just invalidates the supplied token. Derive the
+    # user from the session itself (this is also called directly by
+    # admin_auth.logout, where a Depends-injected current_user wouldn't resolve).
     if authorization and authorization.startswith("Bearer "):
         token = authorization.removeprefix("Bearer ").strip()
         redis = request.app.state.redis
+        data = await _get_session_data(token, redis)
         await redis.delete(_session_key(token))
         # Remove from user sessions sorted set (D4)
-        token_prefix = hashlib.sha256(token.encode()).hexdigest()[:16]
-        sessions_key = f"user_sessions:{current_user['user_id']}"
-        await redis.zrem(sessions_key, token_prefix)
+        if data and data.get("user_id"):
+            token_prefix = hashlib.sha256(token.encode()).hexdigest()[:16]
+            sessions_key = f"user_sessions:{data['user_id']}"
+            await redis.zrem(sessions_key, token_prefix)
     return {"ok": True}
 
 

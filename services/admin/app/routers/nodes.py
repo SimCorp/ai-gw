@@ -488,7 +488,7 @@ async def list_members(
             SELECT nm.id, nm.node_id, nm.user_id, nm.role, nm.created_at,
                    u.email, u.display_name
             FROM node_members nm
-            LEFT JOIN users u ON u.id = nm.user_id
+            LEFT JOIN users u ON u.id::text = nm.user_id
             WHERE nm.node_id = CAST(:nid AS uuid)
             ORDER BY u.display_name, u.email
             LIMIT :limit OFFSET :offset
@@ -524,7 +524,7 @@ async def add_member(
     await session.execute(
         text("""
             INSERT INTO node_members (node_id, user_id)
-            VALUES (CAST(:nid AS uuid), CAST(:uid AS uuid))
+            VALUES (CAST(:nid AS uuid), :uid)
             ON CONFLICT (node_id, user_id) DO NOTHING
         """),
         {"nid": node_id, "uid": body.user_id},
@@ -547,7 +547,7 @@ async def remove_member(
     await session.execute(
         text("""
             DELETE FROM node_members
-            WHERE node_id = CAST(:nid AS uuid) AND user_id = CAST(:uid AS uuid)
+            WHERE node_id = CAST(:nid AS uuid) AND user_id = :uid
         """),
         {"nid": node_id, "uid": user_id},
     )
