@@ -390,7 +390,7 @@ app.include_router(genai_adoption_router.router, dependencies=_auth)
 app.include_router(alerts_router.router, dependencies=_auth)
 app.include_router(access_requests_router.router, dependencies=_auth)
 app.include_router(scim_router.router)  # SCIM uses its own SCIM_BEARER_TOKEN auth
-app.include_router(tools_router.router, dependencies=_auth)
+app.include_router(tools_router.router)  # per-route auth: GET any user, PATCH admin-only
 app.include_router(admin_ops_router.router, dependencies=_auth)
 app.include_router(admin_champions_router.router)  # own auth: require_admin_auth
 app.include_router(champions_router.router)  # developer-facing — no admin token required

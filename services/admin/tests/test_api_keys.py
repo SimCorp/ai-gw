@@ -72,6 +72,7 @@ async def test_create_key_returns_201_with_sk_prefix(client, mock_session):
             self.project_id = kwargs.get("project_id", None)
             self.name = kwargs.get("name", "test key")
             self.key_hash = kwargs.get("key_hash", "abc")
+            self.scopes = kwargs.get("scopes", [])
             self.created_at = None
             self.revoked_at = None
 
@@ -108,6 +109,7 @@ async def test_create_key_key_returned_once(client, mock_session):
             self.project_id = None
             self.name = kwargs.get("name", "test key")
             self.key_hash = kwargs.get("key_hash", "abc")
+            self.scopes = kwargs.get("scopes", [])
             self.created_at = None
             self.revoked_at = None
 

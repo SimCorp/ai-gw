@@ -447,7 +447,7 @@ export default function DashboardPage() {
             <h3 className="card__title">Top teams · spend</h3>
             <span className="card__sub">all time</span>
             <div className="card__actions">
-              <Link href="/admin/teams" className="btn btn--sm btn--ghost">View all →</Link>
+              <Link href="/admin/org" className="btn btn--sm btn--ghost">View all →</Link>
             </div>
           </div>
           <div className="card__body" style={{ paddingTop: 8 }}>

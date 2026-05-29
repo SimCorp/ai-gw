@@ -198,7 +198,7 @@ Once a target is approved, teams submit scan jobs. The service enforces per-team
     "id": "uuid",
     "node_id": "team-uuid",
     "target_id": "target-uuid",
-    "requested_by": "user-uuid",
+    "requested_by": "user-uuid or null (API key callers)",
     "scan_types": ["ai", "api"],
     "tier": "standard",
     "status": "completed",
@@ -222,7 +222,7 @@ Once a target is approved, teams submit scan jobs. The service enforces per-team
   "id": "uuid",
   "node_id": "team-uuid",
   "target_id": "target-uuid",
-  "requested_by": "user-uuid",
+  "requested_by": "user-uuid or null (API key callers)",
   "scan_types": ["ai", "api"],
   "tier": "standard",
   "status": "completed",
@@ -582,7 +582,7 @@ Workers mark a job as complete (success, failure, partial results).
 | `id` | UUID | PK, default `gen_random_uuid()` | Job ID |
 | `node_id` | UUID | FK→organization_nodes, nullable | Team/org node |
 | `target_id` | UUID | FK→scan_targets(id) | Target being scanned |
-| `requested_by` | UUID | FK→users, NOT NULL | User who submitted job |
+| `requested_by` | UUID | FK→users, nullable | User who submitted job (null for API key callers) |
 | `scan_types` | TEXT[] | NOT NULL | Scan types to run (ai, api, network) |
 | `tier` | TEXT | NOT NULL | Scan intensity (quick, standard, deep) |
 | `status` | TEXT | default `'queued'` | `queued`, `running`, `completed`, `failed`, `cancelled` |

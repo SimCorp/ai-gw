@@ -29,7 +29,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app import audit
 from app.db import get_session
 from app.models.api_key import APIKey
-from app.models.team import Team
 
 
 def _end_of_month() -> int:
@@ -50,11 +49,6 @@ _BUDGET_REDIS_TTL = 300  # seconds
 # Area / unit budget schemas
 # ---------------------------------------------------------------------------
 
-class BudgetSet(BaseModel):
-    monthly_budget_usd: float | None = None
-    budget_alert_threshold: float | None = None  # 0.0–1.0
-
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -71,19 +65,6 @@ def _remaining(spend: float, limit: float | None) -> float | None:
     if limit is None:
         return None
     return max(limit - spend, 0.0)
-
-
-async def _team_monthly_spend(session: AsyncSession, team_id: UUID) -> float:
-    row = await session.execute(
-        text(
-            "SELECT COALESCE(SUM(cost_usd), 0) AS spend "
-            "FROM cost_records "
-            "WHERE team_id = :team_id "
-            "  AND created_at >= date_trunc('month', NOW())"
-        ),
-        {"team_id": str(team_id)},
-    )
-    return float(row.scalar_one())
 
 
 async def _key_monthly_spend(session: AsyncSession, key_id: UUID) -> float:
@@ -110,16 +91,6 @@ async def _org_monthly_spend(session: AsyncSession) -> float:
     return float(row.scalar_one())
 
 
-async def _redis_set_team_budget(request: Request, team_id: UUID, limit: float | None, action: str, alert_pct: float) -> None:
-    redis = request.app.state.redis
-    key = f"budget_limit:team:{team_id}"
-    if limit is None:
-        await redis.delete(key)
-    else:
-        payload = json.dumps({"limit": limit, "action": action, "alert_pct": alert_pct})
-        await redis.set(key, payload, ex=_BUDGET_REDIS_TTL)
-
-
 async def _redis_set_key_budget(request: Request, key_id: UUID, limit: float | None) -> None:
     redis = request.app.state.redis
     key = f"budget_limit:key:{key_id}"
@@ -144,12 +115,6 @@ async def _redis_set_org_budget(request: Request, limit: float | None, action: s
 # Pydantic schemas
 # ---------------------------------------------------------------------------
 
-class TeamBudgetBody(BaseModel):
-    monthly_budget_usd: float | None = Field(default=None, ge=0)
-    budget_alert_pct: float = Field(default=0.8, ge=0.0, le=1.0)
-    budget_action: Literal["alert", "block"] = "alert"
-
-
 class KeyBudgetBody(BaseModel):
     monthly_budget_usd: float | None = Field(default=None, ge=0)
 
@@ -161,96 +126,10 @@ class OrgBudgetBody(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Team budget
+# Team budget — REMOVED.
+# Per-team budgets are now managed via GET/PUT /nodes/{id}/budget in nodes.py
+# (organization_nodes replaced the dropped `teams` table in migration 0025).
 # ---------------------------------------------------------------------------
-
-@router.get("/teams/{team_id}/budget")
-async def get_team_budget(
-    team_id: UUID,
-    session: AsyncSession = Depends(get_session),
-) -> dict[str, Any]:
-    team = await session.get(Team, team_id)
-    if not team:
-        raise HTTPException(status_code=404, detail="Team not found")
-
-    limit = float(team.monthly_budget_usd) if team.monthly_budget_usd is not None else None
-    spend = await _team_monthly_spend(session, team_id)
-
-    return {
-        "team_id": str(team_id),
-        "monthly_budget_usd": limit,
-        "budget_alert_pct": team.budget_alert_pct,
-        "budget_action": team.budget_action,
-        "current_spend_usd": spend,
-        "budget_remaining_usd": _remaining(spend, limit),
-        "pct_used": _safe_pct(spend, limit),
-    }
-
-
-@router.put("/teams/{team_id}/budget")
-async def set_team_budget(
-    team_id: UUID,
-    body: TeamBudgetBody,
-    request: Request,
-    session: AsyncSession = Depends(get_session),
-) -> dict[str, Any]:
-    team = await session.get(Team, team_id)
-    if not team:
-        raise HTTPException(status_code=404, detail="Team not found")
-
-    # Validate team budget against parent area hierarchy cap
-    if body.monthly_budget_usd is not None:
-        area_cap_row = (await session.execute(
-            text("""
-                SELECT a.monthly_budget_usd AS area_budget
-                FROM teams t
-                LEFT JOIN areas a ON a.id = t.area_id
-                WHERE t.id = CAST(:tid AS uuid)
-            """),
-            {"tid": str(team_id)},
-        )).mappings().first()
-        if area_cap_row:
-            area_budget = area_cap_row["area_budget"]
-            if area_budget is not None and body.monthly_budget_usd > float(area_budget):
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Team budget ${body.monthly_budget_usd} exceeds area budget ${area_budget}",
-                )
-
-    team.monthly_budget_usd = Decimal(str(body.monthly_budget_usd)) if body.monthly_budget_usd is not None else None
-    team.budget_alert_pct = body.budget_alert_pct
-    team.budget_action = body.budget_action
-
-    await audit.record(
-        session, request, "set_team_budget", "team", resource_id=team_id,
-        details={
-            "monthly_budget_usd": body.monthly_budget_usd,
-            "budget_alert_pct": body.budget_alert_pct,
-            "budget_action": body.budget_action,
-        },
-    )
-    await session.commit()
-    await session.refresh(team)
-
-    await _redis_set_team_budget(request, team_id, body.monthly_budget_usd, body.budget_action, body.budget_alert_pct)
-
-    limit = float(team.monthly_budget_usd) if team.monthly_budget_usd is not None else None
-    spend = await _team_monthly_spend(session, team_id)
-
-    # Seed the running spend counter so enforcement is immediate
-    redis = request.app.state.redis
-    month = _current_month()
-    await redis.set(f"budget:team:{team_id}:{month}", str(spend), exat=_end_of_month())
-
-    return {
-        "team_id": str(team_id),
-        "monthly_budget_usd": limit,
-        "budget_alert_pct": team.budget_alert_pct,
-        "budget_action": team.budget_action,
-        "current_spend_usd": spend,
-        "budget_remaining_usd": _remaining(spend, limit),
-        "pct_used": _safe_pct(spend, limit),
-    }
 
 
 # ---------------------------------------------------------------------------
@@ -420,16 +299,22 @@ async def budget_status(session: AsyncSession = Depends(get_session)) -> dict[st
     org_action = org_settings.get("budget_action", "alert")
     org_spend = await _org_monthly_spend(session)
 
-    # All teams with their spend
+    # All team nodes with their spend.
+    # organization_nodes carries `budget_alert_threshold` (0.0–1.0) instead of the
+    # legacy `teams.budget_alert_pct`; there is no per-node `budget_action`, so we
+    # alias the threshold and default the action to 'alert' to keep the response
+    # shape stable for existing callers.
     result = await session.execute(
         text(
-            "SELECT t.id, t.name, t.slug, t.monthly_budget_usd, t.budget_alert_pct, t.budget_action, "
+            "SELECT t.id, t.name, t.slug, t.monthly_budget_usd, "
+            "       t.budget_alert_threshold AS budget_alert_pct, "
             "       COALESCE(SUM(cr.cost_usd), 0) AS spend "
-            "FROM teams t "
+            "FROM organization_nodes t "
             "LEFT JOIN cost_records cr "
-            "       ON cr.team_id = t.id "
+            "       ON cr.node_id = t.id "
             "      AND cr.created_at >= date_trunc('month', NOW()) "
-            "GROUP BY t.id, t.name, t.slug, t.monthly_budget_usd, t.budget_alert_pct, t.budget_action "
+            "WHERE t.type = 'team' "
+            "GROUP BY t.id, t.name, t.slug, t.monthly_budget_usd, t.budget_alert_threshold "
             "ORDER BY t.name"
         )
     )
@@ -439,14 +324,15 @@ async def budget_status(session: AsyncSession = Depends(get_session)) -> dict[st
     for row in teams_rows:
         t_limit = float(row["monthly_budget_usd"]) if row["monthly_budget_usd"] is not None else None
         t_spend = float(row["spend"])
+        t_alert_pct = float(row["budget_alert_pct"]) if row["budget_alert_pct"] is not None else 0.8
         teams_summary.append(
             {
                 "team_id": str(row["id"]),
                 "name": row["name"],
                 "slug": row["slug"],
                 "monthly_budget_usd": t_limit,
-                "budget_alert_pct": float(row["budget_alert_pct"]),
-                "budget_action": row["budget_action"],
+                "budget_alert_pct": t_alert_pct,
+                "budget_action": "alert",
                 "current_spend_usd": t_spend,
                 "budget_remaining_usd": _remaining(t_spend, t_limit),
                 "pct_used": _safe_pct(t_spend, t_limit),
@@ -511,89 +397,11 @@ async def set_notification_webhook(
 
 
 # ---------------------------------------------------------------------------
-# Area budget endpoints (D14)
+# Area / unit budget endpoints (D14) — REMOVED.
+# Areas and units are now `organization_nodes` (type='area'/'unit') and their
+# budgets are managed via GET/PUT /nodes/{id}/budget in nodes.py, which also
+# enforces the parent-cap validation these routes used to do.
 # ---------------------------------------------------------------------------
-
-@router.get("/areas/{area_id}/budget")
-async def get_area_budget(
-    area_id: str,
-    session: AsyncSession = Depends(get_session),
-) -> dict[str, Any]:
-    row = (await session.execute(
-        text("SELECT id, name, monthly_budget_usd, budget_alert_threshold FROM areas WHERE id=CAST(:aid AS uuid)"),
-        {"aid": area_id},
-    )).mappings().first()
-    if not row:
-        raise HTTPException(status_code=404, detail="Area not found")
-    return dict(row)
-
-
-@router.put("/areas/{area_id}/budget")
-async def set_area_budget(
-    area_id: str,
-    body: BudgetSet,
-    session: AsyncSession = Depends(get_session),
-) -> dict[str, Any]:
-    result = await session.execute(
-        text("""UPDATE areas SET monthly_budget_usd=:budget, budget_alert_threshold=:threshold
-                WHERE id=CAST(:aid AS uuid) RETURNING id"""),
-        {"budget": body.monthly_budget_usd, "threshold": body.budget_alert_threshold, "aid": area_id},
-    )
-    if result.first() is None:
-        raise HTTPException(status_code=404, detail="Area not found")
-    await session.commit()
-    return {"message": "Area budget updated"}
-
-
-# ---------------------------------------------------------------------------
-# Unit budget endpoints (D14)
-# ---------------------------------------------------------------------------
-
-@router.get("/units/{unit_id}/budget")
-async def get_unit_budget(
-    unit_id: str,
-    session: AsyncSession = Depends(get_session),
-) -> dict[str, Any]:
-    row = (await session.execute(
-        text("SELECT id, name, monthly_budget_usd, budget_alert_threshold FROM units WHERE id=CAST(:uid AS uuid)"),
-        {"uid": unit_id},
-    )).mappings().first()
-    if not row:
-        raise HTTPException(status_code=404, detail="Unit not found")
-    return dict(row)
-
-
-@router.put("/units/{unit_id}/budget")
-async def set_unit_budget(
-    unit_id: str,
-    body: BudgetSet,
-    session: AsyncSession = Depends(get_session),
-) -> dict[str, Any]:
-    # Validate budget against parent area cap
-    if body.monthly_budget_usd is not None:
-        unit_row = (await session.execute(
-            text("SELECT area_id FROM units WHERE id=CAST(:uid AS uuid)"), {"uid": unit_id}
-        )).mappings().first()
-        if unit_row and unit_row["area_id"]:
-            area_budget = (await session.execute(
-                text("SELECT monthly_budget_usd FROM areas WHERE id=CAST(:aid AS uuid)"),
-                {"aid": str(unit_row["area_id"])},
-            )).scalar()
-            if area_budget is not None and body.monthly_budget_usd > float(area_budget):
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Unit budget ${body.monthly_budget_usd} exceeds area budget ${area_budget}",
-                )
-
-    result = await session.execute(
-        text("""UPDATE units SET monthly_budget_usd=:budget, budget_alert_threshold=:threshold
-                WHERE id=CAST(:uid AS uuid) RETURNING id"""),
-        {"budget": body.monthly_budget_usd, "threshold": body.budget_alert_threshold, "uid": unit_id},
-    )
-    if result.first() is None:
-        raise HTTPException(status_code=404, detail="Unit not found")
-    await session.commit()
-    return {"message": "Unit budget updated"}
 
 
 @router.post("/org/notifications/test")
@@ -657,9 +465,10 @@ async def budget_forecast(session: AsyncSession = Depends(get_session)) -> dict:
     team_rows = (await session.execute(text("""
         SELECT t.id, t.name, t.slug, t.monthly_budget_usd,
                COALESCE(SUM(cr.cost_usd), 0) AS mtd_spend
-        FROM teams t
-        LEFT JOIN cost_records cr ON cr.team_id = t.id
+        FROM organization_nodes t
+        LEFT JOIN cost_records cr ON cr.node_id = t.id
           AND cr.created_at >= date_trunc('month', NOW())
+        WHERE t.type = 'team'
         GROUP BY t.id, t.name, t.slug, t.monthly_budget_usd
         ORDER BY mtd_spend DESC
     """))).mappings().all()

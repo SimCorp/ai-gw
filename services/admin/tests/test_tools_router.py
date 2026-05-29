@@ -104,3 +104,141 @@ async def test_patch_tool_not_found(client, mock_session):
 
     resp = await client.patch("/tools/does-not-exist", json={"enabled": False})
     assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Auth split: GET /tools = require_authenticated_user (any signed-in user),
+#             PATCH /tools/{id} = require_admin_auth (admin only).
+#
+# The shared `client` fixture bypasses auth (DEV_BYPASS_AUTH=true) so it cannot
+# distinguish "any user" from "admin". We therefore exercise the underlying
+# auth dependencies (app.auth) directly, plus verify the router wires the right
+# dependency onto each route.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_get_tools_reachable_by_non_admin_authenticated_user(mock_session):
+    """GET /tools resolves for a developer session (non-admin), via
+    require_authenticated_user, with no admin role present."""
+    import json
+    from unittest.mock import AsyncMock
+    from httpx import ASGITransport, AsyncClient
+    from app.main import app
+    from app.db import get_session
+    from app import config as _config
+
+    async def override_session():
+        yield mock_session
+
+    mock_session.execute.return_value = _mappings_all([
+        _tool_row("uuid-generator", "UUID generator", "Crypto", True),
+    ])
+
+    # Simulate a real (non-bypass) auth path: a developer session in redis.
+    original_bypass = _config.settings.dev_bypass_auth
+    _config.settings.dev_bypass_auth = False
+    redis = AsyncMock()
+    dev_session = json.dumps({
+        "user_id": "u-1", "email": "dev@simcorp.com",
+        "roles": [{"role": "developer", "node_path": "/"}],
+    })
+
+    async def _redis_get(key):
+        return dev_session if key == "session:dev-token" else None
+    redis.get = _redis_get
+
+    app.dependency_overrides[get_session] = override_session
+    app.state.redis = redis
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as c:
+            resp = await c.get("/tools", headers={"Authorization": "Bearer dev-token"})
+    finally:
+        _config.settings.dev_bypass_auth = original_bypass
+        app.dependency_overrides.clear()
+
+    assert resp.status_code == 200
+    assert isinstance(resp.json(), list)
+
+
+@pytest.mark.asyncio
+async def test_patch_tool_rejects_non_admin_session(mock_session):
+    """PATCH /tools/{id} requires admin — a developer-only session is 403."""
+    import json
+    from unittest.mock import AsyncMock
+    from httpx import ASGITransport, AsyncClient
+    from app.main import app
+    from app.db import get_session
+    from app import config as _config
+
+    async def override_session():
+        yield mock_session
+
+    original_bypass = _config.settings.dev_bypass_auth
+    _config.settings.dev_bypass_auth = False
+    redis = AsyncMock()
+    dev_session = json.dumps({
+        "user_id": "u-1", "email": "dev@simcorp.com",
+        "roles": [{"role": "developer", "node_path": "/"}],
+    })
+
+    async def _redis_get(key):
+        return dev_session if key == "session:dev-token" else None
+    redis.get = _redis_get
+
+    app.dependency_overrides[get_session] = override_session
+    app.state.redis = redis
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as c:
+            resp = await c.patch(
+                "/tools/uuid-generator",
+                json={"enabled": False},
+                headers={"Authorization": "Bearer dev-token"},
+            )
+    finally:
+        _config.settings.dev_bypass_auth = original_bypass
+        app.dependency_overrides.clear()
+
+    assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_require_authenticated_user_dev_bypass_returns_dict():
+    """app.auth.require_authenticated_user honours dev bypass → returns a dict."""
+    from unittest.mock import MagicMock
+    from app import config as _config
+    from app.auth import require_authenticated_user
+
+    request = MagicMock()
+    request.state = MagicMock()
+    original = _config.settings.dev_bypass_auth
+    _config.settings.dev_bypass_auth = True
+    try:
+        result = await require_authenticated_user(request, None, None)
+    finally:
+        _config.settings.dev_bypass_auth = original
+    assert isinstance(result, dict)
+    assert "role" in result
+
+
+@pytest.mark.asyncio
+async def test_require_authenticated_user_missing_token_raises_401():
+    """No bypass, no token → 401."""
+    from unittest.mock import MagicMock
+    from fastapi import HTTPException
+    from app import config as _config
+    from app.auth import require_authenticated_user
+
+    request = MagicMock()
+    request.app.state.redis = None
+    original = _config.settings.dev_bypass_auth
+    _config.settings.dev_bypass_auth = False
+    try:
+        with pytest.raises(HTTPException) as exc:
+            await require_authenticated_user(request, None, None)
+    finally:
+        _config.settings.dev_bypass_auth = original
+    assert exc.value.status_code == 401

@@ -27,3 +27,4 @@ data/
 
 # Ephemeral Claude Code agent worktrees (created/cleaned per-session)
 .claude/worktrees/
+.claire/worktrees/

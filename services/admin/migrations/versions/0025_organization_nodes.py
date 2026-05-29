@@ -232,9 +232,19 @@ def upgrade() -> None:
     op.execute("ALTER TABLE access_grants DROP CONSTRAINT IF EXISTS access_grants_grantor_team_id_fkey")
     op.execute("ALTER TABLE access_grants DROP CONSTRAINT IF EXISTS access_grants_grantee_team_id_fkey")
 
-    # scan_jobs.team_id and scan_targets.team_id (added by scanner migration)
-    op.execute("ALTER TABLE scan_jobs DROP CONSTRAINT IF EXISTS scan_jobs_team_id_fkey")
-    op.execute("ALTER TABLE scan_targets DROP CONSTRAINT IF EXISTS scan_targets_team_id_fkey")
+    # scan_jobs.team_id and scan_targets.team_id (only present on legacy DBs where
+    # the scanner migration ran before this one; on a fresh chain the scanner
+    # tables are created later by 0026 already using node_id, so guard the drops).
+    op.execute("""
+        DO $$ BEGIN
+            IF to_regclass('public.scan_jobs') IS NOT NULL THEN
+                ALTER TABLE scan_jobs DROP CONSTRAINT IF EXISTS scan_jobs_team_id_fkey;
+            END IF;
+            IF to_regclass('public.scan_targets') IS NOT NULL THEN
+                ALTER TABLE scan_targets DROP CONSTRAINT IF EXISTS scan_targets_team_id_fkey;
+            END IF;
+        END $$;
+    """)
 
     # teams.unit_id (teams refs units — must drop before dropping units)
     op.execute("ALTER TABLE teams DROP CONSTRAINT IF EXISTS teams_unit_id_fkey")

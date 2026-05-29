@@ -131,6 +131,35 @@ async def test_submit_job_tier_not_allowed(client, mock_redis):
 
 
 @pytest.mark.asyncio
+async def test_disallowed_scan_type_does_not_burn_quota(client, mock_redis):
+    """A submission rejected for a disallowed scan type (403) must NOT increment
+    the Redis daily-quota counter — scan-type validation runs BEFORE _check_quota.
+    """
+    from app.db import get_session
+    from app.main import app
+
+    # Target only permits 'ai' scans; caller requests 'network' → disallowed.
+    target = _approved_target(scan_types=["ai"])
+    mock_sess = _mock_execute(target)  # only _load_target is reached
+    async def override():
+        yield mock_sess
+    app.dependency_overrides[get_session] = override
+    mock_redis.get = AsyncMock(return_value=None)  # kill switch off
+    mock_redis.incr = AsyncMock(return_value=1)
+
+    async with client as c:
+        resp = await c.post("/jobs", json={
+            "target_id": "dddddddd-0000-0000-0000-000000000001",
+            "scan_types": ["network"],
+            "tier": "quick",
+        }, headers={"Authorization": "Bearer test-token"})
+
+    assert resp.status_code == 403
+    # The daily-quota counter (incremented inside _check_quota) must never run.
+    mock_redis.incr.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_internal_endpoint_rejects_bad_secret():
     from app.main import app
     from httpx import AsyncClient, ASGITransport

@@ -140,7 +140,7 @@ Enable or disable a tool in the catalog. Disabled tools do not appear in the dev
 ```
 
 **Notes:**
-- No authentication is performed at the API layer; authentication is enforced by the nginx gateway
+- Requires any authenticated user (developer or admin)
 - Tool enable/disable changes are reflected immediately in the portal
 
 ## Database Schema

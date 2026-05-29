@@ -110,12 +110,15 @@ async def submit_job(
 
     await _check_kill_switch(redis)
     target = await _load_target(session, body.target_id, node_id)
-    await _check_quota(redis, session, node_id, body.tier)
 
+    # Validate scan types BEFORE consuming quota — a rejected submission must not
+    # burn a daily quota slot (the Redis counter is incremented in _check_quota).
     scan_types = body.scan_types or list(target["allowed_scan_types"])
     disallowed = set(scan_types) - set(target["allowed_scan_types"])
     if disallowed:
         raise HTTPException(status_code=403, detail=f"Scan types not allowed for this target: {disallowed}")
+
+    await _check_quota(redis, session, node_id, body.tier)
 
     result = await session.execute(
         text("""

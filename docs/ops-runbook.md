@@ -107,6 +107,8 @@ docker compose -f infra/docker-compose.yml up --build -d
 
 The `db-migrate` container runs all Alembic migrations (0001 → latest) before any app services start. LiteLLM has a 120-second `start_period` — allow 2–3 minutes for full cluster readiness.
 
+**Scanner migrations note:** Migrations 0025–0030 are safe for fresh deployments. All conditional checks (e.g. renaming columns that may not exist) guard against errors on clean databases. `docker compose up --build` works reliably even on a brand-new Postgres instance.
+
 ### First login (admin portal)
 
 The default admin account is seeded automatically on first boot in `development` mode:

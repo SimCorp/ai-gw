@@ -17,9 +17,7 @@ interface GroupMapping {
   created_by_email: string | null;
 }
 
-interface Area { id: string; name: string; }
-interface Unit { id: string; name: string; area_id: string; }
-interface Team { id: string; name: string; }
+interface OrgNode { id: string; name: string; type: string; }
 
 const ROLE_OPTIONS = [
   { value: 'platform_admin', label: 'Platform Admin' },
@@ -70,20 +68,15 @@ export default function EntraSettingsPage() {
     queryFn: () => apiFetch('/settings/entra'),
   });
 
-  const { data: areas } = useQuery<Area[]>({
-    queryKey: ['areas'],
-    queryFn: () => apiFetch('/areas'),
+  // Org tree replaced the separate areas/units/teams tables; derive scope
+  // pickers from the unified /nodes list filtered by node type.
+  const { data: nodes } = useQuery<OrgNode[]>({
+    queryKey: ['org-nodes'],
+    queryFn: () => apiFetch('/nodes'),
   });
-
-  const { data: units } = useQuery<Unit[]>({
-    queryKey: ['units'],
-    queryFn: () => apiFetch('/units'),
-  });
-
-  const { data: teamsData } = useQuery<Team[]>({
-    queryKey: ['teams'],
-    queryFn: () => apiFetch('/teams'),
-  });
+  const areas = (nodes ?? []).filter(n => n.type === 'area');
+  const units = (nodes ?? []).filter(n => n.type === 'unit');
+  const teamsData = (nodes ?? []).filter(n => n.type === 'team');
 
   const addMutation = useMutation({
     mutationFn: (body: typeof form) => apiFetch('/settings/entra', {
@@ -146,7 +139,7 @@ export default function EntraSettingsPage() {
         background: 'var(--surface-2)', borderRadius: 6, border: '1px solid var(--rule)',
         fontSize: 12, color: 'var(--fg-3)', fontFamily: 'monospace',
       }}>
-        Azure Entra group claim → entra_group_role_mappings → user_roles (on login)
+        Azure Entra group claim → role_assignments (scoped to org node) → session roles (on login)
       </div>
 
       {/* Add mapping */}

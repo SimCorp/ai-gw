@@ -10,11 +10,12 @@ require_node_role() from unified_auth.
 """
 from __future__ import annotations
 
+import json
 import re
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -720,6 +721,7 @@ async def get_budget(
 async def set_budget(
     node_id: str,
     body: SetBudgetRequest,
+    request: Request,
     current_user: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
@@ -753,6 +755,28 @@ async def set_budget(
         updates,
     )
     await session.commit()
+
+    # Write-through to the budget-enforcement key the auth service reads
+    # (budget_limit:team:{node_id} — auth aliases node_id as team_id). Without
+    # this, a node budget set here would never be enforced at request time.
+    redis = getattr(request.app.state, "redis", None)
+    if redis is not None:
+        final = (await session.execute(
+            text("SELECT monthly_budget_usd, budget_alert_threshold "
+                 "FROM organization_nodes WHERE id = CAST(:nid AS uuid)"),
+            {"nid": node_id},
+        )).mappings().first()
+        key = f"budget_limit:team:{node_id}"
+        if final and final["monthly_budget_usd"] is not None:
+            threshold = final["budget_alert_threshold"]
+            await redis.set(key, json.dumps({
+                "limit": float(final["monthly_budget_usd"]),
+                "action": "alert",
+                "alert_pct": float(threshold) if threshold is not None else 0.8,
+            }))
+        else:
+            await redis.delete(key)
+
     return {"ok": True}
 
 

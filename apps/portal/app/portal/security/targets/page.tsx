@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '../../_lib/authContext';
 
 const ADMIN_API = process.env.NEXT_PUBLIC_ADMIN_API ?? 'http://localhost:8005';
 
@@ -23,6 +24,7 @@ interface RegisterForm {
 }
 
 export default function TargetsPage() {
+  const { token } = useAuth();
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<RegisterForm>({
@@ -36,9 +38,12 @@ export default function TargetsPage() {
   const USER_ID = process.env.NEXT_PUBLIC_USER_ID ?? '';
 
   const { data: targets = [] } = useQuery<ScanTarget[]>({
-    queryKey: ['portal-scanner-targets', TEAM_ID],
+    queryKey: ['portal-scanner-targets', TEAM_ID, token],
     queryFn: () =>
-      fetch(`${ADMIN_API}/scanner/targets?team_id=${TEAM_ID}`).then(r => r.json()),
+      fetch(`${ADMIN_API}/scanner/targets?team_id=${TEAM_ID}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }).then(r => r.json()),
+    enabled: !!token,
     refetchInterval: 15_000,
   });
 
@@ -46,7 +51,7 @@ export default function TargetsPage() {
     mutationFn: (body: RegisterForm & { team_id: string; created_by: string }) =>
       fetch(`${ADMIN_API}/scanner/targets`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           url: body.url,
           label: body.label,
