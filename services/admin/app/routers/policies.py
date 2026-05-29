@@ -47,7 +47,9 @@ async def upsert_policy(team_id: UUID, body: PolicyUpdate, request: Request, ses
             allowed_models=body.allowed_models,
         )
         .on_conflict_do_update(
-            index_elements=["team_id"],
+            # DB column is `node_id` (renamed from team_id in migration 0025);
+            # the partial unique index is policies_node_null_proj_uidx(node_id).
+            index_elements=["node_id"],
             index_where=Policy.project_id.is_(None),
             set_={
                 "cache_ttl_seconds": body.cache_ttl_seconds,
@@ -101,10 +103,11 @@ async def list_all_policies(session: AsyncSession = Depends(get_session)):
             p.rate_limit_rpm,
             p.allowed_models,
             p.updated_at
-        FROM teams t
+        FROM organization_nodes t
         LEFT JOIN policies p
-            ON p.team_id = t.id
+            ON p.node_id = t.id
             AND p.project_id IS NULL
+        WHERE t.type = 'team'
         ORDER BY t.name
     """)
     rows = (await session.execute(sql)).mappings().all()

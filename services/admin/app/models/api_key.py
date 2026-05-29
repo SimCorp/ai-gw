@@ -23,7 +23,16 @@ class APIKey(Base):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
-    team_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("teams.id", ondelete="CASCADE"), nullable=False)
+    # Column was renamed team_id -> node_id in migration 0025 (now a nullable
+    # FK to organization_nodes in the DB). The Python attribute name `team_id`
+    # is preserved so call sites are unchanged; only the underlying column name
+    # is remapped to `node_id`.
+    # No declarative ForeignKey: the old teams.id target no longer exists and
+    # the organization_nodes model is not registered in this service's
+    # Base.metadata, so a declarative FK here would fail mapper table-sort on
+    # flush. The real FK (api_keys_node_id_fkey -> organization_nodes) is owned
+    # by the migration; the ORM does not need to mirror it.
+    team_id: Mapped[uuid.UUID | None] = mapped_column("node_id", UUID(as_uuid=True), nullable=True)
     project_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="SET NULL"), nullable=True)
     name: Mapped[str] = mapped_column(Text, nullable=False)
     key_hash: Mapped[str] = mapped_column(Text, nullable=False, unique=True)

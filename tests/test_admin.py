@@ -1,7 +1,14 @@
-"""Admin API tests — team management, API key lifecycle, system health JSON shape.
+"""Admin API tests — org-node (team) management, API key lifecycle, system
+health JSON shape.
 
-All endpoints under /teams, /system, etc. require the X-Admin-Token header.
-The admin_client fixture injects that automatically.
+The org-node refactor replaced /teams with the unified /nodes surface
+(services/admin/app/routers/nodes.py); a "team" is a node with type='team'.
+The team CRUD tests below were rewritten from /teams to /nodes. The API-key
+tests still use /teams/{id}/keys — that router is intact and its node_id FK now
+points at organization_nodes, so a node id works in place of the old team id.
+
+All endpoints require the X-Admin-Token header, which the admin_client fixture
+injects automatically.
 """
 
 import uuid
@@ -63,66 +70,70 @@ async def test_system_health_requires_admin_token():
     )
 
 
-# ── Team CRUD ─────────────────────────────────────────────────────────────────
+# ── Team (org node) CRUD ──────────────────────────────────────────────────────
 
 
 @pytest.mark.asyncio
-async def test_create_team_returns_201(admin_client):
-    """POST /teams must return 201 and the created team object."""
+async def test_create_team_returns_201(admin_client, root_node_id):
+    """POST /nodes (type=team) must return 201 and the created node object."""
     uid = uuid.uuid4().hex[:8]
     resp = await admin_client.post(
-        "/teams", json={"name": f"admin-test-{uid}", "slug": f"admin-test-{uid}"}
+        "/nodes",
+        json={"name": f"admin-test-{uid}", "type": "team", "parent_id": root_node_id},
     )
     assert resp.status_code == 201, f"Expected 201, got {resp.status_code}: {resp.text}"
     data = resp.json()
     assert "id" in data
+    # slug is derived from the name server-side (no caller-supplied slug field).
     assert data["slug"] == f"admin-test-{uid}"
+    assert data["type"] == "team"
 
     # Teardown
-    await admin_client.delete(f"/teams/{data['id']}")
+    await admin_client.delete(f"/nodes/{data['id']}")
 
 
 @pytest.mark.asyncio
 async def test_list_teams_includes_created_team(admin_client, test_team):
-    """GET /teams must include the team created by the test_team fixture."""
-    resp = await admin_client.get("/teams")
+    """GET /nodes?type=team must include the node created by the test_team fixture."""
+    resp = await admin_client.get("/nodes", params={"type": "team"})
     assert resp.status_code == 200
     ids = [t["id"] for t in resp.json()]
     assert test_team in ids, (
-        f"test_team {test_team!r} not found in team list"
+        f"test_team node {test_team!r} not found in node list"
     )
 
 
 @pytest.mark.asyncio
 async def test_get_team(admin_client, test_team):
-    """GET /teams/{id} must return the team."""
-    resp = await admin_client.get(f"/teams/{test_team}")
+    """GET /nodes/{id} must return the node."""
+    resp = await admin_client.get(f"/nodes/{test_team}")
     assert resp.status_code == 200
     assert resp.json()["id"] == test_team
 
 
 @pytest.mark.asyncio
 async def test_get_nonexistent_team_returns_404(admin_client):
-    """GET /teams/{non-existent-id} must return 404."""
-    resp = await admin_client.get(f"/teams/{uuid.uuid4()}")
+    """GET /nodes/{non-existent-id} must return 404."""
+    resp = await admin_client.get(f"/nodes/{uuid.uuid4()}")
     assert resp.status_code == 404
 
 
 @pytest.mark.asyncio
-async def test_delete_team_returns_204(admin_client):
-    """DELETE /teams/{id} must return 204."""
+async def test_delete_team_returns_204(admin_client, root_node_id):
+    """DELETE /nodes/{id} must return 204."""
     uid = uuid.uuid4().hex[:8]
     create = await admin_client.post(
-        "/teams", json={"name": f"delete-me-{uid}", "slug": f"delete-me-{uid}"}
+        "/nodes",
+        json={"name": f"delete-me-{uid}", "type": "team", "parent_id": root_node_id},
     )
     assert create.status_code == 201
     team_id = create.json()["id"]
 
-    delete = await admin_client.delete(f"/teams/{team_id}")
+    delete = await admin_client.delete(f"/nodes/{team_id}")
     assert delete.status_code == 204
 
     # Confirm it's gone
-    get = await admin_client.get(f"/teams/{team_id}")
+    get = await admin_client.get(f"/nodes/{team_id}")
     assert get.status_code == 404
 
 

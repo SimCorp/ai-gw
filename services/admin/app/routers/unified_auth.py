@@ -157,6 +157,23 @@ async def get_current_user(
     request: Request = None,
 ) -> dict:
     """Validate session token. Returns unified session payload."""
+    # Dev/CI escape hatch: when auth is bypassed, return a synthetic
+    # platform_admin scoped to the root path "/" (mirrors the login mint for
+    # ENVIRONMENT in development/test/ci). Keeps the X-Admin-Token-only CI
+    # client working against the session-based /nodes endpoints.
+    from app.config import settings as _cfg
+    if _cfg.dev_bypass_auth:
+        data = {
+            "user_id": None,
+            "email": "dev-bypass@local",
+            "display_name": "Dev Bypass",
+            "roles": [{"role": "platform_admin", "node_path": "/", "node_id": None, "node_name": "root"}],
+            "primary_node_id": None,
+        }
+        if request is not None:
+            request.state.current_user = data
+        return data
+
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Authentication required")
     token = authorization.removeprefix("Bearer ").strip()

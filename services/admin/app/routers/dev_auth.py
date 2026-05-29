@@ -189,7 +189,7 @@ async def select_team(
 ):
     developer = await _get_current_developer(authorization, request)
     row = (await session.execute(
-        text("SELECT id, name FROM teams WHERE id = CAST(:id AS uuid)"),
+        text("SELECT id, name FROM organization_nodes WHERE id = CAST(:id AS uuid) AND type = 'team'"),
         {"id": team_id},
     )).mappings().first()
     if not row:
@@ -197,8 +197,8 @@ async def select_team(
 
     member_row = (await session.execute(
         text("""
-            SELECT id FROM team_members
-            WHERE team_id = CAST(:team_id AS uuid)
+            SELECT id FROM node_members
+            WHERE node_id = CAST(:team_id AS uuid)
               AND (user_id = CAST(:uid AS uuid) OR developer_id = CAST(:uid AS uuid))
         """),
         {"team_id": team_id, "uid": developer["user_id"]},
@@ -207,7 +207,7 @@ async def select_team(
         raise HTTPException(status_code=403, detail="You are not a member of this team")
 
     await session.execute(
-        text("UPDATE users SET primary_team_id = CAST(:team_id AS uuid) WHERE id = CAST(:id AS uuid)"),
+        text("UPDATE users SET primary_node_id = CAST(:team_id AS uuid) WHERE id = CAST(:id AS uuid)"),
         {"team_id": team_id, "id": developer["user_id"]},
     )
     await session.commit()

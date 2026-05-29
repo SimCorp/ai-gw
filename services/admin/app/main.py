@@ -169,6 +169,9 @@ async def lifespan(app: FastAPI):
     if os.getenv("ENVIRONMENT", "production") in ("development", "test", "ci"):
         # bcrypt hash of "password"
         _default_hash = '$2b$12$97tEM5lfcioIn4w9wDRHQe3qQNeU9OIBDImBuWj6wQRF30UCpIWom'
+        # bcrypt hash of "Admin1234!" — the documented admin credential
+        # (docs/SYSTEM_REFERENCE.md, portal login). Keep dev@ on "password".
+        _admin_hash = '$2b$12$w4aAEPPdqbjhNDH7kWPV6uQKSllc3EFzxvQvns5PlNgbfbkGkSi3e'
         async with engine.begin() as conn:
             try:
                 # Admin account — must_change_password=FALSE so local dev works immediately
@@ -178,7 +181,7 @@ async def lifespan(app: FastAPI):
                     INSERT INTO users (email, display_name, password_hash, hash_type, status, must_change_password)
                     VALUES ('admin@simcorp.com', 'Default Admin', :hash, 'bcrypt', 'active', FALSE)
                     ON CONFLICT (email) DO NOTHING
-                """), {"hash": _default_hash})
+                """), {"hash": _admin_hash})
                 # Developer test account for local dev and E2E tests
                 await conn.execute(text("""
                     INSERT INTO users (email, display_name, password_hash, hash_type, status, must_change_password)
