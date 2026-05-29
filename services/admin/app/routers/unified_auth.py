@@ -556,9 +556,12 @@ async def register(
     )
     await session.commit()
 
-    # New users registered via self-service get no node-scoped roles.
-    # They gain access when an admin assigns their Entra group to a node.
-    roles: list[dict] = []
+    # Self-service registrants get the base `developer` role so they can use the
+    # developer portal. Elevated/node-scoped roles still come from an admin
+    # assigning their Entra group to a node (role_assignments).
+    roles: list[dict] = [
+        {"role": "developer", "node_path": "/", "node_id": None, "node_name": "root"}
+    ]
     payload = {
         "user_id": user_id,
         "email": body.email,
