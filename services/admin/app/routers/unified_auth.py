@@ -166,6 +166,13 @@ async def get_current_user(
     Bearer session and no matching admin token still get 401.
     """
     from app.config import settings as _cfg
+    # When called directly (not via FastAPI DI) — e.g. _get_current_developer,
+    # admin_auth.me — the Header(default=None) params arrive as their FieldInfo
+    # sentinel rather than a resolved value. Normalize non-str to None.
+    if not isinstance(x_admin_token, str):
+        x_admin_token = None
+    if not isinstance(authorization, str):
+        authorization = None
     if x_admin_token and _cfg.admin_token and secrets.compare_digest(x_admin_token, _cfg.admin_token):
         data = {
             "user_id": None,
