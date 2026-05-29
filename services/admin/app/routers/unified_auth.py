@@ -154,8 +154,8 @@ async def _get_session_data(token: str, redis) -> dict | None:
 
 async def get_current_user(
     authorization: str | None = Header(default=None),
-    x_admin_token: str | None = Header(default=None),
     request: Request = None,
+    x_admin_token: str | None = Header(default=None),
 ) -> dict:
     """Validate session token. Returns unified session payload.
 

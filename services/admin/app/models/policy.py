@@ -6,7 +6,6 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     Float,
-    ForeignKey,
     Index,
     Integer,
     Text,
@@ -44,7 +43,9 @@ class Policy(Base):
     # flush. The real FK (policies_node_id_fkey -> organization_nodes) is owned
     # by the migration; the ORM does not need to mirror it.
     team_id: Mapped[uuid.UUID] = mapped_column("node_id", UUID(as_uuid=True), nullable=False)
-    project_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=True)
+    # No declarative ForeignKey: projects isn't in this service's Base.metadata,
+    # so a declarative FK raises NoReferencedTableError on flush.
+    project_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     cache_ttl_seconds: Mapped[int] = mapped_column(Integer, nullable=False, server_default="3600")
     cache_similarity_threshold: Mapped[float] = mapped_column(Float, nullable=False, server_default="0.95")
     cache_opt_out: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")

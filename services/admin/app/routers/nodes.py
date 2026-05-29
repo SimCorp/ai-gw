@@ -228,6 +228,7 @@ async def get_tree(
 @router.post("", status_code=201)
 async def create_node(
     body: CreateNodeRequest,
+    request: Request,
     current_user: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
@@ -274,6 +275,11 @@ async def create_node(
             "description": body.description,
             "location": body.location,
         },
+    )
+    from app import audit
+    await audit.record(
+        session, request, "create_node", "node", resource_id=node_id,
+        details={"name": body.name, "type": body.type, "parent_id": body.parent_id},
     )
     await session.commit()
     row = await _get_node_row(session, node_id)

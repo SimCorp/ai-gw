@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import ARRAY, DateTime, ForeignKey, Index, Numeric, Text, text
+from sqlalchemy import ARRAY, DateTime, Index, Numeric, Text, text
 
 # Note: developer_id references developers.id (raw-SQL table, not ORM-mapped).
 # FK constraint exists in the DB via the baseline migration; the column is
@@ -33,7 +33,10 @@ class APIKey(Base):
     # flush. The real FK (api_keys_node_id_fkey -> organization_nodes) is owned
     # by the migration; the ORM does not need to mirror it.
     team_id: Mapped[uuid.UUID | None] = mapped_column("node_id", UUID(as_uuid=True), nullable=True)
-    project_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="SET NULL"), nullable=True)
+    # No declarative ForeignKey: the projects table isn't registered in this
+    # service's Base.metadata, so a declarative FK raises NoReferencedTableError
+    # on flush (INSERT). The DB-level FK, if any, is owned by the migrations.
+    project_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     name: Mapped[str] = mapped_column(Text, nullable=False)
     key_hash: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("NOW()"))
