@@ -154,7 +154,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: pip
+          # No `cache: pip` here (unlike the unit-test jobs): the stack started
+          # above bind-mounts a root-owned data/postgres dir into the workspace,
+          # which breaks setup-python's cache directory scan with EACCES.
 
       - name: Install test dependencies
         run: pip install --quiet -r tests/requirements.txt
