@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
 import { useAuth } from '../../../_lib/authContext';
@@ -52,8 +52,35 @@ export default function ResultsPage() {
     [sev]: findings.filter(f => f.severity === sev).length,
   }), {});
 
-  const downloadSarif = () => {
-    window.open(`${SCANNER_API}/jobs/${jobId}/results?format=sarif`, '_blank');
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+
+  // The SARIF endpoint requires a Bearer token, so we can't use window.open
+  // (it cannot send an Authorization header). Fetch the file as a blob with the
+  // auth header, then trigger a client-side download via a temporary object URL.
+  const downloadSarif = async () => {
+    if (!token || downloading) return;
+    setDownloading(true);
+    setDownloadError(null);
+    try {
+      const res = await fetch(`${SCANNER_API}/jobs/${jobId}/results?format=sarif`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(`Download failed (${res.status})`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `scan-${jobId}.sarif.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setDownloadError(e instanceof Error ? e.message : 'Download failed');
+    } finally {
+      setDownloading(false);
+    }
   };
 
   const grouped = SEVERITY_ORDER
@@ -66,11 +93,15 @@ export default function ResultsPage() {
         <h1 className="text-2xl font-semibold">Scan Results</h1>
         <button
           onClick={downloadSarif}
-          className="px-4 py-2 bg-gray-800 text-white rounded text-sm"
+          disabled={!token || downloading}
+          className="px-4 py-2 bg-gray-800 text-white rounded text-sm disabled:opacity-50"
         >
-          Download SARIF
+          {downloading ? 'Downloading…' : 'Download SARIF'}
         </button>
       </div>
+      {downloadError && (
+        <p className="text-sm text-red-600 mb-2">{downloadError}</p>
+      )}
 
       {isLoading && <p className="text-gray-500">Loading…</p>}
 
