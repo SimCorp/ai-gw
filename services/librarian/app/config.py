@@ -7,6 +7,9 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://aigateway:aigateway@localhost:5432/aigateway"
     redis_url: str = "redis://localhost:6379/0"
 
+    # Auth service — validates the sk-* Bearer on MCP requests.
+    auth_url: str = "http://auth:8001"
+
     # Embedding model config — routed through the gateway's own litellm proxy,
     # not a direct provider call. litellm holds the provider keys and exposes
     # embedding models (see services/litellm/config.yaml). The service only needs

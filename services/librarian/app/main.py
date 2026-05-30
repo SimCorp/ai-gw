@@ -27,9 +27,19 @@ from openai import AsyncOpenAI
 from pydantic import BaseModel
 from redis.asyncio import Redis
 
+from app.auth import AuthError, resolve_caller
 from app.config import settings
 
 _log = logging.getLogger(__name__)
+
+
+async def _require_caller(request: Request) -> None:
+    """Gate an MCP request on a valid sk-* Bearer; map AuthError → HTTP error."""
+    try:
+        await resolve_caller(request)
+    except AuthError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail)
+
 
 # ---------------------------------------------------------------------------
 # Embedding client (AsyncOpenAI — same pattern as cache service)
@@ -816,7 +826,8 @@ async def mcp_root():
 
 
 @app.post("/mcp/tools/search")
-async def mcp_search(body: dict):
+async def mcp_search(body: dict, request: Request):
+    await _require_caller(request)
     query = body.get("query", "")
     if not query:
         raise HTTPException(status_code=422, detail="query is required")
@@ -860,7 +871,8 @@ async def mcp_ingest(body: dict, request: Request):
 
 
 @app.post("/mcp/tools/topics")
-async def mcp_topics():
+async def mcp_topics(request: Request):
+    await _require_caller(request)
     pool = await get_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch(
@@ -998,7 +1010,7 @@ from fastapi.responses import Response as _Response  # noqa: E402
 
 
 @app.post("/mcp")
-async def mcp_jsonrpc(body: dict):
+async def mcp_jsonrpc(body: dict, request: Request):
     """JSON-RPC 2.0 MCP endpoint consumed by real MCP clients."""
     method: str = body.get("method", "")
     params: dict = body.get("params") or {}
@@ -1010,6 +1022,13 @@ async def mcp_jsonrpc(body: dict):
 
     def _err(code: int, message: str) -> dict:
         return {"jsonrpc": "2.0", "id": request_id, "error": {"code": code, "message": message}}
+
+    # Authenticate every JSON-RPC call (incl. initialize) — auth failures map to
+    # -32000 so the MCP client surfaces them cleanly.
+    try:
+        await resolve_caller(request)
+    except AuthError as exc:
+        return _err(-32000, exc.detail)
 
     if method == "initialize":
         if is_notification:
@@ -1064,6 +1083,7 @@ async def mcp_sse(request: Request):
     Sends an 'endpoint' event pointing to POST /mcp, then relays responses
     for any JSON-RPC calls the client makes to that URL.
     """
+    await _require_caller(request)
     import asyncio as _asyncio
 
     from fastapi.responses import StreamingResponse as _SSE
