@@ -78,12 +78,15 @@ PROVIDERS = [
         "test_model": "gemini-1.5-pro",
     },
     {
-        "name": "GitHub Models (GPT-4o)",
+        "name": "GitHub Models",
         "icon": "⚫",
         "env_var": "GITHUB_MODELS_API_KEY",
-        "models": ["github-gpt-4o"],
-        "litellm_model_names": ["github-gpt-4o"],
+        "models": ["github-gpt-4o", "text-embedding-3-small"],
+        # Same key serves chat (github-gpt-4o) and embeddings (text-embedding-3-small),
+        # so both must be patched when the key is saved/pushed to LiteLLM.
+        "litellm_model_names": ["github-gpt-4o", "text-embedding-3-small"],
         "test_model": "github-gpt-4o",
+        "embedding_test_model": "text-embedding-3-small",
         "extra_env_vars": [],
     },
     {
@@ -102,8 +105,9 @@ PROVIDERS = [
         "icon": "☁️",
         "env_var": "AZURE_API_KEY",
         "models": ["azure-gpt-4o", "azure-gpt-4o-mini", "azure-o3-mini", "azure-gpt-4.1"],
-        "litellm_model_names": ["azure-gpt-4o", "azure-gpt-4o-mini", "azure-o3-mini", "azure-gpt-4.1"],
+        "litellm_model_names": ["azure-gpt-4o", "azure-gpt-4o-mini", "azure-o3-mini", "azure-gpt-4.1", "azure-text-embedding-3-small", "azure-text-embedding-3-large"],
         "test_model": "azure-gpt-4o",
+        "embedding_test_model": "azure-text-embedding-3-small",
         "description": "Azure AI Foundry (Azure OpenAI) — requires API key, endpoint URL, and API version",
         "docs_url": "https://learn.microsoft.com/en-us/azure/ai-services/openai/",
         "extra_env_vars": [
@@ -280,27 +284,49 @@ async def test_provider(env_var: str, session: AsyncSession = Depends(get_sessio
     if not key:
         return {"ok": False, "error": "No API key configured — save a key first"}
 
-    model = provider.get("test_model", provider["litellm_model_names"][0])
-    t0 = time.monotonic()
-    try:
-        async with httpx.AsyncClient(timeout=20) as client:
-            resp = await client.post(
-                f"{settings.litellm_url}/v1/chat/completions",
-                headers={"Authorization": f"Bearer {settings.litellm_master_key}"},
-                json={
-                    "model": model,
-                    "messages": [{"role": "user", "content": "Reply with the single word: ok"}],
-                    "max_tokens": 5,
-                    "api_key": key,  # pass stored key directly; overrides whatever LiteLLM has
-                },
-            )
+    async def _test_chat(client: httpx.AsyncClient, model: str) -> dict:
+        t0 = time.monotonic()
+        resp = await client.post(
+            f"{settings.litellm_url}/v1/chat/completions",
+            headers={"Authorization": f"Bearer {settings.litellm_master_key}"},
+            json={
+                "model": model,
+                "messages": [{"role": "user", "content": "Reply with the single word: ok"}],
+                "max_tokens": 5,
+                "api_key": key,  # pass stored key directly; overrides whatever LiteLLM has
+            },
+        )
         latency_ms = int((time.monotonic() - t0) * 1000)
         if resp.status_code == 200:
             reply = resp.json().get("choices", [{}])[0].get("message", {}).get("content", "").strip()
             return {"ok": True, "latency_ms": latency_ms, "reply": reply, "model": model}
-        else:
-            detail = resp.json().get("error", {}).get("message", resp.text[:200])
-            return {"ok": False, "error": detail, "latency_ms": latency_ms}
+        detail = resp.json().get("error", {}).get("message", resp.text[:200])
+        return {"ok": False, "error": detail, "latency_ms": latency_ms, "model": model}
+
+    async def _test_embedding(client: httpx.AsyncClient, model: str) -> dict:
+        t0 = time.monotonic()
+        resp = await client.post(
+            f"{settings.litellm_url}/v1/embeddings",
+            headers={"Authorization": f"Bearer {settings.litellm_master_key}"},
+            json={"model": model, "input": "ping", "api_key": key},
+        )
+        latency_ms = int((time.monotonic() - t0) * 1000)
+        if resp.status_code == 200:
+            data = resp.json().get("data", [])
+            dim = len(data[0].get("embedding", [])) if data else 0
+            return {"ok": dim > 0, "latency_ms": latency_ms, "dim": dim, "model": model}
+        detail = resp.json().get("error", {}).get("message", resp.text[:200])
+        return {"ok": False, "error": detail, "latency_ms": latency_ms, "model": model}
+
+    chat_model = provider.get("test_model", provider["litellm_model_names"][0])
+    embed_model = provider.get("embedding_test_model")
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            chat = await _test_chat(client, chat_model)
+            result = dict(chat)  # top-level stays the chat result (back-compat)
+            if embed_model:
+                result["embedding"] = await _test_embedding(client, embed_model)
+        return result
     except httpx.TimeoutException:
         return {"ok": False, "error": "Request timed out after 20s"}
     except Exception as exc:
@@ -309,7 +335,6 @@ async def test_provider(env_var: str, session: AsyncSession = Depends(get_sessio
 
 async def _fetch_provider_models(provider: dict, key: str, stored: dict[str, str]) -> list[dict]:
     """Call the provider's model list API and return [{id, name}]."""
-    provider["env_var"]
     name = provider["name"]
     try:
         async with httpx.AsyncClient(timeout=15) as client:

@@ -144,6 +144,39 @@ model_list:
       api_base: os.environ/AZURE_AI_FOUNDRY_ENDPOINT
       api_key: os.environ/AZURE_AI_FOUNDRY_KEY
 
+  # ── Embedding models ────────────────────────────────────────────────────────
+  # Exposed through the gateway so internal services (librarian, cache, …) consume
+  # embeddings via litellm with a gateway key instead of holding provider keys.
+  # Add more entries here to make new embedding models available gateway-wide.
+  #
+  # Default `text-embedding-3-small` routes to GitHub Models (key already wired).
+  # Switch a service's EMBEDDING_MODEL to one of the alternates below to repoint it.
+  - model_name: text-embedding-3-small
+    litellm_params:
+      model: openai/text-embedding-3-small
+      api_base: https://models.inference.ai.azure.com
+      api_key: os.environ/GITHUB_MODELS_API_KEY
+
+  - model_name: azure-text-embedding-3-small
+    litellm_params:
+      model: azure/text-embedding-3-small
+      api_base: os.environ/AZURE_API_BASE
+      api_key: os.environ/AZURE_API_KEY
+      api_version: os.environ/AZURE_API_VERSION
+
+  - model_name: azure-text-embedding-3-large
+    litellm_params:
+      model: azure/text-embedding-3-large
+      api_base: os.environ/AZURE_API_BASE
+      api_key: os.environ/AZURE_API_KEY
+      api_version: os.environ/AZURE_API_VERSION
+
+  # Local, no key — requires `--profile ollama` and `ollama pull nomic-embed-text`.
+  - model_name: local-embed
+    litellm_params:
+      model: ollama/nomic-embed-text
+      api_base: http://ollama:11434
+
 litellm_settings:
   drop_params: true
   request_timeout: 600

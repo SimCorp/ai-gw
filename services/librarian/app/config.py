@@ -7,9 +7,13 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://aigateway:aigateway@localhost:5432/aigateway"
     redis_url: str = "redis://localhost:6379/0"
 
-    # Embedding model config — same defaults as the cache service
-    embedding_api_key: str = "sk-local-placeholder"
-    embedding_base_url: str = "http://ollama:11434/v1"
+    # Embedding model config — routed through the gateway's own litellm proxy,
+    # not a direct provider call. litellm holds the provider keys and exposes
+    # embedding models (see services/litellm/config.yaml). The service only needs
+    # a gateway key and the model name; switch EMBEDDING_MODEL to any embedding
+    # model the gateway exposes (now or in future) without touching code.
+    embedding_base_url: str = "http://litellm:8003/v1"
+    embedding_api_key: str = "sk-litellm-local-dev"  # gateway key (LITELLM_MASTER_KEY)
     embedding_model: str = "text-embedding-3-small"
 
     # URL of the cache service (used by the research agent to call the LLM)

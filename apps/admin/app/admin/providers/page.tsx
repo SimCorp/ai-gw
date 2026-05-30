@@ -29,12 +29,21 @@ interface ProvidersResponse {
   providers: Provider[];
 }
 
+interface EmbeddingTestResult {
+  ok: boolean;
+  latency_ms?: number;
+  dim?: number;
+  model?: string;
+  error?: string;
+}
+
 interface TestResult {
   ok: boolean;
   latency_ms?: number;
   reply?: string;
   model?: string;
   error?: string;
+  embedding?: EmbeddingTestResult;
 }
 
 interface DiscoveredModel {
@@ -277,8 +286,15 @@ function ProviderCard({ p, onSaved }: { p: Provider; onSaved: () => void }) {
         {testResult && (
           <span style={{ fontSize: 12, color: testResult.ok ? 'var(--good)' : 'var(--bad)' }}>
             {testResult.ok
-              ? `Pass · ${testResult.latency_ms}ms · ${testResult.model}`
-              : `Fail: ${testResult.error}`}
+              ? `Chat: Pass · ${testResult.latency_ms}ms · ${testResult.model}`
+              : `Chat: Fail: ${testResult.error}`}
+          </span>
+        )}
+        {testResult?.embedding && (
+          <span style={{ fontSize: 12, color: testResult.embedding.ok ? 'var(--good)' : 'var(--bad)' }}>
+            {testResult.embedding.ok
+              ? `Embedding: Pass · ${testResult.embedding.latency_ms}ms · ${testResult.embedding.model} · dim ${testResult.embedding.dim}`
+              : `Embedding: Fail: ${testResult.embedding.error}`}
           </span>
         )}
         {discoverError && (

@@ -442,8 +442,11 @@ services:
     environment:
       DATABASE_URL: "postgresql+asyncpg://aigateway:aigateway@postgres:5432/aigateway"
       REDIS_URL: "redis://redis:6379/0"
-      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-sk-local-placeholder}
-      EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:-http://ollama:11434/v1}
+      # Embeddings route through the gateway's litellm proxy, not a direct
+      # provider call. Override EMBEDDING_MODEL to use any embedding model the
+      # gateway exposes (see services/litellm/config.yaml).
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-${LITELLM_MASTER_KEY:-sk-litellm-local-dev}}
+      EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:-http://litellm:8003/v1}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
       CACHE_URL: "http://cache:8002"
       LIBRARIAN_SERVICE_TOKEN: ""
@@ -451,6 +454,8 @@ services:
       db-migrate:
         condition: service_completed_successfully
       redis:
+        condition: service_healthy
+      litellm:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8008/health')\" 2>/dev/null || exit 1"]
