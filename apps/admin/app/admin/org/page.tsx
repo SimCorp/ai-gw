@@ -7,7 +7,13 @@ import { LoadingState, ErrorState } from '../_components/PageStates';
 import { OrgTree, collectAllIds } from '../_components/OrgTree';
 import { OrgNode } from '../_components/nodeTypes';
 
-const NODE_TYPES = ['area', 'team', 'unit'] as const;
+const NODE_TYPES = ['area', 'unit', 'team'] as const;
+
+const NODE_TYPE_META: Record<string, { label: string; description: string }> = {
+  area:  { label: 'Area',  description: 'Top-level division (e.g. Engineering, Data). An area_owner here has access to everything below it.' },
+  unit:  { label: 'Unit',  description: 'Group of related teams within an area (e.g. Platform, Mobile). Has a unit_lead role.' },
+  team:  { label: 'Team',  description: 'Leaf node where engineers are members. Inherits policies and budgets from nodes above it.' },
+};
 
 interface CreateNodeForm {
   name: string;
@@ -120,15 +126,30 @@ function CreateNodeModal({
 
           <div>
             <label style={labelStyle}>Type</label>
-            <select
-              value={form.type}
-              onChange={e => setForm(f => ({ ...f, type: e.target.value as typeof NODE_TYPES[number] }))}
-              style={{ ...inputStyle, cursor: 'pointer' }}
-            >
-              {NODE_TYPES.map(t => (
-                <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
-              ))}
-            </select>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {NODE_TYPES.map(t => {
+                const selected = form.type === t;
+                return (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, type: t }))}
+                    style={{
+                      flex: 1, padding: '7px 0', fontSize: 12.5, fontWeight: selected ? 600 : 400,
+                      background: selected ? 'var(--sc-blue, #083EA7)' : 'var(--surface-2)',
+                      color: selected ? '#fff' : 'var(--fg-2)',
+                      border: `1px solid ${selected ? 'var(--sc-blue, #083EA7)' : 'var(--rule)'}`,
+                      borderRadius: 6, cursor: 'pointer', transition: 'all 0.1s',
+                    }}
+                  >
+                    {NODE_TYPE_META[t].label}
+                  </button>
+                );
+              })}
+            </div>
+            <p style={{ margin: '6px 0 0', fontSize: 11.5, color: 'var(--fg-3)', lineHeight: 1.4 }}>
+              {NODE_TYPE_META[form.type].description}
+            </p>
           </div>
 
           <div>
