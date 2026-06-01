@@ -415,6 +415,8 @@ export default function KeysPage() {
         </div>
       </div>
 
+      <KeyVerifier initialKey={newKeyValue} />
+
       {/* Code samples */}
       <div className="section-h">
         <h2>Use it in code</h2>
@@ -441,8 +443,6 @@ export default function KeysPage() {
         <span><span className="muted">Anthropic-shaped:</span> <span className="mono">/anthropic</span></span>
         <span><span className="muted">Status:</span> <a href="#" style={{ color: "var(--sc-blue)" }}>aigw.simcorp.internal/status</a></span>
       </div>
-
-      <KeyVerifier initialKey={newKeyValue} />
     </main>
   );
 }
