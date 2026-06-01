@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../_lib/authContext';
+import { useTeam } from '../../_lib/teamContext';
 
 const ADMIN_API = process.env.NEXT_PUBLIC_ADMIN_API ?? 'http://localhost:8005';
 const SCANNER_API = process.env.NEXT_PUBLIC_SCANNER_API ?? 'http://localhost:8011';
@@ -25,8 +26,6 @@ interface ScanJob {
   partial_results: boolean;
 }
 
-const TEAM_ID = process.env.NEXT_PUBLIC_TEAM_ID ?? '';
-
 const STATUS_COLOR: Record<string, string> = {
   queued: 'bg-gray-100 text-gray-700',
   running: 'bg-blue-100 text-blue-700',
@@ -37,6 +36,7 @@ const STATUS_COLOR: Record<string, string> = {
 
 export default function ScansPage() {
   const { token } = useAuth();
+  const { teamId } = useTeam();
   const router = useRouter();
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
@@ -44,12 +44,12 @@ export default function ScansPage() {
   const [selectedTier, setSelectedTier] = useState('quick');
 
   const { data: targets = [] } = useQuery<ScanTarget[]>({
-    queryKey: ['portal-scanner-targets-approved', TEAM_ID, token],
+    queryKey: ['portal-scanner-targets-approved', teamId, token],
     queryFn: () =>
-      fetch(`${ADMIN_API}/scanner/targets?team_id=${TEAM_ID}&status=approved`, {
+      fetch(`${ADMIN_API}/scanner/targets?team_id=${teamId}&status=approved`, {
         headers: { Authorization: `Bearer ${token}` },
       }).then(r => r.json()),
-    enabled: !!token,
+    enabled: !!token && !!teamId,
   });
 
   const { data: jobs = [] } = useQuery<ScanJob[]>({

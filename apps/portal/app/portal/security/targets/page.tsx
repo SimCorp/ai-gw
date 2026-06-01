@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../_lib/authContext';
+import { useTeam } from '../../_lib/teamContext';
 
 const ADMIN_API = process.env.NEXT_PUBLIC_ADMIN_API ?? 'http://localhost:8005';
 
@@ -24,7 +25,8 @@ interface RegisterForm {
 }
 
 export default function TargetsPage() {
-  const { token } = useAuth();
+  const { token, developer } = useAuth();
+  const { teamId } = useTeam();
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<RegisterForm>({
@@ -34,16 +36,13 @@ export default function TargetsPage() {
     scan_types: ['ai', 'api', 'network'],
   });
 
-  const TEAM_ID = process.env.NEXT_PUBLIC_TEAM_ID ?? '';
-  const USER_ID = process.env.NEXT_PUBLIC_USER_ID ?? '';
-
   const { data: targets = [] } = useQuery<ScanTarget[]>({
-    queryKey: ['portal-scanner-targets', TEAM_ID, token],
+    queryKey: ['portal-scanner-targets', teamId, token],
     queryFn: () =>
-      fetch(`${ADMIN_API}/scanner/targets?team_id=${TEAM_ID}`, {
+      fetch(`${ADMIN_API}/scanner/targets?team_id=${teamId}`, {
         headers: { Authorization: `Bearer ${token}` },
       }).then(r => r.json()),
-    enabled: !!token,
+    enabled: !!token && !!teamId,
     refetchInterval: 15_000,
   });
 
@@ -128,7 +127,7 @@ export default function TargetsPage() {
           </div>
           <div className="flex gap-2 mt-3">
             <button
-              onClick={() => register.mutate({ ...form, team_id: TEAM_ID, created_by: USER_ID })}
+              onClick={() => register.mutate({ ...form, team_id: teamId ?? '', created_by: developer?.developer_id ?? '' })}
               disabled={!form.url || !form.label}
               className="px-4 py-2 bg-blue-600 text-white rounded text-sm disabled:opacity-50"
             >
