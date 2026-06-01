@@ -317,7 +317,7 @@ export default function ModelsPage() {
                     </td>
                     <td>{enabledPill(m.enabled, () => toggleEnabled(m))}</td>
                     <td className="mono lo" style={{ fontSize: 12 }}>{new Date(m.created_at).toLocaleDateString()}</td>
-                    <td><button className="btn btn--sm btn--ghost">⋯</button></td>
+                    <td></td>
                   </tr>
                 ))}
               </tbody>
