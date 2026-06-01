@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useAuth } from '../../_lib/authContext';
 
 const BASE = process.env.NEXT_PUBLIC_ADMIN_BASE_URL ?? 'http://localhost:8005';
+const TOOLS_APP_BASE = process.env.NEXT_PUBLIC_TOOLS_APP_URL ?? '/tools-app';
 
 interface Tool {
   tool_id: string;
@@ -75,13 +76,25 @@ export default function ToolPage({ params }: { params: Promise<{ slug: string }>
         )}
       </div>
       <iframe
-        src={`/tools-app/${slug}`}
+        src={`${TOOLS_APP_BASE}/${slug}`}
         title={tool?.label ?? slug}
         style={{
           flex: 1, border: 'none', borderRadius: 8,
           background: '#fff', minHeight: 600,
         }}
+        onError={() => {/* handled by browser's native iframe error display */}}
       />
+      <div style={{ padding: '10px 0', fontSize: 12, color: 'var(--fg-mute)', flexShrink: 0 }}>
+        Having trouble? Access the tools app directly at{' '}
+        <a
+          href={`${TOOLS_APP_BASE}/${slug}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ color: 'var(--sc-link, #0A7BD7)' }}
+        >
+          {TOOLS_APP_BASE}/{slug} ↗
+        </a>
+      </div>
     </main>
   );
 }

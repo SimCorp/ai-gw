@@ -461,6 +461,10 @@ function AdoptionMockContent({km,activeDev,totalDev,adoptionPct,trendSeries,disp
 }) {
   return (
     <div style={{display:'flex',flexDirection:'column',gap:16}}>
+      <div style={{fontSize:11.5,color:C.fg2,marginBottom:8,padding:'6px 12px',background:'rgba(245,181,86,0.06)',border:'1px solid rgba(245,181,86,0.15)',borderRadius:6,display:'flex',alignItems:'center',gap:6}}>
+        <span style={{color:'#f5b556',fontSize:12}}>⚡</span>
+        <span>Live API data where available · heatmap, charts, and tool tiles use representative data</span>
+      </div>
       {/* KPI row */}
       <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:16}}>
         <CardWrap>
@@ -601,6 +605,10 @@ function ProductivityTab({period}:{period:Period}) {
   return (
     <div style={{display:'flex',flexDirection:'column',gap:16}}>
       {error&&<ErrorBox msg={`Failed to load productivity data: ${error} — charts show illustrative data`}/>}
+      <div style={{fontSize:11.5,color:C.fg2,marginBottom:8,padding:'6px 12px',background:'rgba(245,181,86,0.06)',border:'1px solid rgba(245,181,86,0.15)',borderRadius:6,display:'flex',alignItems:'center',gap:6}}>
+        <span style={{color:'#f5b556',fontSize:12}}>⚡</span>
+        <span>Live API data where available · cycle time charts and team ranking use representative data</span>
+      </div>
       {/* KPI row */}
       <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:16}}>
         <CardWrap>
@@ -773,6 +781,10 @@ function QualityTab({period}:{period:Period}) {
   return (
     <div style={{display:'flex',flexDirection:'column',gap:16}}>
       {error&&<ErrorBox msg={`Failed to load quality data: ${error} — charts show illustrative data`}/>}
+      <div style={{fontSize:11.5,color:C.fg2,marginBottom:8,padding:'6px 12px',background:'rgba(245,181,86,0.06)',border:'1px solid rgba(245,181,86,0.15)',borderRadius:6,display:'flex',alignItems:'center',gap:6}}>
+        <span style={{color:'#f5b556',fontSize:12}}>⚡</span>
+        <span>Live API data where available · durability charts and revert-rate bars use representative data</span>
+      </div>
       {/* KPI row */}
       <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:16}}>
         <CardWrap>
