@@ -190,13 +190,13 @@ export default function DashboardPage() {
   const [range, setRange] = useState('24h');
 
   const statsQuery = useQuery<TeamStat[]>({
-    queryKey: ['dashboard-stats'],
-    queryFn: () => apiFetch<TeamStat[]>('/dashboard/stats'),
+    queryKey: ['dashboard-stats', range],
+    queryFn: () => apiFetch<TeamStat[]>(`/dashboard/stats?range=${range}`),
     staleTime: 30_000,
   });
 
   const healthQuery = useQuery<SystemHealth>({
-    queryKey: ['system-health'],
+    queryKey: ['system-health', range],
     queryFn: () => apiFetch<SystemHealth>('/system/health'),
     staleTime: 15_000,
   });
@@ -252,7 +252,7 @@ export default function DashboardPage() {
       <div className="page__head">
         <div>
           <h1 className="page__title">Platform overview</h1>
-          <p className="page__sub">Org-wide usage, cost, and health · last 24 hours</p>
+          <p className="page__sub">Org-wide usage, cost, and health · last {range}</p>
         </div>
         <div className="page__actions">
           <div className="seg" role="tablist">
