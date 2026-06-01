@@ -270,7 +270,7 @@ export default function LoginPage() {
               />
               {process.env.NODE_ENV !== 'production' && (
                 <div style={{ fontSize: 11, color: 'var(--fg-3, #666)', marginTop: 4 }}>
-                  Local dev: <code style={{ fontFamily: 'monospace' }}>admin@simcorp.com</code> / <code style={{ fontFamily: 'monospace' }}>password</code>
+                  Local dev: <code style={{ fontFamily: 'monospace' }}>admin@simcorp.com</code> / <code style={{ fontFamily: 'monospace' }}>Admin1234!</code>
                 </div>
               )}
             </div>
