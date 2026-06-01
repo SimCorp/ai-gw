@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { LoadingState, ErrorState } from '../_components/PageStates';
 import { apiFetch } from '../../../lib/apiClient';
@@ -250,7 +251,7 @@ export default function QuotasPage() {
                         <span className="muted" style={{ fontSize: 12 }}>no cap set</span>
                       )}
                     </td>
-                    <td><button className="btn btn--sm">Adjust</button></td>
+                    <td><Link href={`/admin/nodes/${q.id}`} className="btn btn--sm">Adjust</Link></td>
                   </tr>
                 );
               })}
