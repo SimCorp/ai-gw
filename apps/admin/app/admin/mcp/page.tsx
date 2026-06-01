@@ -256,6 +256,7 @@ function ServerModal({
                 <input
                   className="input" style={{ width: '100%' }}
                   type="password"
+                  autoComplete="off"
                   value={form.auth_secret}
                   onChange={e => setForm(f => ({ ...f, auth_secret: e.target.value }))}
                   placeholder={editServer ? '••••••••' : 'Secret token / API key'}

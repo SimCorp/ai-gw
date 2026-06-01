@@ -263,6 +263,7 @@ function ProviderCard({ p, onSaved }: { p: Provider; onSaved: () => void }) {
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <input
             type="password"
+            autoComplete="off"
             className="search"
             placeholder={p.is_set ? `Replace key… ${p.key_placeholder ? `(${p.key_placeholder})` : ''}`.trim() : (p.key_placeholder ?? 'Paste API key…')}
             value={keyInput}
