@@ -36,7 +36,7 @@ export default function UsagePage() {
     if (!teamId || !teamName) return;
     setLoading(true);
     setError(null);
-    fetch(`${ADMIN_BASE}/dashboard/stats`)
+    fetch(`${ADMIN_BASE}/dashboard/stats?range=${range}`)
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
@@ -47,7 +47,7 @@ export default function UsagePage() {
       })
       .catch((e) => setError(String(e)))
       .finally(() => setLoading(false));
-  }, [teamId, teamName]);
+  }, [teamId, teamName, range]);
 
   if (!teamId) {
     return (
@@ -71,7 +71,7 @@ export default function UsagePage() {
       <div className="phero">
         <div>
           <h1>Usage &amp; spend</h1>
-          <p>Your activity on <strong>{teamName}</strong> · last 30 days</p>
+          <p>Your activity on <strong>{teamName}</strong> · {range}</p>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <div className="seg">
@@ -79,7 +79,32 @@ export default function UsagePage() {
               <button key={r} className={range === r ? "is-active" : ""} onClick={() => setRange(r)}>{r}</button>
             ))}
           </div>
-          <button className="btn">Export CSV</button>
+          <button
+            className="btn"
+            disabled={!stat}
+            onClick={() => {
+              if (!stat) return;
+              const rows = [
+                ['Metric', 'Value'],
+                ['Team', stat.team_name],
+                ['Total spend (EUR)', stat.total_cost_usd.toFixed(2)],
+                ['Total requests', stat.request_count],
+                ['Total tokens', stat.total_tokens],
+                ['Cache hit rate (%)', stat.cache_hit_pct.toFixed(1)],
+                ['Range', range],
+              ];
+              const csv = rows.map(r => r.join(',')).join('\n');
+              const blob = new Blob([csv], { type: 'text/csv' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `usage-${stat.team_name}-${range}.csv`;
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+          >
+            Export CSV
+          </button>
         </div>
       </div>
 
