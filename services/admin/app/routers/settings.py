@@ -115,9 +115,9 @@ PROVIDERS = [
             "copilot-claude-3.5-sonnet",
         ],
         "test_model": "copilot-gpt-4o",
-        "description": "Access models through an existing GitHub Copilot subscription — not a model marketplace. Requires a GitHub PAT (classic) with the copilot:read scope. Distinct from GitHub Models: uses your Copilot licence, not free inference credits.",
+        "description": "Access models through an existing GitHub Copilot subscription. WARNING: PATs (ghp_…) are NOT accepted — the Copilot API requires a GitHub OAuth token (ghu_… format). Get one via GitHub CLI: gh auth login --scopes copilot && gh auth token",
         "docs_url": "https://docs.github.com/en/copilot/using-github-copilot/using-github-copilot-chat-in-your-ide",
-        "key_placeholder": "ghp_… (GitHub PAT, copilot:read scope)",
+        "key_placeholder": "ghu_… (OAuth token — NOT a PAT; see description)",
         "extra_env_vars": [],
     },
     {
