@@ -205,7 +205,9 @@ export default function RequestsPage() {
 
               {selectedRow.latency_ms != null && (
                 <>
-                  <h4 style={{ margin: '14px 0 6px', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--fg-2)' }}>Trace</h4>
+                  <h4 style={{ margin: '14px 0 6px', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--fg-2)' }}>
+                    Trace <span style={{ fontWeight: 400, textTransform: 'none', fontSize: 10.5, color: 'var(--fg-3)' }}>· estimated from total latency</span>
+                  </h4>
                   {(() => {
                     const total = selectedRow.latency_ms;
                     const auth = Math.min(8, total * 0.05);

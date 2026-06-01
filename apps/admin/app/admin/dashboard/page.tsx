@@ -265,7 +265,25 @@ export default function DashboardPage() {
               >{r}</button>
             ))}
           </div>
-          <button className="btn">Export</button>
+          <button
+            className="btn"
+            onClick={() => {
+              if (!stats.length) return;
+              const header = 'Team,Requests,Tokens,Cost (EUR),Cache Hit %';
+              const rows = stats.map(t =>
+                [t.team_name, t.request_count, t.total_tokens ?? 0, (t.total_cost_usd ?? 0).toFixed(4), (t.cache_hit_pct ?? 0).toFixed(1)].join(',')
+              );
+              const csv = [header, ...rows].join('\n');
+              const blob = new Blob([csv], { type: 'text/csv' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url; a.download = `gateway-stats-${range}.csv`; a.click();
+              URL.revokeObjectURL(url);
+            }}
+            disabled={stats.length === 0}
+          >
+            Export
+          </button>
         </div>
       </div>
 
@@ -276,6 +294,7 @@ export default function DashboardPage() {
           <div className="kpi__value">{fmtUsd(totalSpend)}</div>
           <div className="kpi__delta flat">{stats.length} teams · all time</div>
           <svg className="spark kpi__spark" viewBox="0 0 100 28" preserveAspectRatio="none">
+            <title>trend · representative</title>
             <path d="M0,18 L10,16 L20,20 L30,12 L40,15 L50,9 L60,13 L70,8 L80,11 L90,6 L100,9" fill="none" stroke="var(--sc-blue)" strokeWidth="1.5"/>
             <path d="M0,18 L10,16 L20,20 L30,12 L40,15 L50,9 L60,13 L70,8 L80,11 L90,6 L100,9 L100,28 L0,28 Z" fill="var(--sc-blue)" opacity="0.08"/>
           </svg>
@@ -285,6 +304,7 @@ export default function DashboardPage() {
           <div className="kpi__value">{avgCacheHit.toFixed(1)}<span className="unit">%</span></div>
           <div className="kpi__delta flat">avg across teams</div>
           <svg className="spark kpi__spark" viewBox="0 0 100 28" preserveAspectRatio="none">
+            <title>trend · representative</title>
             <path d="M0,22 L10,20 L20,18 L30,16 L40,14 L50,12 L60,11 L70,9 L80,7 L90,5 L100,4" fill="none" stroke="var(--good)" strokeWidth="1.5"/>
             <path d="M0,22 L10,20 L20,18 L30,16 L40,14 L50,12 L60,11 L70,9 L80,7 L90,5 L100,4 L100,28 L0,28 Z" fill="var(--good)" opacity="0.10"/>
           </svg>
@@ -300,6 +320,7 @@ export default function DashboardPage() {
           </div>
           <div className="kpi__delta flat">total · all teams</div>
           <svg className="spark kpi__spark" viewBox="0 0 100 28" preserveAspectRatio="none">
+            <title>trend · representative</title>
             <path d="M0,15 L8,18 L16,12 L24,16 L32,10 L40,14 L48,8 L56,12 L64,6 L72,10 L80,5 L88,9 L100,4" fill="none" stroke="var(--sc-purple)" strokeWidth="1.5"/>
           </svg>
         </div>
@@ -415,7 +436,7 @@ export default function DashboardPage() {
         <div className="card">
           <div className="card__head">
             <h3 className="card__title">Request volume &amp; cache hits</h3>
-            <span className="card__sub">stacked, requests/min</span>
+            <span className="card__sub">representative · no time-series endpoint</span>
             <div className="card__actions">
               <span className="pill"><span className="dot" style={{ background: 'var(--sc-blue)' }}></span>Provider</span>
               <span className="pill"><span className="dot" style={{ background: 'var(--sc-teal)' }}></span>Cache hit</span>
@@ -476,7 +497,7 @@ export default function DashboardPage() {
       {/* 3-col row */}
       <div className="split-3" style={{ marginBottom: 16 }}>
         <div className="card">
-          <div className="card__head"><h3 className="card__title">Model mix</h3><span className="card__sub">by spend</span></div>
+          <div className="card__head"><h3 className="card__title">Model mix</h3><span className="card__sub">representative · live breakdown coming soon</span></div>
           <div className="card__body">
             <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
               <svg viewBox="0 0 80 80" width="100" height="100" style={{ flexShrink: 0 }}>
