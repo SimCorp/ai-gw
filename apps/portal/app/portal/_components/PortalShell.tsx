@@ -7,40 +7,65 @@ import { useAuth } from "../_lib/authContext";
 
 const NAV = [
   {
-    group: "Use",
+    group: "",
     items: [
-      { href: "/portal",            label: "Home",        icon: <HomeIcon /> },
-      { href: "/portal/playground", label: "Playground",  icon: <PlayIcon />, kbd: "⌘P" },
-      { href: "/portal/agents",     label: "Agents",      icon: <AgentIcon /> },
-      { href: "/portal/workflows",  label: "Workflows",   icon: <WorkflowIcon /> },
-      { href: "/portal/keys",       label: "API keys",    icon: <KeyIcon /> },
-      { href: "/portal/models",     label: "Models",      icon: <CubeIcon /> },
-      { href: "/portal/prompts",    label: "Prompts",     icon: <PromptIcon /> },
-      { href: "/portal/mcp",        label: "MCP servers", icon: <McpIcon /> },
-      { href: "/portal/plugins",    label: "Plugins",     icon: <PluginIcon /> },
-      { href: "/portal/skills",     label: "Skills",      icon: <SkillIcon /> },
-      { href: "/portal/tools",      label: "Tools",       icon: <WrenchIcon /> },
-      { href: "/portal/docs",       label: "Quickstart",  icon: <DocIcon /> },
-      { href: "/portal/security",   label: "Security",    icon: <SecurityIcon /> },
+      { href: "/portal",      label: "Home",       icon: <HomeIcon /> },
+      { href: "/portal/docs", label: "Quickstart", icon: <DocIcon /> },
+    ],
+  },
+  {
+    group: "Build",
+    items: [
+      { href: "/portal/playground", label: "Playground", icon: <PlayIcon />, kbd: "⌘P" },
+      { href: "/portal/agents",     label: "Agents",     icon: <AgentIcon /> },
+      { href: "/portal/workflows",  label: "Workflows",  icon: <WorkflowIcon /> },
+      { href: "/portal/prompts",    label: "Prompts",    icon: <PromptIcon /> },
+    ],
+  },
+  {
+    group: "Access",
+    items: [
+      { href: "/portal/models", label: "Models",   icon: <CubeIcon /> },
+      { href: "/portal/keys",   label: "API keys", icon: <KeyIcon /> },
+    ],
+  },
+  {
+    group: "Catalog",
+    items: [
+      { href: "/portal/mcp",     label: "MCP servers", icon: <McpIcon /> },
+      { href: "/portal/plugins", label: "Plugins",     icon: <PluginIcon /> },
+      { href: "/portal/skills",  label: "Skills",      icon: <SkillIcon /> },
+      { href: "/portal/tools",   label: "Tools",       icon: <WrenchIcon /> },
+    ],
+  },
+  {
+    group: "Monitor",
+    items: [
+      { href: "/portal/usage",    label: "Usage & spend", icon: <ChartIcon /> },
+      { href: "/portal/security", label: "Security",      icon: <SecurityIcon /> },
+    ],
+  },
+  {
+    group: "Grow",
+    items: [
+      { href: "/portal/transformation",     label: "AI Transformation", icon: <TransformIcon /> },
+      { href: "/portal/champions",          label: "Champions",         icon: <TrophyIcon /> },
+      { href: "/portal/champions/bookings", label: "Bookings",          icon: <ResultsIcon /> },
     ],
   },
   {
     group: "League",
     items: [
-      { href: "/portal/league",              label: "Challenges",   icon: <SwordIcon /> },
-      { href: "/portal/league/leaderboard",  label: "Leaderboard",  icon: <TrophyIcon /> },
-      { href: "/portal/league/results",      label: "My Results",   icon: <ResultsIcon /> },
-      { href: "/portal/league/store",        label: "Store",        icon: <StoreIcon /> },
+      { href: "/portal/league",             label: "Challenges",  icon: <SwordIcon /> },
+      { href: "/portal/league/leaderboard", label: "Leaderboard", icon: <TrophyIcon /> },
+      { href: "/portal/league/results",     label: "My Results",  icon: <ResultsIcon /> },
+      { href: "/portal/league/store",       label: "Store",       icon: <StoreIcon /> },
     ],
   },
   {
     group: "Account",
     items: [
-      { href: "/portal/usage",          label: "Usage & spend",   icon: <ChartIcon /> },
-      { href: "/portal/transformation", label: "AI Transformation", icon: <TransformIcon /> },
-      { href: "/portal/champions",      label: "Champions",         icon: <TrophyIcon /> },
-      { href: "/portal/champions/bookings", label: "Bookings",      icon: <ResultsIcon /> },
-      { href: "/portal/settings",       label: "Settings",         icon: <SettingsIcon /> },
+      { href: "/portal/settings", label: "Settings", icon: <SettingsIcon /> },
     ],
   },
 ];
@@ -98,8 +123,8 @@ export default function PortalShell() {
 
       <nav className="psidebar__nav">
         {NAV.map((section) => (
-          <div key={section.group}>
-            <div className="group">{section.group}</div>
+          <div key={section.group || "top"}>
+            {section.group && <div className="group">{section.group}</div>}
             {section.items.map((item) => (
               <Link
                 key={item.href}
