@@ -449,7 +449,7 @@ function AdoptionTab({period}:{period:Period}) {
     : MOCK.mockTeams;
 
   if(loading) return <Spinner/>;
-  if(error)   return <><ErrorBox msg={error}/><AdoptionMockContent km={km} activeDev={activeDev} totalDev={totalDev} adoptionPct={adoptionPct} trendSeries={trendSeries} displayTeams={displayTeams} chartType={chartType} setChartType={setChartType}/></>;
+  if(error)   return <ErrorBox msg={`Failed to load adoption data: ${error} — showing illustrative data below`}/>;
   return <AdoptionMockContent km={km} activeDev={activeDev} totalDev={totalDev} adoptionPct={adoptionPct} trendSeries={trendSeries} displayTeams={displayTeams} chartType={chartType} setChartType={setChartType}/>;
 }
 
@@ -600,6 +600,7 @@ function ProductivityTab({period}:{period:Period}) {
 
   return (
     <div style={{display:'flex',flexDirection:'column',gap:16}}>
+      {error&&<ErrorBox msg={`Failed to load productivity data: ${error} — charts show illustrative data`}/>}
       {/* KPI row */}
       <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:16}}>
         <CardWrap>
@@ -771,6 +772,7 @@ function QualityTab({period}:{period:Period}) {
 
   return (
     <div style={{display:'flex',flexDirection:'column',gap:16}}>
+      {error&&<ErrorBox msg={`Failed to load quality data: ${error} — charts show illustrative data`}/>}
       {/* KPI row */}
       <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:16}}>
         <CardWrap>
@@ -944,7 +946,10 @@ export default function GenAiAdoptionPage() {
             <h1 style={{margin:0,fontSize:22,fontWeight:700,color:'#fff',fontFamily:C.display,letterSpacing:'-.01em'}}>
               GenAI Adoption <span style={{color:C.azure}}>✦</span>
             </h1>
-            <div style={{fontSize:13,color:C.fg2,marginTop:3}}>Track adoption, productivity impact, and code quality across the engineering organisation</div>
+            <div style={{fontSize:11,color:C.fg2,marginTop:4,display:'flex',alignItems:'center',gap:6}}>
+              <span style={{padding:'1px 6px',borderRadius:4,background:'rgba(245,181,86,0.12)',border:'1px solid rgba(245,181,86,0.3)',color:C.amber,fontSize:10,fontWeight:600}}>ILLUSTRATIVE</span>
+              <span>Charts use representative data · live cohort metrics load where available</span>
+            </div>
           </div>
           <select value={period} onChange={e=>setPeriod(Number(e.target.value) as Period)} style={{marginLeft:'auto',padding:'7px 14px',borderRadius:10,background:'rgba(124,140,248,0.18)',border:'1px solid rgba(124,140,248,0.30)',color:'#fff',fontFamily:C.ui,fontSize:13,cursor:'pointer',backdropFilter:'blur(12px)'}}>
             <option value={7}>Last 7 days</option>
