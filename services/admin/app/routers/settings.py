@@ -1,4 +1,5 @@
 """Provider API key management — store keys in DB, push to LiteLLM at runtime."""
+
 import base64
 import os
 
@@ -31,6 +32,7 @@ def _make_fernet(salt: bytes) -> Fernet:
 def _encrypt_value(plaintext: str) -> str:
     # Store as "v2:<b64-salt>:<fernet-ciphertext>" so each value has a unique salt.
     import secrets as _secrets
+
     salt = _secrets.token_bytes(16)
     token = _make_fernet(salt).encrypt(plaintext.encode())
     salt_b64 = base64.urlsafe_b64encode(salt).decode()
@@ -47,8 +49,12 @@ def _decrypt_value(stored: str) -> str:
         return _make_fernet(_LEGACY_SALT).decrypt(stored.encode()).decode()
     except (InvalidToken, Exception):
         import logging
-        logging.getLogger(__name__).warning("Failed to decrypt provider key — value may be corrupted")
+
+        logging.getLogger(__name__).warning(
+            "Failed to decrypt provider key — value may be corrupted"
+        )
         raise InvalidToken("Could not decrypt stored provider API key")
+
 
 router = APIRouter(tags=["settings"])
 # Provider definitions — env_var is what LiteLLM reads
@@ -87,17 +93,31 @@ PROVIDERS = [
         "litellm_model_names": ["github-gpt-4o", "text-embedding-3-small"],
         "test_model": "github-gpt-4o",
         "embedding_test_model": "text-embedding-3-small",
+        "description": "AI model marketplace hosted on Azure AI — OpenAI, Meta, Cohere and more. Free tier available, no Copilot subscription needed. Requires a GitHub PAT (classic) with the models:read scope.",
+        "docs_url": "https://docs.github.com/en/github-models",
+        "key_placeholder": "ghp_… (GitHub PAT, models:read scope)",
         "extra_env_vars": [],
     },
     {
         "name": "GitHub Copilot",
         "icon": "⚫",
         "env_var": "GITHUB_COPILOT_TOKEN",
-        "models": ["copilot-gpt-4o", "copilot-gpt-4o-mini", "copilot-o3-mini", "copilot-claude-3.5-sonnet"],
-        "litellm_model_names": ["copilot-gpt-4o", "copilot-gpt-4o-mini", "copilot-o3-mini", "copilot-claude-3.5-sonnet"],
+        "models": [
+            "copilot-gpt-4o",
+            "copilot-gpt-4o-mini",
+            "copilot-o3-mini",
+            "copilot-claude-3.5-sonnet",
+        ],
+        "litellm_model_names": [
+            "copilot-gpt-4o",
+            "copilot-gpt-4o-mini",
+            "copilot-o3-mini",
+            "copilot-claude-3.5-sonnet",
+        ],
         "test_model": "copilot-gpt-4o",
-        "description": "GitHub Copilot API — requires a GitHub PAT with Copilot access (ghp_... token with copilot:read scope)",
+        "description": "Access models through an existing GitHub Copilot subscription — not a model marketplace. Requires a GitHub PAT (classic) with the copilot:read scope. Distinct from GitHub Models: uses your Copilot licence, not free inference credits.",
         "docs_url": "https://docs.github.com/en/copilot/using-github-copilot/using-github-copilot-chat-in-your-ide",
+        "key_placeholder": "ghp_… (GitHub PAT, copilot:read scope)",
         "extra_env_vars": [],
     },
     {
@@ -105,14 +125,29 @@ PROVIDERS = [
         "icon": "☁️",
         "env_var": "AZURE_API_KEY",
         "models": ["azure-gpt-4o", "azure-gpt-4o-mini", "azure-o3-mini", "azure-gpt-4.1"],
-        "litellm_model_names": ["azure-gpt-4o", "azure-gpt-4o-mini", "azure-o3-mini", "azure-gpt-4.1", "azure-text-embedding-3-small", "azure-text-embedding-3-large"],
+        "litellm_model_names": [
+            "azure-gpt-4o",
+            "azure-gpt-4o-mini",
+            "azure-o3-mini",
+            "azure-gpt-4.1",
+            "azure-text-embedding-3-small",
+            "azure-text-embedding-3-large",
+        ],
         "test_model": "azure-gpt-4o",
         "embedding_test_model": "azure-text-embedding-3-small",
         "description": "Azure AI Foundry (Azure OpenAI) — requires API key, endpoint URL, and API version",
         "docs_url": "https://learn.microsoft.com/en-us/azure/ai-services/openai/",
         "extra_env_vars": [
-            {"env_var": "AZURE_API_BASE", "label": "Endpoint URL", "placeholder": "https://YOUR-RESOURCE.openai.azure.com/"},
-            {"env_var": "AZURE_API_VERSION", "label": "API Version", "placeholder": "2024-12-01-preview"},
+            {
+                "env_var": "AZURE_API_BASE",
+                "label": "Endpoint URL",
+                "placeholder": "https://YOUR-RESOURCE.openai.azure.com/",
+            },
+            {
+                "env_var": "AZURE_API_VERSION",
+                "label": "API Version",
+                "placeholder": "2024-12-01-preview",
+            },
         ],
     },
 ]
@@ -249,10 +284,13 @@ async def save_provider_keys(
                     from fastapi import HTTPException as _HTTPException
 
                     from app.routers.mcp import _validate_mcp_url
+
                     try:
                         _validate_mcp_url(extra_val)
                     except _HTTPException as exc:
-                        raise _HTTPException(status_code=422, detail=f"{extra_var}: {exc.detail}") from exc
+                        raise _HTTPException(
+                            status_code=422, detail=f"{extra_var}: {exc.detail}"
+                        ) from exc
                 await session.execute(
                     text("""
                         INSERT INTO provider_keys (env_var, key_value, updated_at)
@@ -298,7 +336,9 @@ async def test_provider(env_var: str, session: AsyncSession = Depends(get_sessio
         )
         latency_ms = int((time.monotonic() - t0) * 1000)
         if resp.status_code == 200:
-            reply = resp.json().get("choices", [{}])[0].get("message", {}).get("content", "").strip()
+            reply = (
+                resp.json().get("choices", [{}])[0].get("message", {}).get("content", "").strip()
+            )
             return {"ok": True, "latency_ms": latency_ms, "reply": reply, "model": model}
         detail = resp.json().get("error", {}).get("message", resp.text[:200])
         return {"ok": False, "error": detail, "latency_ms": latency_ms, "model": model}
@@ -345,7 +385,10 @@ async def _fetch_provider_models(provider: dict, key: str, stored: dict[str, str
                     params={"limit": 100},
                 )
                 r.raise_for_status()
-                return [{"id": m["id"], "name": m.get("display_name", m["id"])} for m in r.json().get("data", [])]
+                return [
+                    {"id": m["id"], "name": m.get("display_name", m["id"])}
+                    for m in r.json().get("data", [])
+                ]
 
             elif "OpenAI" in name:
                 r = await client.get(
@@ -353,8 +396,14 @@ async def _fetch_provider_models(provider: dict, key: str, stored: dict[str, str
                     headers={"Authorization": f"Bearer {key}"},
                 )
                 r.raise_for_status()
-                raw = [m for m in r.json().get("data", []) if "gpt" in m["id"] or m["id"].startswith("o")]
-                return [{"id": m["id"], "name": m["id"]} for m in sorted(raw, key=lambda x: x["id"])]
+                raw = [
+                    m
+                    for m in r.json().get("data", [])
+                    if "gpt" in m["id"] or m["id"].startswith("o")
+                ]
+                return [
+                    {"id": m["id"], "name": m["id"]} for m in sorted(raw, key=lambda x: x["id"])
+                ]
 
             elif "GitHub Copilot" in name:
                 r = await client.get(
@@ -362,15 +411,21 @@ async def _fetch_provider_models(provider: dict, key: str, stored: dict[str, str
                     headers={"Authorization": f"Bearer {key}"},
                 )
                 r.raise_for_status()
-                return [{"id": m["id"], "name": m.get("name", m["id"])} for m in r.json().get("data", r.json() if isinstance(r.json(), list) else [])]
+                return [
+                    {"id": m["id"], "name": m.get("name", m["id"])}
+                    for m in r.json().get("data", r.json() if isinstance(r.json(), list) else [])
+                ]
 
             elif "GitHub Models" in name:
-                r = await client.get(
-                    "https://models.inference.ai.azure.com/v1/models",
-                    headers={"Authorization": f"Bearer {key}"},
-                )
+                # Public catalog endpoint — no auth required, returns a plain list
+                # (not the OpenAI-compat /v1/models which returns {"data":[...]})
+                r = await client.get("https://models.inference.ai.azure.com/models")
                 r.raise_for_status()
-                return [{"id": m["id"], "name": m.get("name", m["id"])} for m in r.json().get("data", [])]
+                return [
+                    {"id": m["name"], "name": m.get("friendly_name", m["name"])}
+                    for m in r.json()
+                    if isinstance(m, dict) and m.get("name")
+                ]
 
             elif "Google" in name:
                 r = await client.get(
@@ -379,14 +434,19 @@ async def _fetch_provider_models(provider: dict, key: str, stored: dict[str, str
                 )
                 r.raise_for_status()
                 return [
-                    {"id": m["name"].split("/")[-1], "name": m.get("displayName", m["name"].split("/")[-1])}
+                    {
+                        "id": m["name"].split("/")[-1],
+                        "name": m.get("displayName", m["name"].split("/")[-1]),
+                    }
                     for m in r.json().get("models", [])
                     if "generateContent" in m.get("supportedGenerationMethods", [])
                 ]
 
             elif "Azure" in name:
                 api_base = stored.get("AZURE_API_BASE") or os.environ.get("AZURE_API_BASE", "")
-                api_version = stored.get("AZURE_API_VERSION") or os.environ.get("AZURE_API_VERSION", "2024-12-01-preview")
+                api_version = stored.get("AZURE_API_VERSION") or os.environ.get(
+                    "AZURE_API_VERSION", "2024-12-01-preview"
+                )
                 if not api_base:
                     return []
                 base = api_base.rstrip("/")
@@ -396,7 +456,10 @@ async def _fetch_provider_models(provider: dict, key: str, stored: dict[str, str
                     params={"api-version": api_version},
                 )
                 r.raise_for_status()
-                return [{"id": m["id"], "name": m.get("model", m["id"])} for m in r.json().get("data", [])]
+                return [
+                    {"id": m["id"], "name": m.get("model", m["id"])}
+                    for m in r.json().get("data", [])
+                ]
 
     except Exception:
         pass
@@ -421,9 +484,9 @@ async def discover_provider_models(env_var: str, session: AsyncSession = Depends
         return {"ok": False, "error": "No models returned — check key and try again", "models": []}
 
     # Fetch registry rows to get UUID + enabled state for registered models
-    rows = (await session.execute(
-        text("SELECT id::text, model_id, enabled FROM model_registry")
-    )).all()
+    rows = (
+        await session.execute(text("SELECT id::text, model_id, enabled FROM model_registry"))
+    ).all()
     registry_map = {r[1]: {"registry_id": r[0], "enabled": r[2]} for r in rows}
 
     return {
@@ -433,7 +496,9 @@ async def discover_provider_models(env_var: str, session: AsyncSession = Depends
                 "id": m["id"],
                 "name": m["name"],
                 "registered": m["id"] in registry_map,
-                "registry_id": registry_map[m["id"]]["registry_id"] if m["id"] in registry_map else None,
+                "registry_id": registry_map[m["id"]]["registry_id"]
+                if m["id"] in registry_map
+                else None,
                 "enabled": registry_map[m["id"]]["enabled"] if m["id"] in registry_map else None,
             }
             for m in discovered

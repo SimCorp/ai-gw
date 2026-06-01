@@ -23,6 +23,7 @@ interface Provider {
   description?: string;
   extra_env_vars?: ExtraEnvVar[];
   docs_url?: string;
+  key_placeholder?: string;
 }
 
 interface ProvidersResponse {
@@ -263,7 +264,7 @@ function ProviderCard({ p, onSaved }: { p: Provider; onSaved: () => void }) {
           <input
             type="password"
             className="search"
-            placeholder={p.is_set ? 'Replace key…' : 'Paste API key…'}
+            placeholder={p.is_set ? `Replace key… ${p.key_placeholder ? `(${p.key_placeholder})` : ''}`.trim() : (p.key_placeholder ?? 'Paste API key…')}
             value={keyInput}
             onChange={e => setKeyInput(e.target.value)}
             style={{ flex: 1, height: 30, padding: '0 10px', fontSize: 12 }}
