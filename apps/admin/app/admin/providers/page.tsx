@@ -278,12 +278,15 @@ function ProviderCard({ p, onSaved }: { p: Provider; onSaved: () => void }) {
               {testing ? 'Testing…' : 'Test'}
             </button>
           )}
-          {p.is_set && (
-            <button className="btn btn--sm" onClick={fetchModels} disabled={discovering}>
+        </div>
+        {p.is_set && (
+          <div style={{ borderTop: '1px solid var(--rule)', paddingTop: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--fg-3)' }}>Model registry</span>
+            <button className="btn btn--sm" onClick={fetchModels} disabled={discovering} style={{ marginLeft: 'auto' }}>
               {discovering ? 'Fetching…' : 'Fetch models'}
             </button>
-          )}
-        </div>
+          </div>
+        )}
         {saveMsg && <span style={{ fontSize: 12, color: saveMsg === 'Saved' ? 'var(--good)' : 'var(--bad)' }}>{saveMsg}</span>}
         {testResult && (
           <span style={{ fontSize: 12, color: testResult.ok ? 'var(--good)' : 'var(--bad)' }}>
