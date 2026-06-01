@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { LoadingState, ErrorState } from '../_components/PageStates';
 import { apiFetch } from '../../../lib/apiClient';
@@ -230,8 +231,6 @@ export default function AlertsPage() {
           </p>
         </div>
         <div className="page__actions">
-          <button className="btn">Notification channels</button>
-          <button className="btn btn--primary">+ New rule</button>
         </div>
       </div>
 
@@ -317,7 +316,20 @@ export default function AlertsPage() {
                       <td className="mono lo">{a.triggered}</td>
                       <td>{a.owner}</td>
                       <td>{alertStatusPill(a.status)}</td>
-                      <td><button className="btn btn--sm">{a.btn}</button></td>
+                      <td>
+                        <Link
+                          href={
+                            a.btn === 'Review'
+                              ? '/admin/quotas'
+                              : a.ruleName.toLowerCase().includes('redis') || a.ruleName.toLowerCase().includes('postgres') || a.ruleName.toLowerCase().includes('litellm')
+                              ? '/admin/dashboard'
+                              : '/admin/requests'
+                          }
+                          className="btn btn--sm"
+                        >
+                          {a.btn}
+                        </Link>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
