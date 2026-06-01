@@ -15,6 +15,10 @@ export interface OrgTreeProps {
   /** Externally controlled expanded IDs (optional; tree manages its own state when not provided) */
   expandedIds?: Set<string>;
   onToggle?: (id: string) => void;
+  /** Called when user clicks "+ child" on a node */
+  onAddChild?: (node: OrgNode) => void;
+  /** Highlight/filter nodes matching this string */
+  searchQuery?: string;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -33,13 +37,15 @@ function Chevron({ open }: { open: boolean }) {
 // ── OrgTreeNode (recursive) ───────────────────────────────────────────────────
 
 function OrgTreeNode({
-  node, depth, expandedIds, onToggle, onSelect,
+  node, depth, expandedIds, onToggle, onSelect, onAddChild, searchQuery,
 }: {
   node: OrgNode;
   depth: number;
   expandedIds: Set<string>;
   onToggle: (id: string) => void;
   onSelect: (node: OrgNode) => void;
+  onAddChild?: (node: OrgNode) => void;
+  searchQuery?: string;
 }) {
   const open = expandedIds.has(node.id);
   const hasChildren = (node.children?.length ?? 0) > 0;
@@ -58,55 +64,74 @@ function OrgTreeNode({
             expandedIds={expandedIds}
             onToggle={onToggle}
             onSelect={onSelect}
+            onAddChild={onAddChild}
+            searchQuery={searchQuery}
           />
         ))}
       </>
     );
   }
 
+  const matchesSearch = searchQuery
+    ? node.name.toLowerCase().includes(searchQuery.toLowerCase())
+    : true;
+
   return (
-    <div>
+    <div style={{ opacity: searchQuery && !matchesSearch ? 0.35 : 1 }}>
       <div
-        onClick={() => {
-          if (hasChildren) onToggle(node.id);
-          onSelect(node);
-        }}
         style={{
           display: 'flex', alignItems: 'center', gap: 8,
           padding: `9px 16px 9px ${16 + indent}px`,
-          cursor: 'pointer',
           borderBottom: '1px solid var(--rule)',
           userSelect: 'none',
           background: depth === 0 ? `${color}0d` : undefined,
           borderLeft: depth === 0 ? `3px solid ${color}` : undefined,
         }}
-        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = depth === 0 ? `${color}1a` : 'var(--surface-2)'; }}
-        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = depth === 0 ? `${color}0d` : ''; }}
+        onMouseEnter={e => {
+          (e.currentTarget as HTMLElement).style.background = depth === 0 ? `${color}1a` : 'var(--surface-2)';
+          const btn = (e.currentTarget as HTMLElement).querySelector('.add-child-btn') as HTMLElement | null;
+          if (btn) btn.style.opacity = '1';
+        }}
+        onMouseLeave={e => {
+          (e.currentTarget as HTMLElement).style.background = depth === 0 ? `${color}0d` : '';
+          const btn = (e.currentTarget as HTMLElement).querySelector('.add-child-btn') as HTMLElement | null;
+          if (btn) btn.style.opacity = '0';
+        }}
       >
-        {hasChildren ? <Chevron open={open} /> : <span style={{ width: 14, display: 'inline-block' }} />}
-        <span style={{
-          display: 'inline-block', width: 10, height: 10,
-          borderRadius: 3, background: color, flexShrink: 0,
-        }} />
-        <span style={{
-          fontSize: 13, fontWeight: depth === 0 ? 600 : 500,
-          color: 'var(--fg)', flex: 1,
-        }}>
-          {node.name}
-        </span>
-        <TypeBadge type={node.type} />
-        {hasChildren && (
-          <span style={{
-            fontSize: 11, color: 'var(--fg-3)',
-            background: 'var(--surface-3)',
-            borderRadius: 10, padding: '1px 7px', marginLeft: 6,
-          }}>
-            {node.children!.length}
+        <span
+          onClick={() => { if (hasChildren) onToggle(node.id); onSelect(node); }}
+          style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, cursor: 'pointer' }}
+        >
+          {hasChildren ? <Chevron open={open} /> : <span style={{ width: 14, display: 'inline-block' }} />}
+          <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 3, background: color, flexShrink: 0 }} />
+          <span style={{ fontSize: 13, fontWeight: depth === 0 ? 600 : 500, color: matchesSearch && searchQuery ? 'var(--fg)' : 'var(--fg)', flex: 1 }}>
+            {node.name}
           </span>
-        )}
-        <span style={{ fontSize: 11, color: 'var(--fg-3)', fontFamily: 'monospace', marginLeft: 8 }}>
-          {node.slug}
+          <TypeBadge type={node.type} />
+          {hasChildren && (
+            <span style={{ fontSize: 11, color: 'var(--fg-3)', background: 'var(--surface-3)', borderRadius: 10, padding: '1px 7px', marginLeft: 6 }}>
+              {node.children!.length}
+            </span>
+          )}
+          <span style={{ fontSize: 11, color: 'var(--fg-3)', fontFamily: 'monospace', marginLeft: 8 }}>
+            {node.slug}
+          </span>
         </span>
+        {onAddChild && (
+          <button
+            className="add-child-btn"
+            onClick={e => { e.stopPropagation(); onAddChild(node); }}
+            title="Add child node"
+            style={{
+              opacity: 0, transition: 'opacity 0.1s',
+              background: 'none', border: '1px solid var(--rule)',
+              borderRadius: 4, padding: '2px 7px', fontSize: 11,
+              color: 'var(--fg-2)', cursor: 'pointer', flexShrink: 0,
+            }}
+          >
+            + child
+          </button>
+        )}
       </div>
 
       {open && hasChildren && (
@@ -119,6 +144,8 @@ function OrgTreeNode({
               expandedIds={expandedIds}
               onToggle={onToggle}
               onSelect={onSelect}
+              onAddChild={onAddChild}
+              searchQuery={searchQuery}
             />
           ))}
         </div>
@@ -129,7 +156,7 @@ function OrgTreeNode({
 
 // ── OrgTree ───────────────────────────────────────────────────────────────────
 
-export function OrgTree({ onSelect, expandedIds: extExpandedIds, onToggle: extOnToggle }: OrgTreeProps) {
+export function OrgTree({ onSelect, expandedIds: extExpandedIds, onToggle: extOnToggle, onAddChild, searchQuery }: OrgTreeProps) {
   const router = useRouter();
   const [internalExpanded, setInternalExpanded] = useState<Set<string>>(new Set());
 
@@ -184,6 +211,8 @@ export function OrgTree({ onSelect, expandedIds: extExpandedIds, onToggle: extOn
         expandedIds={expandedIds}
         onToggle={toggle}
         onSelect={handleSelect}
+        onAddChild={onAddChild}
+        searchQuery={searchQuery}
       />
     </div>
   );
