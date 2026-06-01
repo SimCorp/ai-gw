@@ -32,6 +32,7 @@ const NAV = [
   {
     group: "Catalog",
     items: [
+      { href: "/portal/library", label: "Library",     icon: <LibraryIcon /> },
       { href: "/portal/mcp",     label: "MCP servers", icon: <McpIcon /> },
       { href: "/portal/plugins", label: "Plugins",     icon: <PluginIcon /> },
       { href: "/portal/skills",  label: "Skills",      icon: <SkillIcon /> },
@@ -441,6 +442,13 @@ function StoreIcon() {
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
       <path d="M2 5h12l-1.5 7H3.5L2 5z"/>
       <path d="M1 2h14M6 5v4M10 5v4"/>
+    </svg>
+  );
+}
+function LibraryIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M2 3h4v10H2zM6 3h4v10H6zM10 3l3 1v9l-3-1V3z"/>
     </svg>
   );
 }
