@@ -771,26 +771,6 @@ function QualityTab({period}:{period:Period}) {
 
   return (
     <div style={{display:'flex',flexDirection:'column',gap:16}}>
-      {/* Most impacted contributors */}
-      <CardWrap>
-        <CardHead title="Most impacted contributors" sub="Groups with highest GenAI impact · avg PR cycle time"/>
-        <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12}}>
-          {MOCK.qualityContribs.map(c=>(
-            <div key={c.name} style={{background:'rgba(255,255,255,0.03)',border:`1px solid rgba(255,255,255,0.06)`,borderRadius:10,padding:'14px 16px',display:'flex',flexDirection:'column',gap:8}}>
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                <div style={{width:32,height:32,borderRadius:8,background:`${c.color}20`,display:'flex',alignItems:'center',justifyContent:'center',color:c.color,fontSize:14}}>●</div>
-                <span style={{fontSize:18,fontWeight:700,color:'#fff',fontFamily:C.display}}>{c.cycle}</span>
-              </div>
-              <div style={{fontSize:13,fontWeight:600,color:'#fff'}}>{c.name}</div>
-              <div style={{display:'flex',gap:3}}>
-                {['JK','RM','SE','NV'].map((a,i)=><div key={i} style={{width:22,height:22,borderRadius:'50%',background:[C.indigo,C.amber,C.rose,'rgba(66,32,130,0.8)'][i],display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:700,color:'#fff',marginLeft:i?-4:0,border:'1.5px solid rgba(15,23,41,0.8)'}}>{a}</div>)}
-                <div style={{width:22,height:22,borderRadius:'50%',background:'rgba(255,255,255,0.08)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:8,color:C.fg2,marginLeft:-4,border:'1.5px solid rgba(15,23,41,0.8)'}}>15+</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </CardWrap>
-
       {/* KPI row */}
       <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:16}}>
         <CardWrap>
@@ -814,6 +794,26 @@ function QualityTab({period}:{period:Period}) {
           <div style={{display:'flex',alignItems:'center',gap:8}}><DeltaChip value={km.reviewImpactDelta} inverted={true}/><span style={{fontSize:11,color:C.fg2}}>faster reviews</span></div>
         </CardWrap>
       </div>
+
+      {/* Most impacted contributors */}
+      <CardWrap>
+        <CardHead title="Most impacted contributors" sub="Groups with highest GenAI impact · avg PR cycle time"/>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12}}>
+          {MOCK.qualityContribs.map(c=>(
+            <div key={c.name} style={{background:'rgba(255,255,255,0.03)',border:`1px solid rgba(255,255,255,0.06)`,borderRadius:10,padding:'14px 16px',display:'flex',flexDirection:'column',gap:8}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                <div style={{width:32,height:32,borderRadius:8,background:`${c.color}20`,display:'flex',alignItems:'center',justifyContent:'center',color:c.color,fontSize:14}}>●</div>
+                <span style={{fontSize:18,fontWeight:700,color:'#fff',fontFamily:C.display}}>{c.cycle}</span>
+              </div>
+              <div style={{fontSize:13,fontWeight:600,color:'#fff'}}>{c.name}</div>
+              <div style={{display:'flex',gap:3}}>
+                {['JK','RM','SE','NV'].map((a,i)=><div key={i} style={{width:22,height:22,borderRadius:'50%',background:[C.indigo,C.amber,C.rose,'rgba(66,32,130,0.8)'][i],display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:700,color:'#fff',marginLeft:i?-4:0,border:'1.5px solid rgba(15,23,41,0.8)'}}>{a}</div>)}
+                <div style={{width:22,height:22,borderRadius:'50%',background:'rgba(255,255,255,0.08)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:8,color:C.fg2,marginLeft:-4,border:'1.5px solid rgba(15,23,41,0.8)'}}>15+</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </CardWrap>
 
       {/* Code durability chart + side cards */}
       <div style={{display:'grid',gridTemplateColumns:'2fr 1fr',gap:16}}>
