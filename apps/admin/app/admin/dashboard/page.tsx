@@ -525,12 +525,9 @@ export default function DashboardPage() {
         </div>
 
         <div className="card">
-          <div className="card__head"><h3 className="card__title">Cache</h3><span className="card__sub">live</span></div>
+          <div className="card__head"><h3 className="card__title">Infrastructure</h3><span className="card__sub">live</span></div>
           <div className="card__body">
             <div className="dl">
-              <dt>Hit rate (last 60s)</dt><dd>{((gateway?.cache_hit_rate_last_60s ?? 0) * 100).toFixed(1)}%</dd>
-              <dt>Avg cache hit (teams)</dt><dd>{avgCacheHit.toFixed(1)}%</dd>
-              <dt>Requests last 60s</dt><dd>{gateway?.requests_last_60s ?? '—'}</dd>
               <dt>Redis ping</dt><dd>{redis ? `${redis.ping_ms.toFixed(1)}ms` : '—'}</dd>
               <dt>Redis memory</dt><dd>{redis ? `${redis.used_memory_mb.toFixed(1)} MB` : '—'}</dd>
               <dt>Redis clients</dt><dd>{redis?.connected_clients ?? '—'}</dd>
