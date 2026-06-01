@@ -148,6 +148,9 @@ function ServerToolsPanel({ serverId }: { serverId: string }) {
 const MEMORY_MCP_URL =
   (process.env.NEXT_PUBLIC_MEMORY_BASE_URL ?? 'http://localhost:8009') + '/mcp';
 
+const LIBRARIAN_MCP_URL =
+  (process.env.NEXT_PUBLIC_LIBRARIAN_BASE_URL ?? 'http://localhost:8080/librarian') + '/mcp';
+
 const GATEWAY_MANAGED_SERVERS = [
   {
     id: '__memory_palace__',
@@ -157,11 +160,31 @@ const GATEWAY_MANAGED_SERVERS = [
     auth_type: 'bearer' as const,
     tool_count: 30,
   },
+  {
+    id: '__librarian__',
+    name: 'AI Librarian',
+    description: 'Shared knowledge base — search docs, best practices, and engineering patterns. Pre-authorized with your API key.',
+    url: LIBRARIAN_MCP_URL,
+    auth_type: 'bearer' as const,
+    tool_count: 3,
+  },
 ];
 
 const MP_SETUP_CONFIG = (url: string) => `{
   "mcpServers": {
     "memory-palace": {
+      "transport": "http",
+      "url": "${url}",
+      "headers": {
+        "Authorization": "Bearer REPLACE_WITH_YOUR_AIGW_KEY"
+      }
+    }
+  }
+}`;
+
+const LIB_SETUP_CONFIG = (url: string) => `{
+  "mcpServers": {
+    "ai-librarian": {
       "transport": "http",
       "url": "${url}",
       "headers": {
@@ -181,6 +204,10 @@ export default function McpPage() {
   const [mpTestStatus, setMpTestStatus] = useState<'idle' | 'testing' | 'ok' | 'error'>('idle');
   const [mpTestMsg, setMpTestMsg] = useState<string | null>(null);
   const [copiedSetup, setCopiedSetup] = useState(false);
+  const [libExpanded, setLibExpanded] = useState(false);
+  const [libTestStatus, setLibTestStatus] = useState<'idle' | 'testing' | 'ok' | 'error'>('idle');
+  const [libTestMsg, setLibTestMsg] = useState<string | null>(null);
+  const [copiedLibSetup, setCopiedLibSetup] = useState(false);
 
   const testMemoryPalace = async () => {
     if (!token) { setMpTestMsg('Not signed in — use portal session token'); setMpTestStatus('error'); return; }
@@ -201,6 +228,27 @@ export default function McpPage() {
     } catch (e) {
       setMpTestMsg(String(e));
       setMpTestStatus('error');
+    }
+  };
+
+  const testLibrarian = async () => {
+    setLibTestStatus('testing');
+    setLibTestMsg(null);
+    try {
+      const r = await fetch(LIBRARIAN_MCP_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }),
+      });
+      if (!r.ok) { setLibTestMsg(`HTTP ${r.status}`); setLibTestStatus('error'); return; }
+      const data = await r.json();
+      if (data.error) { setLibTestMsg(data.error.message ?? JSON.stringify(data.error)); setLibTestStatus('error'); return; }
+      const tools = data.result?.tools ?? [];
+      setLibTestMsg(`${tools.length} tool${tools.length !== 1 ? 's' : ''} available: ${tools.map((t: {name: string}) => t.name).join(', ')}`);
+      setLibTestStatus('ok');
+    } catch (e) {
+      setLibTestMsg(String(e));
+      setLibTestStatus('error');
     }
   };
 
@@ -271,7 +319,20 @@ export default function McpPage() {
           Gateway-managed
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {GATEWAY_MANAGED_SERVERS.map(gws => (
+          {GATEWAY_MANAGED_SERVERS.map(gws => {
+            const isMemory = gws.id === '__memory_palace__';
+            const isLib = gws.id === '__librarian__';
+            const expanded = isMemory ? mpExpanded : isLib ? libExpanded : false;
+            const setExpanded = isMemory ? () => setMpExpanded(x => !x) : isLib ? () => setLibExpanded(x => !x) : () => {};
+            const testFn = isMemory ? testMemoryPalace : isLib ? testLibrarian : () => {};
+            const testStatus = isMemory ? mpTestStatus : isLib ? libTestStatus : 'idle';
+            const testMsg = isMemory ? mpTestMsg : isLib ? libTestMsg : null;
+            const setupConfig = isMemory ? MP_SETUP_CONFIG(gws.url) : LIB_SETUP_CONFIG(gws.url);
+            const copiedSetupState = isMemory ? copiedSetup : copiedLibSetup;
+            const setCopiedSetupFn = isMemory ? (v: boolean) => setCopiedSetup(v) : (v: boolean) => setCopiedLibSetup(v);
+            const testLabel = isMemory ? 'Test Memory' : 'Test Librarian';
+            const testOkMsg = isMemory ? 'Memory is reachable' : 'Librarian is reachable';
+            return (
             <div key={gws.id} className="card" style={{ border: '1px solid var(--sc-blue, #0A7BD7)' }}>
               <div className="card__head" style={{ alignItems: 'flex-start' }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -298,12 +359,12 @@ export default function McpPage() {
                   </div>
                 </div>
                 <div className="card__actions">
-                  <button className="btn btn--sm" onClick={() => setMpExpanded(x => !x)}>
-                    {mpExpanded ? '▼ Hide setup' : '▶ Setup & test'}
+                  <button className="btn btn--sm" onClick={setExpanded}>
+                    {expanded ? '▼ Hide setup' : '▶ Setup & test'}
                   </button>
                 </div>
               </div>
-              {mpExpanded && (
+              {expanded && (
                 <div className="card__body" style={{ borderTop: '1px solid var(--rule)' }}>
                   {/* Setup steps */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -317,21 +378,21 @@ export default function McpPage() {
                           Add this block to <span className="mono" style={{ fontSize: 12 }}>~/.claude/settings.json</span> (replacing the key):
                           <div style={{ position: 'relative', marginTop: 8 }}>
                             <pre style={{ margin: 0, padding: '10px 14px', background: 'var(--surface-soft)', borderRadius: 8, fontSize: 12, fontFamily: 'var(--font-mono)', lineHeight: 1.5, overflowX: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: 'var(--fg-1)' }}>
-                              {MP_SETUP_CONFIG(gws.url)}
+                              {setupConfig}
                             </pre>
                             <button
                               style={{ position: 'absolute', top: 8, right: 8, fontSize: 11.5, padding: '3px 8px', borderRadius: 5, border: '1px solid var(--rule)', background: 'var(--surface)', cursor: 'pointer', color: 'var(--fg-2)' }}
                               onClick={() => {
-                                navigator.clipboard.writeText(MP_SETUP_CONFIG(gws.url));
-                                setCopiedSetup(true);
-                                setTimeout(() => setCopiedSetup(false), 2000);
+                                navigator.clipboard.writeText(setupConfig);
+                                setCopiedSetupFn(true);
+                                setTimeout(() => setCopiedSetupFn(false), 2000);
                               }}
                             >
-                              {copiedSetup ? 'Copied!' : 'Copy'}
+                              {copiedSetupState ? 'Copied!' : 'Copy'}
                             </button>
                           </div>
                         </li>
-                        <li>Restart Claude Code. Memory Palace tools will appear automatically.</li>
+                        <li>Restart Claude Code. The tools will appear automatically.</li>
                       </ol>
                     </div>
 
@@ -342,26 +403,26 @@ export default function McpPage() {
                       </div>
                       <button
                         className="btn btn--sm btn--primary"
-                        onClick={testMemoryPalace}
-                        disabled={mpTestStatus === 'testing'}
+                        onClick={testFn}
+                        disabled={testStatus === 'testing'}
                       >
-                        {mpTestStatus === 'testing' ? 'Testing…' : 'Test Memory'}
+                        {testStatus === 'testing' ? 'Testing…' : testLabel}
                       </button>
-                      {mpTestStatus === 'ok' && (
+                      {testStatus === 'ok' && (
                         <div style={{ marginTop: 10, padding: '10px 14px', borderRadius: 8, background: 'rgba(31,138,91,0.06)', border: '1px solid rgba(31,138,91,0.2)', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                           <span style={{ color: 'var(--good)', fontWeight: 700, fontSize: 15 }}>✓</span>
                           <div>
-                            <div style={{ fontSize: 13, color: 'var(--good)', fontWeight: 500 }}>Memory is reachable</div>
-                            {mpTestMsg && <div className="mono" style={{ fontSize: 11.5, color: 'var(--fg-2)', marginTop: 3, whiteSpace: 'pre-wrap' }}>{mpTestMsg}</div>}
+                            <div style={{ fontSize: 13, color: 'var(--good)', fontWeight: 500 }}>{testOkMsg}</div>
+                            {testMsg && <div className="mono" style={{ fontSize: 11.5, color: 'var(--fg-2)', marginTop: 3, whiteSpace: 'pre-wrap' }}>{testMsg}</div>}
                           </div>
                         </div>
                       )}
-                      {mpTestStatus === 'error' && (
+                      {testStatus === 'error' && (
                         <div style={{ marginTop: 10, padding: '10px 14px', borderRadius: 8, background: 'rgba(239,62,74,0.06)', border: '1px solid rgba(239,62,74,0.2)', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                           <span style={{ color: 'var(--bad)', fontWeight: 700, fontSize: 15 }}>✗</span>
                           <div>
                             <div style={{ fontSize: 13, color: 'var(--bad)', fontWeight: 500 }}>Connection failed</div>
-                            {mpTestMsg && <div className="mono" style={{ fontSize: 11.5, color: 'var(--fg-2)', marginTop: 3 }}>{mpTestMsg}</div>}
+                            {testMsg && <div className="mono" style={{ fontSize: 11.5, color: 'var(--fg-2)', marginTop: 3 }}>{testMsg}</div>}
                           </div>
                         </div>
                       )}
@@ -370,7 +431,8 @@ export default function McpPage() {
                 </div>
               )}
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
