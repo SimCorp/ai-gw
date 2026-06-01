@@ -62,16 +62,27 @@ export default function AuditPage() {
           <p className="page__sub">Tamper-evident · WORM-stored · retention 7y · last export 6 May 2026 by audit@simcorp</p>
         </div>
         <div className="page__actions">
-          <button className="btn">Schedule export</button>
-          <button className="btn btn--primary">Export CSV</button>
+          <button
+            className="btn btn--primary"
+            disabled={filtered.length === 0}
+            onClick={() => {
+              const header = 'Timestamp,Actor,Action,Resource Type,Resource ID';
+              const csvRows = filtered.map(r =>
+                [formatTimestamp(r.timestamp), r.actor, r.action, r.resource_type, r.resource_id].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')
+              );
+              const csv = [header, ...csvRows].join('\n');
+              const blob = new Blob([csv], { type: 'text/csv' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a'); a.href = url; a.download = 'audit-log.csv'; a.click();
+              URL.revokeObjectURL(url);
+            }}
+          >
+            Export CSV
+          </button>
         </div>
       </div>
 
       <div className="filters" style={{ marginBottom: 16 }}>
-        <button className="filter"><span className="lbl">Range</span><span className="val">Today</span><span className="caret">▾</span></button>
-        <button className="filter"><span className="lbl">Actor</span><span className="val">All</span><span className="caret">▾</span></button>
-        <button className="filter"><span className="lbl">Action</span><span className="val">All</span><span className="caret">▾</span></button>
-        <button className="filter"><span className="lbl">Resource</span><span className="val">All</span><span className="caret">▾</span></button>
         <span style={{ flex: 1 }} />
         <input
           className="search"
@@ -108,7 +119,7 @@ export default function AuditPage() {
                   <td className="mono" style={{ fontSize: 12, color: 'var(--fg-2)' }}>
                     {row.resource_type}{row.resource_id ? ` · ${row.resource_id.substring(0, 8)}…` : ''}
                   </td>
-                  <td><button className="btn btn--sm">Details</button></td>
+                  <td></td>
                 </tr>
               ))}
             </tbody>
