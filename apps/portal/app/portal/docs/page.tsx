@@ -184,7 +184,14 @@ console.log(resp.choices[0].message.content);`}</pre>
 for chunk in stream:
     if chunk.choices[0].delta.content:
         print(chunk.choices[0].delta.content, end="")`}</pre>
-            <button className="copy-btn" onClick={() => copy("streaming", "")}>
+            <button className="copy-btn" onClick={() => copy("streaming", `stream = client.chat.completions.create(
+    model="claude-sonnet-4-6",
+    messages=[{"role": "user", "content": "Explain CRDT in one paragraph"}],
+    stream=True,
+)
+for chunk in stream:
+    if chunk.choices[0].delta.content:
+        print(chunk.choices[0].delta.content, end="")`)}>
               {copied === "streaming" ? "Copied!" : "Copy"}
             </button>
           </div>
@@ -209,7 +216,23 @@ resp = client.chat.completions.create(
     messages=messages,
     tools=tools,
 )`}</pre>
-            <button className="copy-btn" onClick={() => copy("tools", "")}>
+            <button className="copy-btn" onClick={() => copy("tools", `tools = [{
+    "type": "function",
+    "function": {
+        "name": "get_repo_stats",
+        "description": "Return commit count for a repo",
+        "parameters": {
+            "type": "object",
+            "properties": {"repo": {"type": "string"}},
+            "required": ["repo"],
+        },
+    },
+}]
+resp = client.chat.completions.create(
+    model="claude-sonnet-4-6",
+    messages=messages,
+    tools=tools,
+)`)}>
               {copied === "tools" ? "Copied!" : "Copy"}
             </button>
           </div>
@@ -226,7 +249,12 @@ resp = client.chat.completions.create(
     extra_headers={"x-cache": "bypass"},
 )
 # Response header x-cache: HIT | MISS | BYPASS`}</pre>
-            <button className="copy-btn" onClick={() => copy("cache", "")}>
+            <button className="copy-btn" onClick={() => copy("cache", `resp = client.chat.completions.create(
+    model="claude-sonnet-4-6",
+    messages=[...],
+    extra_headers={"x-cache": "bypass"},
+)
+# Response header x-cache: HIT | MISS | BYPASS`)}>
               {copied === "cache" ? "Copied!" : "Copy"}
             </button>
           </div>

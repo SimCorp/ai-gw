@@ -1,11 +1,13 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { useAuth } from "../_lib/authContext";
 import RelatedChampionContent from "../_components/RelatedChampionContent";
 
 const CACHE_BASE = process.env.NEXT_PUBLIC_CACHE_BASE_URL ?? "http://localhost:8002";
 const ADMIN_BASE = process.env.NEXT_PUBLIC_ADMIN_BASE_URL ?? "http://localhost:8005";
+const LEAGUE = process.env.NEXT_PUBLIC_LEAGUE_API ?? "http://localhost:8080/league";
 
 // Fallback model list when the gateway is unreachable
 const FALLBACK_MODELS = [
@@ -34,6 +36,9 @@ interface LiteLLMModel {
 
 export default function PlaygroundPage() {
   const { token, developer } = useAuth();
+
+  const searchParams = useSearchParams();
+  const challengeId = searchParams.get("challenge");
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [models, setModels] = useState<string[]>([]);
@@ -97,6 +102,19 @@ export default function PlaygroundPage() {
       threadRef.current.scrollTop = threadRef.current.scrollHeight;
     }
   }, [messages]);
+
+  // Pre-load challenge context when navigated from league page
+  useEffect(() => {
+    if (!challengeId) return;
+    fetch(`${LEAGUE}/challenges/${challengeId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then((ch: { title?: string; goal?: string; prompt_context?: string } | null) => {
+        if (!ch) return;
+        const ctx = ch.prompt_context ?? ch.goal ?? '';
+        if (ctx) setSystemPrompt(`You are helping with the AI League challenge: "${ch.title ?? 'Challenge'}"\n\n${ctx}`);
+      })
+      .catch(() => {});
+  }, [challengeId]);
 
   const handleSend = async () => {
     if (!input.trim() || isLoading || !selectedModelId) return;
@@ -275,7 +293,13 @@ export default function PlaygroundPage() {
                 <div style={{ fontSize: 12 }}>Type a message below and press Send or ⌘ + Enter</div>
               </div>
             ) : (
-              messages.map((msg: Message) => (
+              <>
+                {challengeId && (
+                  <div style={{ margin: '0 0 12px', padding: '10px 14px', borderRadius: 8, background: 'rgba(10,123,215,0.08)', border: '1px solid rgba(10,123,215,0.2)', fontSize: 12.5, color: 'var(--sc-blue, #0A7BD7)' }}>
+                    ⚔ League challenge loaded — system prompt pre-set. Make your attempt.
+                  </div>
+                )}
+                {messages.map((msg: Message) => (
                 <div key={msg.id} className={`msg msg--${msg.role}${msg.error ? " msg--error" : ""}`}>
                   <div className="msg__avatar">
                     {msg.role === "system" ? "SYS" : msg.role === "user" ? "ME" : "A"}
@@ -310,7 +334,8 @@ export default function PlaygroundPage() {
                     )}
                   </div>
                 </div>
-              ))
+              ))}
+              </>
             )}
           </div>
 
