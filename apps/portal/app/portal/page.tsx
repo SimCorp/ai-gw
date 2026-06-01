@@ -49,13 +49,10 @@ interface ApiKey {
 
 interface DashboardStats {
   team_name: string;
-  spend_mtd: number;
-  budget_cap: number;
-  requests_7d: number;
-  requests_7d_prev?: number;
-  cache_hit_rate_24h?: number;
-  avg_latency_ms?: number;
-  p99_latency_ms?: number;
+  request_count: number;
+  total_tokens: number | null;
+  total_cost_usd: number | null;
+  cache_hit_pct: number | null;
 }
 
 export default function PortalHome() {
@@ -149,18 +146,22 @@ export default function PortalHome() {
     );
   }
 
-  const spendDisplay = stats ? `€${stats.spend_mtd?.toFixed(2) ?? "—"}` : "—";
-  const budgetDisplay = stats?.budget_cap ? `of team cap €${stats.budget_cap.toLocaleString()}` : "";
-  const requests7dDisplay = stats ? (stats.requests_7d?.toLocaleString() ?? "—") : "—";
-  const cacheHitDisplay = stats?.cache_hit_rate_24h != null
-    ? `${(stats.cache_hit_rate_24h * 100).toFixed(1)}%`
+  const spendDisplay = stats?.total_cost_usd != null
+    ? `€${stats.total_cost_usd.toFixed(2)}`
     : "—";
-  const latencyDisplay = stats?.avg_latency_ms != null
-    ? `${Math.round(stats.avg_latency_ms)} ms`
+  const requestsDisplay = stats?.request_count != null
+    ? stats.request_count.toLocaleString()
     : "—";
-  const p99Display = stats?.p99_latency_ms != null
-    ? `p99 ${Math.round(stats.p99_latency_ms / 1000).toFixed(1)}s`
-    : "";
+  const cacheHitDisplay = stats?.cache_hit_pct != null
+    ? `${stats.cache_hit_pct.toFixed(1)}%`
+    : "—";
+  const tokensDisplay = stats?.total_tokens != null
+    ? stats.total_tokens >= 1_000_000
+      ? `${(stats.total_tokens / 1_000_000).toFixed(1)}M`
+      : stats.total_tokens >= 1_000
+      ? `${(stats.total_tokens / 1_000).toFixed(0)}k`
+      : String(stats.total_tokens)
+    : "—";
 
   return (
     <main className="pmain">
@@ -251,21 +252,19 @@ export default function PortalHome() {
         <div className="s">
           <div className="l">Team spend MTD</div>
           <div className="v">{loadingStats ? "…" : spendDisplay}</div>
-          {budgetDisplay && <div className="d">{budgetDisplay}</div>}
         </div>
         <div className="s">
-          <div className="l">Requests · 7d</div>
-          <div className="v">{loadingStats ? "…" : requests7dDisplay}</div>
+          <div className="l">Requests · all time</div>
+          <div className="v">{loadingStats ? "…" : requestsDisplay}</div>
         </div>
         <div className="s">
-          <div className="l">Cache hit</div>
+          <div className="l">Cache hit rate</div>
           <div className="v good">{loadingStats ? "…" : cacheHitDisplay}</div>
-          <div className="d">team avg, last 24h</div>
+          <div className="d">team avg</div>
         </div>
         <div className="s">
-          <div className="l">Avg latency</div>
-          <div className="v">{loadingStats ? "…" : latencyDisplay}</div>
-          {p99Display && <div className="d">{p99Display}</div>}
+          <div className="l">Tokens used</div>
+          <div className="v">{loadingStats ? "…" : tokensDisplay}</div>
         </div>
       </div>
 
