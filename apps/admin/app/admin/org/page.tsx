@@ -117,6 +117,7 @@ function CreateNodeModal({
               type="text"
               required
               autoFocus
+              autoComplete="off"
               value={form.name}
               onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
               placeholder="e.g. Engineering, Platform Team"
@@ -158,6 +159,7 @@ function CreateNodeModal({
               type="text"
               value={form.description}
               onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+              autoComplete="off"
               placeholder="Optional"
               style={inputStyle}
             />
@@ -169,6 +171,7 @@ function CreateNodeModal({
               type="text"
               value={form.location}
               onChange={e => setForm(f => ({ ...f, location: e.target.value }))}
+              autoComplete="off"
               placeholder="e.g. Copenhagen, Remote"
               style={inputStyle}
             />
