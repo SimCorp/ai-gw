@@ -80,9 +80,7 @@ export default function CachePage() {
           </p>
         </div>
         <div className="page__actions">
-          <button className="btn">Flush by team…</button>
-          <button className="btn">Reindex</button>
-          <button className="btn btn--primary">Edit defaults</button>
+          <button className="btn" onClick={() => refetch()}>↻ Refresh</button>
         </div>
       </div>
 
@@ -115,7 +113,7 @@ export default function CachePage() {
         <div className="card">
           <div className="card__head">
             <h3 className="card__title">Hit rate over time</h3>
-            <span className="card__sub">last 7d · stacked</span>
+            <span className="card__sub">representative · no time-series endpoint</span>
             <div className="card__actions">
               <span className="pill"><span className="dot" style={{ background: 'var(--sc-teal)' }}></span>Semantic</span>
               <span className="pill"><span className="dot" style={{ background: 'var(--sc-blue)' }}></span>Exact</span>
@@ -142,7 +140,7 @@ export default function CachePage() {
         </div>
 
         <div className="card">
-          <div className="card__head"><h3 className="card__title">Similarity distribution</h3><span className="card__sub">semantic hits · last 24h</span></div>
+          <div className="card__head"><h3 className="card__title">Similarity distribution</h3><span className="card__sub">representative · no distribution endpoint</span></div>
           <div className="card__body">
             <svg viewBox="0 0 600 220" style={{ width: '100%', height: 220, display: 'block' }}>
               <g stroke="var(--rule)" strokeWidth="1">
@@ -168,7 +166,7 @@ export default function CachePage() {
 
       <div className="split-2" style={{ marginBottom: 16 }}>
         <div className="card">
-          <div className="card__head"><h3 className="card__title">Default policy</h3><div className="card__actions"><button className="btn btn--sm">Edit</button></div></div>
+          <div className="card__head"><h3 className="card__title">Default policy</h3></div>
           <div className="card__body">
             <div className="dl">
               <dt>Status</dt><dd><span className="pill pill--good"><span className="dot"></span>Enabled (org-wide)</span></dd>
