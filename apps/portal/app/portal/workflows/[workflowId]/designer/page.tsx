@@ -278,6 +278,47 @@ export default function DesignerPage() {
       .catch(() => setAgents([]));
   }, []);
 
+  // Load existing workflow DAG
+  useEffect(() => {
+    if (!workflowId) return;
+    // First fetch the workflow list to get latest_version, then fetch that version
+    fetch(`${ADMIN_BASE}/workflows`)
+      .then(r => r.ok ? r.json() : null)
+      .then((d: { workflows?: Array<{ id: string; latest_version: number }> } | null) => {
+        const wf = d?.workflows?.find(w => w.id === workflowId);
+        if (!wf || wf.latest_version < 1) return null;
+        return fetch(`${ADMIN_BASE}/workflows/${workflowId}/versions/${wf.latest_version}`)
+          .then(r => r.ok ? r.json() : null);
+      })
+      .then((data: { dag?: { nodes?: Array<{ id: string; agent_slug: string; inputs: Record<string, string>; loop?: { enabled: boolean; max_iterations: number } }>; edges?: Array<{ from: string; to: string; condition?: string | null }> } } | null) => {
+        const dag = data?.dag;
+        if (!dag?.nodes?.length) return;
+        // Rebuild ReactFlow nodes with auto-layout
+        const newNodes: Node[] = dag.nodes.map((n, i) => ({
+          id: n.id,
+          type: 'agent' as const,
+          position: { x: 100 + (i % 4) * 220, y: 100 + Math.floor(i / 4) * 160 },
+          data: {
+            agent_slug: n.agent_slug,
+            agent_name: n.agent_slug,
+            category: 'llm',
+            inputs: n.inputs ?? {},
+            loop_enabled: n.loop?.enabled ?? false,
+            loop_max_iterations: n.loop?.max_iterations ?? 10,
+          } satisfies NodeData,
+        }));
+        const newEdges: Edge[] = (dag.edges ?? []).map((e, i) => ({
+          id: `e${i}`,
+          source: e.from,
+          target: e.to,
+          data: { condition: e.condition ?? null },
+        }));
+        setNodes(newNodes);
+        setEdges(newEdges);
+      })
+      .catch(() => {/* start with empty canvas on any error */});
+  }, [workflowId, setNodes, setEdges]);
+
   // Connect handler
   const onConnect = useCallback((params: Connection) => {
     setEdges(eds => addEdge({ ...params, data: { condition: null } }, eds));
