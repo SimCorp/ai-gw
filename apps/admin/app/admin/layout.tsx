@@ -91,9 +91,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               </div>
 
               <div style={{ flex: 1, overflowY: 'auto' }}>
-                <NavSection label="Overview">
+                <NavSection label="Monitor">
                   <NavItem href="/admin/dashboard" label="Dashboard" />
                   <NavItem href="/admin/requests" label="Live requests" />
+                  <NavItem href="/admin/reports" label="Cost reports" />
+                  <NavItem href="/admin/alerts" label="Alerts" />
                 </NavSection>
 
                 <NavSection label="Organisation">
@@ -106,16 +108,22 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   <NavItem href="/admin/insights" label="AI Insights" />
                   <NavItem href="/admin/devops" label="DevOps Agent" />
                   <NavItem href="/admin/champions" label="Champions" />
-                  <NavItem href="/admin/champions/activity" label="Champions · Activity" />
-                  <NavItem href="/admin/champions/flags" label="Champions · Flags" />
+                  <NavSubItem href="/admin/champions/activity" label="Activity" />
+                  <NavSubItem href="/admin/champions/flags" label="Flags" />
                 </NavSectionLink>
 
                 <NavSection label="Govern">
                   <NavItem href="/admin/guardrails" label="Guardrails" />
-                  <NavItem href="/admin/audit" label="Audit log" />
                   <NavItem href="/admin/policies" label="Policies" />
                   <NavItem href="/admin/quotas" label="Quotas & budgets" />
                   <NavItem href="/admin/approvals" label="Approvals" />
+                  <NavItem href="/admin/audit" label="Audit log" />
+                </NavSection>
+
+                <NavSection label="Security">
+                  <NavItem href="/admin/security/targets" label="Targets" />
+                  <NavItem href="/admin/security/jobs" label="Scan jobs" />
+                  <NavItem href="/admin/security/quotas" label="Team quotas" />
                 </NavSection>
 
                 <NavSection label="Catalog">
@@ -131,11 +139,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   <NavItem href="/admin/providers" label="Providers" />
                   <NavItem href="/admin/providers#auto-drive" label="Auto-Drive" />
                   <NavItem href="/admin/tools" label="Developer tools" />
-                </NavSection>
-
-                <NavSection label="Operate">
-                  <NavItem href="/admin/reports" label="Cost reports" />
-                  <NavItem href="/admin/alerts" label="Alerts" />
                 </NavSection>
 
                 <NavSection label="League">
@@ -214,6 +217,27 @@ function NavItem({ href, label }: { href: string; label: string }) {
       }}
       onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--side-active)'; }}
       onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = ''; }}
+    >
+      {label}
+    </Link>
+  );
+}
+
+function NavSubItem({ href, label }: { href: string; label: string }) {
+  return (
+    <Link
+      href={href}
+      style={{
+        display: 'block',
+        padding: '6px 14px 6px 30px',
+        fontSize: 12.5,
+        color: 'var(--side-fg-mute)',
+        borderRadius: 4,
+        margin: '1px 6px',
+        textDecoration: 'none',
+      }}
+      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--side-active)'; (e.currentTarget as HTMLElement).style.color = 'var(--side-fg)'; }}
+      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = ''; (e.currentTarget as HTMLElement).style.color = 'var(--side-fg-mute)'; }}
     >
       {label}
     </Link>
