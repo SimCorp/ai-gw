@@ -233,6 +233,7 @@ async def _bootstrap_schema(pool: asyncpg.Pool) -> None:
 # Core document store functions (shared between HTTP routes and research loop)
 # ---------------------------------------------------------------------------
 
+
 async def ingest_document(
     *,
     pool: asyncpg.Pool,
@@ -361,16 +362,21 @@ async def search_knowledge(
         else:
             score = 0.0
 
-        scored.append((score, {
-            "id": str(row["id"]),
-            "title": row["title"],
-            "content": row["content"],
-            "source_url": row["source_url"],
-            "topic": row["topic"],
-            "tags": list(row["tags"]),
-            "ingested_at": row["ingested_at"].isoformat() if row["ingested_at"] else None,
-            "score": round(score, 4),
-        }))
+        scored.append(
+            (
+                score,
+                {
+                    "id": str(row["id"]),
+                    "title": row["title"],
+                    "content": row["content"],
+                    "source_url": row["source_url"],
+                    "topic": row["topic"],
+                    "tags": list(row["tags"]),
+                    "ingested_at": row["ingested_at"].isoformat() if row["ingested_at"] else None,
+                    "score": round(score, 4),
+                },
+            )
+        )
 
     scored.sort(key=lambda x: x[0], reverse=True)
     return [item for _, item in scored[:limit]]
@@ -482,6 +488,7 @@ async def _research_loop(pool: asyncpg.Pool, redis: Redis) -> None:
 # Lifespan
 # ---------------------------------------------------------------------------
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _pool, _redis
@@ -544,6 +551,7 @@ app.add_middleware(
 # Health
 # ---------------------------------------------------------------------------
 
+
 @app.get("/health")
 async def health():
     return {"status": "ok"}
@@ -552,6 +560,7 @@ async def health():
 # ---------------------------------------------------------------------------
 # Pydantic schemas
 # ---------------------------------------------------------------------------
+
 
 class IngestRequest(BaseModel):
     title: str
@@ -571,6 +580,7 @@ class ResearchTopicCreate(BaseModel):
 # ---------------------------------------------------------------------------
 # Document store routes
 # ---------------------------------------------------------------------------
+
 
 @app.post("/ingest", status_code=201)
 async def ingest(body: IngestRequest, request: Request):
@@ -627,7 +637,9 @@ async def list_topics():
         {
             "topic": r["topic"],
             "item_count": r["item_count"],
-            "last_ingested_at": r["last_ingested_at"].isoformat() if r["last_ingested_at"] else None,
+            "last_ingested_at": r["last_ingested_at"].isoformat()
+            if r["last_ingested_at"]
+            else None,
         }
         for r in rows
     ]
@@ -682,20 +694,21 @@ async def delete_item(item_id: str):
 # Research topic routes
 # ---------------------------------------------------------------------------
 
+
 @app.get("/research/topics")
 async def list_research_topics():
     pool = await get_pool()
     async with pool.acquire() as conn:
-        rows = await conn.fetch(
-            "SELECT * FROM research_topics ORDER BY topic"
-        )
+        rows = await conn.fetch("SELECT * FROM research_topics ORDER BY topic")
     return [
         {
             "id": str(r["id"]),
             "topic": r["topic"],
             "description": r["description"],
             "search_query": r["search_query"],
-            "last_researched_at": r["last_researched_at"].isoformat() if r["last_researched_at"] else None,
+            "last_researched_at": r["last_researched_at"].isoformat()
+            if r["last_researched_at"]
+            else None,
             "interval_seconds": r["interval_seconds"],
             "enabled": r["enabled"],
         }
@@ -888,7 +901,9 @@ async def mcp_topics(request: Request):
             {
                 "topic": r["topic"],
                 "item_count": r["item_count"],
-                "last_ingested_at": r["last_ingested_at"].isoformat() if r["last_ingested_at"] else None,
+                "last_ingested_at": r["last_ingested_at"].isoformat()
+                if r["last_ingested_at"]
+                else None,
             }
             for r in rows
         ]
@@ -1010,7 +1025,7 @@ from fastapi.responses import Response as _Response  # noqa: E402
 
 
 @app.post("/mcp")
-async def mcp_jsonrpc(body: dict, request: Request):
+async def mcp_jsonrpc(body: dict, request: Request, session_id: str | None = None):
     """JSON-RPC 2.0 MCP endpoint consumed by real MCP clients."""
     method: str = body.get("method", "")
     params: dict = body.get("params") or {}
@@ -1023,21 +1038,41 @@ async def mcp_jsonrpc(body: dict, request: Request):
     def _err(code: int, message: str) -> dict:
         return {"jsonrpc": "2.0", "id": request_id, "error": {"code": code, "message": message}}
 
+    import json as _json_m
+
+    async def _relay_or_return(response: dict) -> Any:
+        """Push response to SSE queue if a session_id is bound, else return directly."""
+        if session_id is not None:
+            try:
+                sid = int(session_id)
+                _sessions = getattr(app.state, "_mcp_sse_sessions", {})
+                _q = _sessions.get(sid)
+                if _q is not None:
+                    await _q.put(_json_m.dumps(response))
+                    return _Response(status_code=202)
+            except (ValueError, TypeError):
+                pass
+        return response
+
     # Authenticate every JSON-RPC call (incl. initialize) — auth failures map to
     # -32000 so the MCP client surfaces them cleanly.
     try:
         await resolve_caller(request)
     except AuthError as exc:
-        return _err(-32000, exc.detail)
+        return await _relay_or_return(_err(-32000, exc.detail))
 
     if method == "initialize":
         if is_notification:
             return _Response(status_code=204)
-        return _ok({
-            "protocolVersion": _MCP_PROTOCOL_VERSION,
-            "capabilities": {"tools": {}},
-            "serverInfo": {"name": "ai-librarian", "version": "1.0.0"},
-        })
+        return await _relay_or_return(
+            _ok(
+                {
+                    "protocolVersion": _MCP_PROTOCOL_VERSION,
+                    "capabilities": {"tools": {}},
+                    "serverInfo": {"name": "ai-librarian", "version": "1.0.0"},
+                }
+            )
+        )
 
     if method == "notifications/initialized":
         return _Response(status_code=204)
@@ -1045,7 +1080,7 @@ async def mcp_jsonrpc(body: dict, request: Request):
     if method == "tools/list":
         if is_notification:
             return _Response(status_code=204)
-        return _ok({"tools": _MCP_JSONRPC_TOOLS})
+        return await _relay_or_return(_ok({"tools": _MCP_JSONRPC_TOOLS}))
 
     if method == "tools/call":
         if is_notification:
@@ -1054,25 +1089,27 @@ async def mcp_jsonrpc(body: dict, request: Request):
         arguments = params.get("arguments") or {}
         handler = _JSONRPC_TOOL_HANDLERS.get(tool_name)
         if handler is None:
-            return _err(-32601, f"Tool not found: {tool_name}")
+            return await _relay_or_return(_err(-32601, f"Tool not found: {tool_name}"))
         try:
             result = await handler(arguments)
         except Exception as exc:
             _log.exception("MCP tool %s error", tool_name)
-            return _err(-32603, f"Tool execution error: {exc}")
-        import json as _json
-        return _ok({"content": [{"type": "text", "text": _json.dumps(result)}]})
+            return await _relay_or_return(_err(-32603, f"Tool execution error: {exc}"))
+
+        return await _relay_or_return(
+            _ok({"content": [{"type": "text", "text": _json_m.dumps(result)}]})
+        )
 
     if method == "ping":
         if is_notification:
             return _Response(status_code=204)
-        return _ok({})
+        return await _relay_or_return(_ok({}))
 
     if is_notification:
         return _Response(status_code=204)
 
     _log.debug("MCP unknown method: %s", method)
-    return _err(-32601, f"Method not found: {method}")
+    return await _relay_or_return(_err(-32601, f"Method not found: {method}"))
 
 
 # GET /mcp/sse — HTTP+SSE transport for MCP clients that require it
@@ -1095,7 +1132,7 @@ async def mcp_sse(request: Request):
     app.state._mcp_sse_sessions = sessions
 
     base = str(request.base_url).rstrip("/")
-    post_url = f"{base}/mcp"
+    post_url = f"{base}/mcp?session_id={conn_id}"
 
     async def _stream():
         yield f"event: endpoint\ndata: {post_url}\n\n"
