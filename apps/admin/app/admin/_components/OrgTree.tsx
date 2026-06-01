@@ -177,7 +177,7 @@ export function OrgTree({ onSelect, expandedIds: extExpandedIds, onToggle: extOn
 
   const { data: tree, isLoading, error } = useQuery<OrgNode>({
     queryKey: ['node-tree'],
-    queryFn: () => apiFetch('/nodes/tree'),
+    queryFn: () => apiFetch<OrgNode[]>('/nodes/tree').then(arr => arr[0]),
     staleTime: 30_000,
   });
 

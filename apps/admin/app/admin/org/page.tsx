@@ -48,6 +48,7 @@ function CreateNodeModal({
     try {
       await apiFetch('/nodes', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: form.name.trim(),
           type: form.type,
@@ -179,7 +180,7 @@ export default function OrgTreePage() {
 
   const { data: tree, isLoading, error } = useQuery<OrgNode>({
     queryKey: ['node-tree'],
-    queryFn: () => apiFetch('/nodes/tree'),
+    queryFn: () => apiFetch<OrgNode[]>('/nodes/tree').then(arr => arr[0]),
     staleTime: 30_000,
   });
 
