@@ -483,3 +483,155 @@ class TestStreamingCacheHits:
         assert resp.status_code == 200
         assert "application/json" in resp.headers.get("content-type", "")
         assert resp.json()["id"] == "chatcmpl-cached"
+
+
+# ---------------------------------------------------------------------------
+# Output guardrails
+# ---------------------------------------------------------------------------
+
+_OUTPUT_BLOCK_RULE = {
+    "id": "gr-out-1",
+    "name": "secret-output-block",
+    "type": "pattern",
+    "action": "block",
+    "applies_to": "output",
+    "enabled": True,
+    "severity": "high",
+    "config": {"patterns": ["forbidden-output"]},
+}
+
+_OUTPUT_REDACT_RULE = {
+    "id": "gr-out-2",
+    "name": "secret-output-redact",
+    "type": "pattern",
+    "action": "redact",
+    "applies_to": "output",
+    "enabled": True,
+    "severity": "medium",
+    "config": {"patterns": ["sk-output-secret"], "mask": "[REDACTED]"},
+}
+
+
+class TestOutputGuardrails:
+    async def _make_client_with_guardrail(self, app_and_client, rule, litellm_content):
+        """Helper: set up redis with one guardrail rule and a litellm response."""
+        app, client = app_and_client
+
+        guardrail_json = _j.dumps([rule])
+
+        async def _redis_get_side_effect(key):
+            if key.startswith("guardrails:"):
+                return guardrail_json
+            return None
+
+        app.state.redis.get = AsyncMock(side_effect=_redis_get_side_effect)
+
+        async def _post_side_effect(url, **kwargs):
+            if "validate" in url:
+                return _auth_response_ok()
+            if "chat/completions" in url:
+                return _litellm_chat_response(litellm_content)
+            return HttpxResponse(200, json={})
+
+        app.state.http.post = AsyncMock(side_effect=_post_side_effect)
+        return app, client
+
+    async def test_output_block_withholds_and_skips_cache(self, app_and_client):
+        """Output block rule must replace content with withheld notice and skip cache writes."""
+        app, client = await self._make_client_with_guardrail(
+            app_and_client, _OUTPUT_BLOCK_RULE, "forbidden-output here"
+        )
+
+        mock_exact_set = AsyncMock()
+        mock_semantic_set = AsyncMock()
+        with (
+            patch("app.exact.get", new=AsyncMock(return_value=None)),
+            patch("app.semantic.embed", new=AsyncMock(side_effect=Exception("skip"))),
+            patch("app.exact.set", new=mock_exact_set),
+            patch("app.semantic.set", new=mock_semantic_set),
+        ):
+            resp = await client.post(
+                "/v1/chat/completions",
+                json=CHAT_BODY,
+                headers={"Authorization": "Bearer valid"},
+            )
+
+        assert resp.status_code == 200
+        body = resp.json()
+        content = body["choices"][0]["message"]["content"]
+        assert "withheld" in content
+        assert "secret-output-block" in content
+        mock_exact_set.assert_not_awaited()
+        mock_semantic_set.assert_not_awaited()
+
+    async def test_output_redact_masks_completion(self, app_and_client):
+        """Output redact rule must mask matching text in the completion content."""
+        app, client = await self._make_client_with_guardrail(
+            app_and_client, _OUTPUT_REDACT_RULE, "here is your sk-output-secret key"
+        )
+
+        with (
+            patch("app.exact.get", new=AsyncMock(return_value=None)),
+            patch("app.semantic.embed", new=AsyncMock(side_effect=Exception("skip"))),
+            patch("app.exact.set", new=AsyncMock()),
+        ):
+            resp = await client.post(
+                "/v1/chat/completions",
+                json=CHAT_BODY,
+                headers={"Authorization": "Bearer valid"},
+            )
+
+        assert resp.status_code == 200
+        content = resp.json()["choices"][0]["message"]["content"]
+        assert "sk-output-secret" not in content
+        assert "[REDACTED]" in content
+
+    async def test_output_tool_call_null_content_ok(self, app_and_client):
+        """A completion with null content (tool call) must not crash; return 200."""
+        app, client = app_and_client
+
+        guardrail_json = _j.dumps([_OUTPUT_BLOCK_RULE])
+
+        async def _redis_get_side_effect(key):
+            if key.startswith("guardrails:"):
+                return guardrail_json
+            return None
+
+        app.state.redis.get = AsyncMock(side_effect=_redis_get_side_effect)
+
+        async def _post_side_effect(url, **kwargs):
+            if "validate" in url:
+                return _auth_response_ok()
+            if "chat/completions" in url:
+                return HttpxResponse(
+                    200,
+                    json={
+                        "id": "chatcmpl-tool",
+                        "choices": [
+                            {
+                                "message": {
+                                    "role": "assistant",
+                                    "content": None,
+                                    "tool_calls": [{"id": "tc1", "type": "function"}],
+                                }
+                            }
+                        ],
+                        "usage": {"prompt_tokens": 5, "completion_tokens": 3},
+                    },
+                )
+            return HttpxResponse(200, json={})
+
+        app.state.http.post = AsyncMock(side_effect=_post_side_effect)
+
+        with (
+            patch("app.exact.get", new=AsyncMock(return_value=None)),
+            patch("app.semantic.embed", new=AsyncMock(side_effect=Exception("skip"))),
+            patch("app.exact.set", new=AsyncMock()),
+        ):
+            resp = await client.post(
+                "/v1/chat/completions",
+                json=CHAT_BODY,
+                headers={"Authorization": "Bearer valid"},
+            )
+
+        assert resp.status_code == 200

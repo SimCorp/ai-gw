@@ -726,8 +726,39 @@ async def _handle_chat_completions(request: Request, body: dict):
             headers={"Retry-After": "30", "x-request-id": request_id},
         )
     response_body = resp.json()
+    block_output_cache = False
 
-    if resp.status_code == 200 and not bypass_cache:
+    if resp.status_code == 200 and not body.get("stream") and guardrail_rules:
+        try:
+            for choice in response_body.get("choices", []):
+                content = choice.get("message", {}).get("content")
+                if not isinstance(content, str):
+                    continue
+                out = evaluate_guardrails(guardrail_rules, content, "output")
+                for hit in out.hits:
+                    asyncio.create_task(
+                        _emit_guardrail_hit(
+                            http,
+                            {
+                                **hit,
+                                "team_id": team_id,
+                                "api_key_id": key_id,
+                                "request_id": request_id,
+                                "model": body.get("model"),
+                            },
+                        )
+                    )
+                if out.blocked_rule:
+                    choice["message"]["content"] = (
+                        f"[response withheld by guardrail: {out.blocked_rule}]"
+                    )
+                    block_output_cache = True
+                elif out.text != content:
+                    choice["message"]["content"] = out.text
+        except Exception:
+            pass  # fail-open
+
+    if resp.status_code == 200 and not bypass_cache and not block_output_cache:
         try:
             await exact.set(
                 body,
@@ -783,7 +814,7 @@ async def _handle_chat_completions(request: Request, body: dict):
         )
     )
     return Response(
-        content=resp.content,
+        content=_json.dumps(response_body),
         status_code=resp.status_code,
         media_type="application/json",
         headers={"X-Cache": "MISS", "x-request-id": request_id},
