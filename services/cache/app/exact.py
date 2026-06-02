@@ -17,5 +17,7 @@ async def get(prompt: dict, redis: Redis, team_id: str = "", project_id: str = "
     return json.loads(raw)
 
 
-async def set(prompt: dict, response: dict, ttl: int, redis: Redis, team_id: str = "", project_id: str = "") -> None:
+async def set(
+    prompt: dict, response: dict, ttl: int, redis: Redis, team_id: str = "", project_id: str = ""
+) -> None:
     await redis.setex(_key(prompt, team_id, project_id), ttl, json.dumps(response))

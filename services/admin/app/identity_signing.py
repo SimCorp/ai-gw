@@ -15,6 +15,7 @@ Usage:
     # Verify a token (any service)
     claims = verify_identity_token(token, public_key)
 """
+
 from __future__ import annotations
 
 import base64
@@ -49,6 +50,7 @@ def _fernet(secret: str) -> Fernet:
 def _get_identity_secret() -> str:
     """Return the IDENTITY_KEY_SECRET env var, falling back to the dev placeholder."""
     from app.config import settings
+
     return settings.identity_key_secret or _DEV_SECRET
 
 
@@ -195,12 +197,14 @@ def verify_identity_token(token: str, public_key: RSAPublicKey) -> dict:
 
 def public_key_to_jwk(public_key: RSAPublicKey, kid: str) -> dict:
     """Serialise an RSAPublicKey to a JWK dict (RFC 7517)."""
-    pub_numbers = public_key.public_key().public_numbers() if hasattr(public_key, "private_numbers") else public_key.public_numbers()  # type: ignore[attr-defined]
+    pub_numbers = (
+        public_key.public_key().public_numbers()
+        if hasattr(public_key, "private_numbers")
+        else public_key.public_numbers()
+    )  # type: ignore[attr-defined]
 
     def _b64url(n: int, length: int) -> str:
-        return base64.urlsafe_b64encode(
-            n.to_bytes(length, "big")
-        ).rstrip(b"=").decode()
+        return base64.urlsafe_b64encode(n.to_bytes(length, "big")).rstrip(b"=").decode()
 
     # RSA public key: n (modulus) and e (exponent)
     n_bytes = (pub_numbers.n.bit_length() + 7) // 8

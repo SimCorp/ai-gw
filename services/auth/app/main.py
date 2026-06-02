@@ -16,6 +16,7 @@ async def lifespan(app: FastAPI):
         _validate_jwks_uri(settings.jwks_uri)
     except ValueError as exc:
         import logging
+
         logging.getLogger(__name__).error("Invalid JWKS_URI: %s", exc)
     app.state.redis = make_redis(settings.redis_url)
     app.state.db = await asyncpg.create_pool(

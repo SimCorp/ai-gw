@@ -12,6 +12,7 @@ this job uses the local org seed data (services/admin/scripts/seed_workday_org.p
 as the reference. In production, replace _get_workday_snapshot() with actual
 Workday API calls once a service account is provisioned.
 """
+
 from __future__ import annotations
 
 import logging

@@ -1,4 +1,5 @@
 """Tests for app.semantic: _cosine, get, and set."""
+
 import json
 import math
 from unittest.mock import AsyncMock
@@ -22,6 +23,7 @@ PROJECT = "proj1"
 # ---------------------------------------------------------------------------
 # _cosine — pure function, no I/O
 # ---------------------------------------------------------------------------
+
 
 class TestCosine:
     def test_identical_vectors_return_one(self):
@@ -58,6 +60,7 @@ class TestCosine:
 # semantic.get — scans Redis keys, returns best match or None
 # ---------------------------------------------------------------------------
 
+
 def _open_redis() -> AsyncMock:
     """Return an AsyncMock Redis with the circuit breaker key absent (circuit closed)."""
     redis = AsyncMock()
@@ -87,8 +90,8 @@ class TestSemanticGet:
         # First get → embedding bytes; second get → response bytes
         redis.get = AsyncMock(
             side_effect=[
-                json.dumps(stored_emb),       # "sem:team1:proj1:abc:emb"
-                json.dumps(cached_resp),       # "sem:team1:proj1:abc:resp"
+                json.dumps(stored_emb),  # "sem:team1:proj1:abc:emb"
+                json.dumps(cached_resp),  # "sem:team1:proj1:abc:resp"
             ]
         )
 
@@ -97,7 +100,7 @@ class TestSemanticGet:
         assert result == cached_resp
 
     async def test_key_below_threshold_returns_none(self):
-        stored_emb = [0.0, 1.0]   # orthogonal to query
+        stored_emb = [0.0, 1.0]  # orthogonal to query
         query_emb = [1.0, 0.0]
 
         redis = _open_redis()
@@ -110,15 +113,17 @@ class TestSemanticGet:
 
     async def test_picks_best_match_among_multiple_keys(self):
         query = [1.0, 0.0]
-        poor_match = [0.0, 1.0]      # orthogonal → 0.0
-        good_match = [0.99, 0.14]    # near-identical → close to 1.0
+        poor_match = [0.0, 1.0]  # orthogonal → 0.0
+        good_match = [0.99, 0.14]  # near-identical → close to 1.0
         best_resp = {"choices": [{"message": {"content": "best"}}]}
 
         redis = _open_redis()
-        redis.keys = AsyncMock(return_value=[
-            f"sem:{TEAM}:{PROJECT}:poor:emb",
-            f"sem:{TEAM}:{PROJECT}:best:emb",
-        ])
+        redis.keys = AsyncMock(
+            return_value=[
+                f"sem:{TEAM}:{PROJECT}:poor:emb",
+                f"sem:{TEAM}:{PROJECT}:best:emb",
+            ]
+        )
 
         async def _get(key):
             if key == f"sem:{TEAM}:{PROJECT}:poor:emb":
@@ -159,6 +164,7 @@ class TestSemanticGet:
 # ---------------------------------------------------------------------------
 # semantic.set — writes two Redis keys with TTL
 # ---------------------------------------------------------------------------
+
 
 class TestSemanticSet:
     async def test_writes_emb_and_resp_keys_with_ttl(self):
@@ -223,6 +229,7 @@ class TestSemanticSet:
 # Team namespace isolation
 # ---------------------------------------------------------------------------
 
+
 class TestTeamNamespace:
     async def test_different_teams_use_different_key_prefix(self):
         """Two teams scanning Redis must use different key patterns."""
@@ -248,6 +255,7 @@ class TestTeamNamespace:
 # TTL jitter
 # ---------------------------------------------------------------------------
 
+
 class TestTTLJitter:
     async def test_ttl_jitter_applied(self):
         """TTL passed to setex must be within ±10% of the base TTL."""
@@ -255,7 +263,9 @@ class TestTTLJitter:
         redis = _open_redis()
         redis.setex = AsyncMock()
 
-        await sem_set([0.1, 0.2], {"choices": []}, base_ttl, redis, team_id=TEAM, project_id=PROJECT)
+        await sem_set(
+            [0.1, 0.2], {"choices": []}, base_ttl, redis, team_id=TEAM, project_id=PROJECT
+        )
 
         calls = redis.setex.call_args_list
         ttls_used = [c[0][1] for c in calls]
@@ -269,6 +279,7 @@ class TestTTLJitter:
 # ---------------------------------------------------------------------------
 # Circuit breaker
 # ---------------------------------------------------------------------------
+
 
 class TestCircuitBreaker:
     async def test_circuit_breaker_skips_get_when_open(self):

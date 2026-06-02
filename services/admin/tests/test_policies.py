@@ -7,6 +7,7 @@ from unittest.mock import MagicMock
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_policy_orm(team_id):
     p = MagicMock()
     p.id = uuid.uuid4()
@@ -44,6 +45,7 @@ def _mappings_all(rows):
 # GET /teams/{id}/policy
 # ---------------------------------------------------------------------------
 
+
 async def test_get_policy_found(client, mock_session):
     team_id = uuid.uuid4()
     policy = _make_policy_orm(team_id)
@@ -68,6 +70,7 @@ async def test_get_policy_not_found_returns_empty_dict(client, mock_session):
 # PUT /teams/{id}/policy
 # ---------------------------------------------------------------------------
 
+
 async def test_upsert_policy_calls_redis_hset(client, mock_session):
     team_id = uuid.uuid4()
     policy = _make_policy_orm(team_id)
@@ -87,6 +90,7 @@ async def test_upsert_policy_calls_redis_hset(client, mock_session):
 
     assert resp.status_code == 200
     from app.main import app as fastapi_app
+
     redis = fastapi_app.state.redis
     redis.hset.assert_called_once()
     call_args = redis.hset.call_args
@@ -116,6 +120,7 @@ async def test_upsert_policy_with_project_id_includes_project_in_key(client, moc
 
     assert resp.status_code == 200
     from app.main import app as fastapi_app
+
     redis = fastapi_app.state.redis
     redis.hset.assert_called()
     key_used = redis.hset.call_args[0][0]
@@ -125,6 +130,7 @@ async def test_upsert_policy_with_project_id_includes_project_in_key(client, moc
 # ---------------------------------------------------------------------------
 # GET /policies
 # ---------------------------------------------------------------------------
+
 
 async def test_list_all_policies_returns_200(client, mock_session):
     team_id = uuid.uuid4()

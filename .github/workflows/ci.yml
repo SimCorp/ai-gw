@@ -33,6 +33,9 @@ jobs:
       - name: ruff check
         run: ruff check services/
 
+      - name: ruff format --check
+        run: ruff format --check services/
+
   # ────────────────────────────────────────────────────────────────────────────
   # Frontend lint + build (pnpm workspace / turbo)
   # ────────────────────────────────────────────────────────────────────────────
@@ -83,7 +86,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [auth, cache, observability, admin]
+        service: [auth, cache, observability, admin, librarian, memory, scanner]
 
     steps:
       - uses: actions/checkout@v4
@@ -198,6 +201,51 @@ jobs:
         run: docker compose -f infra/docker-compose.yml down -v
         env:
           COMPOSE_ANSI: never
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Security — dependency CVE scan (pip-audit) + secret scan (gitleaks)
+  # ────────────────────────────────────────────────────────────────────────────
+  security:
+    name: Security scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # gitleaks scans history
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pip-audit
+        run: pip install --quiet pip-audit
+
+      - name: pip-audit (declared deps per service)
+        run: |
+          set -euo pipefail
+          # Advisories with no available fix are allowlisted here with a
+          # justification. Populate from the FIRST CI run's findings — do not
+          # invent IDs. Format: one --ignore-vuln per advisory.
+          IGNORE=(
+            # e.g. --ignore-vuln GHSA-xxxx-xxxx-xxxx  # no fixed version yet (dep X)
+          )
+          fail=0
+          for svc in auth cache observability admin librarian memory scanner; do
+            echo "::group::pip-audit $svc"
+            # Project mode: resolves and audits the service's DECLARED deps from
+            # pyproject.toml — not the ambient env / pip-audit's own deps.
+            pip-audit "${IGNORE[@]}" "services/$svc" || fail=1
+            echo "::endgroup::"
+          done
+          exit $fail
+
+      - name: gitleaks secret scan
+        # Use the OSS gitleaks CLI directly: gitleaks-action@v2 requires a paid
+        # GITLEAKS_LICENSE for org-owned repos (SimCorp/ai-gw); the binary does not.
+        run: |
+          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz \
+            | tar -xz -C /usr/local/bin gitleaks
+          gitleaks detect --source . --redact --no-banner
 
   # ────────────────────────────────────────────────────────────────────────────
   # Build & push all images to GHCR

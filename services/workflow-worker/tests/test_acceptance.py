@@ -12,6 +12,7 @@ The suite assumes DEV_BYPASS_AUTH=true on the admin service, which makes all
 requests succeed without a token. In CI, ensure the compose stack includes
 that env var (docker-compose.test.yml sets it).
 """
+
 from __future__ import annotations
 
 import subprocess
@@ -32,6 +33,7 @@ _redis = redis_mod.Redis(host="localhost", port=6379, decode_responses=True)
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _get(path: str) -> dict:
     r = httpx.get(f"{ADMIN}{path}", headers=HEADERS, timeout=10)
     r.raise_for_status()
@@ -50,36 +52,55 @@ def _team_id() -> str:
 
 
 def _register_agent(slug: str, image: str) -> str:
-    r = httpx.post(f"{ADMIN}/agents", headers=HEADERS, timeout=10, json={
-        "slug": slug, "name": slug, "image": image, "category": "test",
-    })
+    r = httpx.post(
+        f"{ADMIN}/agents",
+        headers=HEADERS,
+        timeout=10,
+        json={
+            "slug": slug,
+            "name": slug,
+            "image": image,
+            "category": "test",
+        },
+    )
     r.raise_for_status()
     return r.json()["id"]
 
 
 def _make_workflow(team_id: str, nodes: list[dict], edges: list[dict]) -> tuple[str, str]:
     """Create a workflow + version. Returns (workflow_id, first_node_id)."""
-    wf = _post("/workflows", {
-        "slug": f"test-{uuid.uuid4().hex[:6]}",
-        "name": "Test Workflow",
-        "team_id": team_id,
-    })
+    wf = _post(
+        "/workflows",
+        {
+            "slug": f"test-{uuid.uuid4().hex[:6]}",
+            "name": "Test Workflow",
+            "team_id": team_id,
+        },
+    )
     entry = nodes[0]["id"]
-    _post(f"/workflows/{wf['id']}/versions", {
-        "dag": {"entry_node": entry, "nodes": nodes, "edges": edges},
-        "created_by": str(uuid.uuid4()),
-    })
+    _post(
+        f"/workflows/{wf['id']}/versions",
+        {
+            "dag": {"entry_node": entry, "nodes": nodes, "edges": edges},
+            "created_by": str(uuid.uuid4()),
+        },
+    )
     return wf["id"], entry
 
 
-def _submit_run(workflow_id: str, team_id: str, *, triggered_by_kind: str = "user", inputs: dict | None = None) -> dict:
-    return _post("/runs", {
-        "workflow_id": workflow_id,
-        "inputs": inputs or {},
-        "team_id": team_id,
-        "triggered_by": str(uuid.uuid4()),
-        "triggered_by_kind": triggered_by_kind,
-    })
+def _submit_run(
+    workflow_id: str, team_id: str, *, triggered_by_kind: str = "user", inputs: dict | None = None
+) -> dict:
+    return _post(
+        "/runs",
+        {
+            "workflow_id": workflow_id,
+            "inputs": inputs or {},
+            "team_id": team_id,
+            "triggered_by": str(uuid.uuid4()),
+            "triggered_by_kind": triggered_by_kind,
+        },
+    )
 
 
 def _wait_run(run_id: str, timeout: float = 120) -> dict:
@@ -115,13 +136,16 @@ def echo_agent_id() -> str:
 # Acceptance criterion 1: JWT user 3-node linear chain succeeds
 # ---------------------------------------------------------------------------
 
+
 def test_linear_chain_succeeds(team_id, echo_agent_id):
     """User-triggered 3-node chain executes; all nodes succeed."""
     wf_id, _ = _make_workflow(
         team_id,
-        nodes=[{"id": "a", "agent_slug": "echo-agent"},
-               {"id": "b", "agent_slug": "echo-agent"},
-               {"id": "c", "agent_slug": "echo-agent"}],
+        nodes=[
+            {"id": "a", "agent_slug": "echo-agent"},
+            {"id": "b", "agent_slug": "echo-agent"},
+            {"id": "c", "agent_slug": "echo-agent"},
+        ],
         edges=[{"from": "a", "to": "b"}, {"from": "b", "to": "c"}],
     )
     run = _submit_run(wf_id, team_id, inputs={"value": 42})
@@ -140,10 +164,10 @@ def test_linear_chain_succeeds(team_id, echo_agent_id):
 # Acceptance criterion 2: API-key trigger records triggered_by_kind
 # ---------------------------------------------------------------------------
 
+
 def test_api_key_trigger(team_id, echo_agent_id):
     """Service-account API-key trigger sets triggered_by_kind='api_key'."""
-    wf_id, _ = _make_workflow(team_id,
-        nodes=[{"id": "n1", "agent_slug": "echo-agent"}], edges=[])
+    wf_id, _ = _make_workflow(team_id, nodes=[{"id": "n1", "agent_slug": "echo-agent"}], edges=[])
     run = _submit_run(wf_id, team_id, triggered_by_kind="api_key")
     result = _wait_run(run["id"])
 
@@ -155,12 +179,14 @@ def test_api_key_trigger(team_id, echo_agent_id):
 # Acceptance criterion 3: Worker crash recovery (stale claim reclaim)
 # ---------------------------------------------------------------------------
 
+
 def test_worker_crash_recovery(team_id, echo_agent_id):
     """Killing and restarting the worker mid-run; run still completes."""
-    wf_id, _ = _make_workflow(team_id,
-        nodes=[{"id": "n1", "agent_slug": "echo-agent"},
-               {"id": "n2", "agent_slug": "echo-agent"}],
-        edges=[{"from": "n1", "to": "n2"}])
+    wf_id, _ = _make_workflow(
+        team_id,
+        nodes=[{"id": "n1", "agent_slug": "echo-agent"}, {"id": "n2", "agent_slug": "echo-agent"}],
+        edges=[{"from": "n1", "to": "n2"}],
+    )
     run = _submit_run(wf_id, team_id)
     run_id = run["id"]
 
@@ -178,7 +204,8 @@ def test_worker_crash_recovery(team_id, echo_agent_id):
     # Restart the worker (simulates crash + recovery)
     subprocess.run(
         ["docker", "compose", "-f", "infra/docker-compose.yml", "restart", "workflow-worker"],
-        check=True, capture_output=True,
+        check=True,
+        capture_output=True,
     )
 
     # Run should still complete after worker restarts
@@ -190,25 +217,30 @@ def test_worker_crash_recovery(team_id, echo_agent_id):
 # Acceptance criterion 4: Rate limit — 101st run returns 429
 # ---------------------------------------------------------------------------
 
+
 def test_rate_limit(team_id, echo_agent_id):
     """101st run submission within the rate-limit window returns 429."""
     # Flush the counter first by using a fresh team-scoped slug pair
     # (Rate limit counter uses team_id; use a synthetic team_id that won't conflict)
 
     # Create a minimal workflow the 101 runs can reference (real workflow needed)
-    wf_id, _ = _make_workflow(team_id,
-        nodes=[{"id": "n1", "agent_slug": "echo-agent"}], edges=[])
+    wf_id, _ = _make_workflow(team_id, nodes=[{"id": "n1", "agent_slug": "echo-agent"}], edges=[])
 
     # Submit 100 runs quickly — they may queue but should not 429
     status_codes = []
     for _ in range(101):
-        r = httpx.post(f"{ADMIN}/runs", headers=HEADERS, timeout=10, json={
-            "workflow_id": wf_id,
-            "inputs": {},
-            "team_id": team_id,
-            "triggered_by": str(uuid.uuid4()),
-            "triggered_by_kind": "user",
-        })
+        r = httpx.post(
+            f"{ADMIN}/runs",
+            headers=HEADERS,
+            timeout=10,
+            json={
+                "workflow_id": wf_id,
+                "inputs": {},
+                "team_id": team_id,
+                "triggered_by": str(uuid.uuid4()),
+                "triggered_by_kind": "user",
+            },
+        )
         status_codes.append(r.status_code)
         if r.status_code == 429:
             assert "Retry-After" in r.headers, "429 must include Retry-After"
@@ -221,12 +253,14 @@ def test_rate_limit(team_id, echo_agent_id):
 # Acceptance criterion 5: LLM cost attribution via llm-echo-agent
 # ---------------------------------------------------------------------------
 
+
 def test_llm_cost_attribution(team_id):
     """llm-echo-agent calls cache:8002 with scoped key; cost record tied to run."""
     _register_agent("llm-echo-agent", "ai-gateway-llm-echo-agent:dev")
 
-    wf_id, _ = _make_workflow(team_id,
-        nodes=[{"id": "n1", "agent_slug": "llm-echo-agent"}], edges=[])
+    wf_id, _ = _make_workflow(
+        team_id, nodes=[{"id": "n1", "agent_slug": "llm-echo-agent"}], edges=[]
+    )
     run = _submit_run(wf_id, team_id, inputs={"topic": "Alembic migrations"})
     result = _wait_run(run["id"], timeout=120)
 
@@ -243,12 +277,13 @@ def test_llm_cost_attribution(team_id):
 # Acceptance criterion 6: 5 concurrent nodes fan-out all start within 2s
 # ---------------------------------------------------------------------------
 
+
 def test_concurrent_fanout(team_id, echo_agent_id):
     """5-node fan-out from an entry node; all 5 start within 2 seconds."""
     # DAG: entry -> [n1, n2, n3, n4, n5] (parallel fan-out requires v0.5 multi-entry)
     # v0.1 is linear only; test with a 5-node chain (worker's concurrency=5)
     nodes = [{"id": f"n{i}", "agent_slug": "echo-agent"} for i in range(1, 6)]
-    edges = [{"from": f"n{i}", "to": f"n{i+1}"} for i in range(1, 5)]
+    edges = [{"from": f"n{i}", "to": f"n{i + 1}"} for i in range(1, 5)]
     wf_id, _ = _make_workflow(team_id, nodes=nodes, edges=edges)
 
     run = _submit_run(wf_id, team_id)
@@ -264,10 +299,10 @@ def test_concurrent_fanout(team_id, echo_agent_id):
 # Acceptance criterion 7: Cross-team access returns 403
 # ---------------------------------------------------------------------------
 
+
 def test_cross_team_access_denied(team_id, echo_agent_id):
     """A run owned by one team cannot be fetched with a different team_id scoped key."""
-    wf_id, _ = _make_workflow(team_id,
-        nodes=[{"id": "n1", "agent_slug": "echo-agent"}], edges=[])
+    wf_id, _ = _make_workflow(team_id, nodes=[{"id": "n1", "agent_slug": "echo-agent"}], edges=[])
     run = _submit_run(wf_id, team_id)
     run_id = run["id"]
 

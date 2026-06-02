@@ -5,6 +5,7 @@ Developer portal authentication — shim over unified_auth.
 Portal-specific endpoints (profile, select-team, stats) stay here and query users table.
 Session key: session:{token}  (unified format)
 """
+
 from __future__ import annotations
 
 import json
@@ -74,6 +75,7 @@ async def _get_current_developer(
 # Auth routes (delegate to unified)
 # ---------------------------------------------------------------------------
 
+
 @router.post("/register", status_code=201)
 async def register(
     body: RegisterRequest,
@@ -84,7 +86,9 @@ async def register(
     if settings.allowed_email_domains:
         domain = body.email.split("@")[1]
         if domain not in settings.allowed_email_domains:
-            raise HTTPException(status_code=422, detail="Registration is restricted to corporate email addresses")
+            raise HTTPException(
+                status_code=422, detail="Registration is restricted to corporate email addresses"
+            )
     result = await _unified_register(body, request, session)
     # Map to dev portal format
     u = result["user"]
@@ -151,6 +155,7 @@ async def change_password(
 # Portal-specific routes
 # ---------------------------------------------------------------------------
 
+
 class ProfileUpdate(BaseModel):
     display_name: str | None = Field(default=None, max_length=200)
 
@@ -168,7 +173,9 @@ async def update_profile(
 
     display_name = body.display_name.strip()
     await session.execute(
-        text("UPDATE users SET display_name = :dn, updated_at = NOW() WHERE id = CAST(:id AS uuid)"),
+        text(
+            "UPDATE users SET display_name = :dn, updated_at = NOW() WHERE id = CAST(:id AS uuid)"
+        ),
         {"dn": display_name, "id": developer["user_id"]},
     )
     await session.commit()
@@ -188,32 +195,49 @@ async def select_team(
     session: AsyncSession = Depends(get_session),
 ):
     developer = await _get_current_developer(authorization, request)
-    row = (await session.execute(
-        text("SELECT id, name FROM organization_nodes WHERE id = CAST(:id AS uuid) AND type = 'team'"),
-        {"id": team_id},
-    )).mappings().first()
+    row = (
+        (
+            await session.execute(
+                text(
+                    "SELECT id, name FROM organization_nodes WHERE id = CAST(:id AS uuid) AND type = 'team'"
+                ),
+                {"id": team_id},
+            )
+        )
+        .mappings()
+        .first()
+    )
     if not row:
         raise HTTPException(status_code=404, detail="Team not found")
 
-    member_row = (await session.execute(
-        text("""
+    member_row = (
+        await session.execute(
+            text("""
             SELECT id FROM node_members
             WHERE node_id = CAST(:team_id AS uuid)
               AND (user_id = :uid OR developer_id = CAST(:uid AS uuid))
         """),
-        {"team_id": team_id, "uid": developer["user_id"]},
-    )).first()
+            {"team_id": team_id, "uid": developer["user_id"]},
+        )
+    ).first()
     if not member_row:
         raise HTTPException(status_code=403, detail="You are not a member of this team")
 
     await session.execute(
-        text("UPDATE users SET primary_node_id = CAST(:team_id AS uuid) WHERE id = CAST(:id AS uuid)"),
+        text(
+            "UPDATE users SET primary_node_id = CAST(:team_id AS uuid) WHERE id = CAST(:id AS uuid)"
+        ),
         {"team_id": team_id, "id": developer["user_id"]},
     )
     await session.commit()
 
     token = (authorization or "").removeprefix("Bearer ").strip()
-    new_payload = {**developer, "primary_team_id": team_id, "team_id": team_id, "team_name": row["name"]}
+    new_payload = {
+        **developer,
+        "primary_team_id": team_id,
+        "team_id": team_id,
+        "team_name": row["name"],
+    }
     await request.app.state.redis.setex(_session_key(token), _SESSION_TTL, json.dumps(new_payload))
     return new_payload
 
@@ -221,6 +245,7 @@ async def select_team(
 # ---------------------------------------------------------------------------
 # /dev-auth/me/stats — kept here (large endpoint, developer-only)
 # ---------------------------------------------------------------------------
+
 
 @router.get("/me/stats")
 async def my_stats(
@@ -236,7 +261,7 @@ async def my_stats(
     team_id = developer.get("primary_team_id") or developer.get("team_id")
 
     since_map = {
-        "7d":  "AND cr.created_at >= NOW() - INTERVAL '7 days'",
+        "7d": "AND cr.created_at >= NOW() - INTERVAL '7 days'",
         "30d": "AND cr.created_at >= NOW() - INTERVAL '30 days'",
         "90d": "AND cr.created_at >= NOW() - INTERVAL '90 days'",
         "mtd": "AND cr.created_at >= date_trunc('month', NOW())",
@@ -244,9 +269,12 @@ async def my_stats(
     }
     since = since_map[period]
     since_doe = since.replace("AND cr.created_at", "AND doe.occurred_at")
-    since_s   = since.replace("AND cr.created_at", "AND s.first_request_at")
+    since_s = since.replace("AND cr.created_at", "AND s.first_request_at")
 
-    cost_row = (await session.execute(text(f"""
+    cost_row = (
+        (
+            await session.execute(
+                text(f"""
         SELECT
             COUNT(cr.id)                                                              AS request_count,
             COALESCE(SUM(cr.tokens_input + cr.tokens_output), 0)                     AS total_tokens,
@@ -259,29 +287,47 @@ async def my_stats(
             COALESCE(SUM(cr.retry_count), 0)                                         AS total_retries
         FROM cost_records cr
         WHERE cr.developer_id = CAST(:dev_id AS uuid) {since}
-    """), {"dev_id": developer_id})).mappings().one()
+    """),
+                {"dev_id": developer_id},
+            )
+        )
+        .mappings()
+        .one()
+    )
 
-    output_totals = (await session.execute(text(f"""
+    output_totals = (
+        (
+            await session.execute(
+                text(f"""
         SELECT
             COALESCE(SUM(doe.commit_count), 0)                                       AS total_commits,
             COUNT(CASE WHEN doe.event_type IN ('pr_opened','pr_merged') THEN 1 END)  AS total_prs,
             COUNT(CASE WHEN doe.event_type = 'pr_merged' THEN 1 END)                AS merged_prs
         FROM developer_output_events doe
         WHERE doe.developer_id = CAST(:dev_id AS uuid) {since_doe}
-    """), {"dev_id": developer_id})).mappings().one()
+    """),
+                {"dev_id": developer_id},
+            )
+        )
+        .mappings()
+        .one()
+    )
 
-    cost_usd     = float(cost_row["cost_usd"])
-    total_prs    = int(output_totals["total_prs"])
+    cost_usd = float(cost_row["cost_usd"])
+    total_prs = int(output_totals["total_prs"])
     total_commits = int(output_totals["total_commits"])
-    merged_prs   = int(output_totals["merged_prs"])
+    merged_prs = int(output_totals["merged_prs"])
 
-    cost_per_pr     = round(cost_usd / total_prs, 4)    if total_prs    > 0 else None
+    cost_per_pr = round(cost_usd / total_prs, 4) if total_prs > 0 else None
     cost_per_commit = round(cost_usd / total_commits, 4) if total_commits > 0 else None
-    pr_merge_rate   = round(merged_prs * 100.0 / total_prs, 1) if total_prs > 0 else None
+    pr_merge_rate = round(merged_prs * 100.0 / total_prs, 1) if total_prs > 0 else None
 
     team_budget_info = None
     if team_id:
-        budget_row = (await session.execute(text("""
+        budget_row = (
+            (
+                await session.execute(
+                    text("""
             SELECT t.monthly_budget_usd,
                    COALESCE(SUM(cr.cost_usd), 0) AS team_mtd_spend
             FROM teams t
@@ -289,9 +335,19 @@ async def my_stats(
               AND cr.created_at >= date_trunc('month', NOW())
             WHERE t.id = CAST(:team_id AS uuid)
             GROUP BY t.monthly_budget_usd
-        """), {"team_id": team_id})).mappings().one_or_none()
+        """),
+                    {"team_id": team_id},
+                )
+            )
+            .mappings()
+            .one_or_none()
+        )
         if budget_row:
-            team_limit = float(budget_row["monthly_budget_usd"]) if budget_row["monthly_budget_usd"] else None
+            team_limit = (
+                float(budget_row["monthly_budget_usd"])
+                if budget_row["monthly_budget_usd"]
+                else None
+            )
             team_spent = float(budget_row["team_mtd_spend"])
             team_budget_info = {
                 "monthly_budget_usd": team_limit,
@@ -300,7 +356,10 @@ async def my_stats(
                 "remaining_usd": round(team_limit - team_spent, 4) if team_limit else None,
             }
 
-    session_row = (await session.execute(text(f"""
+    session_row = (
+        (
+            await session.execute(
+                text(f"""
         SELECT COUNT(s.session_trace_id)                                AS session_count,
                ROUND(AVG(s.quality_score)::numeric, 2)                  AS avg_quality,
                ROUND(AVG(s.turn_count)::numeric, 1)                     AS avg_turns,
@@ -308,35 +367,70 @@ async def my_stats(
                COUNT(CASE WHEN s.produced_commit THEN 1 END)            AS sessions_with_commit
         FROM sessions s
         WHERE s.developer_id = CAST(:dev_id AS uuid) {since_s}
-    """), {"dev_id": developer_id})).mappings().one()
+    """),
+                {"dev_id": developer_id},
+            )
+        )
+        .mappings()
+        .one()
+    )
 
     session_count = int(session_row["session_count"])
     commit_conversion_pct = (
         round(int(session_row["sessions_with_commit"]) * 100.0 / session_count, 1)
-        if session_count > 0 else None
+        if session_count > 0
+        else None
     )
 
     hints = []
     request_count = int(cost_row["request_count"])
-    retry_count   = int(cost_row["total_retries"])
-    retry_rate    = retry_count / max(1, request_count)
+    retry_count = int(cost_row["total_retries"])
+    retry_rate = retry_count / max(1, request_count)
 
     if retry_rate > 0.3:
-        hints.append({"type": "high_retry_rate", "severity": "warning",
-            "message": f"Your retry rate is {retry_rate:.0%}. Try scoping prompts to a single task."})
-    if cost_row["cache_hit_pct"] is not None and float(cost_row["cache_hit_pct"]) < 20 and request_count > 20:
-        hints.append({"type": "low_cache_hit", "severity": "info",
-            "message": "Less than 20% of your requests hit the semantic cache."})
+        hints.append(
+            {
+                "type": "high_retry_rate",
+                "severity": "warning",
+                "message": f"Your retry rate is {retry_rate:.0%}. Try scoping prompts to a single task.",
+            }
+        )
+    if (
+        cost_row["cache_hit_pct"] is not None
+        and float(cost_row["cache_hit_pct"]) < 20
+        and request_count > 20
+    ):
+        hints.append(
+            {
+                "type": "low_cache_hit",
+                "severity": "info",
+                "message": "Less than 20% of your requests hit the semantic cache.",
+            }
+        )
     if cost_per_pr is not None and cost_per_pr > 50:
-        hints.append({"type": "high_cost_per_pr", "severity": "warning",
-            "message": f"Your cost per PR is ${cost_per_pr:.2f}. Top quartile developers achieve <$10/PR."})
+        hints.append(
+            {
+                "type": "high_cost_per_pr",
+                "severity": "warning",
+                "message": f"Your cost per PR is ${cost_per_pr:.2f}. Top quartile developers achieve <$10/PR.",
+            }
+        )
 
-    daily_rows = (await session.execute(text("""
+    daily_rows = (
+        (
+            await session.execute(
+                text("""
         SELECT date, request_count, cost_usd, cache_hits, tool_invocations, error_count
         FROM developer_activity_log
         WHERE developer_id = CAST(:dev_id AS uuid)
         ORDER BY date DESC LIMIT 30
-    """), {"dev_id": developer_id})).mappings().all()
+    """),
+                {"dev_id": developer_id},
+            )
+        )
+        .mappings()
+        .all()
+    )
 
     return {
         "developer_id": developer_id,
@@ -348,29 +442,47 @@ async def my_stats(
             "total_tokens": int(cost_row["total_tokens"]),
             "cost_usd": cost_usd,
             "tool_invocations": int(cost_row["tool_invocations"]),
-            "cache_hit_pct": float(cost_row["cache_hit_pct"]) if cost_row["cache_hit_pct"] is not None else None,
-            "avg_latency_ms": int(cost_row["avg_latency_ms"]) if cost_row["avg_latency_ms"] is not None else None,
+            "cache_hit_pct": float(cost_row["cache_hit_pct"])
+            if cost_row["cache_hit_pct"] is not None
+            else None,
+            "avg_latency_ms": int(cost_row["avg_latency_ms"])
+            if cost_row["avg_latency_ms"] is not None
+            else None,
             "error_count": int(cost_row["error_count"]),
             "repo_count": int(cost_row["repo_count"]),
         },
         "roi": {
-            "total_commits": total_commits, "total_prs": total_prs, "merged_prs": merged_prs,
-            "cost_per_pr": cost_per_pr, "cost_per_commit": cost_per_commit,
+            "total_commits": total_commits,
+            "total_prs": total_prs,
+            "merged_prs": merged_prs,
+            "cost_per_pr": cost_per_pr,
+            "cost_per_commit": cost_per_commit,
             "pr_merge_rate_pct": pr_merge_rate,
         },
         "session_quality": {
             "session_count": session_count,
-            "avg_quality_score": float(session_row["avg_quality"]) if session_row["avg_quality"] is not None else None,
-            "avg_turns": float(session_row["avg_turns"]) if session_row["avg_turns"] is not None else None,
-            "avg_inter_request_s": float(session_row["avg_inter_s"]) if session_row["avg_inter_s"] is not None else None,
+            "avg_quality_score": float(session_row["avg_quality"])
+            if session_row["avg_quality"] is not None
+            else None,
+            "avg_turns": float(session_row["avg_turns"])
+            if session_row["avg_turns"] is not None
+            else None,
+            "avg_inter_request_s": float(session_row["avg_inter_s"])
+            if session_row["avg_inter_s"] is not None
+            else None,
             "commit_conversion_pct": commit_conversion_pct,
         },
         "team_budget": team_budget_info,
         "optimization_hints": hints,
         "daily": [
-            {"date": str(r["date"]), "request_count": r["request_count"],
-             "cost_usd": float(r["cost_usd"]), "cache_hits": r["cache_hits"],
-             "tool_invocations": r["tool_invocations"], "error_count": r["error_count"]}
+            {
+                "date": str(r["date"]),
+                "request_count": r["request_count"],
+                "cost_usd": float(r["cost_usd"]),
+                "cache_hits": r["cache_hits"],
+                "tool_invocations": r["tool_invocations"],
+                "error_count": r["error_count"],
+            }
             for r in daily_rows
         ],
     }

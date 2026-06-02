@@ -150,7 +150,6 @@ async def _verify_identity_token(token: str, admin_url: str) -> bool:
         # Try each key until one verifies successfully
         import base64 as _b64
 
-
         def _decode_b64url(s: str) -> int:
             # Add padding if needed
             padded = s + "=" * (-len(s) % 4)
@@ -163,6 +162,7 @@ async def _verify_identity_token(token: str, admin_url: str) -> bool:
                 from cryptography.hazmat.primitives.asymmetric.rsa import (
                     RSAPublicNumbers,
                 )
+
                 pub_numbers = RSAPublicNumbers(
                     e=_decode_b64url(jwk["e"]),
                     n=_decode_b64url(jwk["n"]),
@@ -202,16 +202,10 @@ async def _seed_from_admin(pool: asyncpg.Pool, admin_url: str) -> None:
         if not slug:
             continue
         async with pool.acquire() as conn:
-            existing = await conn.fetchrow(
-                "SELECT id FROM agent_identities WHERE slug = $1", slug
-            )
+            existing = await conn.fetchrow("SELECT id FROM agent_identities WHERE slug = $1", slug)
             if existing:
                 continue
-            endpoint = (
-                f"http://workflow-worker:8000/invoke/{slug}"
-                if a.get("managed")
-                else ""
-            )
+            endpoint = f"http://workflow-worker:8000/invoke/{slug}" if a.get("managed") else ""
             await conn.execute(
                 """
                 INSERT INTO agent_identities
@@ -341,9 +335,7 @@ async def list_agents(
 @app.get("/agents/{slug}", response_model=AgentIdentity)
 async def get_agent(slug: str, request: Request):
     async with _pool(request).acquire() as conn:
-        row = await conn.fetchrow(
-            "SELECT * FROM agent_identities WHERE slug = $1", slug
-        )
+        row = await conn.fetchrow("SELECT * FROM agent_identities WHERE slug = $1", slug)
     if not row:
         raise HTTPException(status_code=404, detail=f"Agent '{slug}' not found")
     return await _to_identity(row, _redis(request))
@@ -377,9 +369,7 @@ async def get_agent_identity(slug: str, request: Request):
 @app.get("/agents/{slug}/endpoint", response_model=EndpointResponse)
 async def get_endpoint(slug: str, request: Request):
     async with _pool(request).acquire() as conn:
-        row = await conn.fetchrow(
-            "SELECT id, endpoint FROM agent_identities WHERE slug = $1", slug
-        )
+        row = await conn.fetchrow("SELECT id, endpoint FROM agent_identities WHERE slug = $1", slug)
     if not row:
         raise HTTPException(status_code=404, detail=f"Agent '{slug}' not found")
     online = await _is_online(_redis(request), slug)
@@ -392,9 +382,7 @@ async def get_endpoint(slug: str, request: Request):
 @app.post("/agents/{slug}/heartbeat")
 async def heartbeat(slug: str, request: Request):
     async with _pool(request).acquire() as conn:
-        exists = await conn.fetchval(
-            "SELECT 1 FROM agent_identities WHERE slug = $1", slug
-        )
+        exists = await conn.fetchval("SELECT 1 FROM agent_identities WHERE slug = $1", slug)
     if not exists:
         raise HTTPException(status_code=404, detail=f"Agent '{slug}' not found")
 
@@ -421,9 +409,7 @@ async def heartbeat(slug: str, request: Request):
     await redis.setex(_heartbeat_key(slug), _HEARTBEAT_TTL, "1")
 
     async with _pool(request).acquire() as conn:
-        await conn.execute(
-            "UPDATE agent_identities SET last_seen = NOW() WHERE slug = $1", slug
-        )
+        await conn.execute("UPDATE agent_identities SET last_seen = NOW() WHERE slug = $1", slug)
     return {"ok": True, "ttl": _HEARTBEAT_TTL}
 
 
@@ -436,11 +422,11 @@ async def register_agent(body: RegisterRequest, request: Request):
     # Verify the optional identity token against the admin JWKS
     token_verified = False
     if body.identity_token:
-        token_verified = await _verify_identity_token(
-            body.identity_token, settings.admin_url
-        )
+        token_verified = await _verify_identity_token(body.identity_token, settings.admin_url)
         if not token_verified:
-            log.warning("Agent '%s' supplied an invalid identity token during registration", body.slug)
+            log.warning(
+                "Agent '%s' supplied an invalid identity token during registration", body.slug
+            )
 
     async with _pool(request).acquire() as conn:
         row = await conn.fetchrow(
@@ -505,9 +491,7 @@ async def resolve(name: str, request: Request):
 
     async with pool.acquire() as conn:
         # Exact slug
-        exact = await conn.fetch(
-            "SELECT * FROM agent_identities WHERE slug = $1", name
-        )
+        exact = await conn.fetch("SELECT * FROM agent_identities WHERE slug = $1", name)
         # Capability tag
         cap = await conn.fetch(
             "SELECT * FROM agent_identities WHERE $1 = ANY(capabilities) AND slug != $2",

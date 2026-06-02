@@ -13,7 +13,13 @@ _SYSTEM = (
     "Return ONLY the JSON object, no prose."
 )
 
-_FALLBACK = {"title": "(untitled)", "summary": "", "focus_areas": [], "tags": [], "difficulty": "unknown"}
+_FALLBACK = {
+    "title": "(untitled)",
+    "summary": "",
+    "focus_areas": [],
+    "tags": [],
+    "difficulty": "unknown",
+}
 
 
 async def classify_content(*, text: str) -> dict:
@@ -47,5 +53,7 @@ async def classify_content(*, text: str) -> dict:
         "summary": str(parsed.get("summary") or "")[:200],
         "focus_areas": [str(x) for x in (parsed.get("focus_areas") or [])][:8],
         "tags": [str(x) for x in (parsed.get("tags") or [])][:12],
-        "difficulty": parsed.get("difficulty") if parsed.get("difficulty") in {"beginner", "intermediate", "advanced"} else "unknown",
+        "difficulty": parsed.get("difficulty")
+        if parsed.get("difficulty") in {"beginner", "intermediate", "advanced"}
+        else "unknown",
     }

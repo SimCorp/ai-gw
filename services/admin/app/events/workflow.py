@@ -10,6 +10,7 @@ The wire taxonomy follows the parent spec:
 - workflow.node.log         {run_id, node_id, line}
 - workflow.node.finished    {run_id, node_id, iteration, status, outputs|error}
 """
+
 from __future__ import annotations
 
 import json
@@ -78,47 +79,85 @@ async def subscribe(redis: Redis, run_id: uuid.UUID):
 
 # Convenience wrappers ---------------------------------------------------------
 
-async def run_started(redis: Redis, run_id: uuid.UUID, workflow_id: uuid.UUID, version: int, team_id: uuid.UUID, project_id: uuid.UUID | None) -> None:
-    await publish(redis, "workflow.run.started", {
-        "run_id": str(run_id),
-        "workflow_id": str(workflow_id),
-        "version": version,
-        "team_id": str(team_id),
-        "project_id": str(project_id) if project_id else None,
-    })
+
+async def run_started(
+    redis: Redis,
+    run_id: uuid.UUID,
+    workflow_id: uuid.UUID,
+    version: int,
+    team_id: uuid.UUID,
+    project_id: uuid.UUID | None,
+) -> None:
+    await publish(
+        redis,
+        "workflow.run.started",
+        {
+            "run_id": str(run_id),
+            "workflow_id": str(workflow_id),
+            "version": version,
+            "team_id": str(team_id),
+            "project_id": str(project_id) if project_id else None,
+        },
+    )
 
 
 async def run_finished(redis: Redis, run_id: uuid.UUID, status: str) -> None:
-    await publish(redis, "workflow.run.finished", {
-        "run_id": str(run_id),
-        "status": status,
-        "finished_at": datetime.now(timezone.utc).isoformat(),
-    })
+    await publish(
+        redis,
+        "workflow.run.finished",
+        {
+            "run_id": str(run_id),
+            "status": status,
+            "finished_at": datetime.now(timezone.utc).isoformat(),
+        },
+    )
 
 
-async def node_started(redis: Redis, run_id: uuid.UUID, node_id: str, iteration: int, agent_id: uuid.UUID | None) -> None:
-    await publish(redis, "workflow.node.started", {
-        "run_id": str(run_id),
-        "node_id": node_id,
-        "iteration": iteration,
-        "agent_id": str(agent_id) if agent_id else None,
-    })
+async def node_started(
+    redis: Redis, run_id: uuid.UUID, node_id: str, iteration: int, agent_id: uuid.UUID | None
+) -> None:
+    await publish(
+        redis,
+        "workflow.node.started",
+        {
+            "run_id": str(run_id),
+            "node_id": node_id,
+            "iteration": iteration,
+            "agent_id": str(agent_id) if agent_id else None,
+        },
+    )
 
 
 async def node_log(redis: Redis, run_id: uuid.UUID, node_id: str, line: str) -> None:
-    await publish(redis, "workflow.node.log", {
-        "run_id": str(run_id),
-        "node_id": node_id,
-        "line": line,
-    })
+    await publish(
+        redis,
+        "workflow.node.log",
+        {
+            "run_id": str(run_id),
+            "node_id": node_id,
+            "line": line,
+        },
+    )
 
 
-async def node_finished(redis: Redis, run_id: uuid.UUID, node_id: str, iteration: int, status: str, outputs: dict | None = None, error: str | None = None) -> None:
-    await publish(redis, "workflow.node.finished", {
-        "run_id": str(run_id),
-        "node_id": node_id,
-        "iteration": iteration,
-        "status": status,
-        "outputs": outputs,
-        "error": error,
-    })
+async def node_finished(
+    redis: Redis,
+    run_id: uuid.UUID,
+    node_id: str,
+    iteration: int,
+    status: str,
+    outputs: dict | None = None,
+    error: str | None = None,
+) -> None:
+    await publish(
+        redis,
+        "workflow.node.finished",
+        {
+            "run_id": str(run_id),
+            "node_id": node_id,
+            "iteration": iteration,
+            "status": status,
+            "outputs": outputs,
+            "error": error,
+        },
+    )

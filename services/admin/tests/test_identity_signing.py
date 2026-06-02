@@ -2,6 +2,7 @@
 
 All tests use mock Redis so no real Redis instance is required.
 """
+
 from __future__ import annotations
 
 import time
@@ -94,7 +95,7 @@ async def test_expired_token_rejected(fake_redis):
         "sub": "old-agent",
         "name": "Old Agent",
         "iat": now - 120,
-        "exp": now - 60,   # already expired 60 s ago
+        "exp": now - 60,  # already expired 60 s ago
         "capabilities": [],
     }
     expired_token = jwt.encode(payload, private_key, algorithm="RS256", headers={"kid": kid})
@@ -113,6 +114,7 @@ async def test_expired_token_rejected(fake_redis):
 async def test_jwks_endpoint_returns_public_key(fake_redis):
     """GET /identity/jwks must return a JWK Set with at least one RSA key."""
     import os
+
     os.environ.setdefault("DEV_BYPASS_AUTH", "true")
     os.environ.setdefault("ENVIRONMENT", "development")
 

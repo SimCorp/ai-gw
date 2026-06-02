@@ -6,6 +6,7 @@ Sanitizes the inputs dict before writing to inputs.json to prevent:
 - Oversized payloads (DoS via large inputs)
 - Excessive key counts (complexity explosion)
 """
+
 import json
 import logging
 import re
@@ -17,7 +18,7 @@ _MAX_STRING_CHARS = 50_000
 _MAX_KEYS_TOTAL = 100
 _MAX_JSON_BYTES = 1_048_576  # 1 MB
 
-_MENTION_RE = re.compile(r'@[A-Za-z0-9_-]+')
+_MENTION_RE = re.compile(r"@[A-Za-z0-9_-]+")
 
 
 def sanitize_string(value: str, path: str = "") -> str:
@@ -28,8 +29,12 @@ def sanitize_string(value: str, path: str = "") -> str:
     value = value.replace("<", "&lt;").replace(">", "&gt;")
     # Enforce length limit
     if len(value) > _MAX_STRING_CHARS:
-        _log.info("sanitizer: truncated string at %s from %d to %d chars",
-                  path, len(value), _MAX_STRING_CHARS)
+        _log.info(
+            "sanitizer: truncated string at %s from %d to %d chars",
+            path,
+            len(value),
+            _MAX_STRING_CHARS,
+        )
         value = value[:_MAX_STRING_CHARS] + " [truncated]"
     return value
 
@@ -51,8 +56,7 @@ def _sanitize_value(value: Any, path: str = "", key_count: list[int] = None) -> 
             result[k] = _sanitize_value(v, f"{path}.{k}" if path else k, key_count)
         return result
     elif isinstance(value, list):
-        return [_sanitize_value(item, f"{path}[{i}]", key_count)
-                for i, item in enumerate(value)]
+        return [_sanitize_value(item, f"{path}[{i}]", key_count) for i, item in enumerate(value)]
     else:
         return value
 
@@ -63,10 +67,13 @@ def sanitize_inputs(inputs: dict) -> dict:
     # Enforce total size limit
     serialized = json.dumps(sanitized)
     if len(serialized.encode()) > _MAX_JSON_BYTES:
-        _log.warning("sanitizer: inputs exceed 1MB after sanitization, truncating to top-level keys")
+        _log.warning(
+            "sanitizer: inputs exceed 1MB after sanitization, truncating to top-level keys"
+        )
         # Fallback: keep only top-level string values
         sanitized = {
-            k: v for k, v in sanitized.items()
+            k: v
+            for k, v in sanitized.items()
             if isinstance(v, (str, int, float, bool)) or v is None
         }
     return sanitized

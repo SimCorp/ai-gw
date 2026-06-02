@@ -103,15 +103,19 @@ async def _cost_by_area(period: Period, session: AsyncSession) -> list[dict]:
           )
     """)
     no_area_row = (await session.execute(no_area_sql)).mappings().one()
-    results.append({
-        "area_id": None,
-        "area_name": "No area",
-        "area_color": None,
-        "request_count": no_area_row["request_count"],
-        "total_tokens": int(no_area_row["total_tokens"]),
-        "total_cost_usd": float(no_area_row["total_cost_usd"]),
-        "cache_hit_pct": float(no_area_row["cache_hit_pct"]) if no_area_row["cache_hit_pct"] is not None else None,
-    })
+    results.append(
+        {
+            "area_id": None,
+            "area_name": "No area",
+            "area_color": None,
+            "request_count": no_area_row["request_count"],
+            "total_tokens": int(no_area_row["total_tokens"]),
+            "total_cost_usd": float(no_area_row["total_cost_usd"]),
+            "cache_hit_pct": float(no_area_row["cache_hit_pct"])
+            if no_area_row["cache_hit_pct"] is not None
+            else None,
+        }
+    )
 
     return results
 
@@ -225,6 +229,7 @@ async def _cost_by_model(period: Period, session: AsyncSession) -> list[dict]:
 # B. Cost-per-outcome (cost per PR / cost per commit)
 # ---------------------------------------------------------------------------
 
+
 @router.get("/outcomes")
 async def outcome_efficiency_report(
     period: Period = "30d",
@@ -285,8 +290,12 @@ async def outcome_efficiency_report(
             "total_prs": int(r["total_prs"]),
             "merged_prs": int(r["merged_prs"]),
             "cost_per_pr": float(r["cost_per_pr"]) if r["cost_per_pr"] is not None else None,
-            "cost_per_commit": float(r["cost_per_commit"]) if r["cost_per_commit"] is not None else None,
-            "pr_merge_rate_pct": float(r["pr_merge_rate_pct"]) if r["pr_merge_rate_pct"] is not None else None,
+            "cost_per_commit": float(r["cost_per_commit"])
+            if r["cost_per_commit"] is not None
+            else None,
+            "pr_merge_rate_pct": float(r["pr_merge_rate_pct"])
+            if r["pr_merge_rate_pct"] is not None
+            else None,
         }
         for r in rows
     ]
@@ -355,7 +364,9 @@ async def team_efficiency_report(
             "total_prs": int(r["total_prs"]),
             "merged_prs": int(r["merged_prs"]),
             "cost_per_pr": float(r["cost_per_pr"]) if r["cost_per_pr"] is not None else None,
-            "cost_per_merged_pr": float(r["cost_per_merged_pr"]) if r["cost_per_merged_pr"] is not None else None,
+            "cost_per_merged_pr": float(r["cost_per_merged_pr"])
+            if r["cost_per_merged_pr"] is not None
+            else None,
         }
         for r in rows
     ]
@@ -364,6 +375,7 @@ async def team_efficiency_report(
 # ---------------------------------------------------------------------------
 # D. Model calibration report
 # ---------------------------------------------------------------------------
+
 
 @router.get("/model-calibration")
 async def model_calibration_report(
@@ -406,19 +418,22 @@ async def model_calibration_report(
         cost = float(r["cost_usd"])
         devs[dev_id]["total_cost_usd"] += cost
         devs[dev_id]["total_requests"] += r["request_count"]
-        devs[dev_id]["models"].append({
-            "model": r["model"],
-            "request_count": r["request_count"],
-            "cost_usd": cost,
-            "total_tokens": int(r["total_tokens"]),
-        })
+        devs[dev_id]["models"].append(
+            {
+                "model": r["model"],
+                "request_count": r["request_count"],
+                "cost_usd": cost,
+                "total_tokens": int(r["total_tokens"]),
+            }
+        )
 
     # Compute calibration signals
     EXPENSIVE_PREFIXES = ("claude-opus", "gpt-4o ", "gpt-4")
     result = []
     for dev in devs.values():
         expensive_reqs = sum(
-            m["request_count"] for m in dev["models"]
+            m["request_count"]
+            for m in dev["models"]
             if any(m["model"].startswith(p) for p in EXPENSIVE_PREFIXES)
         )
         expensive_pct = round(expensive_reqs * 100 / max(1, dev["total_requests"]), 1)
@@ -434,6 +449,7 @@ async def model_calibration_report(
 # Session quality reports
 # ---------------------------------------------------------------------------
 
+
 @router.get("/sessions")
 async def session_quality_report(
     period: Period = "30d",
@@ -443,7 +459,11 @@ async def session_quality_report(
     _auth: dict = Depends(require_admin_role),
 ):
     """Aggregate session quality stats by developer."""
-    since = _since_clause(period)[0].replace("AND cr.created_at", "AND s.first_request_at") if _since_clause(period)[0] else ""
+    since = (
+        _since_clause(period)[0].replace("AND cr.created_at", "AND s.first_request_at")
+        if _since_clause(period)[0]
+        else ""
+    )
 
     sql = text(f"""
         SELECT d.id AS developer_id, d.email, d.display_name, t.name AS team_name,
@@ -465,7 +485,9 @@ async def session_quality_report(
         GROUP BY d.id, d.email, d.display_name, t.name
         ORDER BY avg_quality_score ASC
     """)
-    rows = (await session.execute(sql, {"min_q": min_quality, "max_q": max_quality})).mappings().all()
+    rows = (
+        (await session.execute(sql, {"min_q": min_quality, "max_q": max_quality})).mappings().all()
+    )
     return [
         {
             "developer_id": str(r["developer_id"]),
@@ -473,12 +495,20 @@ async def session_quality_report(
             "display_name": r["display_name"],
             "team_name": r["team_name"],
             "session_count": r["session_count"],
-            "avg_quality_score": float(r["avg_quality_score"]) if r["avg_quality_score"] is not None else None,
+            "avg_quality_score": float(r["avg_quality_score"])
+            if r["avg_quality_score"] is not None
+            else None,
             "avg_turns": float(r["avg_turns"]) if r["avg_turns"] is not None else None,
-            "avg_inter_request_s": float(r["avg_inter_request_s"]) if r["avg_inter_request_s"] is not None else None,
-            "avg_retry_rate": float(r["avg_retry_rate"]) if r["avg_retry_rate"] is not None else None,
+            "avg_inter_request_s": float(r["avg_inter_request_s"])
+            if r["avg_inter_request_s"] is not None
+            else None,
+            "avg_retry_rate": float(r["avg_retry_rate"])
+            if r["avg_retry_rate"] is not None
+            else None,
             "sessions_with_commit": r["sessions_with_commit"],
-            "commit_conversion_pct": float(r["commit_conversion_pct"]) if r["commit_conversion_pct"] is not None else None,
+            "commit_conversion_pct": float(r["commit_conversion_pct"])
+            if r["commit_conversion_pct"] is not None
+            else None,
             "total_cost_usd": float(r["total_cost_usd"]),
         }
         for r in rows
@@ -488,6 +518,7 @@ async def session_quality_report(
 # ---------------------------------------------------------------------------
 # Guardrail analytics
 # ---------------------------------------------------------------------------
+
 
 @router.get("/guardrails")
 async def guardrail_analytics(
@@ -553,7 +584,9 @@ async def guardrail_analytics(
                 "teams_affected": r["teams_affected"],
                 "keys_affected": r["keys_affected"],
                 "false_positives": r["false_positives"],
-                "false_positive_pct": float(r["false_positive_pct"]) if r["false_positive_pct"] is not None else None,
+                "false_positive_pct": float(r["false_positive_pct"])
+                if r["false_positive_pct"] is not None
+                else None,
                 "last_fired_at": r["last_fired_at"].isoformat() if r["last_fired_at"] else None,
             }
             for r in guard_rows
@@ -576,6 +609,7 @@ async def guardrail_analytics(
 # ---------------------------------------------------------------------------
 # Intent distribution
 # ---------------------------------------------------------------------------
+
 
 @router.get("/intents")
 async def intent_distribution(
@@ -610,7 +644,9 @@ async def intent_distribution(
             "avg_quality_score": float(r["avg_quality"]) if r["avg_quality"] is not None else None,
             "avg_turns": float(r["avg_turns"]) if r["avg_turns"] is not None else None,
             "sessions_with_commit": r["sessions_with_commit"],
-            "commit_conversion_pct": float(r["commit_conversion_pct"]) if r["commit_conversion_pct"] is not None else None,
+            "commit_conversion_pct": float(r["commit_conversion_pct"])
+            if r["commit_conversion_pct"] is not None
+            else None,
         }
         for r in rows
     ]

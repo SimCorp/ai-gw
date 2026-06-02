@@ -1,5 +1,6 @@
 """Pytest configuration for workflow-worker tests.
 Ensures the worker's app package is first in sys.path when collected from root."""
+
 import sys
 from pathlib import Path
 

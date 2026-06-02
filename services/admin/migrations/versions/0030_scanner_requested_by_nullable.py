@@ -1,4 +1,5 @@
 """Make scan_jobs.requested_by nullable for API key callers"""
+
 from alembic import op
 
 revision = "0030"

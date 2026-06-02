@@ -1,4 +1,5 @@
 """Tests for the internal points grant API used by other services (admin)."""
+
 import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -12,6 +13,7 @@ os.environ["ADMIN_TOKEN"] = "test-admin-token"
 
 # Reimport settings + app fresh with ADMIN_TOKEN set
 from app.config import settings  # noqa: E402
+
 settings.admin_token = "test-admin-token"
 
 from app.db import get_session  # noqa: E402

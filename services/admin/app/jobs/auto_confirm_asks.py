@@ -1,4 +1,5 @@
 """Nightly cron: auto-confirm asks past their auto_confirm_at deadline."""
+
 import logging
 
 from sqlalchemy import text
@@ -19,14 +20,16 @@ async def run_auto_confirm() -> int:
     best-effort).
     """
     async with async_session_maker() as session:
-        result = await session.execute(text("""
+        result = await session.execute(
+            text("""
             UPDATE champion_asks
             SET status = 'resolved', confirmed_at = NOW()
             WHERE status = 'resolved_pending'
               AND auto_confirm_at IS NOT NULL
               AND auto_confirm_at <= NOW()
             RETURNING id, claimed_by
-        """))
+        """)
+        )
         rows = list(result)
         await session.commit()
 

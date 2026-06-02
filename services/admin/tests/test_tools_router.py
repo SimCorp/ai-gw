@@ -8,6 +8,7 @@ import pytest
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _tool_row(tool_id="uuid-generator", label="UUID generator", category="Crypto", enabled=True):
     row = MagicMock()
     data = {
@@ -39,13 +40,18 @@ def _mappings_first(row):
 # GET /tools
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_list_tools_returns_catalog(client, mock_session):
     """GET /tools returns all tools from tool_config."""
-    mock_session.execute.return_value = _mappings_all([
-        _tool_row("uuid-generator", "UUID generator", "Crypto", True),
-        _tool_row("base64-string-converter", "Base64 string encoder/decoder", "Converter", False),
-    ])
+    mock_session.execute.return_value = _mappings_all(
+        [
+            _tool_row("uuid-generator", "UUID generator", "Crypto", True),
+            _tool_row(
+                "base64-string-converter", "Base64 string encoder/decoder", "Converter", False
+            ),
+        ]
+    )
 
     resp = await client.get("/tools")
     assert resp.status_code == 200
@@ -62,9 +68,11 @@ async def test_list_tools_returns_catalog(client, mock_session):
 @pytest.mark.asyncio
 async def test_list_tools_enabled_only(client, mock_session):
     """GET /tools?enabled_only=true returns only enabled tools."""
-    mock_session.execute.return_value = _mappings_all([
-        _tool_row("uuid-generator", "UUID generator", "Crypto", True),
-    ])
+    mock_session.execute.return_value = _mappings_all(
+        [
+            _tool_row("uuid-generator", "UUID generator", "Crypto", True),
+        ]
+    )
 
     resp = await client.get("/tools?enabled_only=true")
     assert resp.status_code == 200
@@ -75,6 +83,7 @@ async def test_list_tools_enabled_only(client, mock_session):
 # ---------------------------------------------------------------------------
 # PATCH /tools/{tool_id}
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_patch_tool_toggle(client, mock_session):
@@ -115,6 +124,7 @@ async def test_patch_tool_not_found(client, mock_session):
 # dependency onto each route.
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_get_tools_reachable_by_non_admin_authenticated_user(mock_session):
     """GET /tools resolves for a developer session (non-admin), via
@@ -130,29 +140,33 @@ async def test_get_tools_reachable_by_non_admin_authenticated_user(mock_session)
     async def override_session():
         yield mock_session
 
-    mock_session.execute.return_value = _mappings_all([
-        _tool_row("uuid-generator", "UUID generator", "Crypto", True),
-    ])
+    mock_session.execute.return_value = _mappings_all(
+        [
+            _tool_row("uuid-generator", "UUID generator", "Crypto", True),
+        ]
+    )
 
     # Simulate a real (non-bypass) auth path: a developer session in redis.
     original_bypass = _config.settings.dev_bypass_auth
     _config.settings.dev_bypass_auth = False
     redis = AsyncMock()
-    dev_session = json.dumps({
-        "user_id": "u-1", "email": "dev@simcorp.com",
-        "roles": [{"role": "developer", "node_path": "/"}],
-    })
+    dev_session = json.dumps(
+        {
+            "user_id": "u-1",
+            "email": "dev@simcorp.com",
+            "roles": [{"role": "developer", "node_path": "/"}],
+        }
+    )
 
     async def _redis_get(key):
         return dev_session if key == "session:dev-token" else None
+
     redis.get = _redis_get
 
     app.dependency_overrides[get_session] = override_session
     app.state.redis = redis
     try:
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as c:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
             resp = await c.get("/tools", headers={"Authorization": "Bearer dev-token"})
     finally:
         _config.settings.dev_bypass_auth = original_bypass
@@ -179,21 +193,23 @@ async def test_patch_tool_rejects_non_admin_session(mock_session):
     original_bypass = _config.settings.dev_bypass_auth
     _config.settings.dev_bypass_auth = False
     redis = AsyncMock()
-    dev_session = json.dumps({
-        "user_id": "u-1", "email": "dev@simcorp.com",
-        "roles": [{"role": "developer", "node_path": "/"}],
-    })
+    dev_session = json.dumps(
+        {
+            "user_id": "u-1",
+            "email": "dev@simcorp.com",
+            "roles": [{"role": "developer", "node_path": "/"}],
+        }
+    )
 
     async def _redis_get(key):
         return dev_session if key == "session:dev-token" else None
+
     redis.get = _redis_get
 
     app.dependency_overrides[get_session] = override_session
     app.state.redis = redis
     try:
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as c:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
             resp = await c.patch(
                 "/tools/uuid-generator",
                 json={"enabled": False},

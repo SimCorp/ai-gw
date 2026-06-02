@@ -45,6 +45,7 @@ async def test_retire_returns_404_when_missing(client, mock_session):
 # Wave 2: flag moderation
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_list_flags_returns_joined_rows(client, mock_session):
     rows = [
@@ -130,6 +131,7 @@ async def test_resolve_flag_returns_404_when_missing(client, mock_session):
 # ---------------------------------------------------------------------------
 # Wave 3: activity dashboard
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_activity_returns_org_and_per_champion(client, mock_session):

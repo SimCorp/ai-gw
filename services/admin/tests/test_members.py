@@ -40,9 +40,8 @@ async def member_client(mock_session):
     app.state.redis = AsyncMock()
 
     from httpx import ASGITransport, AsyncClient
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as c:
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         yield c
 
     app.dependency_overrides.clear()
@@ -51,6 +50,7 @@ async def member_client(mock_session):
 # ---------------------------------------------------------------------------
 # Row / result helpers
 # ---------------------------------------------------------------------------
+
 
 def _node_row(node_id):
     return {
@@ -69,8 +69,9 @@ def _node_row(node_id):
     }
 
 
-def _member_row(node_id, user_id=None, role="developer",
-                email="dev@simcorp.com", display_name="Dev User"):
+def _member_row(
+    node_id, user_id=None, role="developer", email="dev@simcorp.com", display_name="Dev User"
+):
     return {
         "id": str(uuid.uuid4()),
         "node_id": node_id,
@@ -106,6 +107,7 @@ def _override(app, sess):
 
     async def override():
         yield sess
+
     app.dependency_overrides[get_session] = override
 
 
@@ -113,12 +115,13 @@ def _override(app, sess):
 # GET /nodes/{id}/members
 # ===========================================================================
 
+
 async def test_list_members_returns_200(member_client):
     from app.main import app
 
     nid = str(uuid.uuid4())
     sess = _sequence(
-        _result_mappings_first(_node_row(nid)),                  # _get_node_row
+        _result_mappings_first(_node_row(nid)),  # _get_node_row
         _result_mappings_all([_member_row(nid), _member_row(nid)]),  # members
     )
     _override(app, sess)
@@ -138,7 +141,7 @@ async def test_list_members_empty(member_client):
     nid = str(uuid.uuid4())
     sess = _sequence(
         _result_mappings_first(_node_row(nid)),  # _get_node_row
-        _result_mappings_all([]),                # members
+        _result_mappings_all([]),  # members
     )
     _override(app, sess)
 
@@ -162,13 +165,14 @@ async def test_list_members_node_not_found_returns_404(member_client):
 # POST /nodes/{id}/members
 # ===========================================================================
 
+
 async def test_add_member_returns_201(member_client):
     from app.main import app
 
     nid = str(uuid.uuid4())
     sess = _sequence(
         _result_mappings_first(_node_row(nid)),  # _get_node_row
-        MagicMock(),                             # INSERT
+        MagicMock(),  # INSERT
     )
     _override(app, sess)
 
@@ -211,6 +215,7 @@ async def test_add_member_node_not_found_returns_404(member_client):
 # DELETE /nodes/{id}/members/{user_id}
 # ===========================================================================
 
+
 async def test_remove_member_returns_204(member_client):
     from app.main import app
 
@@ -218,7 +223,7 @@ async def test_remove_member_returns_204(member_client):
     uid = str(uuid.uuid4())
     sess = _sequence(
         _result_mappings_first(_node_row(nid)),  # _get_node_row
-        MagicMock(),                             # DELETE
+        MagicMock(),  # DELETE
     )
     _override(app, sess)
 

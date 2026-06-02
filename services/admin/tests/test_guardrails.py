@@ -7,6 +7,7 @@ from unittest.mock import MagicMock
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _guardrail_row(guardrail_id=None, team_id=None):
     _id = guardrail_id or uuid.uuid4()
     row = MagicMock()
@@ -93,6 +94,7 @@ def _hit_row():
 # GET /guardrails
 # ---------------------------------------------------------------------------
 
+
 async def test_list_guardrails_no_filter(client, mock_session):
     row = _guardrail_row()
     mock_session.execute.return_value = _mappings_all([row])
@@ -121,6 +123,7 @@ async def test_list_guardrails_with_team_filter(client, mock_session):
 # GET /guardrails/summary
 # ---------------------------------------------------------------------------
 
+
 async def test_guardrails_summary_returns_200(client, mock_session):
     summary = _summary_row()
     result = MagicMock()
@@ -139,6 +142,7 @@ async def test_guardrails_summary_returns_200(client, mock_session):
 # GET /guardrails/hits
 # ---------------------------------------------------------------------------
 
+
 async def test_recent_hits_returns_200(client, mock_session):
     hit = _hit_row()
     mock_session.execute.return_value = _mappings_all([hit])
@@ -153,6 +157,7 @@ async def test_recent_hits_returns_200(client, mock_session):
 # ---------------------------------------------------------------------------
 # POST /guardrails
 # ---------------------------------------------------------------------------
+
 
 async def test_create_guardrail_returns_201(client, mock_session):
     new_row = _guardrail_row()
@@ -177,6 +182,7 @@ async def test_create_guardrail_returns_201(client, mock_session):
 # ---------------------------------------------------------------------------
 # PATCH /guardrails/{id}
 # ---------------------------------------------------------------------------
+
 
 async def test_patch_guardrail_updates_enabled(client, mock_session):
     guardrail_id = str(uuid.uuid4())
@@ -215,6 +221,7 @@ async def test_patch_guardrail_not_found_returns_404(client, mock_session):
 # DELETE /guardrails/{id}
 # ---------------------------------------------------------------------------
 
+
 async def test_delete_guardrail_found_returns_204(client, mock_session):
     guardrail_id = str(uuid.uuid4())
     # First execute: SELECT team_id (mappings().first() returns a row with team_id=None)
@@ -244,6 +251,7 @@ async def test_delete_guardrail_not_found_returns_404(client, mock_session):
 # ---------------------------------------------------------------------------
 # POST /guardrails/hits
 # ---------------------------------------------------------------------------
+
 
 async def test_record_hit_returns_201(client, mock_session):
     guardrail_id = str(uuid.uuid4())

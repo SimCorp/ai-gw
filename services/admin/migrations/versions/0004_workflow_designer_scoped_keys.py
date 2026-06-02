@@ -9,6 +9,7 @@ Revision ID: 0004
 Revises: 0003
 Create Date: 2026-05-11
 """
+
 from __future__ import annotations
 
 from typing import Sequence, Union
@@ -23,9 +24,17 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column("api_keys", sa.Column("scope", sa.String(), nullable=False, server_default=sa.text("'standard'")))
+    op.add_column(
+        "api_keys",
+        sa.Column("scope", sa.String(), nullable=False, server_default=sa.text("'standard'")),
+    )
     op.add_column("api_keys", sa.Column("expires_at", sa.DateTime(timezone=True), nullable=True))
-    op.create_index("idx_api_keys_expires_at", "api_keys", ["expires_at"], postgresql_where=sa.text("expires_at IS NOT NULL"))
+    op.create_index(
+        "idx_api_keys_expires_at",
+        "api_keys",
+        ["expires_at"],
+        postgresql_where=sa.text("expires_at IS NOT NULL"),
+    )
 
 
 def downgrade() -> None:

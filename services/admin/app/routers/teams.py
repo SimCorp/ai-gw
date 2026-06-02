@@ -31,7 +31,9 @@ def _team_row_to_dict(row) -> dict:
         "name": row["name"],
         "slug": row["slug"],
         "created_at": row["created_at"].isoformat() if row["created_at"] else None,
-        "monthly_budget_usd": float(row["monthly_budget_usd"]) if row["monthly_budget_usd"] is not None else None,
+        "monthly_budget_usd": float(row["monthly_budget_usd"])
+        if row["monthly_budget_usd"] is not None
+        else None,
         "budget_alert_pct": row["budget_alert_pct"],
         "budget_action": row["budget_action"],
         "area_id": str(row["area_id"]) if row["area_id"] else None,
@@ -46,7 +48,8 @@ def _team_row_to_dict(row) -> dict:
 
 @router.get("")
 async def list_teams(session: AsyncSession = Depends(get_session)):
-    result = await session.execute(text("""
+    result = await session.execute(
+        text("""
         SELECT t.id, t.name, t.slug, t.created_at, t.monthly_budget_usd,
                t.budget_alert_pct, t.budget_action, t.area_id,
                a.name AS area_name, a.slug AS area_slug, a.color AS area_color,
@@ -55,7 +58,8 @@ async def list_teams(session: AsyncSession = Depends(get_session)):
         LEFT JOIN areas a ON a.id = t.area_id
         LEFT JOIN units u ON u.id = t.unit_id
         ORDER BY a.name NULLS LAST, u.name NULLS LAST, t.name
-    """))
+    """)
+    )
     return [_team_row_to_dict(row) for row in result.mappings().all()]
 
 
@@ -75,9 +79,9 @@ async def create_team(
 
     # derive area_id from unit if unit_id is provided and area_id is not
     if unit_id and not area_id:
-        unit_row = (await session.execute(
-            text("SELECT area_id FROM units WHERE id = :id"), {"id": unit_id}
-        )).one_or_none()
+        unit_row = (
+            await session.execute(text("SELECT area_id FROM units WHERE id = :id"), {"id": unit_id})
+        ).one_or_none()
         if not unit_row:
             raise HTTPException(status_code=404, detail="Unit not found")
         area_id = unit_row[0]
@@ -101,7 +105,9 @@ async def create_team(
         "name": team.name,
         "slug": team.slug,
         "created_at": team.created_at.isoformat() if team.created_at else None,
-        "monthly_budget_usd": float(team.monthly_budget_usd) if team.monthly_budget_usd is not None else None,
+        "monthly_budget_usd": float(team.monthly_budget_usd)
+        if team.monthly_budget_usd is not None
+        else None,
         "budget_alert_pct": team.budget_alert_pct,
         "budget_action": team.budget_action,
         "area_id": str(team.area_id) if team.area_id else None,
@@ -147,7 +153,11 @@ async def update_team(
     team.slug = body.slug
     team.area_id = body.area_id
     await audit.record(
-        session, request, "update_team", "team", resource_id=team_id,
+        session,
+        request,
+        "update_team",
+        "team",
+        resource_id=team_id,
         details={"name": body.name, "slug": body.slug},
     )
     await session.commit()
@@ -157,7 +167,9 @@ async def update_team(
         "name": team.name,
         "slug": team.slug,
         "created_at": team.created_at.isoformat() if team.created_at else None,
-        "monthly_budget_usd": float(team.monthly_budget_usd) if team.monthly_budget_usd is not None else None,
+        "monthly_budget_usd": float(team.monthly_budget_usd)
+        if team.monthly_budget_usd is not None
+        else None,
         "budget_alert_pct": team.budget_alert_pct,
         "budget_action": team.budget_action,
         "area_id": str(team.area_id) if team.area_id else None,
@@ -198,7 +210,11 @@ async def create_project(
     session.add(project)
     await session.flush()
     await audit.record(
-        session, request, "create_project", "project", resource_id=project.id,
+        session,
+        request,
+        "create_project",
+        "project",
+        resource_id=project.id,
         details={"team_id": str(team_id)},
     )
     await session.commit()

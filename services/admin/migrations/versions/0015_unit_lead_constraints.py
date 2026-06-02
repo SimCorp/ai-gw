@@ -3,6 +3,7 @@
 Revision ID: 0015
 Revises: 0014
 """
+
 from typing import Sequence, Union
 
 from alembic import op
@@ -48,7 +49,9 @@ def downgrade():
             'developer', 'viewer', 'service_account'
         ]))
     """)
-    op.execute("ALTER TABLE user_invitations DROP CONSTRAINT IF EXISTS user_invitations_scope_type_check")
+    op.execute(
+        "ALTER TABLE user_invitations DROP CONSTRAINT IF EXISTS user_invitations_scope_type_check"
+    )
     op.execute("""
         ALTER TABLE user_invitations
         ADD CONSTRAINT user_invitations_scope_type_check

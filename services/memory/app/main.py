@@ -3,6 +3,7 @@
 Each developer gets their own isolated memory namespace, identified by their
 existing gateway API key.  All MCP tool calls are authenticated per-request.
 """
+
 from __future__ import annotations
 
 import json
@@ -63,11 +64,14 @@ class MCPServer:
         return {"jsonrpc": "2.0", "id": request_id, "error": {"code": code, "message": message}}
 
     def _handle_initialize(self, params: dict, request_id: Any) -> dict:
-        return self._ok(request_id, {
-            "protocolVersion": self.MCP_PROTOCOL_VERSION,
-            "capabilities": {"tools": {}},
-            "serverInfo": {"name": self.name, "version": self.version},
-        })
+        return self._ok(
+            request_id,
+            {
+                "protocolVersion": self.MCP_PROTOCOL_VERSION,
+                "capabilities": {"tools": {}},
+                "serverInfo": {"name": self.name, "version": self.version},
+            },
+        )
 
     def _handle_tools_list(self, params: dict, request_id: Any) -> dict:
         return self._ok(request_id, {"tools": self._tools})
@@ -95,15 +99,31 @@ class MCPServer:
         is_notification = "id" not in body
 
         if method == "initialize":
-            return Response(status_code=204) if is_notification else self._handle_initialize(params, request_id)
+            return (
+                Response(status_code=204)
+                if is_notification
+                else self._handle_initialize(params, request_id)
+            )
         if method == "notifications/initialized":
             return Response(status_code=204)
         if method == "tools/list":
-            return Response(status_code=204) if is_notification else self._handle_tools_list(params, request_id)
+            return (
+                Response(status_code=204)
+                if is_notification
+                else self._handle_tools_list(params, request_id)
+            )
         if method == "tools/call":
-            return Response(status_code=204) if is_notification else await self._handle_tools_call(params, request_id, request)
+            return (
+                Response(status_code=204)
+                if is_notification
+                else await self._handle_tools_call(params, request_id, request)
+            )
         if method == "ping":
-            return Response(status_code=204) if is_notification else self._handle_ping(params, request_id)
+            return (
+                Response(status_code=204)
+                if is_notification
+                else self._handle_ping(params, request_id)
+            )
         if is_notification:
             return Response(status_code=204)
         _log.debug("MCP unknown method: %s", method)
@@ -158,7 +178,7 @@ async def get_developer_id(request: Request) -> str:
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing Bearer token")
-    token = auth_header[len("Bearer "):]
+    token = auth_header[len("Bearer ") :]
     return await resolve_developer(token, request.app.state.http, request.app.state.pool)
 
 
@@ -201,7 +221,8 @@ async def _add_drawer(args: dict, req: Request) -> dict:
         content = args["content"]
         embedding = await _embed(content)
         result = await store.add_drawer(
-            _pool(), _dev(),
+            _pool(),
+            _dev(),
             wing=args.get("wing", "default"),
             room=args.get("room", "default"),
             content=content,
@@ -249,7 +270,8 @@ async def _delete_drawer(args: dict, req: Request) -> dict:
 async def _list_drawers(args: dict, req: Request) -> dict:
     try:
         result = await store.list_drawers(
-            _pool(), _dev(),
+            _pool(),
+            _dev(),
             wing=args.get("wing"),
             room=args.get("room"),
             limit=args.get("limit", 20),
@@ -264,7 +286,8 @@ async def _search(args: dict, req: Request) -> dict:
         query = args["query"]
         embedding = await _embed(query)
         result = await store.search_drawers(
-            _pool(), _dev(),
+            _pool(),
+            _dev(),
             embedding=embedding,
             limit=args.get("limit", 10),
             threshold=args.get("threshold", 0.7),
@@ -279,7 +302,8 @@ async def _check_duplicate(args: dict, req: Request) -> dict:
         content = args["content"]
         embedding = await _embed(content)
         result = await store.check_duplicate(
-            _pool(), _dev(),
+            _pool(),
+            _dev(),
             embedding=embedding,
             threshold=args.get("threshold", 0.95),
         )
@@ -304,7 +328,8 @@ async def _list_rooms(args: dict, req: Request) -> dict:
         if wing:
             rows = await pool.fetch(
                 "SELECT DISTINCT room FROM memory_drawers WHERE developer_id = $1::uuid AND wing = $2 ORDER BY room",
-                dev, wing,
+                dev,
+                wing,
             )
         else:
             rows = await pool.fetch(
@@ -347,14 +372,16 @@ async def _kg_add(args: dict, req: Request) -> dict:
         kind = args.get("type", "node")
         if kind == "node":
             result = await store.kg_add_node(
-                _pool(), _dev(),
+                _pool(),
+                _dev(),
                 name=args["name"],
                 entity_type=args.get("entity_type", "entity"),
                 attributes=args.get("attributes") or {},
             )
         else:
             result = await store.kg_add_edge(
-                _pool(), _dev(),
+                _pool(),
+                _dev(),
                 from_id=args["from_id"],
                 to_id=args["to_id"],
                 relation=args.get("relation", "related"),
@@ -368,7 +395,8 @@ async def _kg_add(args: dict, req: Request) -> dict:
 async def _kg_query(args: dict, req: Request) -> dict:
     try:
         result = await store.kg_query(
-            _pool(), _dev(),
+            _pool(),
+            _dev(),
             name=args.get("name"),
             entity_type=args.get("entity_type"),
             limit=args.get("limit", 20),
@@ -413,7 +441,9 @@ async def _diary_read(args: dict, req: Request) -> dict:
         date_filter = None
         if args.get("date"):
             date_filter = date.fromisoformat(args["date"])
-        result = await store.diary_read(_pool(), _dev(), date_filter=date_filter, limit=args.get("limit", 7))
+        result = await store.diary_read(
+            _pool(), _dev(), date_filter=date_filter, limit=args.get("limit", 7)
+        )
         return {"entries": _serialize(result)}
     except Exception as exc:
         return {"error": str(exc)}
@@ -422,7 +452,9 @@ async def _diary_read(args: dict, req: Request) -> dict:
 async def _diary_write(args: dict, req: Request) -> dict:
     try:
         entry_date = date.fromisoformat(args["date"]) if args.get("date") else date.today()
-        result = await store.diary_write(_pool(), _dev(), entry_date=entry_date, entry=args["entry"])
+        result = await store.diary_write(
+            _pool(), _dev(), entry_date=entry_date, entry=args["entry"]
+        )
         return _serialize(result)
     except Exception as exc:
         return {"error": str(exc)}
@@ -431,7 +463,8 @@ async def _diary_write(args: dict, req: Request) -> dict:
 async def _create_tunnel(args: dict, req: Request) -> dict:
     try:
         result = await store.create_tunnel(
-            _pool(), _dev(),
+            _pool(),
+            _dev(),
             from_wing=args["from_wing"],
             to_wing=args["to_wing"],
             label=args.get("label"),
@@ -561,190 +594,295 @@ async def _graph_stats(args: dict, req: Request) -> dict:
 # ── Register tools ─────────────────────────────────────────────────────────────
 
 
-mcp_server.add_tool("mempalace_status", "Return palace stats for the current developer", {}, _status)
+mcp_server.add_tool(
+    "mempalace_status", "Return palace stats for the current developer", {}, _status
+)
 
-mcp_server.add_tool("mempalace_add_drawer", "Add a memory drawer (content is embedded automatically)", {
-    "type": "object",
-    "properties": {
-        "wing": {"type": "string", "description": "Wing name (top-level category)"},
-        "room": {"type": "string", "description": "Room name within the wing"},
-        "content": {"type": "string", "description": "Content to store"},
-        "summary": {"type": "string", "description": "Optional short summary"},
-        "tags": {"type": "array", "items": {"type": "string"}, "description": "Optional tags"},
-        "source": {"type": "string", "description": "Optional source reference"},
+mcp_server.add_tool(
+    "mempalace_add_drawer",
+    "Add a memory drawer (content is embedded automatically)",
+    {
+        "type": "object",
+        "properties": {
+            "wing": {"type": "string", "description": "Wing name (top-level category)"},
+            "room": {"type": "string", "description": "Room name within the wing"},
+            "content": {"type": "string", "description": "Content to store"},
+            "summary": {"type": "string", "description": "Optional short summary"},
+            "tags": {"type": "array", "items": {"type": "string"}, "description": "Optional tags"},
+            "source": {"type": "string", "description": "Optional source reference"},
+        },
+        "required": ["content"],
     },
-    "required": ["content"],
-}, _add_drawer)
+    _add_drawer,
+)
 
-mcp_server.add_tool("mempalace_get_drawer", "Fetch a drawer by ID", {
-    "type": "object",
-    "properties": {"id": {"type": "string"}},
-    "required": ["id"],
-}, _get_drawer)
-
-mcp_server.add_tool("mempalace_update_drawer", "Update a drawer", {
-    "type": "object",
-    "properties": {
-        "id": {"type": "string"},
-        "wing": {"type": "string"},
-        "room": {"type": "string"},
-        "content": {"type": "string"},
-        "summary": {"type": "string"},
-        "tags": {"type": "array", "items": {"type": "string"}},
-        "source": {"type": "string"},
+mcp_server.add_tool(
+    "mempalace_get_drawer",
+    "Fetch a drawer by ID",
+    {
+        "type": "object",
+        "properties": {"id": {"type": "string"}},
+        "required": ["id"],
     },
-    "required": ["id"],
-}, _update_drawer)
+    _get_drawer,
+)
 
-mcp_server.add_tool("mempalace_delete_drawer", "Delete a drawer", {
-    "type": "object",
-    "properties": {"id": {"type": "string"}},
-    "required": ["id"],
-}, _delete_drawer)
-
-mcp_server.add_tool("mempalace_list_drawers", "List drawers, optionally filtered by wing/room", {
-    "type": "object",
-    "properties": {
-        "wing": {"type": "string"},
-        "room": {"type": "string"},
-        "limit": {"type": "integer", "default": 20},
+mcp_server.add_tool(
+    "mempalace_update_drawer",
+    "Update a drawer",
+    {
+        "type": "object",
+        "properties": {
+            "id": {"type": "string"},
+            "wing": {"type": "string"},
+            "room": {"type": "string"},
+            "content": {"type": "string"},
+            "summary": {"type": "string"},
+            "tags": {"type": "array", "items": {"type": "string"}},
+            "source": {"type": "string"},
+        },
+        "required": ["id"],
     },
-}, _list_drawers)
+    _update_drawer,
+)
 
-mcp_server.add_tool("mempalace_search", "Semantic search over drawers", {
-    "type": "object",
-    "properties": {
-        "query": {"type": "string"},
-        "limit": {"type": "integer", "default": 10},
-        "threshold": {"type": "number", "default": 0.7},
+mcp_server.add_tool(
+    "mempalace_delete_drawer",
+    "Delete a drawer",
+    {
+        "type": "object",
+        "properties": {"id": {"type": "string"}},
+        "required": ["id"],
     },
-    "required": ["query"],
-}, _search)
+    _delete_drawer,
+)
 
-mcp_server.add_tool("mempalace_check_duplicate", "Check if a near-duplicate drawer already exists", {
-    "type": "object",
-    "properties": {
-        "content": {"type": "string"},
-        "threshold": {"type": "number", "default": 0.95},
+mcp_server.add_tool(
+    "mempalace_list_drawers",
+    "List drawers, optionally filtered by wing/room",
+    {
+        "type": "object",
+        "properties": {
+            "wing": {"type": "string"},
+            "room": {"type": "string"},
+            "limit": {"type": "integer", "default": 20},
+        },
     },
-    "required": ["content"],
-}, _check_duplicate)
+    _list_drawers,
+)
 
-mcp_server.add_tool("mempalace_memories_filed_away", "Count drawers grouped by wing", {}, _memories_filed_away)
+mcp_server.add_tool(
+    "mempalace_search",
+    "Semantic search over drawers",
+    {
+        "type": "object",
+        "properties": {
+            "query": {"type": "string"},
+            "limit": {"type": "integer", "default": 10},
+            "threshold": {"type": "number", "default": 0.7},
+        },
+        "required": ["query"],
+    },
+    _search,
+)
 
-mcp_server.add_tool("mempalace_list_rooms", "List distinct rooms, optionally filtered by wing", {
-    "type": "object",
-    "properties": {"wing": {"type": "string"}},
-}, _list_rooms)
+mcp_server.add_tool(
+    "mempalace_check_duplicate",
+    "Check if a near-duplicate drawer already exists",
+    {
+        "type": "object",
+        "properties": {
+            "content": {"type": "string"},
+            "threshold": {"type": "number", "default": 0.95},
+        },
+        "required": ["content"],
+    },
+    _check_duplicate,
+)
+
+mcp_server.add_tool(
+    "mempalace_memories_filed_away", "Count drawers grouped by wing", {}, _memories_filed_away
+)
+
+mcp_server.add_tool(
+    "mempalace_list_rooms",
+    "List distinct rooms, optionally filtered by wing",
+    {
+        "type": "object",
+        "properties": {"wing": {"type": "string"}},
+    },
+    _list_rooms,
+)
 
 mcp_server.add_tool("mempalace_list_wings", "List wings with drawer counts", {}, _list_wings)
 
-mcp_server.add_tool("mempalace_get_taxonomy", "Get hierarchical wings → rooms structure", {}, _get_taxonomy)
+mcp_server.add_tool(
+    "mempalace_get_taxonomy", "Get hierarchical wings → rooms structure", {}, _get_taxonomy
+)
 
-mcp_server.add_tool("mempalace_kg_add", "Add a KG node or edge", {
-    "type": "object",
-    "properties": {
-        "type": {"type": "string", "enum": ["node", "edge"]},
-        "name": {"type": "string"},
-        "entity_type": {"type": "string"},
-        "attributes": {"type": "object"},
-        "from_id": {"type": "string"},
-        "to_id": {"type": "string"},
-        "relation": {"type": "string"},
+mcp_server.add_tool(
+    "mempalace_kg_add",
+    "Add a KG node or edge",
+    {
+        "type": "object",
+        "properties": {
+            "type": {"type": "string", "enum": ["node", "edge"]},
+            "name": {"type": "string"},
+            "entity_type": {"type": "string"},
+            "attributes": {"type": "object"},
+            "from_id": {"type": "string"},
+            "to_id": {"type": "string"},
+            "relation": {"type": "string"},
+        },
+        "required": ["type"],
     },
-    "required": ["type"],
-}, _kg_add)
+    _kg_add,
+)
 
-mcp_server.add_tool("mempalace_kg_query", "Search KG nodes", {
-    "type": "object",
-    "properties": {
-        "name": {"type": "string"},
-        "entity_type": {"type": "string"},
-        "limit": {"type": "integer", "default": 20},
+mcp_server.add_tool(
+    "mempalace_kg_query",
+    "Search KG nodes",
+    {
+        "type": "object",
+        "properties": {
+            "name": {"type": "string"},
+            "entity_type": {"type": "string"},
+            "limit": {"type": "integer", "default": 20},
+        },
     },
-}, _kg_query)
+    _kg_query,
+)
 
-mcp_server.add_tool("mempalace_kg_invalidate", "Mark a KG node as invalid (set valid_to = now)", {
-    "type": "object",
-    "properties": {"node_id": {"type": "string"}},
-    "required": ["node_id"],
-}, _kg_invalidate)
+mcp_server.add_tool(
+    "mempalace_kg_invalidate",
+    "Mark a KG node as invalid (set valid_to = now)",
+    {
+        "type": "object",
+        "properties": {"node_id": {"type": "string"}},
+        "required": ["node_id"],
+    },
+    _kg_invalidate,
+)
 
 mcp_server.add_tool("mempalace_kg_stats", "KG node/edge counts by type", {}, _kg_stats)
 
-mcp_server.add_tool("mempalace_kg_timeline", "KG nodes created/invalidated in a time range", {
-    "type": "object",
-    "properties": {
-        "since": {"type": "string", "description": "ISO datetime"},
-        "until": {"type": "string", "description": "ISO datetime"},
+mcp_server.add_tool(
+    "mempalace_kg_timeline",
+    "KG nodes created/invalidated in a time range",
+    {
+        "type": "object",
+        "properties": {
+            "since": {"type": "string", "description": "ISO datetime"},
+            "until": {"type": "string", "description": "ISO datetime"},
+        },
     },
-}, _kg_timeline)
+    _kg_timeline,
+)
 
-mcp_server.add_tool("mempalace_diary_read", "Read diary entries", {
-    "type": "object",
-    "properties": {
-        "date": {"type": "string", "description": "ISO date (YYYY-MM-DD)"},
-        "limit": {"type": "integer", "default": 7},
+mcp_server.add_tool(
+    "mempalace_diary_read",
+    "Read diary entries",
+    {
+        "type": "object",
+        "properties": {
+            "date": {"type": "string", "description": "ISO date (YYYY-MM-DD)"},
+            "limit": {"type": "integer", "default": 7},
+        },
     },
-}, _diary_read)
+    _diary_read,
+)
 
-mcp_server.add_tool("mempalace_diary_write", "Write or update a diary entry", {
-    "type": "object",
-    "properties": {
-        "entry": {"type": "string"},
-        "date": {"type": "string", "description": "ISO date (YYYY-MM-DD), defaults to today"},
+mcp_server.add_tool(
+    "mempalace_diary_write",
+    "Write or update a diary entry",
+    {
+        "type": "object",
+        "properties": {
+            "entry": {"type": "string"},
+            "date": {"type": "string", "description": "ISO date (YYYY-MM-DD), defaults to today"},
+        },
+        "required": ["entry"],
     },
-    "required": ["entry"],
-}, _diary_write)
+    _diary_write,
+)
 
-mcp_server.add_tool("mempalace_create_tunnel", "Create a tunnel between wings", {
-    "type": "object",
-    "properties": {
-        "from_wing": {"type": "string"},
-        "to_wing": {"type": "string"},
-        "label": {"type": "string"},
-        "bidirectional": {"type": "boolean", "default": False},
+mcp_server.add_tool(
+    "mempalace_create_tunnel",
+    "Create a tunnel between wings",
+    {
+        "type": "object",
+        "properties": {
+            "from_wing": {"type": "string"},
+            "to_wing": {"type": "string"},
+            "label": {"type": "string"},
+            "bidirectional": {"type": "boolean", "default": False},
+        },
+        "required": ["from_wing", "to_wing"],
     },
-    "required": ["from_wing", "to_wing"],
-}, _create_tunnel)
+    _create_tunnel,
+)
 
-mcp_server.add_tool("mempalace_delete_tunnel", "Delete a tunnel", {
-    "type": "object",
-    "properties": {"id": {"type": "string"}},
-    "required": ["id"],
-}, _delete_tunnel)
+mcp_server.add_tool(
+    "mempalace_delete_tunnel",
+    "Delete a tunnel",
+    {
+        "type": "object",
+        "properties": {"id": {"type": "string"}},
+        "required": ["id"],
+    },
+    _delete_tunnel,
+)
 
 mcp_server.add_tool("mempalace_list_tunnels", "List all tunnels", {}, _list_tunnels)
 
-mcp_server.add_tool("mempalace_find_tunnels", "Find tunnels from a wing", {
-    "type": "object",
-    "properties": {"from_wing": {"type": "string"}},
-    "required": ["from_wing"],
-}, _find_tunnels)
-
-mcp_server.add_tool("mempalace_follow_tunnels", "BFS traversal returning reachable wings", {
-    "type": "object",
-    "properties": {
-        "from_wing": {"type": "string"},
-        "depth": {"type": "integer", "default": 3},
+mcp_server.add_tool(
+    "mempalace_find_tunnels",
+    "Find tunnels from a wing",
+    {
+        "type": "object",
+        "properties": {"from_wing": {"type": "string"}},
+        "required": ["from_wing"],
     },
-    "required": ["from_wing"],
-}, _follow_tunnels)
+    _find_tunnels,
+)
 
-mcp_server.add_tool("mempalace_traverse", "Full wing graph traversal", {
-    "type": "object",
-    "properties": {
-        "start_wing": {"type": "string"},
-        "depth": {"type": "integer", "default": 5},
+mcp_server.add_tool(
+    "mempalace_follow_tunnels",
+    "BFS traversal returning reachable wings",
+    {
+        "type": "object",
+        "properties": {
+            "from_wing": {"type": "string"},
+            "depth": {"type": "integer", "default": 3},
+        },
+        "required": ["from_wing"],
     },
-    "required": ["start_wing"],
-}, _traverse)
+    _follow_tunnels,
+)
 
-mcp_server.add_tool("mempalace_reconnect", "Ping/reconnect check returning developer_id", {}, _reconnect)
+mcp_server.add_tool(
+    "mempalace_traverse",
+    "Full wing graph traversal",
+    {
+        "type": "object",
+        "properties": {
+            "start_wing": {"type": "string"},
+            "depth": {"type": "integer", "default": 5},
+        },
+        "required": ["start_wing"],
+    },
+    _traverse,
+)
+
+mcp_server.add_tool(
+    "mempalace_reconnect", "Ping/reconnect check returning developer_id", {}, _reconnect
+)
 
 mcp_server.add_tool("mempalace_hook_settings", "Return hook configuration", {}, _hook_settings)
 
-mcp_server.add_tool("mempalace_get_aaak_spec", "Return JSON spec describing available tools", {}, _get_aaak_spec)
+mcp_server.add_tool(
+    "mempalace_get_aaak_spec", "Return JSON spec describing available tools", {}, _get_aaak_spec
+)
 
 mcp_server.add_tool("mempalace_graph_stats", "Return KG graph statistics", {}, _graph_stats)
 

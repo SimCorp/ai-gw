@@ -14,6 +14,7 @@ router = APIRouter(prefix="/plugins", tags=["plugins"])
 # Schemas
 # ---------------------------------------------------------------------------
 
+
 class PluginCreate(BaseModel):
     name: str = Field(..., max_length=200)
     slug: str = Field(..., max_length=100, pattern="^[a-z0-9-]+$")
@@ -44,44 +45,75 @@ class PluginTeamOverrideCreate(BaseModel):
     enabled: bool = True
 
 
-
-
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
 
+
 @router.get("")
 async def list_plugins(session: AsyncSession = Depends(get_session)):
-    rows = (await session.execute(text("""
+    rows = (
+        (
+            await session.execute(
+                text("""
         SELECT p.*, COUNT(DISTINCT o.id) AS override_count
         FROM plugins p
         LEFT JOIN plugin_team_overrides o ON o.plugin_id = p.id
         GROUP BY p.id
         ORDER BY p.name
-    """))).mappings().all()
+    """)
+            )
+        )
+        .mappings()
+        .all()
+    )
     return [dict(r) for r in rows]
 
 
 @router.get("/summary")
 async def plugin_summary(session: AsyncSession = Depends(get_session)):
-    counts_row = (await session.execute(text("""
+    counts_row = (
+        (
+            await session.execute(
+                text("""
         SELECT
             COUNT(*) AS total,
             COUNT(*) FILTER (WHERE enabled) AS enabled,
             COUNT(*) FILTER (WHERE NOT enabled) AS disabled
         FROM plugins
-    """))).mappings().first()
+    """)
+            )
+        )
+        .mappings()
+        .first()
+    )
 
-    category_rows = (await session.execute(text("""
+    category_rows = (
+        (
+            await session.execute(
+                text("""
         SELECT category, COUNT(*) AS cnt
         FROM plugins
         GROUP BY category
         ORDER BY category
-    """))).mappings().all()
+    """)
+            )
+        )
+        .mappings()
+        .all()
+    )
 
-    overrides_row = (await session.execute(text("""
+    overrides_row = (
+        (
+            await session.execute(
+                text("""
         SELECT COUNT(*) AS total_overrides FROM plugin_team_overrides
-    """))).mappings().first()
+    """)
+            )
+        )
+        .mappings()
+        .first()
+    )
 
     per_category = {r["category"]: r["cnt"] for r in category_rows}
 
@@ -121,23 +153,35 @@ async def create_plugin(body: PluginCreate, session: AsyncSession = Depends(get_
 
 @router.get("/{plugin_id}")
 async def get_plugin(plugin_id: str, session: AsyncSession = Depends(get_session)):
-    plugin_row = (await session.execute(
-        text("SELECT * FROM plugins WHERE id = CAST(:id AS uuid)"),
-        {"id": plugin_id},
-    )).mappings().first()
+    plugin_row = (
+        (
+            await session.execute(
+                text("SELECT * FROM plugins WHERE id = CAST(:id AS uuid)"),
+                {"id": plugin_id},
+            )
+        )
+        .mappings()
+        .first()
+    )
     if not plugin_row:
         raise HTTPException(status_code=404, detail="Plugin not found")
 
-    overrides = (await session.execute(
-        text("""
+    overrides = (
+        (
+            await session.execute(
+                text("""
             SELECT o.id, o.plugin_id, o.team_id, t.name AS team_name, o.enabled, o.created_at
             FROM plugin_team_overrides o
             JOIN organization_nodes t ON t.id = o.team_id
             WHERE o.plugin_id = CAST(:plugin_id AS uuid)
             ORDER BY t.name
         """),
-        {"plugin_id": plugin_id},
-    )).mappings().all()
+                {"plugin_id": plugin_id},
+            )
+        )
+        .mappings()
+        .all()
+    )
 
     return {
         "plugin": dict(plugin_row),
@@ -155,7 +199,17 @@ async def update_plugin(
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
 
-    _ALLOWED_PLUGIN_FIELDS = {"name", "description", "version", "author", "category", "scopes", "homepage_url", "icon_url", "enabled"}
+    _ALLOWED_PLUGIN_FIELDS = {
+        "name",
+        "description",
+        "version",
+        "author",
+        "category",
+        "scopes",
+        "homepage_url",
+        "icon_url",
+        "enabled",
+    }
     for field in updates:
         if field not in _ALLOWED_PLUGIN_FIELDS:
             raise HTTPException(status_code=400, detail=f"Unknown field: {field}")
@@ -175,7 +229,7 @@ async def update_plugin(
 
     sql = text(f"""
         UPDATE plugins
-        SET {', '.join(set_clauses)}
+        SET {", ".join(set_clauses)}
         WHERE id = CAST(:id AS uuid)
         RETURNING *
     """)
@@ -200,23 +254,31 @@ async def delete_plugin(plugin_id: str, session: AsyncSession = Depends(get_sess
 
 @router.get("/{plugin_id}/teams")
 async def list_plugin_teams(plugin_id: str, session: AsyncSession = Depends(get_session)):
-    plugin_row = (await session.execute(
-        text("SELECT id FROM plugins WHERE id = CAST(:id AS uuid)"),
-        {"id": plugin_id},
-    )).first()
+    plugin_row = (
+        await session.execute(
+            text("SELECT id FROM plugins WHERE id = CAST(:id AS uuid)"),
+            {"id": plugin_id},
+        )
+    ).first()
     if not plugin_row:
         raise HTTPException(status_code=404, detail="Plugin not found")
 
-    rows = (await session.execute(
-        text("""
+    rows = (
+        (
+            await session.execute(
+                text("""
             SELECT o.id, o.plugin_id, o.team_id, t.name AS team_name, o.enabled, o.created_at
             FROM plugin_team_overrides o
             JOIN organization_nodes t ON t.id = o.team_id
             WHERE o.plugin_id = CAST(:plugin_id AS uuid)
             ORDER BY t.name
         """),
-        {"plugin_id": plugin_id},
-    )).mappings().all()
+                {"plugin_id": plugin_id},
+            )
+        )
+        .mappings()
+        .all()
+    )
     return [dict(r) for r in rows]
 
 
@@ -226,17 +288,23 @@ async def set_plugin_team_override(
     body: PluginTeamOverrideCreate,
     session: AsyncSession = Depends(get_session),
 ):
-    plugin_row = (await session.execute(
-        text("SELECT id FROM plugins WHERE id = CAST(:id AS uuid)"),
-        {"id": plugin_id},
-    )).first()
+    plugin_row = (
+        await session.execute(
+            text("SELECT id FROM plugins WHERE id = CAST(:id AS uuid)"),
+            {"id": plugin_id},
+        )
+    ).first()
     if not plugin_row:
         raise HTTPException(status_code=404, detail="Plugin not found")
 
-    team_row = (await session.execute(
-        text("SELECT id FROM organization_nodes WHERE id = CAST(:id AS uuid) AND type = 'team'"),
-        {"id": body.team_id},
-    )).first()
+    team_row = (
+        await session.execute(
+            text(
+                "SELECT id FROM organization_nodes WHERE id = CAST(:id AS uuid) AND type = 'team'"
+            ),
+            {"id": body.team_id},
+        )
+    ).first()
     if not team_row:
         raise HTTPException(status_code=404, detail="Team not found")
 

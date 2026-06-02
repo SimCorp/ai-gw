@@ -1,5 +1,6 @@
 # services/admin/migrations/versions/0025_security_scanner.py
 """Add security scanner tables"""
+
 from typing import Sequence, Union
 
 import sqlalchemy as sa
@@ -19,7 +20,8 @@ def upgrade():
     # was dropped in migration 0025 (org_nodes refactor).
     # If running against a truly clean DB, the tables must be created via raw SQL:
     conn = op.get_bind()
-    conn.execute(sa.text("""
+    conn.execute(
+        sa.text("""
         CREATE TABLE IF NOT EXISTS scan_targets (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             node_id UUID REFERENCES organization_nodes(id) ON DELETE SET NULL,
@@ -34,8 +36,10 @@ def upgrade():
             created_by UUID REFERENCES users(id) NOT NULL,
             notes TEXT
         )
-    """))
-    conn.execute(sa.text("""
+    """)
+    )
+    conn.execute(
+        sa.text("""
         CREATE TABLE IF NOT EXISTS scan_jobs (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             node_id UUID REFERENCES organization_nodes(id) ON DELETE SET NULL,
@@ -53,8 +57,10 @@ def upgrade():
             worker_id TEXT,
             partial_results BOOLEAN NOT NULL DEFAULT false
         )
-    """))
-    conn.execute(sa.text("""
+    """)
+    )
+    conn.execute(
+        sa.text("""
         CREATE TABLE IF NOT EXISTS scan_findings (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             job_id UUID REFERENCES scan_jobs(id) ON DELETE CASCADE NOT NULL,
@@ -67,15 +73,22 @@ def upgrade():
             remediation TEXT,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
-    """))
-    conn.execute(sa.text("CREATE INDEX IF NOT EXISTS ix_scan_findings_job_id ON scan_findings(job_id)"))
-    conn.execute(sa.text("CREATE INDEX IF NOT EXISTS ix_scan_findings_severity ON scan_findings(severity)"))
+    """)
+    )
+    conn.execute(
+        sa.text("CREATE INDEX IF NOT EXISTS ix_scan_findings_job_id ON scan_findings(job_id)")
+    )
+    conn.execute(
+        sa.text("CREATE INDEX IF NOT EXISTS ix_scan_findings_severity ON scan_findings(severity)")
+    )
     conn.execute(sa.text("CREATE INDEX IF NOT EXISTS ix_scan_jobs_node_id ON scan_jobs(node_id)"))
-    conn.execute(sa.text("""
+    conn.execute(
+        sa.text("""
         ALTER TABLE organization_nodes
         ADD COLUMN IF NOT EXISTS scanner_quota JSONB NOT NULL
         DEFAULT '{"daily_limit": 3, "allow_external_targets": false, "max_tier": "quick"}'::jsonb
-    """))
+    """)
+    )
 
 
 def downgrade():

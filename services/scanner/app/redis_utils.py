@@ -7,6 +7,7 @@ def make_redis(redis_url: str) -> Redis:
     sentinel_hosts_env = os.getenv("REDIS_SENTINEL_HOSTS", "")
     if sentinel_hosts_env:
         from redis.asyncio.sentinel import Sentinel
+
         hosts = [
             (h.split(":")[0], int(h.split(":")[1]))
             for h in sentinel_hosts_env.split(",")

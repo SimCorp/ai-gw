@@ -11,6 +11,7 @@ Usage::
 
 Spec: https://spec.modelcontextprotocol.io  (JSON-RPC 2.0, version 2024-11-05)
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -96,9 +97,7 @@ class MCPServer:
     def _handle_tools_list(self, params: dict, request_id: Any) -> dict:
         return self._ok(request_id, {"tools": self._tools})
 
-    async def _handle_tools_call(
-        self, params: dict, request_id: Any, request: Request
-    ) -> dict:
+    async def _handle_tools_call(self, params: dict, request_id: Any, request: Request) -> dict:
         tool_name = params.get("name", "")
         arguments = params.get("arguments") or {}
 

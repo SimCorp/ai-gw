@@ -7,6 +7,7 @@ Sentinel (production HA):
     REDIS_SENTINEL_HOSTS=sentinel-1:26379,sentinel-2:26379,sentinel-3:26379
     REDIS_SENTINEL_MASTER=mymaster   (default: mymaster)
 """
+
 import os
 
 from redis.asyncio import Redis

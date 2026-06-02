@@ -1,7 +1,27 @@
 import xml.etree.ElementTree as ET
 
-_EXPECTED_INTERNAL_PORTS = {22, 80, 443, 8080, 8443, 8000, 8001, 8002, 8003, 8004,
-                             8005, 8006, 8007, 8008, 8009, 8010, 8011, 3000, 3001, 3002}
+_EXPECTED_INTERNAL_PORTS = {
+    22,
+    80,
+    443,
+    8080,
+    8443,
+    8000,
+    8001,
+    8002,
+    8003,
+    8004,
+    8005,
+    8006,
+    8007,
+    8008,
+    8009,
+    8010,
+    8011,
+    3000,
+    3001,
+    3002,
+}
 
 _PORT_SEVERITY = {
     21: "high",
@@ -48,22 +68,26 @@ def parse_nmap_xml(xml_output: str) -> list[dict]:
                 f"Port {port_num} is open and running {service_product} {service_version}".strip()
                 or f"Port {port_num} is open."
             )
-            findings.append({
-                "scanner": "nmap",
-                "severity": severity,
-                "category": "open_port",
-                "title": f"Open port {port_num}/{port_elem.get('protocol', 'tcp')}: {service_name}",
-                "description": description,
-                "evidence": {
-                    "port": port_num,
-                    "protocol": port_elem.get("protocol", "tcp"),
-                    "service": service_name,
-                    "product": service_product,
-                    "version": service_version,
-                },
-                "remediation": (
-                    "Ensure this port is intentionally exposed. "
-                    "If not needed externally, restrict access via firewall rules."
-                ) if severity != "info" else "Port appears expected for this service type.",
-            })
+            findings.append(
+                {
+                    "scanner": "nmap",
+                    "severity": severity,
+                    "category": "open_port",
+                    "title": f"Open port {port_num}/{port_elem.get('protocol', 'tcp')}: {service_name}",
+                    "description": description,
+                    "evidence": {
+                        "port": port_num,
+                        "protocol": port_elem.get("protocol", "tcp"),
+                        "service": service_name,
+                        "product": service_product,
+                        "version": service_version,
+                    },
+                    "remediation": (
+                        "Ensure this port is intentionally exposed. "
+                        "If not needed externally, restrict access via firewall rules."
+                    )
+                    if severity != "info"
+                    else "Port appears expected for this service type.",
+                }
+            )
     return findings

@@ -1,4 +1,5 @@
 """Admin operational endpoints: manual trigger for background jobs."""
+
 from __future__ import annotations
 
 import os

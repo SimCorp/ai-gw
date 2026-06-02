@@ -30,6 +30,7 @@ Current status: **stub — v0.5 scope**. The interface is implemented but
 ``run()`` raises ``NotImplementedError`` until ``kubernetes-asyncio`` is
 installed and the cluster is configured.
 """
+
 from __future__ import annotations
 
 import logging

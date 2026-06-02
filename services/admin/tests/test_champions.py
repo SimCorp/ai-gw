@@ -6,8 +6,14 @@ import pytest
 @pytest.mark.asyncio
 async def test_list_directory_returns_active_champions(client, mock_session):
     rows = [
-        {"developer_id": "00000000-0000-0000-0000-000000000001", "bio": "rag", "focus_areas": ["rag"],
-         "office_hours_text": None, "active": True, "nominated_at": None}
+        {
+            "developer_id": "00000000-0000-0000-0000-000000000001",
+            "bio": "rag",
+            "focus_areas": ["rag"],
+            "office_hours_text": None,
+            "active": True,
+            "nominated_at": None,
+        }
     ]
     result = MagicMock()
     result.mappings.return_value.all.return_value = rows
@@ -43,12 +49,22 @@ async def test_submit_content_runs_full_pipeline(client, mock_session):
         "tags": ["intro"],
         "difficulty": "beginner",
     }
-    with patch("app.routers.champions.classify_content", new=AsyncMock(return_value=fake_metadata)) as cc, \
-         patch("app.routers.champions.ingest_to_librarian", new=AsyncMock(return_value="lib-item-1")) as ing, \
-         patch("app.routers.champions.grant_points", new=AsyncMock()) as gp:
+    with (
+        patch(
+            "app.routers.champions.classify_content", new=AsyncMock(return_value=fake_metadata)
+        ) as cc,
+        patch(
+            "app.routers.champions.ingest_to_librarian", new=AsyncMock(return_value="lib-item-1")
+        ) as ing,
+        patch("app.routers.champions.grant_points", new=AsyncMock()) as gp,
+    ):
         resp = await client.post(
             "/champions/content",
-            json={"type": "article", "text": "Once upon a time...", "champion_id": "00000000-0000-0000-0000-000000000001"},
+            json={
+                "type": "article",
+                "text": "Once upon a time...",
+                "champion_id": "00000000-0000-0000-0000-000000000001",
+            },
         )
 
     assert resp.status_code == 201, resp.text
@@ -77,13 +93,27 @@ async def test_submit_content_continues_on_league_failure(client, mock_session):
     insert_result.scalar_one.return_value = "22222222-2222-2222-2222-222222222222"
     mock_session.execute.return_value = insert_result
 
-    fake_metadata = {"title": "x", "summary": "y", "focus_areas": [], "tags": [], "difficulty": "unknown"}
-    with patch("app.routers.champions.classify_content", new=AsyncMock(return_value=fake_metadata)), \
-         patch("app.routers.champions.ingest_to_librarian", new=AsyncMock(return_value=None)), \
-         patch("app.routers.champions.grant_points", new=AsyncMock(side_effect=RuntimeError("boom"))):
+    fake_metadata = {
+        "title": "x",
+        "summary": "y",
+        "focus_areas": [],
+        "tags": [],
+        "difficulty": "unknown",
+    }
+    with (
+        patch("app.routers.champions.classify_content", new=AsyncMock(return_value=fake_metadata)),
+        patch("app.routers.champions.ingest_to_librarian", new=AsyncMock(return_value=None)),
+        patch(
+            "app.routers.champions.grant_points", new=AsyncMock(side_effect=RuntimeError("boom"))
+        ),
+    ):
         resp = await client.post(
             "/champions/content",
-            json={"type": "article", "text": "hello", "champion_id": "00000000-0000-0000-0000-000000000001"},
+            json={
+                "type": "article",
+                "text": "hello",
+                "champion_id": "00000000-0000-0000-0000-000000000001",
+            },
         )
     assert resp.status_code == 201  # league failure swallowed
 
@@ -91,10 +121,15 @@ async def test_submit_content_continues_on_league_failure(client, mock_session):
 @pytest.mark.asyncio
 async def test_feed_returns_recent_contributions(client, mock_session):
     rows = [
-        {"id": "11111111-1111-1111-1111-111111111111", "champion_id": "00000000-0000-0000-0000-000000000001",
-         "type": "article", "submitted_at": None,
-         "auto_metadata": {"title": "x", "summary": "y", "focus_areas": [], "tags": []},
-         "upvotes": 0, "views": 0}
+        {
+            "id": "11111111-1111-1111-1111-111111111111",
+            "champion_id": "00000000-0000-0000-0000-000000000001",
+            "type": "article",
+            "submitted_at": None,
+            "auto_metadata": {"title": "x", "summary": "y", "focus_areas": [], "tags": []},
+            "upvotes": 0,
+            "views": 0,
+        }
     ]
     result = MagicMock()
     result.mappings.return_value.all.return_value = rows
@@ -108,6 +143,7 @@ async def test_feed_returns_recent_contributions(client, mock_session):
 # ---------------------------------------------------------------------------
 # Wave 2: asks
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_create_ask_inserts_row(client, mock_session):
@@ -242,6 +278,7 @@ async def test_confirm_ask_wrong_status_returns_409(client, mock_session):
 # Wave 2: upvotes
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_upvote_insert_grants_and_increments(client, mock_session):
     select_existing = MagicMock()
@@ -292,6 +329,7 @@ async def test_upvote_toggle_off_no_grant(client, mock_session):
 # Wave 2: flags
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_flag_inserts_and_increments(client, mock_session):
     insert_result = MagicMock()
@@ -313,6 +351,7 @@ async def test_flag_inserts_and_increments(client, mock_session):
 # ---------------------------------------------------------------------------
 # Wave 3: bookings
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_create_booking_inserts_row(client, mock_session):
@@ -455,6 +494,7 @@ async def test_cancel_booking_conflict_when_terminal(client, mock_session):
 # Wave 3: smart routing
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_route_ask_picks_top_3_by_score(client, mock_session):
     from datetime import datetime, timedelta, timezone
@@ -469,20 +509,35 @@ async def test_route_ask_picks_top_3_by_score(client, mock_session):
     # 5 champions: vary focus overlap and recency
     champ_rows = [
         # high overlap + very recent (top)
-        {"developer_id": "11111111-1111-1111-1111-111111111111",
-         "focus_areas": ["rag", "agentic"], "last_submitted_at": now - timedelta(days=1)},
+        {
+            "developer_id": "11111111-1111-1111-1111-111111111111",
+            "focus_areas": ["rag", "agentic"],
+            "last_submitted_at": now - timedelta(days=1),
+        },
         # high overlap, old contribution
-        {"developer_id": "22222222-2222-2222-2222-222222222222",
-         "focus_areas": ["rag", "agentic"], "last_submitted_at": now - timedelta(days=90)},
+        {
+            "developer_id": "22222222-2222-2222-2222-222222222222",
+            "focus_areas": ["rag", "agentic"],
+            "last_submitted_at": now - timedelta(days=90),
+        },
         # partial overlap, recent
-        {"developer_id": "33333333-3333-3333-3333-333333333333",
-         "focus_areas": ["rag", "ml", "infra"], "last_submitted_at": now - timedelta(days=2)},
+        {
+            "developer_id": "33333333-3333-3333-3333-333333333333",
+            "focus_areas": ["rag", "ml", "infra"],
+            "last_submitted_at": now - timedelta(days=2),
+        },
         # no overlap, recent
-        {"developer_id": "44444444-4444-4444-4444-444444444444",
-         "focus_areas": ["frontend"], "last_submitted_at": now - timedelta(days=1)},
+        {
+            "developer_id": "44444444-4444-4444-4444-444444444444",
+            "focus_areas": ["frontend"],
+            "last_submitted_at": now - timedelta(days=1),
+        },
         # no overlap, no activity
-        {"developer_id": "55555555-5555-5555-5555-555555555555",
-         "focus_areas": ["devops"], "last_submitted_at": None},
+        {
+            "developer_id": "55555555-5555-5555-5555-555555555555",
+            "focus_areas": ["devops"],
+            "last_submitted_at": None,
+        },
     ]
     champ_result = MagicMock()
     champ_result.mappings.return_value.all.return_value = champ_rows

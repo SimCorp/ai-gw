@@ -4,6 +4,7 @@ Two impls (only Docker in v0.1; Kubernetes lands with AKS deployment in v0.5):
 - DockerRuntime  — uses host docker.sock via aiodocker
 - KubernetesRuntime — v0.5+, not in this milestone
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -28,5 +29,4 @@ class ContainerRuntime(Protocol):
         node_id: str,
         timeout_s: float,
         log_stream: AsyncIterator[str] | None = None,
-    ) -> RunResult:
-        ...
+    ) -> RunResult: ...

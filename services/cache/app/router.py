@@ -22,6 +22,7 @@ router = APIRouter()
 # Streaming SSE usage parsers — recover token counts from stream tail
 # ---------------------------------------------------------------------------
 
+
 def _parse_sse_usage_openai(tail: bytes) -> tuple[int, int]:
     """Extract prompt/completion tokens from OpenAI-format SSE tail bytes."""
     text = tail.decode("utf-8", errors="ignore")
@@ -81,13 +82,51 @@ async def _tracked_stream(upstream, emit_coro_fn, parse_fn=_parse_sse_usage_open
 # ---------------------------------------------------------------------------
 
 _INTENT_PATTERNS: list[tuple[str, re.Pattern]] = [
-    ("debugging",      re.compile(r'\b(error|exception|traceback|bug|fix|crash|fail|broken|why\s+is|why\s+does|not\s+work)\b', re.I)),
-    ("testing",        re.compile(r'\b(test|spec|mock|assert|coverage|pytest|unittest|jest|vitest)\b', re.I)),
-    ("refactoring",    re.compile(r'\b(refactor|clean\s*up|simplify|restructure|rename|extract|split|consolidate)\b', re.I)),
-    ("code_review",    re.compile(r'\b(review|check|look\s+at|feedback|improve|suggest|what\s+do\s+you\s+think|critique)\b', re.I)),
-    ("documentation",  re.compile(r'\b(docstring|comment|document|readme|explain\s+this|describe|what\s+does\s+this)\b', re.I)),
-    ("code_generation",re.compile(r'\b(write|implement|create|generate|build|add\s+a\s+function|make\s+a|scaffold)\b', re.I)),
-    ("question",       re.compile(r'\b(how\s+do|what\s+is|can\s+you|could\s+you|please\s+explain|help\s+me\s+understand)\b', re.I)),
+    (
+        "debugging",
+        re.compile(
+            r"\b(error|exception|traceback|bug|fix|crash|fail|broken|why\s+is|why\s+does|not\s+work)\b",
+            re.I,
+        ),
+    ),
+    (
+        "testing",
+        re.compile(r"\b(test|spec|mock|assert|coverage|pytest|unittest|jest|vitest)\b", re.I),
+    ),
+    (
+        "refactoring",
+        re.compile(
+            r"\b(refactor|clean\s*up|simplify|restructure|rename|extract|split|consolidate)\b", re.I
+        ),
+    ),
+    (
+        "code_review",
+        re.compile(
+            r"\b(review|check|look\s+at|feedback|improve|suggest|what\s+do\s+you\s+think|critique)\b",
+            re.I,
+        ),
+    ),
+    (
+        "documentation",
+        re.compile(
+            r"\b(docstring|comment|document|readme|explain\s+this|describe|what\s+does\s+this)\b",
+            re.I,
+        ),
+    ),
+    (
+        "code_generation",
+        re.compile(
+            r"\b(write|implement|create|generate|build|add\s+a\s+function|make\s+a|scaffold)\b",
+            re.I,
+        ),
+    ),
+    (
+        "question",
+        re.compile(
+            r"\b(how\s+do|what\s+is|can\s+you|could\s+you|please\s+explain|help\s+me\s+understand)\b",
+            re.I,
+        ),
+    ),
 ]
 
 
@@ -96,6 +135,7 @@ def _classify_intent(prompt_text: str) -> str:
         if pattern.search(prompt_text):
             return intent
     return "general"
+
 
 _log = logging.getLogger(__name__)
 
@@ -153,6 +193,7 @@ async def _replay_as_sse(cached: dict):
     # 4. SSE end sentinel
     yield b"data: [DONE]\n\n"
 
+
 # ---------------------------------------------------------------------------
 # Short-TTL identity cache — survives auth service restarts / rolling deploys.
 # Entries expire after _IDENTITY_CACHE_TTL seconds; revoked keys are stale at
@@ -172,11 +213,11 @@ _identity_cache: dict[str, _CachedIdentity] = {}
 
 # Patterns that indicate unique/personal context — bypass semantic cache entirely.
 _PII_PATTERNS = re.compile(
-    r"[a-f0-9]{40}"          # git SHA
-    r"|/home/\w+"             # home directory path
-    r"|/Users/\w+"            # macOS home path
-    r"|\bTraceback\b"         # Python stack trace
-    r"|\bError:\s"            # error messages
+    r"[a-f0-9]{40}"  # git SHA
+    r"|/home/\w+"  # home directory path
+    r"|/Users/\w+"  # macOS home path
+    r"|\bTraceback\b"  # Python stack trace
+    r"|\bError:\s"  # error messages
     r"|\btransaction[_\s]id\b"
     r"|\bmy\s+(account|balance|order|sick\s+leave)\b",
     re.IGNORECASE,
@@ -255,7 +296,9 @@ async def _validate_token(
         # Auth service unreachable — serve from stale identity cache if available
         cached = _identity_cache.get(token_key)
         if cached and time.monotonic() < cached.expires_at:
-            _log.warning("Auth service unreachable, using cached identity (team=%s): %s", cached.team_id, exc)
+            _log.warning(
+                "Auth service unreachable, using cached identity (team=%s): %s", cached.team_id, exc
+            )
             # Scope is not stored in the cache; treat as standard on fallback
             return cached.team_id, cached.project_id, cached.key_id, None
         return None
@@ -263,9 +306,11 @@ async def _validate_token(
 
 _GUARDRAIL_CACHE_TTL = 60  # seconds between guardrail refreshes
 
+
 async def _load_guardrails(redis, team_id: str) -> list[dict]:
     """Load enabled guardrails from Redis, keyed by admin service on create/update."""
     import json as _j
+
     results = []
     for key in (f"guardrails:{team_id}", "guardrails:global"):
         raw = await redis.get(key)
@@ -288,6 +333,7 @@ async def _check_guardrails(
 ) -> None:
     """Run enabled guardrails against the prompt text. Fires hits async; blocks on block action."""
     import re as _re
+
     rules = await _load_guardrails(redis, team_id)
     for rule in rules:
         if not rule.get("enabled", True):
@@ -307,17 +353,22 @@ async def _check_guardrails(
         if not matched:
             continue
         action = rule.get("action", "flag")
-        asyncio.create_task(_emit_guardrail_hit(http, {
-            "guardrail_id": rule.get("id"),
-            "guardrail_type": rule.get("type"),
-            "team_id": team_id,
-            "api_key_id": key_id,
-            "request_id": request_id,
-            "model": model,
-            "input_or_output": "input",
-            "action_taken": action,
-            "severity": rule.get("severity", "high"),
-        }))
+        asyncio.create_task(
+            _emit_guardrail_hit(
+                http,
+                {
+                    "guardrail_id": rule.get("id"),
+                    "guardrail_type": rule.get("type"),
+                    "team_id": team_id,
+                    "api_key_id": key_id,
+                    "request_id": request_id,
+                    "model": model,
+                    "input_or_output": "input",
+                    "action_taken": action,
+                    "severity": rule.get("severity", "high"),
+                },
+            )
+        )
         if action == "block":
             raise _BlockedByGuardrail(rule.get("name", "guardrail"))
 
@@ -367,7 +418,9 @@ async def list_models(request: Request):
         headers={"Authorization": f"Bearer {settings.litellm_master_key}"},
         timeout=10,
     )
-    return Response(content=resp.content, status_code=resp.status_code, media_type="application/json")
+    return Response(
+        content=resp.content, status_code=resp.status_code, media_type="application/json"
+    )
 
 
 async def _handle_chat_completions(request: Request, body: dict):
@@ -420,25 +473,34 @@ async def _handle_chat_completions(request: Request, body: dict):
     requested_model = body.get("model", "")
     if policy.allowed_models and requested_model and requested_model not in policy.allowed_models:
         return JSONResponse(
-            {"error": "model_not_permitted",
-             "message": f"Model '{requested_model}' is not in your team's allowed model list"},
+            {
+                "error": "model_not_permitted",
+                "message": f"Model '{requested_model}' is not in your team's allowed model list",
+            },
             status_code=403,
             headers={"x-request-id": request_id},
         )
 
     # Guardrails — run lightweight enforcement on input before forwarding
     try:
-        await _check_guardrails(redis, team_id, key_id, request_id, _prompt_text(body), body.get("model"), http)
+        await _check_guardrails(
+            redis, team_id, key_id, request_id, _prompt_text(body), body.get("model"), http
+        )
     except _BlockedByGuardrail as exc:
         return JSONResponse(
-            {"error": "blocked_by_guardrail", "message": f"Request blocked by guardrail: {exc.rule_name}"},
+            {
+                "error": "blocked_by_guardrail",
+                "message": f"Request blocked by guardrail: {exc.rule_name}",
+            },
             status_code=400,
             headers={"x-request-id": request_id},
         )
 
     # Hard budget gate — fail open (allow) if Redis is unavailable
     if not await _check_budget(redis, team_id, key_id, policy.budget_hard_cap):
-        return JSONResponse({"error": "Budget cap exceeded"}, status_code=429, headers={"x-request-id": request_id})
+        return JSONResponse(
+            {"error": "Budget cap exceeded"}, status_code=429, headers={"x-request-id": request_id}
+        )
 
     start = time.monotonic()
 
@@ -447,11 +509,7 @@ async def _handle_chat_completions(request: Request, body: dict):
     # - conversation has too many turns (context drift)
     # - prompt contains personal identifiers / unique content
     turns = _turn_count(body)
-    bypass_cache = (
-        policy.opt_out
-        or turns > policy.conversation_turn_limit
-        or _has_pii(body)
-    )
+    bypass_cache = policy.opt_out or turns > policy.conversation_turn_limit or _has_pii(body)
 
     emb: list[float] | None = None
     cache_stage = "bypass" if bypass_cache else "miss"
@@ -466,19 +524,33 @@ async def _handle_chat_completions(request: Request, body: dict):
                 cache_stage = "exact_hit"
                 latency_ms = int((time.monotonic() - start) * 1000)
                 asyncio.create_task(
-                    _emit_event(http, {
-                        "team_id": team_id, "project_id": project_id, "key_id": key_id,
-                        "model": body.get("model"), "cache_hit": True, "cache_stage": cache_stage,
-                        "latency_ms": latency_ms,
-                        "cache_namespace": cache_namespace,
-                        "session_trace_id": session_trace_id,
-                        "session_purpose": session_purpose, "repo": repo,
-                    })
+                    _emit_event(
+                        http,
+                        {
+                            "team_id": team_id,
+                            "project_id": project_id,
+                            "key_id": key_id,
+                            "model": body.get("model"),
+                            "cache_hit": True,
+                            "cache_stage": cache_stage,
+                            "latency_ms": latency_ms,
+                            "cache_namespace": cache_namespace,
+                            "session_trace_id": session_trace_id,
+                            "session_purpose": session_purpose,
+                            "repo": repo,
+                        },
+                    )
                 )
                 asyncio.create_task(
-                    _autoroute_record(redis, body.get("model", ""), latency_ms, cache_hit=True, error=False)
+                    _autoroute_record(
+                        redis, body.get("model", ""), latency_ms, cache_hit=True, error=False
+                    )
                 )
-                _hit_headers = {"X-Cache": "HIT", "X-Cache-Stage": "exact", "x-request-id": request_id}
+                _hit_headers = {
+                    "X-Cache": "HIT",
+                    "X-Cache-Stage": "exact",
+                    "x-request-id": request_id,
+                }
                 if body.get("stream"):
                     return StreamingResponse(
                         _replay_as_sse(cached),
@@ -493,25 +565,45 @@ async def _handle_chat_completions(request: Request, body: dict):
         emb_start = time.monotonic()
         try:
             emb = await semantic.embed(_prompt_text(body), policy.embedding_model)
-            cached = await semantic.get(emb, policy.similarity_threshold, redis, team_id=team_id, project_id=project_id or "")
+            cached = await semantic.get(
+                emb,
+                policy.similarity_threshold,
+                redis,
+                team_id=team_id,
+                project_id=project_id or "",
+            )
             if cached:
                 cache_stage = "semantic_hit"
                 latency_ms = int((time.monotonic() - start) * 1000)
                 asyncio.create_task(
-                    _emit_event(http, {
-                        "team_id": team_id, "project_id": project_id, "key_id": key_id,
-                        "model": body.get("model"), "cache_hit": True, "cache_stage": cache_stage,
-                        "embedding_latency_ms": int((time.monotonic() - emb_start) * 1000),
-                        "latency_ms": latency_ms,
-                        "cache_namespace": cache_namespace,
-                        "session_trace_id": session_trace_id,
-                        "session_purpose": session_purpose, "repo": repo,
-                    })
+                    _emit_event(
+                        http,
+                        {
+                            "team_id": team_id,
+                            "project_id": project_id,
+                            "key_id": key_id,
+                            "model": body.get("model"),
+                            "cache_hit": True,
+                            "cache_stage": cache_stage,
+                            "embedding_latency_ms": int((time.monotonic() - emb_start) * 1000),
+                            "latency_ms": latency_ms,
+                            "cache_namespace": cache_namespace,
+                            "session_trace_id": session_trace_id,
+                            "session_purpose": session_purpose,
+                            "repo": repo,
+                        },
+                    )
                 )
                 asyncio.create_task(
-                    _autoroute_record(redis, body.get("model", ""), latency_ms, cache_hit=True, error=False)
+                    _autoroute_record(
+                        redis, body.get("model", ""), latency_ms, cache_hit=True, error=False
+                    )
                 )
-                _hit_headers = {"X-Cache": "HIT", "X-Cache-Stage": "semantic", "x-request-id": request_id}
+                _hit_headers = {
+                    "X-Cache": "HIT",
+                    "X-Cache-Stage": "semantic",
+                    "x-request-id": request_id,
+                }
                 if body.get("stream"):
                     return StreamingResponse(
                         _replay_as_sse(cached),
@@ -525,7 +617,8 @@ async def _handle_chat_completions(request: Request, body: dict):
 
     # 3. Forward to LiteLLM
     fwd_headers = {
-        k: v for k, v in request.headers.items()
+        k: v
+        for k, v in request.headers.items()
         if k.lower() not in ("host", "content-length", "authorization")
     }
     fwd_headers["Authorization"] = f"Bearer {settings.litellm_master_key}"
@@ -539,9 +632,15 @@ async def _handle_chat_completions(request: Request, body: dict):
 
     if is_stream:
         # Inject include_usage so LiteLLM/OpenAI appends a usage chunk at stream end
-        stream_body = {**body, "stream_options": {**body.get("stream_options", {}), "include_usage": True}}
+        stream_body = {
+            **body,
+            "stream_options": {**body.get("stream_options", {}), "include_usage": True},
+        }
         req = http.build_request(
-            "POST", f"{settings.litellm_url}/v1/chat/completions", json=stream_body, headers=fwd_headers,
+            "POST",
+            f"{settings.litellm_url}/v1/chat/completions",
+            json=stream_body,
+            headers=fwd_headers,
         )
         upstream = await http.send(req, stream=True)
         latency_ms = int((time.monotonic() - start) * 1000)
@@ -549,21 +648,34 @@ async def _handle_chat_completions(request: Request, body: dict):
         err = None if not is_error else str(upstream.status_code)
 
         base_event = {
-            "team_id": team_id, "project_id": project_id, "key_id": key_id,
-            "model": body.get("model"), "cache_hit": False, "cache_stage": "stream",
-            "latency_ms": latency_ms, "error": err,
-            "cache_namespace": cache_namespace, "session_trace_id": session_trace_id,
-            "session_purpose": session_purpose, "repo": repo, "request_intent": request_intent,
+            "team_id": team_id,
+            "project_id": project_id,
+            "key_id": key_id,
+            "model": body.get("model"),
+            "cache_hit": False,
+            "cache_stage": "stream",
+            "latency_ms": latency_ms,
+            "error": err,
+            "cache_namespace": cache_namespace,
+            "session_trace_id": session_trace_id,
+            "session_purpose": session_purpose,
+            "repo": repo,
+            "request_intent": request_intent,
         }
         _autoroute_model = body.get("model", "")
         _autoroute_latency = latency_ms
         _autoroute_is_error = is_error
 
         async def _emit_after_stream(tokens_in: int, tokens_out: int) -> None:
-            await _emit_event(http, {**base_event, "tokens_input": tokens_in, "tokens_output": tokens_out})
+            await _emit_event(
+                http, {**base_event, "tokens_input": tokens_in, "tokens_output": tokens_out}
+            )
             await _autoroute_record(
-                redis, _autoroute_model, _autoroute_latency,
-                cache_hit=False, error=_autoroute_is_error,
+                redis,
+                _autoroute_model,
+                _autoroute_latency,
+                cache_hit=False,
+                error=_autoroute_is_error,
             )
 
         return StreamingResponse(
@@ -575,7 +687,10 @@ async def _handle_chat_completions(request: Request, body: dict):
 
     try:
         resp = await http.post(
-            f"{settings.litellm_url}/v1/chat/completions", json=body, headers=fwd_headers, timeout=600
+            f"{settings.litellm_url}/v1/chat/completions",
+            json=body,
+            headers=fwd_headers,
+            timeout=600,
         )
     except httpx.RequestError as exc:
         _log.warning("LiteLLM unreachable: %s", exc)
@@ -588,12 +703,26 @@ async def _handle_chat_completions(request: Request, body: dict):
 
     if resp.status_code == 200 and not bypass_cache:
         try:
-            await exact.set(body, response_body, policy.ttl_seconds, redis, team_id=team_id, project_id=project_id or "")
+            await exact.set(
+                body,
+                response_body,
+                policy.ttl_seconds,
+                redis,
+                team_id=team_id,
+                project_id=project_id or "",
+            )
         except Exception:
             pass
         if emb is not None:
             try:
-                await semantic.set(emb, response_body, policy.ttl_seconds, redis, team_id=team_id, project_id=project_id or "")
+                await semantic.set(
+                    emb,
+                    response_body,
+                    policy.ttl_seconds,
+                    redis,
+                    team_id=team_id,
+                    project_id=project_id or "",
+                )
             except Exception:
                 pass
 
@@ -601,25 +730,36 @@ async def _handle_chat_completions(request: Request, body: dict):
     usage = response_body.get("usage", {})
     is_error = resp.status_code != 200
     asyncio.create_task(
-        _emit_event(http, {
-            "team_id": team_id, "project_id": project_id, "key_id": key_id,
-            "model": body.get("model"),
-            "tokens_input": usage.get("prompt_tokens", 0),
-            "tokens_output": usage.get("completion_tokens", 0),
-            "cache_hit": False, "cache_stage": cache_stage,
-            "latency_ms": final_latency_ms,
-            "error": None if not is_error else str(resp.status_code),
-            "cache_namespace": cache_namespace,
-            "session_trace_id": session_trace_id,
-            "session_purpose": session_purpose, "repo": repo,
-            "request_intent": request_intent,
-        })
+        _emit_event(
+            http,
+            {
+                "team_id": team_id,
+                "project_id": project_id,
+                "key_id": key_id,
+                "model": body.get("model"),
+                "tokens_input": usage.get("prompt_tokens", 0),
+                "tokens_output": usage.get("completion_tokens", 0),
+                "cache_hit": False,
+                "cache_stage": cache_stage,
+                "latency_ms": final_latency_ms,
+                "error": None if not is_error else str(resp.status_code),
+                "cache_namespace": cache_namespace,
+                "session_trace_id": session_trace_id,
+                "session_purpose": session_purpose,
+                "repo": repo,
+                "request_intent": request_intent,
+            },
+        )
     )
     asyncio.create_task(
-        _autoroute_record(redis, body.get("model", ""), final_latency_ms, cache_hit=False, error=is_error)
+        _autoroute_record(
+            redis, body.get("model", ""), final_latency_ms, cache_hit=False, error=is_error
+        )
     )
     return Response(
-        content=resp.content, status_code=resp.status_code, media_type="application/json",
+        content=resp.content,
+        status_code=resp.status_code,
+        media_type="application/json",
         headers={"X-Cache": "MISS", "x-request-id": request_id},
     )
 
@@ -663,19 +803,24 @@ async def anthropic_proxy(path: str, request: Request):
     body = {}
     try:
         import json
+
         body = json.loads(body_bytes) if body_bytes else {}
     except Exception:
         pass
 
     result = await _validate_token(http, token, body.get("model"))
     if result is None:
-        return JSONResponse({"error": {"type": "authentication_error", "message": "Invalid API key"}}, status_code=401)
+        return JSONResponse(
+            {"error": {"type": "authentication_error", "message": "Invalid API key"}},
+            status_code=401,
+        )
     if isinstance(result, Response):
         return result
     team_id, project_id, key_id, _scope = result
 
     fwd_headers = {
-        k: v for k, v in request.headers.items()
+        k: v
+        for k, v in request.headers.items()
         if k.lower() not in ("host", "content-length", "authorization", "x-api-key")
     }
     fwd_headers["x-api-key"] = settings.litellm_master_key
@@ -694,19 +839,32 @@ async def anthropic_proxy(path: str, request: Request):
         except httpx.RequestError as exc:
             _log.warning("LiteLLM unreachable on Anthropic path: %s", exc)
             return JSONResponse(
-                {"error": {"type": "overloaded_error", "message": "LLM provider temporarily unavailable"}},
+                {
+                    "error": {
+                        "type": "overloaded_error",
+                        "message": "LLM provider temporarily unavailable",
+                    }
+                },
                 status_code=503,
                 headers={"Retry-After": "30"},
             )
         latency_ms = int((time.monotonic() - start) * 1000)
         anthropic_base_event = {
-            "team_id": team_id, "project_id": project_id, "key_id": key_id,
-            "model": body.get("model"), "cache_hit": False, "cache_stage": "stream",
-            "latency_ms": latency_ms, "request_intent": anthropic_intent,
+            "team_id": team_id,
+            "project_id": project_id,
+            "key_id": key_id,
+            "model": body.get("model"),
+            "cache_hit": False,
+            "cache_stage": "stream",
+            "latency_ms": latency_ms,
+            "request_intent": anthropic_intent,
         }
 
         async def _emit_anthropic(tokens_in: int, tokens_out: int) -> None:
-            await _emit_event(http, {**anthropic_base_event, "tokens_input": tokens_in, "tokens_output": tokens_out})
+            await _emit_event(
+                http,
+                {**anthropic_base_event, "tokens_input": tokens_in, "tokens_output": tokens_out},
+            )
 
         return StreamingResponse(
             _tracked_stream(upstream, _emit_anthropic, _parse_sse_usage_anthropic),
@@ -720,17 +878,32 @@ async def anthropic_proxy(path: str, request: Request):
     except httpx.RequestError as exc:
         _log.warning("LiteLLM unreachable on Anthropic path: %s", exc)
         return JSONResponse(
-            {"error": {"type": "overloaded_error", "message": "LLM provider temporarily unavailable"}},
+            {
+                "error": {
+                    "type": "overloaded_error",
+                    "message": "LLM provider temporarily unavailable",
+                }
+            },
             status_code=503,
             headers={"Retry-After": "30"},
         )
-    asyncio.create_task(_emit_event(http, {
-        "team_id": team_id, "project_id": project_id, "key_id": key_id,
-        "model": body.get("model"), "cache_hit": False, "cache_stage": "miss",
-        "latency_ms": int((time.monotonic() - start) * 1000),
-    }))
+    asyncio.create_task(
+        _emit_event(
+            http,
+            {
+                "team_id": team_id,
+                "project_id": project_id,
+                "key_id": key_id,
+                "model": body.get("model"),
+                "cache_hit": False,
+                "cache_stage": "miss",
+                "latency_ms": int((time.monotonic() - start) * 1000),
+            },
+        )
+    )
     return Response(
-        content=resp.content, status_code=resp.status_code,
+        content=resp.content,
+        status_code=resp.status_code,
         media_type=resp.headers.get("content-type", "application/json"),
         headers={"X-Cache": "MISS"},
     )

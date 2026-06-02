@@ -12,6 +12,7 @@ Revision ID: 0005
 Revises: 0004
 Create Date: 2026-05-12
 """
+
 from __future__ import annotations
 
 from typing import Sequence, Union
@@ -25,9 +26,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.execute(
-        "ALTER TABLE policies DROP CONSTRAINT IF EXISTS policies_team_id_project_id_key"
-    )
+    op.execute("ALTER TABLE policies DROP CONSTRAINT IF EXISTS policies_team_id_project_id_key")
 
 
 def downgrade() -> None:

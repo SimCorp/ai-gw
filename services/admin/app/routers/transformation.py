@@ -9,6 +9,7 @@ Admin-facing:
   GET  /admin/transformation          — org + team + individual scores
   POST /admin/transformation/classify — trigger classifier on demand
 """
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -78,18 +79,14 @@ def _compute_score(row) -> int:
     commits = int(row["agent_commits"] or 0)
     commit_rate = (commits / max(agent_sessions, 1) * 100) if agent_sessions > 0 else 0
 
-    score = (
-        session_pct * 0.40 +
-        cost_pct    * 0.30 +
-        tool_density * 0.15 +
-        commit_rate  * 0.15
-    )
+    score = session_pct * 0.40 + cost_pct * 0.30 + tool_density * 0.15 + commit_rate * 0.15
     return min(100, round(score))
 
 
 # ---------------------------------------------------------------------------
 # Developer endpoints
 # ---------------------------------------------------------------------------
+
 
 @dev_router.get("/transformation")
 async def my_transformation(
@@ -102,19 +99,27 @@ async def my_transformation(
     stats = (await session.execute(text(_SCORE_SQL), {"dev_id": dev_id})).mappings().one()
     score = _compute_score(stats)
 
-    achievements = (await session.execute(
-        text("""
+    achievements = (
+        (
+            await session.execute(
+                text("""
             SELECT achievement, earned_at
             FROM developer_achievements
             WHERE developer_id = CAST(:dev_id AS uuid)
             ORDER BY earned_at
         """),
-        {"dev_id": dev_id},
-    )).mappings().all()
+                {"dev_id": dev_id},
+            )
+        )
+        .mappings()
+        .all()
+    )
 
     # Weekly breakdown (last 8 weeks)
-    weekly = (await session.execute(
-        text("""
+    weekly = (
+        (
+            await session.execute(
+                text("""
             SELECT
                 date_trunc('week', first_request_at)::date AS week,
                 COUNT(*) AS total,
@@ -125,25 +130,37 @@ async def my_transformation(
               AND session_type IS NOT NULL
             GROUP BY 1 ORDER BY 1
         """),
-        {"dev_id": dev_id},
-    )).mappings().all()
+                {"dev_id": dev_id},
+            )
+        )
+        .mappings()
+        .all()
+    )
 
     # Leaderboard opt-in status
-    opt_ins = (await session.execute(
-        text("""
+    opt_ins = (
+        (
+            await session.execute(
+                text("""
             SELECT scope FROM developer_leaderboard_opt_in
             WHERE developer_id = CAST(:dev_id AS uuid)
         """),
-        {"dev_id": dev_id},
-    )).scalars().all()
+                {"dev_id": dev_id},
+            )
+        )
+        .scalars()
+        .all()
+    )
 
     # Rank if opted in
     rank_team = rank_company = None
     team_id = developer.get("team_id")
 
     if "team" in opt_ins and team_id:
-        rank_row = (await session.execute(
-            text("""
+        rank_row = (
+            (
+                await session.execute(
+                    text("""
                 WITH scores AS (
                     SELECT s.developer_id,
                            COUNT(*) FILTER (WHERE s.session_type IN ('agentic','autonomous'))::float
@@ -159,14 +176,20 @@ async def my_transformation(
                 FROM scores
                 WHERE pct > (SELECT pct FROM scores WHERE developer_id = CAST(:dev_id AS uuid))
             """),
-            {"team_id": team_id, "dev_id": dev_id},
-        )).mappings().one_or_none()
+                    {"team_id": team_id, "dev_id": dev_id},
+                )
+            )
+            .mappings()
+            .one_or_none()
+        )
         if rank_row:
             rank_team = {"rank": int(rank_row["rank"]), "total": int(rank_row["total"])}
 
     if "company" in opt_ins:
-        rank_row = (await session.execute(
-            text("""
+        rank_row = (
+            (
+                await session.execute(
+                    text("""
                 WITH scores AS (
                     SELECT s.developer_id,
                            COUNT(*) FILTER (WHERE s.session_type IN ('agentic','autonomous'))::float
@@ -181,8 +204,12 @@ async def my_transformation(
                 FROM scores
                 WHERE pct > (SELECT pct FROM scores WHERE developer_id = CAST(:dev_id AS uuid))
             """),
-            {"dev_id": dev_id},
-        )).mappings().one_or_none()
+                    {"dev_id": dev_id},
+                )
+            )
+            .mappings()
+            .one_or_none()
+        )
         if rank_row:
             rank_company = {"rank": int(rank_row["rank"]), "total": int(rank_row["total"])}
 
@@ -255,14 +282,17 @@ async def update_leaderboard_opt_in(
 # Admin endpoints
 # ---------------------------------------------------------------------------
 
+
 @admin_router.get("")
 async def org_transformation(
     admin: dict = Depends(get_admin_session),
     session: AsyncSession = Depends(get_session),
 ):
     # Org-level weekly adoption (last 12 weeks)
-    org_weekly = (await session.execute(
-        text("""
+    org_weekly = (
+        (
+            await session.execute(
+                text("""
             SELECT
                 date_trunc('week', first_request_at)::date AS week,
                 COUNT(*) AS total_sessions,
@@ -274,11 +304,17 @@ async def org_transformation(
               AND session_type IS NOT NULL
             GROUP BY 1 ORDER BY 1
         """)
-    )).mappings().all()
+            )
+        )
+        .mappings()
+        .all()
+    )
 
     # Per-team breakdown
-    teams = (await session.execute(
-        text("""
+    teams = (
+        (
+            await session.execute(
+                text("""
             SELECT
                 d.team_id::text,
                 t.name AS team_name,
@@ -304,11 +340,17 @@ async def org_transformation(
             GROUP BY d.team_id, t.name
             ORDER BY agentic_session_pct_30d DESC NULLS LAST
         """)
-    )).mappings().all()
+            )
+        )
+        .mappings()
+        .all()
+    )
 
     # Individual developer scores
-    developers = (await session.execute(
-        text("""
+    developers = (
+        (
+            await session.execute(
+                text("""
             SELECT
                 d.id::text AS developer_id,
                 d.email,
@@ -331,7 +373,11 @@ async def org_transformation(
             GROUP BY d.id, d.email, d.display_name, d.team_id, t.name
             ORDER BY agentic_pct DESC NULLS LAST
         """)
-    )).mappings().all()
+            )
+        )
+        .mappings()
+        .all()
+    )
 
     return {
         "org_weekly": [
@@ -341,7 +387,9 @@ async def org_transformation(
                 "agentic_sessions": int(r["agentic_sessions"]),
                 "active_devs": int(r["active_devs"]),
                 "agentic_devs": int(r["agentic_devs"]),
-                "agentic_pct": round(int(r["agentic_sessions"]) / max(int(r["total_sessions"]), 1) * 100, 1),
+                "agentic_pct": round(
+                    int(r["agentic_sessions"]) / max(int(r["total_sessions"]), 1) * 100, 1
+                ),
             }
             for r in org_weekly
         ],

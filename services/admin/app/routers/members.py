@@ -20,9 +20,7 @@ class MemberAdd(BaseModel):
 
 @router.get("")
 async def list_members(team_id: UUID, session: AsyncSession = Depends(get_session)):
-    result = await session.execute(
-        select(TeamMember).where(TeamMember.team_id == team_id)
-    )
+    result = await session.execute(select(TeamMember).where(TeamMember.team_id == team_id))
     return result.scalars().all()
 
 
@@ -45,26 +43,32 @@ async def add_member(
     developer_id = None
     if "@" in body.user_id:
         try:
-            dev_row = (await session.execute(
-                text("SELECT id FROM developers WHERE email = :email"),
-                {"email": body.user_id},
-            )).first()
+            dev_row = (
+                await session.execute(
+                    text("SELECT id FROM developers WHERE email = :email"),
+                    {"email": body.user_id},
+                )
+            ).first()
             developer_id = dev_row[0] if dev_row else None
         except Exception:
             pass  # developers table may not exist post-migration
 
-    member = TeamMember(team_id=team_id, user_id=body.user_id, role=body.role, developer_id=developer_id)
+    member = TeamMember(
+        team_id=team_id, user_id=body.user_id, role=body.role, developer_id=developer_id
+    )
     session.add(member)
 
     # Bug 1 fix: set primary_team_id on the user (first assignment wins)
     resolved_uid: str | None = None
-    if body.user_id and '-' in body.user_id:
+    if body.user_id and "-" in body.user_id:
         resolved_uid = body.user_id  # already a UUID string
-    elif body.user_id and '@' in body.user_id:
-        uid_row = (await session.execute(
-            text("SELECT id::text FROM users WHERE email = :e"),
-            {"e": body.user_id},
-        )).first()
+    elif body.user_id and "@" in body.user_id:
+        uid_row = (
+            await session.execute(
+                text("SELECT id::text FROM users WHERE email = :e"),
+                {"e": body.user_id},
+            )
+        ).first()
         resolved_uid = str(uid_row[0]) if uid_row else None
 
     if resolved_uid:
@@ -77,7 +81,10 @@ async def add_member(
         )
 
     await audit.record(
-        session, request, "add_member", "team_member",
+        session,
+        request,
+        "add_member",
+        "team_member",
         details={"team_id": str(team_id), "user_id": body.user_id, "role": body.role},
     )
     await session.commit()
@@ -102,16 +109,17 @@ async def update_member_role(
     if body.role not in ("admin", "member"):
         raise HTTPException(status_code=422, detail="role must be 'admin' or 'member'")
     result = await session.execute(
-        select(TeamMember).where(
-            TeamMember.team_id == team_id, TeamMember.user_id == user_id
-        )
+        select(TeamMember).where(TeamMember.team_id == team_id, TeamMember.user_id == user_id)
     )
     member = result.scalar_one_or_none()
     if not member:
         raise HTTPException(status_code=404, detail="Member not found")
     member.role = body.role
     await audit.record(
-        session, request, "update_member_role", "team_member",
+        session,
+        request,
+        "update_member_role",
+        "team_member",
         details={"team_id": str(team_id), "user_id": user_id, "role": body.role},
     )
     await session.commit()
@@ -127,15 +135,16 @@ async def remove_member(
     session: AsyncSession = Depends(get_session),
 ):
     result = await session.execute(
-        select(TeamMember).where(
-            TeamMember.team_id == team_id, TeamMember.user_id == user_id
-        )
+        select(TeamMember).where(TeamMember.team_id == team_id, TeamMember.user_id == user_id)
     )
     member = result.scalar_one_or_none()
     if not member:
         raise HTTPException(status_code=404, detail="Member not found")
     await audit.record(
-        session, request, "remove_member", "team_member",
+        session,
+        request,
+        "remove_member",
+        "team_member",
         details={"team_id": str(team_id), "user_id": user_id},
     )
     await session.delete(member)

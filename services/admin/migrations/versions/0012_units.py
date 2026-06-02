@@ -3,6 +3,7 @@
 Revision ID: 0012
 Revises: 0011
 """
+
 from typing import Sequence, Union
 
 from alembic import op
@@ -30,7 +31,9 @@ def upgrade():
     op.execute("CREATE INDEX IF NOT EXISTS idx_units_area_id ON units(area_id)")
 
     # add unit_id to teams (nullable for migration safety)
-    op.execute("ALTER TABLE teams ADD COLUMN IF NOT EXISTS unit_id UUID REFERENCES units(id) ON DELETE SET NULL")
+    op.execute(
+        "ALTER TABLE teams ADD COLUMN IF NOT EXISTS unit_id UUID REFERENCES units(id) ON DELETE SET NULL"
+    )
     op.execute("CREATE INDEX IF NOT EXISTS idx_teams_unit_id ON teams(unit_id)")
 
     # backfill: for each area, create a "General" unit and assign existing teams to it

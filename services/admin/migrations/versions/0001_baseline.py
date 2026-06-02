@@ -21,6 +21,7 @@ Revision ID: 0001
 Revises:
 Create Date: 2026-05-11
 """
+
 from __future__ import annotations
 
 from typing import Sequence, Union
@@ -120,7 +121,9 @@ def upgrade() -> None:
         )
     """)
     op.execute("CREATE INDEX IF NOT EXISTS team_members_team_id_idx ON team_members (team_id)")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_team_members_developer_id ON team_members(developer_id)")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_team_members_developer_id ON team_members(developer_id)"
+    )
 
     # ------------------------------------------------------------------
     # Policies (per-team-project) and area-level policies
@@ -141,8 +144,12 @@ def upgrade() -> None:
         )
     """)
     # Partial unique indexes so ON CONFLICT works when project_id is NULL
-    op.execute("CREATE UNIQUE INDEX IF NOT EXISTS policies_team_null_proj_uidx ON policies (team_id) WHERE project_id IS NULL")
-    op.execute("CREATE UNIQUE INDEX IF NOT EXISTS policies_team_proj_uidx ON policies (team_id, project_id) WHERE project_id IS NOT NULL")
+    op.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS policies_team_null_proj_uidx ON policies (team_id) WHERE project_id IS NULL"
+    )
+    op.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS policies_team_proj_uidx ON policies (team_id, project_id) WHERE project_id IS NOT NULL"
+    )
 
     op.execute("""
         CREATE TABLE IF NOT EXISTS area_policies (
@@ -185,9 +192,15 @@ def upgrade() -> None:
             session_purpose TEXT
         )
     """)
-    op.execute("CREATE INDEX IF NOT EXISTS cost_records_team_id_created_at_idx ON cost_records (team_id, created_at DESC)")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_cost_records_api_key_id ON cost_records(api_key_id, created_at DESC)")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_cost_records_developer_id ON cost_records(developer_id, created_at DESC)")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS cost_records_team_id_created_at_idx ON cost_records (team_id, created_at DESC)"
+    )
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_cost_records_api_key_id ON cost_records(api_key_id, created_at DESC)"
+    )
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_cost_records_developer_id ON cost_records(developer_id, created_at DESC)"
+    )
 
     op.execute("""
         CREATE TABLE IF NOT EXISTS developer_activity_log (
@@ -203,8 +216,12 @@ def upgrade() -> None:
             PRIMARY KEY (developer_id, date)
         )
     """)
-    op.execute("CREATE INDEX IF NOT EXISTS idx_dev_activity_developer_date ON developer_activity_log(developer_id, date DESC)")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_dev_activity_date ON developer_activity_log(date DESC)")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_dev_activity_developer_date ON developer_activity_log(developer_id, date DESC)"
+    )
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_dev_activity_date ON developer_activity_log(date DESC)"
+    )
 
     op.execute("""
         CREATE TABLE IF NOT EXISTS developer_output_events (
@@ -221,7 +238,9 @@ def upgrade() -> None:
             raw JSONB
         )
     """)
-    op.execute("CREATE INDEX IF NOT EXISTS idx_dev_output_developer ON developer_output_events(developer_id, occurred_at DESC)")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_dev_output_developer ON developer_output_events(developer_id, occurred_at DESC)"
+    )
 
     op.execute("""
         CREATE TABLE IF NOT EXISTS sessions (
@@ -246,9 +265,15 @@ def upgrade() -> None:
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
     """)
-    op.execute("CREATE INDEX IF NOT EXISTS idx_sessions_developer ON sessions(developer_id, first_request_at DESC)")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_sessions_team ON sessions(team_id, first_request_at DESC)")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_sessions_first_request ON sessions(first_request_at DESC)")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_sessions_developer ON sessions(developer_id, first_request_at DESC)"
+    )
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_sessions_team ON sessions(team_id, first_request_at DESC)"
+    )
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_sessions_first_request ON sessions(first_request_at DESC)"
+    )
 
     # ------------------------------------------------------------------
     # Audit log
@@ -265,7 +290,9 @@ def upgrade() -> None:
         )
     """)
     op.execute("CREATE INDEX IF NOT EXISTS audit_log_timestamp_idx ON audit_log (timestamp DESC)")
-    op.execute("CREATE INDEX IF NOT EXISTS audit_log_resource_idx ON audit_log (resource_type, resource_id)")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS audit_log_resource_idx ON audit_log (resource_type, resource_id)"
+    )
 
     # ------------------------------------------------------------------
     # Pricing & model registry (with seeds)
@@ -389,7 +416,9 @@ def upgrade() -> None:
             UNIQUE (plugin_id, team_id)
         )
     """)
-    op.execute("CREATE INDEX IF NOT EXISTS idx_plugin_team_overrides_team ON plugin_team_overrides(team_id)")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_plugin_team_overrides_team ON plugin_team_overrides(team_id)"
+    )
     op.execute("""
         INSERT INTO plugins (name, slug, description, version, author, category, scopes) VALUES
             ('Web Search',       'web-search',       'Search the web using Brave or SerpAPI',                   '1.2.0', 'first-party', 'tool',        ARRAY['internet']),
@@ -458,9 +487,13 @@ def upgrade() -> None:
             source TEXT NOT NULL DEFAULT 'optimization_worker'
         )
     """)
-    op.execute("CREATE INDEX IF NOT EXISTS idx_ai_insights_generated_at ON ai_insights(generated_at DESC)")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_ai_insights_generated_at ON ai_insights(generated_at DESC)"
+    )
     op.execute("CREATE INDEX IF NOT EXISTS idx_ai_insights_team_id ON ai_insights(team_id)")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_ai_insights_developer_id ON ai_insights(developer_id)")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_ai_insights_developer_id ON ai_insights(developer_id)"
+    )
 
     # ------------------------------------------------------------------
     # Guardrails
@@ -485,8 +518,12 @@ def upgrade() -> None:
             updated_by TEXT NOT NULL DEFAULT 'system'
         )
     """)
-    op.execute("CREATE INDEX IF NOT EXISTS guardrails_priority_idx ON guardrails (priority ASC) WHERE enabled = TRUE")
-    op.execute("CREATE UNIQUE INDEX IF NOT EXISTS guardrails_name_org_uidx ON guardrails (name) WHERE team_id IS NULL")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS guardrails_priority_idx ON guardrails (priority ASC) WHERE enabled = TRUE"
+    )
+    op.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS guardrails_name_org_uidx ON guardrails (name) WHERE team_id IS NULL"
+    )
 
     op.execute("""
         CREATE TABLE IF NOT EXISTS guardrail_hits (
@@ -511,8 +548,12 @@ def upgrade() -> None:
             reviewed_at TIMESTAMPTZ
         )
     """)
-    op.execute("CREATE INDEX IF NOT EXISTS guardrail_hits_guardrail_created_idx ON guardrail_hits (guardrail_id, created_at DESC)")
-    op.execute("CREATE INDEX IF NOT EXISTS guardrail_hits_team_created_idx ON guardrail_hits (team_id, created_at DESC)")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS guardrail_hits_guardrail_created_idx ON guardrail_hits (guardrail_id, created_at DESC)"
+    )
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS guardrail_hits_team_created_idx ON guardrail_hits (team_id, created_at DESC)"
+    )
 
 
 def downgrade() -> None:

@@ -24,7 +24,9 @@ class Workflow(Base):
     """
 
     __tablename__ = "workflows"
-    __table_args__ = (UniqueConstraint("team_id", "project_id", "slug", name="workflows_team_proj_slug_uq"),)
+    __table_args__ = (
+        UniqueConstraint("team_id", "project_id", "slug", name="workflows_team_proj_slug_uq"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
@@ -39,7 +41,9 @@ class Workflow(Base):
     name: Mapped[str] = mapped_column(String, nullable=False)
     description: Mapped[str | None] = mapped_column(String, nullable=True)
     latest_version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("NOW()"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("NOW()")
+    )
 
 
 class WorkflowVersion(Base):
@@ -54,4 +58,6 @@ class WorkflowVersion(Base):
     version: Mapped[int] = mapped_column(Integer, nullable=False)
     dag: Mapped[dict] = mapped_column(JSONB, nullable=False)
     created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("NOW()"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("NOW()")
+    )
