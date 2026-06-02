@@ -227,7 +227,20 @@ _PII_PATTERNS = re.compile(
 
 def _prompt_text(body: dict) -> str:
     messages = body.get("messages", [])
-    return " ".join(m.get("content", "") for m in messages if isinstance(m.get("content"), str))
+    parts = []
+    for m in messages:
+        content = m.get("content")
+        if isinstance(content, str):
+            parts.append(content)
+        elif isinstance(content, list):
+            for part in content:
+                if (
+                    isinstance(part, dict)
+                    and part.get("type") == "text"
+                    and isinstance(part.get("text"), str)
+                ):
+                    parts.append(part["text"])
+    return " ".join(parts)
 
 
 def _turn_count(body: dict) -> int:
@@ -519,6 +532,16 @@ async def _handle_chat_completions(request: Request, body: dict):
                 for m in body.get("messages", []):
                     if isinstance(m.get("content"), str):
                         m["content"] = evaluate_guardrails(redact_rules, m["content"], "input").text
+                    elif isinstance(m.get("content"), list):
+                        for part in m["content"]:
+                            if (
+                                isinstance(part, dict)
+                                and part.get("type") == "text"
+                                and isinstance(part.get("text"), str)
+                            ):
+                                part["text"] = evaluate_guardrails(
+                                    redact_rules, part["text"], "input"
+                                ).text
         except Exception:
             pass  # fail-open: never break the request on guardrail errors (block is handled above)
 

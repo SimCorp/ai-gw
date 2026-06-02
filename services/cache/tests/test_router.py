@@ -369,6 +369,108 @@ class TestInputGuardrails:
         assert "sk-secret" not in forwarded_content
         assert "[REDACTED]" in forwarded_content
 
+    async def test_input_block_list_content_is_blocked(self, app_and_client):
+        """A block guardrail must trigger when content is a list of parts (multimodal format)."""
+        app, client = app_and_client
+
+        _BLOCK_RULE = {
+            "id": "gr-block-list",
+            "name": "secret-block",
+            "type": "pattern",
+            "action": "block",
+            "applies_to": "input",
+            "enabled": True,
+            "severity": "high",
+            "config": {"patterns": ["sk-secret"]},
+        }
+
+        guardrail_json = _j.dumps([_BLOCK_RULE])
+
+        async def _redis_get_side_effect(key):
+            if key.startswith("guardrails:"):
+                return guardrail_json
+            return None
+
+        app.state.redis.get = AsyncMock(side_effect=_redis_get_side_effect)
+        app.state.http.post = AsyncMock(return_value=_auth_response_ok())
+
+        list_content_body = {
+            "model": "gpt-4",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [{"type": "text", "text": "sk-secret here"}],
+                }
+            ],
+        }
+
+        with (
+            patch("app.exact.get", new=AsyncMock(return_value=None)),
+            patch("app.semantic.embed", new=AsyncMock(side_effect=Exception("skip"))),
+        ):
+            resp = await client.post(
+                "/v1/chat/completions",
+                json=list_content_body,
+                headers={"Authorization": "Bearer valid"},
+            )
+
+        assert resp.status_code == 400
+        assert resp.json()["error"] == "blocked_by_guardrail"
+
+    async def test_input_redact_list_content_masks_text_parts(self, app_and_client):
+        """A redact guardrail must mask text parts inside list-format message content."""
+        app, client = app_and_client
+
+        forwarded_bodies = []
+
+        async def _post_side_effect(url, **kwargs):
+            if "validate" in url:
+                return _auth_response_ok()
+            if "chat/completions" in url:
+                forwarded_bodies.append(kwargs.get("json", {}))
+                return _litellm_chat_response("ok")
+            return HttpxResponse(200, json={})
+
+        app.state.http.post = AsyncMock(side_effect=_post_side_effect)
+
+        guardrail_json = _j.dumps([_REDACT_RULE])
+
+        async def _redis_get_side_effect(key):
+            if key.startswith("guardrails:"):
+                return guardrail_json
+            return None
+
+        app.state.redis.get = AsyncMock(side_effect=_redis_get_side_effect)
+
+        list_content_body = {
+            "model": "gpt-4",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [{"type": "text", "text": "my key is sk-secret please help"}],
+                }
+            ],
+        }
+
+        with (
+            patch("app.exact.get", new=AsyncMock(return_value=None)),
+            patch("app.semantic.embed", new=AsyncMock(side_effect=Exception("skip"))),
+            patch("app.exact.set", new=AsyncMock()),
+        ):
+            resp = await client.post(
+                "/v1/chat/completions",
+                json=list_content_body,
+                headers={"Authorization": "Bearer valid"},
+            )
+
+        assert resp.status_code == 200
+        assert len(forwarded_bodies) == 1
+        fwd_parts = forwarded_bodies[0]["messages"][0]["content"]
+        assert isinstance(fwd_parts, list)
+        assert fwd_parts[0]["type"] == "text"
+        assert "sk-secret" not in fwd_parts[0]["text"]
+        assert "[REDACTED]" in fwd_parts[0]["text"]
+
 
 # ---------------------------------------------------------------------------
 # Streaming cache hits (stream: true)
