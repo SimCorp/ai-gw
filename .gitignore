@@ -20,6 +20,7 @@ node_modules/
 .turbo/
 dist/
 storybook-static/
+*.tsbuildinfo
 
 # Persistent bind-mount data (survives Docker Desktop restarts)
 data/
@@ -28,3 +29,6 @@ data/
 # Ephemeral Claude Code agent worktrees (created/cleaned per-session)
 .claude/worktrees/
 .claire/worktrees/
+
+# claude-flow local tool state (sessions/data)
+.claude-flow/
