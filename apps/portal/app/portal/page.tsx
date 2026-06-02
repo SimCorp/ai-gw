@@ -45,6 +45,7 @@ interface ApiKey {
   status?: string;
   last_used?: string | null;
   created_at?: string;
+  revoked_at?: string | null;
 }
 
 interface DashboardStats {
@@ -378,99 +379,74 @@ export default function PortalHome() {
         </Link>
       </div>
 
-      {/* Recent requests + API keys */}
-      <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 18 }}>
-        <div className="card">
-          <div className="card__head">
-            <h3 className="card__title">Recent requests</h3>
-            <span className="card__sub">no per-user history endpoint yet</span>
-            <div className="card__actions">
-              <Link href="/portal/usage" className="muted" style={{ fontSize: 12 }}>View all →</Link>
+      {/* Quick links grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
+        <div className="card" style={{ padding: '18px 20px' }}>
+          <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: 'var(--fg-3)', marginBottom: 10 }}>Your API keys</div>
+          {loadingKeys ? (
+            <div style={{ fontSize: 13, color: 'var(--fg-3)' }}>Loading…</div>
+          ) : keys.length === 0 ? (
+            <div style={{ fontSize: 13, color: 'var(--fg-2)', marginBottom: 10 }}>No keys yet — create one to start making API calls.</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginBottom: 10 }}>
+              {keys.filter(k => !k.revoked_at).slice(0, 4).map(key => (
+                <div key={key.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--good)', flexShrink: 0 }} />
+                  <span style={{ fontSize: 13, fontWeight: 500, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{key.name}</span>
+                  {(key.key_prefix ?? key.prefix) && (
+                    <span className="mono" style={{ fontSize: 11.5, color: 'var(--fg-3)' }}>{(key.key_prefix ?? key.prefix)?.slice(0, 8)}…</span>
+                  )}
+                </div>
+              ))}
             </div>
-          </div>
-          <div className="card__body" style={{ padding: "24px 20px", display: "flex", flexDirection: "column", gap: 8 }}>
-            <p style={{ color: "var(--fg-2)", fontSize: 13, margin: 0 }}>
-              Per-request history is not available on the dashboard yet.
-            </p>
-            <Link href="/portal/usage" className="btn" style={{ alignSelf: "flex-start", marginTop: 4 }}>
-              View detailed usage in Usage &amp; spend →
-            </Link>
+          )}
+          <Link href="/portal/keys" className="btn btn--sm" style={{ alignSelf: 'flex-start' as const }}>
+            {keys.filter(k => !k.revoked_at).length > 0 ? 'Manage keys →' : '+ Create key →'}
+          </Link>
+        </div>
+
+        <div className="card" style={{ padding: '18px 20px' }}>
+          <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: 'var(--fg-3)', marginBottom: 10 }}>Quick access</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {[
+              { href: '/portal/playground', label: 'Playground', sub: 'Try models interactively' },
+              { href: '/portal/library',    label: 'Knowledge library', sub: 'Search shared docs & patterns' },
+              { href: '/portal/skills',     label: 'Skills catalog', sub: 'Pre-built AI skill bundles' },
+              { href: '/portal/prompts',    label: 'Prompt library', sub: 'Reusable team prompts' },
+            ].map(l => (
+              <Link key={l.href} href={l.href} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', textDecoration: 'none', borderBottom: '1px solid var(--rule)' }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--fg-1)' }}>{l.label}</div>
+                  <div style={{ fontSize: 11.5, color: 'var(--fg-3)' }}>{l.sub}</div>
+                </div>
+                <span style={{ fontSize: 12, color: 'var(--fg-3)' }}>→</span>
+              </Link>
+            ))}
           </div>
         </div>
 
-        <div className="card">
-          <div className="card__head">
-            <h3 className="card__title">Your API keys</h3>
-            <span className="card__sub">
-              {loadingKeys ? "loading…" : `${keys.length} key${keys.length === 1 ? "" : "s"}`}
-            </span>
-            <div className="card__actions">
-              <Link href="/portal/keys" className="muted" style={{ fontSize: 12 }}>Manage →</Link>
+        <div className="card" style={{ padding: '18px 20px' }}>
+          <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: 'var(--fg-3)', marginBottom: 10 }}>Team usage</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: 12.5, color: 'var(--fg-2)' }}>Spend MTD</span>
+              <span style={{ fontSize: 13, fontWeight: 600 }}>{loadingStats ? '…' : spendDisplay}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: 12.5, color: 'var(--fg-2)' }}>Requests</span>
+              <span style={{ fontSize: 13, fontWeight: 600 }}>{loadingStats ? '…' : requestsDisplay}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: 12.5, color: 'var(--fg-2)' }}>Cache hit rate</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--good)' }}>{loadingStats ? '…' : cacheHitDisplay}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: 12.5, color: 'var(--fg-2)' }}>Tokens used</span>
+              <span style={{ fontSize: 13, fontWeight: 600 }}>{loadingStats ? '…' : tokensDisplay}</span>
             </div>
           </div>
-          <div className="card__body" style={{ padding: "14px 16px" }}>
-            {loadingKeys ? (
-              <div style={{ color: "var(--fg-3)", fontSize: 13 }}>Loading keys…</div>
-            ) : keys.length === 0 ? (
-              <div style={{ color: "var(--fg-3)", fontSize: 13 }}>
-                No API keys yet.{" "}
-                <Link href="/portal/keys" style={{ color: "var(--sc-link)" }}>Create one →</Link>
-              </div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {keys.slice(0, 6).map((key) => {
-                  const isExpiring = key.status === "expiring";
-                  const prefix = key.key_prefix ?? key.prefix ?? "";
-                  const lastUsed = key.last_used ?? null;
-                  return (
-                    <div
-                      key={key.id}
-                      style={{
-                        display: "flex", alignItems: "center", gap: 10,
-                        padding: 10,
-                        border: "1px solid var(--rule)",
-                        borderRadius: 8,
-                        background: isExpiring ? "var(--warn-soft)" : undefined,
-                      }}
-                    >
-                      <div style={{
-                        width: 6, height: 6, borderRadius: "50%",
-                        background: isExpiring ? "var(--warn)" : "var(--good)",
-                      }} />
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 500, fontSize: 13 }}>{key.name}</div>
-                        {prefix && (
-                          <div className="mono" style={{ fontSize: 11.5, color: "var(--fg-3)" }}>{prefix}</div>
-                        )}
-                      </div>
-                      {isExpiring ? (
-                        <button className="btn btn--sm">Rotate</button>
-                      ) : (
-                        <span className="muted" style={{ fontSize: 11 }}>
-                          {lastUsed ?? "—"}
-                        </span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+          <Link href="/portal/usage" className="btn btn--sm">Full usage report →</Link>
         </div>
-      </div>
-
-      {/* Recent sessions replaced with playground link */}
-      <div className="section-h">
-        <h2>Playground sessions</h2>
-        <Link className="a" href="/portal/playground">All sessions →</Link>
-      </div>
-      <div className="card" style={{ padding: "24px 20px" }}>
-        <p style={{ color: "var(--fg-2)", fontSize: 13, margin: "0 0 12px" }}>
-          Session history is stored in the Playground. Open it to pick up where you left off.
-        </p>
-        <Link href="/portal/playground" className="btn btn--primary">
-          Go to Playground →
-        </Link>
       </div>
     </main>
   );
