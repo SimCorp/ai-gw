@@ -222,7 +222,7 @@ jobs:
       - name: Install pip-audit
         run: pip install --quiet pip-audit
 
-      - name: pip-audit (per service, isolated venv)
+      - name: pip-audit (declared deps per service)
         run: |
           set -euo pipefail
           # Advisories with no available fix are allowlisted here with a
@@ -234,18 +234,20 @@ jobs:
           fail=0
           for svc in auth cache observability admin librarian memory scanner; do
             echo "::group::pip-audit $svc"
-            python3 -m venv "/tmp/venv-$svc"
-            "/tmp/venv-$svc/bin/pip" install --quiet "services/$svc"
-            "/tmp/venv-$svc/bin/pip" install --quiet pip-audit
-            "/tmp/venv-$svc/bin/pip-audit" "${IGNORE[@]}" || fail=1
+            # Project mode: resolves and audits the service's DECLARED deps from
+            # pyproject.toml — not the ambient env / pip-audit's own deps.
+            pip-audit "${IGNORE[@]}" "services/$svc" || fail=1
             echo "::endgroup::"
           done
           exit $fail
 
       - name: gitleaks secret scan
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # Use the OSS gitleaks CLI directly: gitleaks-action@v2 requires a paid
+        # GITLEAKS_LICENSE for org-owned repos (SimCorp/ai-gw); the binary does not.
+        run: |
+          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz \
+            | tar -xz -C /usr/local/bin gitleaks
+          gitleaks detect --source . --redact --no-banner
 
   # ────────────────────────────────────────────────────────────────────────────
   # Build & push all images to GHCR
