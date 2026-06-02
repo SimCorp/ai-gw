@@ -545,6 +545,23 @@ async def _handle_chat_completions(request: Request, body: dict):
         except Exception:
             pass  # fail-open: never break the request on guardrail errors (block is handled above)
 
+    # Streaming + output guardrails: fail closed — streaming cannot be scanned
+    has_output_enforcement = any(
+        r.get("enabled", True)
+        and r.get("action") in ("block", "redact")
+        and r.get("applies_to", "input") in ("output", "both")
+        for r in guardrail_rules
+    )
+    if has_output_enforcement and body.get("stream"):
+        return JSONResponse(
+            {
+                "error": "streaming_disabled_by_guardrail",
+                "message": "Streaming is disabled because output guardrails are active for this team.",
+            },
+            status_code=400,
+            headers={"x-request-id": request_id},
+        )
+
     # Hard budget gate — fail open (allow) if Redis is unavailable
     if not await _check_budget(redis, team_id, key_id, policy.budget_hard_cap):
         return JSONResponse(

@@ -588,6 +588,83 @@ class TestStreamingCacheHits:
 
 
 # ---------------------------------------------------------------------------
+# Streaming + output guardrails (Fix 2 — fail closed)
+# ---------------------------------------------------------------------------
+
+_OUTPUT_BLOCK_RULE_FOR_STREAM = {
+    "id": "gr-stream-out-1",
+    "name": "stream-output-block",
+    "type": "pattern",
+    "action": "block",
+    "applies_to": "output",
+    "enabled": True,
+    "severity": "high",
+    "config": {"patterns": ["forbidden-output"]},
+}
+
+_INPUT_ONLY_RULE = {
+    "id": "gr-input-only",
+    "name": "input-only-flag",
+    "type": "pattern",
+    "action": "flag",
+    "applies_to": "input",
+    "enabled": True,
+    "severity": "low",
+    "config": {"patterns": ["anything"]},
+}
+
+
+class TestStreamingOutputGuardrails:
+    async def test_stream_with_output_block_rule_returns_400(self, app_and_client):
+        """stream:true + an output block rule → 400 streaming_disabled_by_guardrail."""
+        app, client = app_and_client
+
+        guardrail_json = _j.dumps([_OUTPUT_BLOCK_RULE_FOR_STREAM])
+
+        async def _redis_get_side_effect(key):
+            if key.startswith("guardrails:"):
+                return guardrail_json
+            return None
+
+        app.state.redis.get = AsyncMock(side_effect=_redis_get_side_effect)
+        app.state.http.post = AsyncMock(return_value=_auth_response_ok())
+
+        resp = await client.post(
+            "/v1/chat/completions",
+            json=STREAM_BODY,
+            headers={"Authorization": "Bearer valid"},
+        )
+
+        assert resp.status_code == 400
+        assert resp.json()["error"] == "streaming_disabled_by_guardrail"
+
+    async def test_stream_with_input_only_rule_not_rejected(self, app_and_client):
+        """stream:true + only an input rule → NOT rejected (cache hit returns SSE)."""
+        app, client = app_and_client
+
+        guardrail_json = _j.dumps([_INPUT_ONLY_RULE])
+
+        async def _redis_get_side_effect(key):
+            if key.startswith("guardrails:"):
+                return guardrail_json
+            return None
+
+        app.state.redis.get = AsyncMock(side_effect=_redis_get_side_effect)
+        app.state.http.post = AsyncMock(return_value=_auth_response_ok())
+
+        with patch("app.exact.get", new=AsyncMock(return_value=_CACHED_RESPONSE)):
+            resp = await client.post(
+                "/v1/chat/completions",
+                json=STREAM_BODY,
+                headers={"Authorization": "Bearer valid"},
+            )
+
+        assert resp.status_code == 200
+        # SSE response — confirm it was not rejected as streaming_disabled_by_guardrail
+        assert "streaming_disabled_by_guardrail" not in resp.text
+
+
+# ---------------------------------------------------------------------------
 # Output guardrails
 # ---------------------------------------------------------------------------
 
