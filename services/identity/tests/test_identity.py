@@ -116,3 +116,37 @@ async def test_identity_summary(client, insert_agent):
     }
 
     assert (await client.get("/agents/ghost/identity")).status_code == 404
+
+
+async def test_heartbeat_404_for_unknown_slug(client):
+    resp = await client.post("/agents/ghost/heartbeat")
+    assert resp.status_code == 404
+
+
+async def test_heartbeat_sets_redis_key_and_updates_last_seen(client, insert_agent):
+    await insert_agent("beater", name="Beater")
+    resp = await client.post("/agents/beater/heartbeat")
+    assert resp.status_code == 200
+    assert resp.json() == {"ok": True, "ttl": 60}
+    client.redis.setex.assert_awaited_once()
+    key, ttl, val = client.redis.setex.call_args[0]
+    assert key == "identity:online:beater"
+    assert ttl == 60
+
+
+async def test_heartbeat_fails_open_when_no_stored_relay_token(client, insert_agent):
+    await insert_agent("open-agent")
+    client.redis.get = AsyncMock(return_value=None)  # no relay token registered
+    resp = await client.post("/agents/open-agent/heartbeat")
+    assert resp.status_code == 200
+
+
+async def test_heartbeat_rejects_wrong_relay_token(client, insert_agent):
+    await insert_agent("guarded")
+    client.redis.get = AsyncMock(return_value="correct-token")
+    bad = await client.post("/agents/guarded/heartbeat", headers={"X-Relay-Token": "wrong"})
+    assert bad.status_code == 401
+    good = await client.post(
+        "/agents/guarded/heartbeat", headers={"X-Relay-Token": "correct-token"}
+    )
+    assert good.status_code == 200
