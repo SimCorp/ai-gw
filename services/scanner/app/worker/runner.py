@@ -1,4 +1,5 @@
 """Redis queue worker — polls for jobs and executes scan containers."""
+
 import asyncio
 import json
 import logging
@@ -24,12 +25,23 @@ _TIER_NMAP_ARGS: dict[str, list[str]] = {
 _TIER_NUCLEI_TEMPLATES: dict[str, list[str]] = {
     "quick": ["http/technologies"],
     "standard": ["http/vulnerabilities", "http/misconfiguration", "http/exposures"],
-    "deep": ["http/vulnerabilities", "http/misconfiguration", "http/exposures",
-             "http/cves", "http/takeovers", "network"],
+    "deep": [
+        "http/vulnerabilities",
+        "http/misconfiguration",
+        "http/exposures",
+        "http/cves",
+        "http/takeovers",
+        "network",
+    ],
 }
 _TIER_GARAK_PROBES: dict[str, list[str]] = {
-    "quick": ["promptinjection.HijackHateHumans", "promptinjection.HijackKillHumans",
-              "leakage.SnapshotData", "jailbreak.Dan", "toxicity.ToxicCommentModel"],
+    "quick": [
+        "promptinjection.HijackHateHumans",
+        "promptinjection.HijackKillHumans",
+        "leakage.SnapshotData",
+        "jailbreak.Dan",
+        "toxicity.ToxicCommentModel",
+    ],
     "standard": ["promptinjection", "jailbreak", "leakage", "xss", "toxicity"],
     "deep": [],
 }
@@ -41,6 +53,7 @@ def _docker():
     global _docker_client
     if _docker_client is None:
         import docker
+
         _docker_client = docker.from_env()
     return _docker_client
 
@@ -54,7 +67,9 @@ async def _post_internal(path: str, payload: Any) -> None:
         )
 
 
-def _run_container(image: str, command: list[str], timeout: int = settings.max_container_timeout_seconds) -> str:
+def _run_container(
+    image: str, command: list[str], timeout: int = settings.max_container_timeout_seconds
+) -> str:
     container = _docker().containers.run(
         image,
         command=command,
@@ -76,6 +91,7 @@ def _run_container(image: str, command: list[str], timeout: int = settings.max_c
 
 async def _run_nmap(job_id: str, target_url: str, tier: str) -> None:
     from urllib.parse import urlparse
+
     host = urlparse(target_url).hostname or target_url
     args = _TIER_NMAP_ARGS.get(tier, _TIER_NMAP_ARGS["quick"])
     command = ["-oX", "-"] + args + [host]
@@ -106,19 +122,29 @@ async def _run_nuclei(job_id: str, target_url: str, tier: str) -> None:
 
 
 async def _run_zap(job_id: str, target_url: str, openapi_spec_url: str) -> None:
-    command = ["zap-api-scan.py", "-t", openapi_spec_url, "-f", "openapi",
-               "-J", "/zap/results.json", "-I"]
+    command = [
+        "zap-api-scan.py",
+        "-t",
+        openapi_spec_url,
+        "-f",
+        "openapi",
+        "-J",
+        "/zap/results.json",
+        "-I",
+    ]
     log.info("Running ZAP for job %s against spec %s", job_id, openapi_spec_url)
     await asyncio.to_thread(_run_container, "zaproxy/zap-stable", command)
-    findings = [{
-        "scanner": "zap",
-        "severity": "info",
-        "category": "api_vuln",
-        "title": "ZAP API scan completed",
-        "description": f"ZAP deep API scan ran against OpenAPI spec at {openapi_spec_url}.",
-        "evidence": {"spec_url": openapi_spec_url},
-        "remediation": None,
-    }]
+    findings = [
+        {
+            "scanner": "zap",
+            "severity": "info",
+            "category": "api_vuln",
+            "title": "ZAP API scan completed",
+            "description": f"ZAP deep API scan ran against OpenAPI spec at {openapi_spec_url}.",
+            "evidence": {"spec_url": openapi_spec_url},
+            "remediation": None,
+        }
+    ]
     await _post_internal(f"/internal/jobs/{job_id}/findings", {"findings": findings})
 
 
@@ -128,10 +154,14 @@ async def _run_garak(job_id: str, target_url: str, tier: str) -> None:
     for p in probes:
         probe_args += ["--probe", p]
     command = [
-        "--model_type", "rest",
-        "--model_name", target_url,
-        "--report_prefix", "/tmp/garak_out",
-        "--parallel_requests", "1",
+        "--model_type",
+        "rest",
+        "--model_name",
+        target_url,
+        "--report_prefix",
+        "/tmp/garak_out",
+        "--parallel_requests",
+        "1",
     ] + probe_args
     log.info("Running garak for job %s", job_id)
     raw_output = await asyncio.to_thread(_run_container, "ai-gateway/garak:latest", command)
@@ -168,18 +198,24 @@ async def process_job(job_payload: dict) -> None:
         status = "completed"
     except Exception as exc:
         log.error("Job %s failed: %s", job_id, exc)
-        await _post_internal(f"/internal/jobs/{job_id}/complete", {
-            "status": "failed",
-            "error_message": str(exc),
-            "partial_results": False,
-        })
+        await _post_internal(
+            f"/internal/jobs/{job_id}/complete",
+            {
+                "status": "failed",
+                "error_message": str(exc),
+                "partial_results": False,
+            },
+        )
         return
 
-    await _post_internal(f"/internal/jobs/{job_id}/complete", {
-        "status": status,
-        "error_message": None,
-        "partial_results": partial,
-    })
+    await _post_internal(
+        f"/internal/jobs/{job_id}/complete",
+        {
+            "status": status,
+            "error_message": None,
+            "partial_results": partial,
+        },
+    )
 
 
 async def run_worker(redis) -> None:

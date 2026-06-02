@@ -4,6 +4,7 @@
 Revision ID: 0019
 Revises: 0018
 """
+
 from typing import Sequence, Union
 
 import sqlalchemy as sa
@@ -16,12 +17,17 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade():
-    op.add_column("users", sa.Column(
-        "password_changed_at",
-        sa.DateTime(timezone=True),
-        nullable=True,
-    ))
-    op.execute("UPDATE users SET password_changed_at = created_at WHERE password_changed_at IS NULL")
+    op.add_column(
+        "users",
+        sa.Column(
+            "password_changed_at",
+            sa.DateTime(timezone=True),
+            nullable=True,
+        ),
+    )
+    op.execute(
+        "UPDATE users SET password_changed_at = created_at WHERE password_changed_at IS NULL"
+    )
 
 
 def downgrade():

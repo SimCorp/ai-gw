@@ -16,6 +16,7 @@ will return errors until a follow-up migration is applied:
   - create_invitation / accept_invitation / bulk_invite
   - create_service_account / list_service_accounts
 """
+
 from __future__ import annotations
 
 import csv as _csv
@@ -69,20 +70,24 @@ def require_node_role(min_role: str = "viewer"):
 
     Returns {"id": str, "path": str} on success.
     """
+
     async def _dep(
         node_id: str,
         current_user: dict = Depends(get_current_user),
         session: AsyncSession = Depends(get_session),
     ):
-        row = (await session.execute(
-            text("SELECT id, path FROM organization_nodes WHERE id = CAST(:nid AS uuid)"),
-            {"nid": node_id},
-        )).first()
+        row = (
+            await session.execute(
+                text("SELECT id, path FROM organization_nodes WHERE id = CAST(:nid AS uuid)"),
+                {"nid": node_id},
+            )
+        ).first()
         if not row:
             raise HTTPException(404, "Node not found")
         if not can_access(current_user, row[1], min_role):
             raise HTTPException(403, "Insufficient permissions for this node")
         return {"id": str(row[0]), "path": row[1]}
+
     return _dep
 
 
@@ -91,12 +96,13 @@ _SESSION_TTL_REMEMBER = int(timedelta(days=30).total_seconds())
 _SESSION_TTL_DEV = int(timedelta(days=7).total_seconds())
 _PBKDF2_ITERS = 390_000
 
-_EMAIL_RE = re.compile(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$')
+_EMAIL_RE = re.compile(r"^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$")
 
 
 # ---------------------------------------------------------------------------
 # Password helpers — support both bcrypt (admin) and pbkdf2 (legacy dev)
 # ---------------------------------------------------------------------------
+
 
 def _hash_bcrypt(password: str) -> str:
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt(rounds=12)).decode()
@@ -134,6 +140,7 @@ def _validate_password_strength(password: str) -> None:
 # Session helpers
 # ---------------------------------------------------------------------------
 
+
 def _session_key(token: str) -> str:
     return f"session:{token}"
 
@@ -152,6 +159,7 @@ async def _get_session_data(token: str, redis) -> dict | None:
 # Auth dependency
 # ---------------------------------------------------------------------------
 
+
 async def get_current_user(
     authorization: str | None = Header(default=None),
     request: Request = None,
@@ -166,6 +174,7 @@ async def get_current_user(
     Bearer session and no matching admin token still get 401.
     """
     from app.config import settings as _cfg
+
     # When called directly (not via FastAPI DI) — e.g. _get_current_developer,
     # admin_auth.me — the Header(default=None) params arrive as their FieldInfo
     # sentinel rather than a resolved value. Normalize non-str to None.
@@ -173,12 +182,18 @@ async def get_current_user(
         x_admin_token = None
     if not isinstance(authorization, str):
         authorization = None
-    if x_admin_token and _cfg.admin_token and secrets.compare_digest(x_admin_token, _cfg.admin_token):
+    if (
+        x_admin_token
+        and _cfg.admin_token
+        and secrets.compare_digest(x_admin_token, _cfg.admin_token)
+    ):
         data = {
             "user_id": None,
             "email": "admin-token@local",
             "display_name": "Admin Token",
-            "roles": [{"role": "platform_admin", "node_path": "/", "node_id": None, "node_name": "root"}],
+            "roles": [
+                {"role": "platform_admin", "node_path": "/", "node_id": None, "node_name": "root"}
+            ],
             "primary_node_id": None,
         }
         if request is not None:
@@ -196,17 +211,21 @@ async def get_current_user(
     # Reject sessions issued before a password change (D3)
     if data.get("issued_at"):
         import datetime as _dt
+
         cached = await redis.get(f"pwd_changed:{data['user_id']}")
         if cached:
             changed_ts = _dt.datetime.fromisoformat(
                 cached if isinstance(cached, str) else cached.decode()
             ).timestamp()
             if data["issued_at"] < changed_ts:
-                raise HTTPException(status_code=401, detail="Session invalidated — password changed")
+                raise HTTPException(
+                    status_code=401, detail="Session invalidated — password changed"
+                )
 
     # Contractor access expiry check
     if data.get("access_expires_at"):
         import datetime as _dt2
+
         try:
             expires = _dt2.datetime.fromisoformat(data["access_expires_at"])
             if expires.tzinfo is None:
@@ -217,18 +236,26 @@ async def get_current_user(
             pass
 
     # Reload session payload from DB if node assignment changed
-    if await redis.get(f"user_node_changed:{data['user_id']}") or await redis.get(f"user_team_changed:{data['user_id']}"):
+    if await redis.get(f"user_node_changed:{data['user_id']}") or await redis.get(
+        f"user_team_changed:{data['user_id']}"
+    ):
         async with async_session_maker() as db_session:
-            row = (await db_session.execute(
-                text("""
+            row = (
+                (
+                    await db_session.execute(
+                        text("""
                     SELECT u.id, u.email, u.display_name, u.status, u.primary_node_id,
                            n.name AS node_name
                     FROM users u
                     LEFT JOIN organization_nodes n ON n.id = u.primary_node_id
                     WHERE u.id = CAST(:uid AS uuid)
                 """),
-                {"uid": data["user_id"]},
-            )).mappings().first()
+                        {"uid": data["user_id"]},
+                    )
+                )
+                .mappings()
+                .first()
+            )
             if row:
                 # Re-use existing roles from session (group IDs not available without re-login)
                 roles = data.get("roles", [])
@@ -274,6 +301,7 @@ def has_role(user: dict, role: str, scope_id: str | None = None) -> bool:
 # These will be removed once legacy routers are fully deleted.
 # ---------------------------------------------------------------------------
 
+
 async def _can_manage_team(user: dict, team_id: str, session=None) -> bool:
     """Deprecated. Use can_access() with organization_nodes paths."""
     return has_role(user, "platform_admin")
@@ -293,11 +321,13 @@ async def _can_manage_area(user: dict, area_id: str) -> bool:
 # Rate limiting
 # ---------------------------------------------------------------------------
 
+
 async def _check_rate_limit(redis, identifier: str, max_attempts: int = 10, window: int = 60):
     # Skip login rate-limiting when auth is bypassed (dev/CI): the integration
     # suite makes many login attempts from one host, and auth is non-enforcing
     # there anyway. Production (dev_bypass_auth=False) is unaffected.
     from app.config import settings as _cfg
+
     if _cfg.dev_bypass_auth:
         return
     key = f"login_rl:{identifier}"
@@ -311,6 +341,7 @@ async def _check_rate_limit(redis, identifier: str, max_attempts: int = 10, wind
 # ---------------------------------------------------------------------------
 # Schemas
 # ---------------------------------------------------------------------------
+
 
 class LoginRequest(BaseModel):
     email: str
@@ -377,6 +408,7 @@ class ForceResetRequest(BaseModel):
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 async def _load_role_assignments(session: AsyncSession, group_ids: list[str]) -> list[dict]:
     """Load role assignments for a list of Entra group IDs.
 
@@ -384,15 +416,21 @@ async def _load_role_assignments(session: AsyncSession, group_ids: list[str]) ->
     """
     if not group_ids:
         return []
-    rows = (await session.execute(
-        text("""
+    rows = (
+        (
+            await session.execute(
+                text("""
             SELECT ra.role, n.path AS node_path, n.id::text AS node_id, n.name AS node_name
             FROM role_assignments ra
             JOIN organization_nodes n ON n.id = ra.node_id
             WHERE ra.entra_group_id = ANY(:gids)
         """),
-        {"gids": group_ids},
-    )).mappings().all()
+                {"gids": group_ids},
+            )
+        )
+        .mappings()
+        .all()
+    )
     return [dict(r) for r in rows]
 
 
@@ -431,16 +469,21 @@ async def _issue_session(redis, payload: dict, ttl: int) -> str:
 # Routes
 # ---------------------------------------------------------------------------
 
+
 @router.post("/login")
 async def login(
     body: LoginRequest,
     request: Request,
     session: AsyncSession = Depends(get_session),
 ):
-    await _check_rate_limit(request.app.state.redis, request.client.host if request.client else "unknown")
+    await _check_rate_limit(
+        request.app.state.redis, request.client.host if request.client else "unknown"
+    )
 
-    row = (await session.execute(
-        text("""
+    row = (
+        (
+            await session.execute(
+                text("""
             SELECT u.id, u.email, u.display_name, u.password_hash, u.hash_type,
                    u.status, u.must_change_password, u.primary_node_id,
                    u.is_contractor, u.access_expires_at, u.allowed_models,
@@ -449,8 +492,12 @@ async def login(
             LEFT JOIN organization_nodes n ON n.id = u.primary_node_id
             WHERE u.email = :email
         """),
-        {"email": body.email},
-    )).mappings().first()
+                {"email": body.email},
+            )
+        )
+        .mappings()
+        .first()
+    )
 
     # Constant-time dummy verify on miss
     _dummy = "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TiGkn3mK3KH0K2aIvFVe7sGOHMCC"
@@ -459,9 +506,19 @@ async def login(
 
     if not _verify_password(body.password, stored_hash, hash_type) or not row:
         from app import audit as _audit
+
         try:
-            await _audit.record(session, request, "login_failure", "user", None,
-                                {"email": body.email, "ip": str(request.client.host) if request and request.client else None})
+            await _audit.record(
+                session,
+                request,
+                "login_failure",
+                "user",
+                None,
+                {
+                    "email": body.email,
+                    "ip": str(request.client.host) if request and request.client else None,
+                },
+            )
             await session.commit()
         except Exception:
             pass
@@ -474,7 +531,9 @@ async def login(
     if hash_type == "pbkdf2":
         new_hash = _hash_bcrypt(body.password)
         await session.execute(
-            text("UPDATE users SET password_hash = :h, hash_type = 'bcrypt', updated_at = NOW() WHERE id = CAST(:id AS uuid)"),
+            text(
+                "UPDATE users SET password_hash = :h, hash_type = 'bcrypt', updated_at = NOW() WHERE id = CAST(:id AS uuid)"
+            ),
             {"h": new_hash, "id": str(row["id"])},
         )
 
@@ -485,11 +544,22 @@ async def login(
     await session.commit()
 
     from app import audit as _audit
-    await _audit.record(session, request, "login_success", "user", str(row["id"]),
-                        {"email": body.email, "ip": str(request.client.host) if request and request.client else None})
+
+    await _audit.record(
+        session,
+        request,
+        "login_success",
+        "user",
+        str(row["id"]),
+        {
+            "email": body.email,
+            "ip": str(request.client.host) if request and request.client else None,
+        },
+    )
 
     # Dev escape hatch: ENVIRONMENT=development bcrypt login → synthetic platform_admin
     import os as _os
+
     _env = _os.getenv("ENVIRONMENT", "production")
     if _env in ("development", "test", "ci"):
         roles = [{"role": "platform_admin", "node_path": "/", "node_id": None, "node_name": "root"}]
@@ -511,6 +581,7 @@ async def login(
         ttl = _SESSION_TTL_DEV
 
     import time as _time
+
     payload["issued_at"] = _time.time()
 
     token = await _issue_session(request.app.state.redis, payload, ttl)
@@ -535,16 +606,21 @@ async def register(
     session: AsyncSession = Depends(get_session),
 ):
     """Self-service developer registration."""
-    await _check_rate_limit(request.app.state.redis, request.client.host if request.client else "unknown")
+    await _check_rate_limit(
+        request.app.state.redis, request.client.host if request.client else "unknown"
+    )
 
-    exists = (await session.execute(
-        text("SELECT id FROM users WHERE email = :email"),
-        {"email": body.email},
-    )).first()
+    exists = (
+        await session.execute(
+            text("SELECT id FROM users WHERE email = :email"),
+            {"email": body.email},
+        )
+    ).first()
     if exists:
         raise HTTPException(status_code=409, detail="Email already registered")
 
     import uuid
+
     user_id = str(uuid.uuid4())
     pw_hash = _hash_bcrypt(body.password)
     await session.execute(
@@ -552,7 +628,12 @@ async def register(
             INSERT INTO users (id, email, display_name, password_hash, hash_type, status)
             VALUES (CAST(:id AS uuid), :email, :display_name, :hash, 'bcrypt', 'active')
         """),
-        {"id": user_id, "email": body.email, "display_name": body.display_name.strip(), "hash": pw_hash},
+        {
+            "id": user_id,
+            "email": body.email,
+            "display_name": body.display_name.strip(),
+            "hash": pw_hash,
+        },
     )
     await session.commit()
 
@@ -613,12 +694,20 @@ async def change_password(
 ):
     user = await get_current_user(authorization, request)
 
-    row = (await session.execute(
-        text("SELECT id, password_hash, hash_type FROM users WHERE id = CAST(:id AS uuid)"),
-        {"id": user["user_id"]},
-    )).mappings().first()
+    row = (
+        (
+            await session.execute(
+                text("SELECT id, password_hash, hash_type FROM users WHERE id = CAST(:id AS uuid)"),
+                {"id": user["user_id"]},
+            )
+        )
+        .mappings()
+        .first()
+    )
 
-    if not row or not _verify_password(body.current_password, row["password_hash"], row["hash_type"]):
+    if not row or not _verify_password(
+        body.current_password, row["password_hash"], row["hash_type"]
+    ):
         raise HTTPException(status_code=401, detail="Current password is incorrect")
 
     new_hash = _hash_bcrypt(body.new_password)
@@ -644,12 +733,16 @@ async def change_password(
 # User management (admin-only)
 # ---------------------------------------------------------------------------
 
+
 @router.get("/users")
 async def list_users(
     admin: dict = Depends(require_platform_admin),
     session: AsyncSession = Depends(get_session),
 ):
-    rows = (await session.execute(text("""
+    rows = (
+        (
+            await session.execute(
+                text("""
         SELECT u.id, u.email, u.display_name, u.status, u.must_change_password,
                u.last_login_at, u.created_at,
                COALESCE(
@@ -661,10 +754,20 @@ async def list_users(
         LEFT JOIN node_members nm ON nm.user_id = u.id::text
         GROUP BY u.id
         ORDER BY u.created_at DESC
-    """))).mappings().all()
+    """)
+            )
+        )
+        .mappings()
+        .all()
+    )
     import json as _json
+
     return [
-        {**dict(r), "id": str(r["id"]), "roles": _json.loads(r["roles"]) if isinstance(r["roles"], str) else r["roles"]}
+        {
+            **dict(r),
+            "id": str(r["id"]),
+            "roles": _json.loads(r["roles"]) if isinstance(r["roles"], str) else r["roles"],
+        }
         for r in rows
     ]
 
@@ -688,7 +791,7 @@ async def grant_role(
     raise HTTPException(
         status_code=501,
         detail="Per-user role grants are managed via Entra group mappings "
-               "(role_assignments) now; assign the user's Entra group to a node instead.",
+        "(role_assignments) now; assign the user's Entra group to a node instead.",
     )
 
 
@@ -704,7 +807,7 @@ async def revoke_role(
     raise HTTPException(
         status_code=501,
         detail="Per-user role revocation is managed via Entra group mappings "
-               "(role_assignments) now; remove the user's Entra group from the node instead.",
+        "(role_assignments) now; remove the user's Entra group from the node instead.",
     )
 
 
@@ -725,8 +828,10 @@ async def set_user_status(
     # Invalidate all sessions for suspended users (D3)
     if status == "suspended":
         import datetime as _dt
+
         await request.app.state.redis.setex(
-            f"pwd_changed:{user_id}", 86400,
+            f"pwd_changed:{user_id}",
+            86400,
             _dt.datetime.now(_dt.timezone.utc).isoformat(),
         )
     await session.commit()
@@ -757,6 +862,7 @@ async def update_user_profile(
 # D3 — Password reset (forgot / reset / force-reset)
 # ---------------------------------------------------------------------------
 
+
 @router.post("/forgot-password")
 async def forgot_password(
     body: ForgotPasswordRequest,
@@ -765,11 +871,20 @@ async def forgot_password(
 ):
     """Always returns 200 to prevent email enumeration."""
     import os
+
     redis = request.app.state.redis
-    row = (await session.execute(
-        text("SELECT id, display_name, email FROM users WHERE email = :e AND status = 'active'"),
-        {"e": body.email},
-    )).mappings().first()
+    row = (
+        (
+            await session.execute(
+                text(
+                    "SELECT id, display_name, email FROM users WHERE email = :e AND status = 'active'"
+                ),
+                {"e": body.email},
+            )
+        )
+        .mappings()
+        .first()
+    )
 
     raw_token = None
     reset_url = None
@@ -782,6 +897,7 @@ async def forgot_password(
         reset_url = f"{portal_url}/reset-password?token={raw_token}"
 
         from app.email import password_reset_html, send_email
+
         await send_email(
             row["email"],
             "Reset your AI Gateway password",
@@ -803,6 +919,7 @@ async def reset_password(
 ):
     import datetime as _dt
     import os
+
     redis = request.app.state.redis
     token_hash = hashlib.sha256(body.token.encode()).hexdigest()
     user_id = await redis.get(f"reset:{token_hash}")
@@ -825,18 +942,29 @@ async def reset_password(
     await redis.delete(f"reset:{token_hash}")
 
     # Cache the new timestamp so get_current_user can reject stale sessions fast
-    await redis.setex(f"pwd_changed:{user_id_str}", 7200,
-                      _dt.datetime.now(_dt.timezone.utc).isoformat())
+    await redis.setex(
+        f"pwd_changed:{user_id_str}", 7200, _dt.datetime.now(_dt.timezone.utc).isoformat()
+    )
 
-    row = (await session.execute(
-        text("SELECT email, display_name FROM users WHERE id = CAST(:uid AS uuid)"),
-        {"uid": user_id_str},
-    )).mappings().first()
+    row = (
+        (
+            await session.execute(
+                text("SELECT email, display_name FROM users WHERE id = CAST(:uid AS uuid)"),
+                {"uid": user_id_str},
+            )
+        )
+        .mappings()
+        .first()
+    )
     if row:
         portal_url = os.getenv("PORTAL_BASE_URL", "http://localhost:3001")
         from app.email import password_changed_html, send_email
-        await send_email(row["email"], "Your password was changed",
-                         password_changed_html(portal_url, row["display_name"] or row["email"]))
+
+        await send_email(
+            row["email"],
+            "Your password was changed",
+            password_changed_html(portal_url, row["display_name"] or row["email"]),
+        )
 
     return {"message": "Password reset successfully"}
 
@@ -849,6 +977,7 @@ async def force_password_reset(
     session: AsyncSession = Depends(get_session),
 ):
     import datetime as _dt
+
     redis = request.app.state.redis
 
     if body.temporary_password:
@@ -862,7 +991,9 @@ async def force_password_reset(
         )
     else:
         await session.execute(
-            text("UPDATE users SET must_change_password=TRUE, password_changed_at=NOW() WHERE id = CAST(:uid AS uuid)"),
+            text(
+                "UPDATE users SET must_change_password=TRUE, password_changed_at=NOW() WHERE id = CAST(:uid AS uuid)"
+            ),
             {"uid": body.user_id},
         )
 
@@ -872,8 +1003,9 @@ async def force_password_reset(
     await redis.setex(f"reset:{token_hash}", 3600, body.user_id)
 
     # Cache invalidation — force logout of all existing sessions
-    await redis.setex(f"pwd_changed:{body.user_id}", 7200,
-                      _dt.datetime.now(_dt.timezone.utc).isoformat())
+    await redis.setex(
+        f"pwd_changed:{body.user_id}", 7200, _dt.datetime.now(_dt.timezone.utc).isoformat()
+    )
 
     await session.commit()
     return {"reset_token": raw_token, "message": "User must change password on next login"}
@@ -882,6 +1014,7 @@ async def force_password_reset(
 # ---------------------------------------------------------------------------
 # D4 — Session visibility & management
 # ---------------------------------------------------------------------------
+
 
 @router.get("/sessions")
 async def list_sessions(
@@ -895,10 +1028,12 @@ async def list_sessions(
     result = []
     for sid_raw, score in entries:
         sid = sid_raw if isinstance(sid_raw, str) else sid_raw.decode()
-        result.append({
-            "session_id": sid,
-            "issued_at": score,
-        })
+        result.append(
+            {
+                "session_id": sid,
+                "issued_at": score,
+            }
+        )
     return result
 
 
@@ -936,6 +1071,7 @@ async def revoke_session(
 # ---------------------------------------------------------------------------
 # Contractor settings
 # ---------------------------------------------------------------------------
+
 
 class ContractorUpdateRequest(BaseModel):
     is_contractor: bool | None = None
@@ -1035,21 +1171,27 @@ async def create_invitation(
         if not is_team_admin:
             raise HTTPException(status_code=403, detail="Insufficient permissions to invite users")
         if body.role not in ("developer", "viewer"):
-            raise HTTPException(status_code=403, detail="Team admins can only invite developers or viewers")
+            raise HTTPException(
+                status_code=403, detail="Team admins can only invite developers or viewers"
+            )
         if body.scope_type != "team":
             raise HTTPException(status_code=403, detail="Team admins must invite to team scope")
         # Verify they admin that specific team
-        team_scopes = [r.get("scope_id") for r in caller.get("roles", []) if r["role"] == "team_admin"]
+        team_scopes = [
+            r.get("scope_id") for r in caller.get("roles", []) if r["role"] == "team_admin"
+        ]
         if body.scope_id not in team_scopes:
             raise HTTPException(status_code=403, detail="You do not manage that team")
 
     import uuid as _uuid
+
     token = secrets.token_urlsafe(32)
     token_hash = _hash_token(token)
     invite_id = str(_uuid.uuid4())
     from datetime import UTC as _UTC
     from datetime import datetime
     from datetime import timedelta as _td
+
     expires_at = datetime.now(_UTC) + _td(hours=48)
 
     await session.execute(
@@ -1062,9 +1204,13 @@ async def create_invitation(
                  CAST(:by AS uuid), :expires_at)
         """),
         {
-            "id": invite_id, "email": body.email, "role": body.role,
-            "scope_type": body.scope_type, "scope_id": body.scope_id,
-            "token_hash": token_hash, "by": caller["user_id"],
+            "id": invite_id,
+            "email": body.email,
+            "role": body.role,
+            "scope_type": body.scope_type,
+            "scope_id": body.scope_id,
+            "token_hash": token_hash,
+            "by": caller["user_id"],
             "expires_at": expires_at,
         },
     )
@@ -1092,18 +1238,30 @@ async def list_invitations(
     is_platform_admin = "platform_admin" in roles
 
     if is_platform_admin:
-        rows = (await session.execute(text("""
+        rows = (
+            (
+                await session.execute(
+                    text("""
             SELECT i.id, i.email, i.role, i.scope_type, i.scope_id::text,
                    i.expires_at, i.accepted_at, i.created_at,
                    u.email AS invited_by_email
             FROM user_invitations i
             LEFT JOIN users u ON u.id = i.invited_by
             ORDER BY i.created_at DESC
-        """))).mappings().all()
+        """)
+                )
+            )
+            .mappings()
+            .all()
+        )
     elif "team_admin" in roles:
-        team_scopes = [r.get("scope_id") for r in caller.get("roles", []) if r["role"] == "team_admin"]
-        rows = (await session.execute(
-            text("""
+        team_scopes = [
+            r.get("scope_id") for r in caller.get("roles", []) if r["role"] == "team_admin"
+        ]
+        rows = (
+            (
+                await session.execute(
+                    text("""
                 SELECT i.id, i.email, i.role, i.scope_type, i.scope_id::text,
                        i.expires_at, i.accepted_at, i.created_at,
                        u.email AS invited_by_email
@@ -1112,8 +1270,12 @@ async def list_invitations(
                 WHERE i.scope_id = ANY(CAST(:scopes AS uuid[]))
                 ORDER BY i.created_at DESC
             """),
-            {"scopes": [s for s in team_scopes if s]},
-        )).mappings().all()
+                    {"scopes": [s for s in team_scopes if s]},
+                )
+            )
+            .mappings()
+            .all()
+        )
     else:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
@@ -1143,32 +1305,43 @@ async def accept_invitation(
     request: Request,
     session: AsyncSession = Depends(get_session),
 ):
-    await _check_rate_limit(request.app.state.redis, request.client.host if request.client else "unknown")
+    await _check_rate_limit(
+        request.app.state.redis, request.client.host if request.client else "unknown"
+    )
     token_hash = _hash_token(body.token)
 
-    invite = (await session.execute(
-        text("""
+    invite = (
+        (
+            await session.execute(
+                text("""
             SELECT id, email, role, scope_type, scope_id::text
             FROM user_invitations
             WHERE token_hash = :th
               AND accepted_at IS NULL
               AND expires_at > NOW()
         """),
-        {"th": token_hash},
-    )).mappings().first()
+                {"th": token_hash},
+            )
+        )
+        .mappings()
+        .first()
+    )
 
     if not invite:
         raise HTTPException(status_code=404, detail="Invitation not found or expired")
 
     # Check email not already registered
-    existing = (await session.execute(
-        text("SELECT id FROM users WHERE email = :email"),
-        {"email": invite["email"]},
-    )).first()
+    existing = (
+        await session.execute(
+            text("SELECT id FROM users WHERE email = :email"),
+            {"email": invite["email"]},
+        )
+    ).first()
     if existing:
         raise HTTPException(status_code=409, detail="Email already registered")
 
     import uuid as _uuid
+
     user_id = str(_uuid.uuid4())
     pw_hash = _hash_bcrypt(body.password)
 
@@ -1177,8 +1350,12 @@ async def accept_invitation(
             INSERT INTO users (id, email, display_name, password_hash, hash_type, status)
             VALUES (CAST(:id AS uuid), :email, :display_name, :hash, 'bcrypt', 'active')
         """),
-        {"id": user_id, "email": invite["email"],
-         "display_name": body.display_name.strip(), "hash": pw_hash},
+        {
+            "id": user_id,
+            "email": invite["email"],
+            "display_name": body.display_name.strip(),
+            "hash": pw_hash,
+        },
     )
     # Migration 0025 dropped user_roles; the invite's role is no longer persisted
     # per-user. Role membership is now derived from Entra group mappings
@@ -1243,10 +1420,14 @@ async def bulk_invite(
             errors.append({"row": i, "reason": f"Invalid role: {role!r}"})
             continue
 
-        existing = (await session.execute(
-            text("SELECT 1 FROM users WHERE email=:e UNION SELECT 1 FROM user_invitations WHERE email=:e AND accepted_at IS NULL"),
-            {"e": email},
-        )).first()
+        existing = (
+            await session.execute(
+                text(
+                    "SELECT 1 FROM users WHERE email=:e UNION SELECT 1 FROM user_invitations WHERE email=:e AND accepted_at IS NULL"
+                ),
+                {"e": email},
+            )
+        ).first()
         if existing:
             skipped += 1
             continue
@@ -1262,18 +1443,29 @@ async def bulk_invite(
                 VALUES (CAST(:id AS uuid), :email, :role, :scope_type,
                         CAST(:scope_id AS uuid), :token_hash, CAST(:by AS uuid), :expires_at)
             """),
-            {"id": str(_uuid.uuid4()), "email": email, "role": role,
-             "scope_type": scope_type, "scope_id": scope_id,
-             "token_hash": token_hash, "by": current_user["user_id"], "expires_at": expires_at},
+            {
+                "id": str(_uuid.uuid4()),
+                "email": email,
+                "role": role,
+                "scope_type": scope_type,
+                "scope_id": scope_id,
+                "token_hash": token_hash,
+                "by": current_user["user_id"],
+                "expires_at": expires_at,
+            },
         )
 
         portal_url = os.getenv("PORTAL_BASE_URL", "http://localhost:3001")
         invite_link = f"{portal_url}/accept-invite?token={raw_token}"
         try:
             from app.email import send_email
-            await send_email(email, "You've been invited to AI Gateway",
+
+            await send_email(
+                email,
+                "You've been invited to AI Gateway",
                 f"<html><body><p>Invited as <strong>{role}</strong>. "
-                f"<a href='{invite_link}'>Accept invitation</a> (expires 7 days).</p></body></html>")
+                f"<a href='{invite_link}'>Accept invitation</a> (expires 7 days).</p></body></html>",
+            )
         except Exception:
             pass
         sent += 1
@@ -1285,6 +1477,7 @@ async def bulk_invite(
 # ---------------------------------------------------------------------------
 # Service accounts
 # ---------------------------------------------------------------------------
+
 
 class CreateServiceAccountRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
@@ -1304,6 +1497,7 @@ async def create_service_account(
 
     import hashlib as _hl
     import uuid as _uuid
+
     sa_id = str(_uuid.uuid4())
     raw_key = f"sa_{secrets.token_urlsafe(32)}"
     key_prefix = raw_key[:12]
@@ -1319,8 +1513,11 @@ async def create_service_account(
                  CAST(:owner AS uuid), CAST(:team AS uuid), CAST(:by AS uuid))
         """),
         {
-            "id": sa_id, "name": body.name, "desc": body.description,
-            "kh": key_hash, "kp": key_prefix,
+            "id": sa_id,
+            "name": body.name,
+            "desc": body.description,
+            "kh": key_hash,
+            "kp": key_prefix,
             "owner": caller["user_id"],
             "team": body.team_id,
             "by": caller["user_id"],
@@ -1346,7 +1543,10 @@ async def list_service_accounts(
     is_platform_admin = "platform_admin" in roles
 
     if is_platform_admin:
-        rows = (await session.execute(text("""
+        rows = (
+            (
+                await session.execute(
+                    text("""
             SELECT sa.id, sa.name, sa.description, sa.key_prefix, sa.status,
                    sa.team_id::text, t.name AS team_name,
                    sa.last_used_at, sa.created_at,
@@ -1355,11 +1555,20 @@ async def list_service_accounts(
             LEFT JOIN organization_nodes t ON t.id = sa.team_id
             LEFT JOIN users u ON u.id = sa.owner_user_id
             ORDER BY sa.created_at DESC
-        """))).mappings().all()
+        """)
+                )
+            )
+            .mappings()
+            .all()
+        )
     elif "team_admin" in roles:
-        team_scopes = [r.get("scope_id") for r in caller.get("roles", []) if r["role"] == "team_admin"]
-        rows = (await session.execute(
-            text("""
+        team_scopes = [
+            r.get("scope_id") for r in caller.get("roles", []) if r["role"] == "team_admin"
+        ]
+        rows = (
+            (
+                await session.execute(
+                    text("""
                 SELECT sa.id, sa.name, sa.description, sa.key_prefix, sa.status,
                        sa.team_id::text, t.name AS team_name,
                        sa.last_used_at, sa.created_at,
@@ -1370,8 +1579,12 @@ async def list_service_accounts(
                 WHERE sa.team_id = ANY(CAST(:scopes AS uuid[]))
                 ORDER BY sa.created_at DESC
             """),
-            {"scopes": [s for s in team_scopes if s]},
-        )).mappings().all()
+                    {"scopes": [s for s in team_scopes if s]},
+                )
+            )
+            .mappings()
+            .all()
+        )
     else:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
@@ -1391,7 +1604,9 @@ async def set_service_account_status(
     if status not in ("active", "suspended", "revoked"):
         raise HTTPException(status_code=422, detail="Invalid status")
     await session.execute(
-        text("UPDATE service_accounts SET status = :s, updated_at = NOW() WHERE id = CAST(:id AS uuid)"),
+        text(
+            "UPDATE service_accounts SET status = :s, updated_at = NOW() WHERE id = CAST(:id AS uuid)"
+        ),
         {"s": status, "id": sa_id},
     )
     await session.commit()
@@ -1409,6 +1624,7 @@ async def rotate_service_account_key(
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
     import hashlib as _hl
+
     raw_key = f"sa_{secrets.token_urlsafe(32)}"
     key_prefix = raw_key[:12]
     key_hash = _hl.sha256(raw_key.encode()).hexdigest()
@@ -1445,14 +1661,17 @@ async def oidc_login(request: Request):
     await request.app.state.redis.setex(f"oidc_state:{state}", _OIDC_STATE_TTL, "1")
 
     redirect_uri = str(request.base_url).rstrip("/") + "/auth/oidc/callback"
-    params = _up.urlencode({
-        "client_id": _cfg.oidc_client_id,
-        "redirect_uri": redirect_uri,
-        "response_type": "code",
-        "scope": "openid email profile",
-        "state": state,
-    })
+    params = _up.urlencode(
+        {
+            "client_id": _cfg.oidc_client_id,
+            "redirect_uri": redirect_uri,
+            "response_type": "code",
+            "scope": "openid email profile",
+            "state": state,
+        }
+    )
     from fastapi.responses import RedirectResponse as _RR
+
     return _RR(f"{_cfg.oidc_issuer}/auth?{params}")
 
 
@@ -1498,6 +1717,7 @@ async def oidc_callback(
 
     # Decode claims without full verification (Dex is internal; add jwks verification for production)
     import base64 as _b64
+
     parts = id_token_raw.split(".")
     if len(parts) < 2:
         raise HTTPException(status_code=502, detail="Malformed id_token")
@@ -1511,19 +1731,26 @@ async def oidc_callback(
         raise HTTPException(status_code=502, detail="No email in OIDC claims")
 
     # Find or create user
-    row = (await session.execute(
-        text("""
+    row = (
+        (
+            await session.execute(
+                text("""
             SELECT u.id, u.status, u.display_name, u.primary_node_id,
                    n.name AS node_name
             FROM users u
             LEFT JOIN organization_nodes n ON n.id = u.primary_node_id
             WHERE u.email = :email
         """),
-        {"email": email},
-    )).mappings().first()
+                {"email": email},
+            )
+        )
+        .mappings()
+        .first()
+    )
 
     if not row:
         import uuid as _uuid
+
         user_id = str(_uuid.uuid4())
         await session.execute(
             text("""
@@ -1575,4 +1802,5 @@ async def oidc_callback(
         frontend = f"http://localhost:3002/portal?sso_token={token}"
 
     from fastapi.responses import RedirectResponse as _RR
+
     return _RR(frontend)

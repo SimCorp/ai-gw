@@ -1,4 +1,5 @@
 """Add scim_external_id for Azure Entra SCIM provisioning"""
+
 from typing import Sequence, Union
 
 import sqlalchemy as sa

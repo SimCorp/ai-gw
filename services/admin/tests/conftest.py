@@ -28,6 +28,7 @@ from httpx import ASGITransport, AsyncClient
 # Session mock
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 async def mock_session():
     session = AsyncMock()
@@ -45,6 +46,7 @@ async def mock_session():
 # HTTP client wired to the FastAPI app
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 async def client(mock_session):
     from app.auth import require_admin_auth
@@ -58,9 +60,7 @@ async def client(mock_session):
     app.dependency_overrides[require_admin_auth] = lambda: None
     app.state.redis = AsyncMock()
 
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as c:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         yield c
 
     app.dependency_overrides.clear()
@@ -69,6 +69,7 @@ async def client(mock_session):
 # ---------------------------------------------------------------------------
 # Pytest-asyncio configuration (applies to all tests in this package)
 # ---------------------------------------------------------------------------
+
 
 def pytest_configure(config):
     """Register asyncio mode so async tests run without per-test markers."""

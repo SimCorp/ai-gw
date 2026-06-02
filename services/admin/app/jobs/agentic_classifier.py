@@ -5,6 +5,7 @@ Classifies sessions into interactive / agentic / autonomous and awards
 developer achievements based on existing session + cost_record data.
 Can be run on demand or on a cron schedule.
 """
+
 from __future__ import annotations
 
 import logging

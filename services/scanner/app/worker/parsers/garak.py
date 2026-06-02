@@ -37,24 +37,26 @@ def parse_garak_jsonl(output: str) -> list[dict]:
         prefix = _probe_prefix(probe_class)
         category = _PROBE_TO_CATEGORY.get(prefix, "ai_security")
         severity = _PROBE_TO_SEVERITY.get(prefix, "medium")
-        findings.append({
-            "scanner": "garak",
-            "severity": severity,
-            "category": category,
-            "title": f"Garak probe failed: {probe_class}",
-            "description": (
-                f"The probe '{probe_class}' triggered a failure. "
-                f"The model may be susceptible to {category.replace('_', ' ')}."
-            ),
-            "evidence": {
-                "probe": probe_class,
-                "passed": False,
-                "notes": record.get("notes", {}),
-                "attempt_idx": record.get("attempt_idx"),
-            },
-            "remediation": (
-                f"Review the model's system prompt and add guardrail rules to block "
-                f"{category.replace('_', ' ')} patterns."
-            ),
-        })
+        findings.append(
+            {
+                "scanner": "garak",
+                "severity": severity,
+                "category": category,
+                "title": f"Garak probe failed: {probe_class}",
+                "description": (
+                    f"The probe '{probe_class}' triggered a failure. "
+                    f"The model may be susceptible to {category.replace('_', ' ')}."
+                ),
+                "evidence": {
+                    "probe": probe_class,
+                    "passed": False,
+                    "notes": record.get("notes", {}),
+                    "attempt_idx": record.get("attempt_idx"),
+                },
+                "remediation": (
+                    f"Review the model's system prompt and add guardrail rules to block "
+                    f"{category.replace('_', ' ')} patterns."
+                ),
+            }
+        )
     return findings

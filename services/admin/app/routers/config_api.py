@@ -15,6 +15,7 @@ Endpoints:
   POST /config/notify       — trigger a re-fetch broadcast (internal use)
   GET  /gateway-info        — gateway version, enabled features, models, autoroute
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -44,6 +45,7 @@ _PUBSUB_CHANNEL = "gateway:config:updates"
 # Internal helpers
 # ---------------------------------------------------------------------------
 
+
 async def _get_config(redis) -> dict:
     """Read gateway:config from Redis; return a minimal default if absent."""
     try:
@@ -66,7 +68,9 @@ async def _get_version(redis) -> int:
 async def _enabled_models(session) -> list[str]:
     """Fetch enabled model IDs from Postgres."""
     try:
-        result = await session.execute(text("SELECT model_id FROM model_registry WHERE enabled = TRUE ORDER BY model_id"))
+        result = await session.execute(
+            text("SELECT model_id FROM model_registry WHERE enabled = TRUE ORDER BY model_id")
+        )
         return [row[0] for row in result.fetchall()]
     except Exception as exc:
         _log.debug("Failed to fetch enabled models: %s", exc)
@@ -97,6 +101,7 @@ async def notify_config_change(redis) -> int:
 # Endpoints
 # ---------------------------------------------------------------------------
 
+
 @router.get("/config")
 async def get_config(request: Request):
     """Return the current effective gateway configuration."""
@@ -118,7 +123,7 @@ async def stream_config(request: Request):
     async def _event_generator() -> AsyncIterator[bytes]:
         # Send initial heartbeat so the client knows the connection is live
         version = await _get_version(redis)
-        yield f"event: connected\ndata: {{\"config_version\": {version}}}\n\n".encode()
+        yield f'event: connected\ndata: {{"config_version": {version}}}\n\n'.encode()
 
         pubsub = redis.pubsub()
         try:
@@ -128,7 +133,9 @@ async def stream_config(request: Request):
                 if await request.is_disconnected():
                     break
                 try:
-                    message = await asyncio.wait_for(pubsub.get_message(ignore_subscribe_messages=True), timeout=25.0)
+                    message = await asyncio.wait_for(
+                        pubsub.get_message(ignore_subscribe_messages=True), timeout=25.0
+                    )
                 except asyncio.TimeoutError:
                     # Send a keepalive comment so the connection is not closed by proxies
                     yield b": keepalive\n\n"
@@ -137,7 +144,7 @@ async def stream_config(request: Request):
                     new_version = message["data"]
                     if isinstance(new_version, bytes):
                         new_version = new_version.decode()
-                    yield f"event: config-change\ndata: {{\"config_version\": {new_version}}}\n\n".encode()
+                    yield f'event: config-change\ndata: {{"config_version": {new_version}}}\n\n'.encode()
         finally:
             try:
                 await pubsub.unsubscribe(_PUBSUB_CHANNEL)
@@ -185,6 +192,7 @@ async def gateway_info(request: Request):
     autoroute_info: dict = {"enabled": False, "current_model": None, "score": None}
     try:
         from app.config import settings as _settings  # local import avoids circular
+
         if _settings.autoroute_enabled:
             # Import autoroute lazily — it lives in the cache service, not admin.
             # In the admin context we read the same Redis keys directly.
@@ -205,11 +213,13 @@ async def gateway_info(request: Request):
     except Exception:
         pass
 
-    return JSONResponse({
-        "version": _GATEWAY_VERSION,
-        "features": _FEATURES,
-        "models": models,
-        "config_version": config_version,
-        "autoroute": autoroute_info,
-        "workflow_runs_today": workflow_runs_today,
-    })
+    return JSONResponse(
+        {
+            "version": _GATEWAY_VERSION,
+            "features": _FEATURES,
+            "models": models,
+            "config_version": config_version,
+            "autoroute": autoroute_info,
+            "workflow_runs_today": workflow_runs_today,
+        }
+    )

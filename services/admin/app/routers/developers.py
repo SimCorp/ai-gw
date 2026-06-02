@@ -31,13 +31,21 @@ async def list_developers(
     session: AsyncSession = Depends(get_session),
     _auth: dict = Depends(require_admin_role),
 ):
-    rows = (await session.execute(text("""
+    rows = (
+        (
+            await session.execute(
+                text("""
         SELECT d.id, d.email, d.display_name, d.status, d.created_at,
                d.team_id, t.name AS team_name
         FROM developers d
         LEFT JOIN organization_nodes t ON t.id = d.team_id
         ORDER BY d.created_at DESC
-    """))).mappings().all()
+    """)
+            )
+        )
+        .mappings()
+        .all()
+    )
     return [
         {
             "id": str(r["id"]),
@@ -58,8 +66,10 @@ async def get_developer(
     session: AsyncSession = Depends(get_session),
     _auth: dict = Depends(require_admin_role),
 ):
-    row = (await session.execute(
-        text("""
+    row = (
+        (
+            await session.execute(
+                text("""
             SELECT d.id, d.email, d.display_name, d.status, d.created_at,
                    d.team_id, t.name AS team_name, a.name AS area_name, a.color AS area_color
             FROM developers d
@@ -68,8 +78,12 @@ async def get_developer(
                    ON a.type = 'area' AND t.path LIKE a.path || '/%'
             WHERE d.id = :id
         """),
-        {"id": developer_id},
-    )).mappings().one_or_none()
+                {"id": developer_id},
+            )
+        )
+        .mappings()
+        .one_or_none()
+    )
     if not row:
         raise HTTPException(status_code=404, detail="Developer not found")
     return {
@@ -92,16 +106,25 @@ async def get_developer_stats(
     session: AsyncSession = Depends(get_session),
     _auth: dict = Depends(require_admin_role),
 ):
-    dev_row = (await session.execute(
-        text("SELECT id, email, display_name FROM developers WHERE id = :id"),
-        {"id": developer_id},
-    )).mappings().one_or_none()
+    dev_row = (
+        (
+            await session.execute(
+                text("SELECT id, email, display_name FROM developers WHERE id = :id"),
+                {"id": developer_id},
+            )
+        )
+        .mappings()
+        .one_or_none()
+    )
     if not dev_row:
         raise HTTPException(status_code=404, detail="Developer not found")
 
     since = _since_sql(period)
 
-    cost_row = (await session.execute(text(f"""
+    cost_row = (
+        (
+            await session.execute(
+                text(f"""
         SELECT
             COUNT(cr.id)                                                  AS request_count,
             COALESCE(SUM(cr.tokens_input), 0)                            AS tokens_input,
@@ -115,9 +138,18 @@ async def get_developer_stats(
             COUNT(CASE WHEN cr.request_error_type IS NOT NULL THEN 1 END) AS error_count
         FROM cost_records cr
         WHERE cr.developer_id = :dev_id {since}
-    """), {"dev_id": developer_id})).mappings().one()
+    """),
+                {"dev_id": developer_id},
+            )
+        )
+        .mappings()
+        .one()
+    )
 
-    model_rows = (await session.execute(text(f"""
+    model_rows = (
+        (
+            await session.execute(
+                text(f"""
         SELECT cr.model,
                COUNT(cr.id)                                       AS request_count,
                COALESCE(SUM(cr.tokens_input + cr.tokens_output), 0) AS total_tokens,
@@ -127,9 +159,18 @@ async def get_developer_stats(
         GROUP BY cr.model
         ORDER BY cost_usd DESC
         LIMIT 10
-    """), {"dev_id": developer_id})).mappings().all()
+    """),
+                {"dev_id": developer_id},
+            )
+        )
+        .mappings()
+        .all()
+    )
 
-    repo_rows = (await session.execute(text(f"""
+    repo_rows = (
+        (
+            await session.execute(
+                text(f"""
         SELECT cr.repo,
                COUNT(cr.id) AS request_count,
                COALESCE(ROUND(SUM(cr.cost_usd)::numeric, 6), 0) AS cost_usd
@@ -138,16 +179,31 @@ async def get_developer_stats(
         GROUP BY cr.repo
         ORDER BY cost_usd DESC
         LIMIT 10
-    """), {"dev_id": developer_id})).mappings().all()
+    """),
+                {"dev_id": developer_id},
+            )
+        )
+        .mappings()
+        .all()
+    )
 
-    daily_rows = (await session.execute(text("""
+    daily_rows = (
+        (
+            await session.execute(
+                text("""
         SELECT date, request_count, tokens_input, tokens_output,
                cost_usd, cache_hits, tool_invocations, error_count
         FROM developer_activity_log
         WHERE developer_id = :dev_id
         ORDER BY date DESC
         LIMIT 30
-    """), {"dev_id": developer_id})).mappings().all()
+    """),
+                {"dev_id": developer_id},
+            )
+        )
+        .mappings()
+        .all()
+    )
 
     return {
         "developer_id": str(developer_id),
@@ -162,8 +218,12 @@ async def get_developer_stats(
             "cost_usd": float(cost_row["cost_usd"]),
             "tool_invocations": int(cost_row["tool_invocations"]),
             "retry_count": int(cost_row["retry_count"]),
-            "cache_hit_pct": float(cost_row["cache_hit_pct"]) if cost_row["cache_hit_pct"] is not None else None,
-            "avg_latency_ms": int(cost_row["avg_latency_ms"]) if cost_row["avg_latency_ms"] is not None else None,
+            "cache_hit_pct": float(cost_row["cache_hit_pct"])
+            if cost_row["cache_hit_pct"] is not None
+            else None,
+            "avg_latency_ms": int(cost_row["avg_latency_ms"])
+            if cost_row["avg_latency_ms"] is not None
+            else None,
             "error_count": int(cost_row["error_count"]),
         },
         "by_model": [
@@ -203,18 +263,24 @@ async def get_developer_stats(
 async def get_developer_teams(developer_id: UUID, session: AsyncSession = Depends(get_session)):
     dev_id_str = str(developer_id)
     # Accept both legacy developers table (pre-0010) and unified users table (post-0010)
-    dev_exists = (await session.execute(
-        text("SELECT id FROM developers WHERE id = :id"), {"id": developer_id}
-    )).one_or_none()
+    dev_exists = (
+        await session.execute(
+            text("SELECT id FROM developers WHERE id = :id"), {"id": developer_id}
+        )
+    ).one_or_none()
     if not dev_exists:
-        dev_exists = (await session.execute(
-            text("SELECT id FROM users WHERE id = CAST(:id AS uuid)"), {"id": dev_id_str}
-        )).one_or_none()
+        dev_exists = (
+            await session.execute(
+                text("SELECT id FROM users WHERE id = CAST(:id AS uuid)"), {"id": dev_id_str}
+            )
+        ).one_or_none()
     if not dev_exists:
         raise HTTPException(status_code=404, detail="Developer not found")
 
-    rows = (await session.execute(
-        text("""
+    rows = (
+        (
+            await session.execute(
+                text("""
             SELECT tm.id AS membership_id, tm.role, tm.created_at AS joined_at,
                    t.id AS team_id, t.name AS team_name, t.slug AS team_slug,
                    a.name AS area_name, a.color AS area_color
@@ -226,8 +292,12 @@ async def get_developer_teams(developer_id: UUID, session: AsyncSession = Depend
                OR tm.user_id = :dev_id_str
             ORDER BY t.name
         """),
-        {"developer_id": developer_id, "dev_id_str": dev_id_str},
-    )).mappings().all()
+                {"developer_id": developer_id, "dev_id_str": dev_id_str},
+            )
+        )
+        .mappings()
+        .all()
+    )
 
     return [
         {
@@ -247,6 +317,7 @@ async def get_developer_teams(developer_id: UUID, session: AsyncSession = Depend
 # ---------------------------------------------------------------------------
 # E. At-risk developer detection (struggle signals)
 # ---------------------------------------------------------------------------
+
 
 @router.get("/at-risk")
 async def at_risk_developers(
@@ -337,14 +408,21 @@ async def at_risk_developers(
             "error_rate": float(r["error_rate"]),
             "total_commits": int(r["total_commits"]),
             "total_prs": int(r["total_prs"]),
-            "avg_session_quality": float(r["avg_quality"]) if r["avg_quality"] is not None else None,
-            "commit_conversion_pct": float(r["commit_conversion_pct"]) if r["commit_conversion_pct"] is not None else None,
+            "avg_session_quality": float(r["avg_quality"])
+            if r["avg_quality"] is not None
+            else None,
+            "commit_conversion_pct": float(r["commit_conversion_pct"])
+            if r["commit_conversion_pct"] is not None
+            else None,
             "struggle_flags": int(r["struggle_flags"]),
             "signals": {
                 "high_retry_rate": float(r["retry_rate"]) > 0.3,
                 "high_error_rate": float(r["error_rate"]) > 0.3,
-                "high_spend_no_output": float(r["cost_usd"]) > 5 and int(r["total_commits"]) == 0 and int(r["total_prs"]) == 0,
-                "low_session_quality": r["avg_quality"] is not None and float(r["avg_quality"]) <= 2,
+                "high_spend_no_output": float(r["cost_usd"]) > 5
+                and int(r["total_commits"]) == 0
+                and int(r["total_prs"]) == 0,
+                "low_session_quality": r["avg_quality"] is not None
+                and float(r["avg_quality"]) <= 2,
             },
         }
         for r in rows

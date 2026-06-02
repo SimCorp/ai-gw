@@ -1,4 +1,5 @@
 """Tests for app.workers.postgres — cost estimation, budget counters, and handler."""
+
 import uuid
 from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -160,7 +161,11 @@ def _make_pool_mock(pricing_rows=None):
 
 def _pricing_row(prefix, price_in, price_out):
     """Simulate an asyncpg Record-like mapping."""
-    return {"model_prefix": prefix, "price_input_per_1k": price_in, "price_output_per_1k": price_out}
+    return {
+        "model_prefix": prefix,
+        "price_input_per_1k": price_in,
+        "price_output_per_1k": price_out,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -172,7 +177,6 @@ async def test_handle_estimates_cost_when_cost_usd_not_set():
     """Event with no cost_usd → cost derived from pricing table."""
     pricing = [_pricing_row("gpt-4", 0.03, 0.06)]
     pool, conn = _make_pool_mock(pricing)
-
 
     with patch("asyncpg.create_pool", AsyncMock(return_value=pool)):
         # Force pricing fetch by placing fetched_at far in the past
@@ -196,13 +200,14 @@ async def test_handle_uses_provided_cost_usd():
     """Event with cost_usd already set → no estimation, uses that value."""
     pool, conn = _make_pool_mock(pricing_rows=[_pricing_row("gpt-4", 99.0, 99.0)])
 
-
     with patch("asyncpg.create_pool", AsyncMock(return_value=pool)):
         pg_mod._pricing_cache = {}
         pg_mod._pricing_fetched_at = 0.0
         handle, _ = await make_handler("postgresql://fake/db")
 
-    event = GatewayEvent(team_id="t1", model="gpt-4", tokens_input=100, tokens_output=50, cost_usd=0.42)
+    event = GatewayEvent(
+        team_id="t1", model="gpt-4", tokens_input=100, tokens_output=50, cost_usd=0.42
+    )
     await handle(event)
 
     # args[0]=sql, args[1]=team_id, ..., args[6]=cost_usd
@@ -214,7 +219,6 @@ async def test_handle_uses_provided_cost_usd():
 async def test_handle_writes_correct_insert():
     """Verify the INSERT uses the right table and passes all expected columns."""
     pool, conn = _make_pool_mock()
-
 
     with patch("asyncpg.create_pool", AsyncMock(return_value=pool)):
         pg_mod._pricing_cache = {}
@@ -254,7 +258,6 @@ async def test_handle_calls_budget_counters_when_redis_provided():
     pool, conn = _make_pool_mock()
     redis, _ = _make_redis_pipeline_mock()
 
-
     with patch("asyncpg.create_pool", AsyncMock(return_value=pool)):
         pg_mod._pricing_cache = {}
         pg_mod._pricing_fetched_at = 0.0
@@ -270,7 +273,6 @@ async def test_handle_no_budget_counters_when_redis_none():
     """No Redis → _update_budget_counters is never called."""
     pool, conn = _make_pool_mock()
 
-
     with patch("asyncpg.create_pool", AsyncMock(return_value=pool)):
         pg_mod._pricing_cache = {}
         pg_mod._pricing_fetched_at = 0.0
@@ -285,7 +287,6 @@ async def test_handle_valid_uuid_key_id_passed_to_db():
     """key_id that is a valid UUID → key_uuid passed as UUID object to DB."""
     pool, conn = _make_pool_mock()
     key = str(uuid.uuid4())
-
 
     with patch("asyncpg.create_pool", AsyncMock(return_value=pool)):
         pg_mod._pricing_cache = {}
@@ -304,7 +305,6 @@ async def test_handle_valid_uuid_key_id_passed_to_db():
 async def test_handle_invalid_uuid_key_id_becomes_none():
     """key_id that is not a valid UUID → key_uuid=None passed to DB."""
     pool, conn = _make_pool_mock()
-
 
     with patch("asyncpg.create_pool", AsyncMock(return_value=pool)):
         pg_mod._pricing_cache = {}
@@ -361,7 +361,7 @@ async def test_handle_keeps_stale_cache_on_db_error():
     pool.fetch = AsyncMock(
         side_effect=[
             [_pricing_row("gpt-4", 0.03, 0.06)],  # first call OK
-            RuntimeError("DB unavailable"),          # second call fails
+            RuntimeError("DB unavailable"),  # second call fails
         ]
     )
 
@@ -378,7 +378,9 @@ async def test_handle_keeps_stale_cache_on_db_error():
 
             handle, _ = await make_handler("postgresql://fake/db")
 
-            event = GatewayEvent(team_id="t1", model="gpt-4-turbo", tokens_input=1000, tokens_output=500)
+            event = GatewayEvent(
+                team_id="t1", model="gpt-4-turbo", tokens_input=1000, tokens_output=500
+            )
 
             # First call: tick=0, far past fetched_at → fetch executes, cache populated
             tick = 0.0

@@ -38,6 +38,7 @@ async def require_admin_auth(
     if x_admin_token and settings.admin_token:
         if secrets.compare_digest(x_admin_token, settings.admin_token):
             import hashlib
+
             digest = hashlib.sha256(x_admin_token.encode()).hexdigest()[:12]
             result = {"actor": f"token:{digest}", "role": "superadmin"}
             request.state.admin_auth = result
@@ -107,6 +108,7 @@ async def require_authenticated_user(
     if x_admin_token and settings.admin_token:
         if secrets.compare_digest(x_admin_token, settings.admin_token):
             import hashlib
+
             digest = hashlib.sha256(x_admin_token.encode()).hexdigest()[:12]
             result = {"actor": f"token:{digest}", "role": "superadmin"}
             request.state.admin_auth = result

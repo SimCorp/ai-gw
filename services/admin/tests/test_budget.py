@@ -40,8 +40,10 @@ def test_remaining_none_limit():
 # Helpers for mocking execute chains
 # ---------------------------------------------------------------------------
 
+
 def _make_key_orm(team_id, revoked=False, budget=None):
     from unittest.mock import MagicMock
+
     k = MagicMock()
     k.id = uuid.uuid4()
     k.team_id = team_id
@@ -84,6 +86,7 @@ def _row_dict(**kwargs):
 # GET /keys/{id}/budget
 # ---------------------------------------------------------------------------
 
+
 async def test_get_key_budget_found(client, mock_session):
     team_id = uuid.uuid4()
     key = _make_key_orm(team_id)
@@ -111,6 +114,7 @@ async def test_get_key_budget_revoked_returns_404(client, mock_session):
 # PUT /keys/{id}/budget
 # ---------------------------------------------------------------------------
 
+
 async def test_set_key_budget_returns_200(client, mock_session):
     team_id = uuid.uuid4()
     key = _make_key_orm(team_id)
@@ -130,6 +134,7 @@ async def test_set_key_budget_returns_200(client, mock_session):
 # ---------------------------------------------------------------------------
 # GET /org/budget
 # ---------------------------------------------------------------------------
+
 
 async def test_get_org_budget_returns_200(client, mock_session):
     # _read_org_settings iterates over rows from execute; _org_monthly_spend also calls execute.
@@ -161,15 +166,14 @@ async def test_get_org_budget_returns_200(client, mock_session):
 # PUT /org/budget
 # ---------------------------------------------------------------------------
 
+
 async def test_set_org_budget_returns_200(client, mock_session):
     # 3 upsert executes + 1 audit add + 1 spend query
     upsert_result = MagicMock()
     spend_result = _scalar_result(0.0)
 
     # side_effect list: first 3 calls return upsert_result, 4th returns spend
-    mock_session.execute.side_effect = [
-        upsert_result, upsert_result, upsert_result, spend_result
-    ]
+    mock_session.execute.side_effect = [upsert_result, upsert_result, upsert_result, spend_result]
 
     resp = await client.put(
         "/org/budget",
@@ -184,6 +188,7 @@ async def test_set_org_budget_returns_200(client, mock_session):
 # ---------------------------------------------------------------------------
 # GET /budget/status
 # ---------------------------------------------------------------------------
+
 
 async def test_budget_status_returns_200(client, mock_session):
     org_settings_rows = [
@@ -212,8 +217,8 @@ async def test_budget_status_returns_200(client, mock_session):
 
     mock_session.execute.side_effect = [
         org_settings_result,  # _read_org_settings
-        spend_result,         # _org_monthly_spend
-        teams_result,         # teams + spend join
+        spend_result,  # _org_monthly_spend
+        teams_result,  # teams + spend join
     ]
 
     resp = await client.get("/budget/status")

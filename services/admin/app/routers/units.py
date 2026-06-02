@@ -69,7 +69,8 @@ async def list_units(area_id: UUID | None = None, session: AsyncSession = Depend
             {"area_id": area_id},
         )
     else:
-        result = await session.execute(text("""
+        result = await session.execute(
+            text("""
             SELECT u.id, u.area_id, a.name AS area_name, u.name, u.slug, u.description, u.color,
                    COUNT(t.id) AS team_count, u.created_at,
                    u.parent_unit_id, p.name AS parent_unit_name
@@ -79,7 +80,8 @@ async def list_units(area_id: UUID | None = None, session: AsyncSession = Depend
             LEFT JOIN teams t ON t.unit_id = u.id
             GROUP BY u.id, a.name, p.name
             ORDER BY a.name, p.name NULLS FIRST, u.name
-        """))
+        """)
+        )
     return [_row_to_dict(row) for row in result.mappings().all()]
 
 
@@ -88,16 +90,23 @@ async def _validate_parent(session: AsyncSession, area_id, parent_unit_id, self_
         return
     if self_id and parent_unit_id == self_id:
         raise HTTPException(status_code=422, detail="A unit cannot be its own parent")
-    parent = (await session.execute(
-        text("SELECT id, area_id FROM units WHERE id = :id"), {"id": parent_unit_id}
-    )).mappings().one_or_none()
+    parent = (
+        (
+            await session.execute(
+                text("SELECT id, area_id FROM units WHERE id = :id"), {"id": parent_unit_id}
+            )
+        )
+        .mappings()
+        .one_or_none()
+    )
     if not parent:
         raise HTTPException(status_code=404, detail="Parent unit not found")
     if str(parent["area_id"]) != str(area_id):
         raise HTTPException(status_code=422, detail="Parent unit must belong to the same area")
     if self_id:
-        cycle = (await session.execute(
-            text("""
+        cycle = (
+            await session.execute(
+                text("""
                 WITH RECURSIVE ancestors AS (
                     SELECT parent_unit_id AS id FROM units WHERE id = :start
                     UNION ALL
@@ -107,10 +116,13 @@ async def _validate_parent(session: AsyncSession, area_id, parent_unit_id, self_
                 )
                 SELECT 1 FROM ancestors WHERE id = :self_id
             """),
-            {"start": parent_unit_id, "self_id": self_id},
-        )).one_or_none()
+                {"start": parent_unit_id, "self_id": self_id},
+            )
+        ).one_or_none()
         if cycle:
-            raise HTTPException(status_code=422, detail="Setting this parent would create a circular reference")
+            raise HTTPException(
+                status_code=422, detail="Setting this parent would create a circular reference"
+            )
 
 
 @router.post("", status_code=201)
@@ -125,21 +137,25 @@ async def create_unit(
     slug = body.slug or _slugify(body.name)
 
     # check area exists
-    area = (await session.execute(
-        text("SELECT id FROM areas WHERE id = :id"), {"id": body.area_id}
-    )).one_or_none()
+    area = (
+        await session.execute(text("SELECT id FROM areas WHERE id = :id"), {"id": body.area_id})
+    ).one_or_none()
     if not area:
         raise HTTPException(status_code=404, detail="Area not found")
 
     await _validate_parent(session, body.area_id, body.parent_unit_id)
 
     # check slug uniqueness within area
-    existing = (await session.execute(
-        text("SELECT id FROM units WHERE area_id = :area_id AND slug = :slug"),
-        {"area_id": body.area_id, "slug": slug},
-    )).one_or_none()
+    existing = (
+        await session.execute(
+            text("SELECT id FROM units WHERE area_id = :area_id AND slug = :slug"),
+            {"area_id": body.area_id, "slug": slug},
+        )
+    ).one_or_none()
     if existing:
-        raise HTTPException(status_code=409, detail="A unit with this slug already exists in the area")
+        raise HTTPException(
+            status_code=409, detail="A unit with this slug already exists in the area"
+        )
 
     result = await session.execute(
         text("""
@@ -147,9 +163,14 @@ async def create_unit(
             VALUES (:area_id, :name, :slug, :description, :color, :parent_unit_id)
             RETURNING id, area_id, name, slug, description, color, created_at, parent_unit_id
         """),
-        {"area_id": body.area_id, "name": body.name, "slug": slug,
-         "description": body.description, "color": body.color,
-         "parent_unit_id": body.parent_unit_id},
+        {
+            "area_id": body.area_id,
+            "name": body.name,
+            "slug": slug,
+            "description": body.description,
+            "color": body.color,
+            "parent_unit_id": body.parent_unit_id,
+        },
     )
     row = result.mappings().one()
     await audit.record(session, request, "create_unit", "unit", resource_id=row["id"])
@@ -168,8 +189,10 @@ async def create_unit(
 
 @router.get("/{unit_id}")
 async def get_unit(unit_id: UUID, session: AsyncSession = Depends(get_session)):
-    unit_row = (await session.execute(
-        text("""
+    unit_row = (
+        (
+            await session.execute(
+                text("""
             SELECT u.id, u.area_id, a.name AS area_name, u.name, u.slug, u.description, u.color,
                    u.created_at, u.parent_unit_id, p.name AS parent_unit_name
             FROM units u
@@ -177,8 +200,12 @@ async def get_unit(unit_id: UUID, session: AsyncSession = Depends(get_session)):
             LEFT JOIN units p ON p.id = u.parent_unit_id
             WHERE u.id = :id
         """),
-        {"id": unit_id},
-    )).mappings().one_or_none()
+                {"id": unit_id},
+            )
+        )
+        .mappings()
+        .one_or_none()
+    )
     if not unit_row:
         raise HTTPException(status_code=404, detail="Unit not found")
 
@@ -195,7 +222,9 @@ async def get_unit(unit_id: UUID, session: AsyncSession = Depends(get_session)):
             "name": r["name"],
             "slug": r["slug"],
             "created_at": r["created_at"].isoformat() if r["created_at"] else None,
-            "monthly_budget_usd": float(r["monthly_budget_usd"]) if r["monthly_budget_usd"] is not None else None,
+            "monthly_budget_usd": float(r["monthly_budget_usd"])
+            if r["monthly_budget_usd"] is not None
+            else None,
             "budget_alert_pct": r["budget_alert_pct"],
             "budget_action": r["budget_action"],
         }
@@ -212,7 +241,9 @@ async def get_unit(unit_id: UUID, session: AsyncSession = Depends(get_session)):
             "description": unit_row["description"],
             "color": unit_row["color"],
             "created_at": unit_row["created_at"].isoformat() if unit_row["created_at"] else None,
-            "parent_unit_id": str(unit_row["parent_unit_id"]) if unit_row["parent_unit_id"] else None,
+            "parent_unit_id": str(unit_row["parent_unit_id"])
+            if unit_row["parent_unit_id"]
+            else None,
             "parent_unit_name": unit_row["parent_unit_name"],
         },
         "teams": teams,
@@ -229,10 +260,18 @@ async def update_unit(
 ):
     if not await _can_manage_unit(user, str(unit_id), session):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
-    current = (await session.execute(
-        text("SELECT id, area_id, name, slug, description, color, created_at, parent_unit_id FROM units WHERE id = :id"),
-        {"id": unit_id},
-    )).mappings().one_or_none()
+    current = (
+        (
+            await session.execute(
+                text(
+                    "SELECT id, area_id, name, slug, description, color, created_at, parent_unit_id FROM units WHERE id = :id"
+                ),
+                {"id": unit_id},
+            )
+        )
+        .mappings()
+        .one_or_none()
+    )
     if not current:
         raise HTTPException(status_code=404, detail="Unit not found")
 
@@ -250,12 +289,18 @@ async def update_unit(
 
     # check slug uniqueness if changed
     if new_slug != current["slug"]:
-        conflict = (await session.execute(
-            text("SELECT id FROM units WHERE area_id = :area_id AND slug = :slug AND id != :id"),
-            {"area_id": current["area_id"], "slug": new_slug, "id": unit_id},
-        )).one_or_none()
+        conflict = (
+            await session.execute(
+                text(
+                    "SELECT id FROM units WHERE area_id = :area_id AND slug = :slug AND id != :id"
+                ),
+                {"area_id": current["area_id"], "slug": new_slug, "id": unit_id},
+            )
+        ).one_or_none()
         if conflict:
-            raise HTTPException(status_code=409, detail="A unit with this slug already exists in the area")
+            raise HTTPException(
+                status_code=409, detail="A unit with this slug already exists in the area"
+            )
 
     result = await session.execute(
         text("""
@@ -264,13 +309,24 @@ async def update_unit(
             WHERE id = :id
             RETURNING id, area_id, name, slug, description, color, created_at, parent_unit_id
         """),
-        {"id": unit_id, "name": new_name, "slug": new_slug,
-         "description": new_description, "color": new_color,
-         "parent_unit_id": new_parent_unit_id},
+        {
+            "id": unit_id,
+            "name": new_name,
+            "slug": new_slug,
+            "description": new_description,
+            "color": new_color,
+            "parent_unit_id": new_parent_unit_id,
+        },
     )
     row = result.mappings().one()
-    await audit.record(session, request, "update_unit", "unit", resource_id=unit_id,
-                       details={"name": new_name, "slug": new_slug})
+    await audit.record(
+        session,
+        request,
+        "update_unit",
+        "unit",
+        resource_id=unit_id,
+        details={"name": new_name, "slug": new_slug},
+    )
     await session.commit()
     return {
         "id": str(row["id"]),
@@ -293,21 +349,25 @@ async def delete_unit(
 ):
     if not await _can_manage_unit(user, str(unit_id), session):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
-    unit = (await session.execute(
-        text("SELECT id FROM units WHERE id = :id"), {"id": unit_id}
-    )).one_or_none()
+    unit = (
+        await session.execute(text("SELECT id FROM units WHERE id = :id"), {"id": unit_id})
+    ).one_or_none()
     if not unit:
         raise HTTPException(status_code=404, detail="Unit not found")
 
-    team_count = (await session.execute(
-        text("SELECT COUNT(*) FROM teams WHERE unit_id = :unit_id"), {"unit_id": unit_id}
-    )).scalar()
+    team_count = (
+        await session.execute(
+            text("SELECT COUNT(*) FROM teams WHERE unit_id = :unit_id"), {"unit_id": unit_id}
+        )
+    ).scalar()
     if team_count > 0:
         raise HTTPException(status_code=409, detail="Cannot delete unit with existing teams")
 
-    child_count = (await session.execute(
-        text("SELECT COUNT(*) FROM units WHERE parent_unit_id = :unit_id"), {"unit_id": unit_id}
-    )).scalar()
+    child_count = (
+        await session.execute(
+            text("SELECT COUNT(*) FROM units WHERE parent_unit_id = :unit_id"), {"unit_id": unit_id}
+        )
+    ).scalar()
     if child_count > 0:
         raise HTTPException(status_code=409, detail="Cannot delete unit with child units")
 

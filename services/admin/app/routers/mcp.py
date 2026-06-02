@@ -102,6 +102,7 @@ def _validate_mcp_url(url: str) -> None:
 # Secret masking
 # ---------------------------------------------------------------------------
 
+
 def _mask_server(row: dict) -> dict:
     d = dict(row)
     if d.get("auth_secret"):
@@ -112,6 +113,7 @@ def _mask_server(row: dict) -> dict:
 # ---------------------------------------------------------------------------
 # Schemas
 # ---------------------------------------------------------------------------
+
 
 class McpServerCreate(BaseModel):
     name: str = Field(..., max_length=200)
@@ -137,7 +139,15 @@ class McpServerUpdate(BaseModel):
 # Column allowlist for update_server
 # ---------------------------------------------------------------------------
 
-_ALLOWED_SERVER_FIELDS = {"name", "description", "url", "auth_type", "auth_header", "auth_secret", "enabled"}
+_ALLOWED_SERVER_FIELDS = {
+    "name",
+    "description",
+    "url",
+    "auth_type",
+    "auth_header",
+    "auth_secret",
+    "enabled",
+}
 
 
 class McpToolUpdate(BaseModel):
@@ -152,16 +162,25 @@ class McpAccessGrant(BaseModel):
 # Servers
 # ---------------------------------------------------------------------------
 
+
 @router.get("/servers")
 async def list_servers(session: AsyncSession = Depends(get_session)):
-    rows = (await session.execute(text("""
+    rows = (
+        (
+            await session.execute(
+                text("""
         SELECT s.*, COUNT(DISTINCT t.id) AS tool_count, COUNT(DISTINCT a.id) AS access_count
         FROM mcp_servers s
         LEFT JOIN mcp_tools t ON t.server_id = s.id
         LEFT JOIN mcp_server_access a ON a.server_id = s.id
         GROUP BY s.id
         ORDER BY s.name
-    """))).mappings().all()
+    """)
+            )
+        )
+        .mappings()
+        .all()
+    )
     return [_mask_server(dict(r)) for r in rows]
 
 
@@ -190,28 +209,48 @@ async def create_server(body: McpServerCreate, session: AsyncSession = Depends(g
 
 @router.get("/servers/{server_id}")
 async def get_server(server_id: str, session: AsyncSession = Depends(get_session)):
-    server_row = (await session.execute(
-        text("SELECT * FROM mcp_servers WHERE id = CAST(:id AS uuid)"),
-        {"id": server_id},
-    )).mappings().first()
+    server_row = (
+        (
+            await session.execute(
+                text("SELECT * FROM mcp_servers WHERE id = CAST(:id AS uuid)"),
+                {"id": server_id},
+            )
+        )
+        .mappings()
+        .first()
+    )
     if not server_row:
         raise HTTPException(status_code=404, detail="MCP server not found")
 
-    tools = (await session.execute(
-        text("SELECT * FROM mcp_tools WHERE server_id = CAST(:server_id AS uuid) ORDER BY name"),
-        {"server_id": server_id},
-    )).mappings().all()
+    tools = (
+        (
+            await session.execute(
+                text(
+                    "SELECT * FROM mcp_tools WHERE server_id = CAST(:server_id AS uuid) ORDER BY name"
+                ),
+                {"server_id": server_id},
+            )
+        )
+        .mappings()
+        .all()
+    )
 
-    access = (await session.execute(
-        text("""
+    access = (
+        (
+            await session.execute(
+                text("""
             SELECT a.server_id, a.team_id, t.name AS team_name, a.granted_at
             FROM mcp_server_access a
             JOIN organization_nodes t ON t.id = a.team_id
             WHERE a.server_id = CAST(:server_id AS uuid)
             ORDER BY t.name
         """),
-        {"server_id": server_id},
-    )).mappings().all()
+                {"server_id": server_id},
+            )
+        )
+        .mappings()
+        .all()
+    )
 
     return {
         "server": _mask_server(dict(server_row)),
@@ -249,7 +288,7 @@ async def update_server(
 
     sql = text(f"""
         UPDATE mcp_servers
-        SET {', '.join(set_clauses)}
+        SET {", ".join(set_clauses)}
         WHERE id = CAST(:id AS uuid)
         RETURNING *
     """)
@@ -276,12 +315,19 @@ async def delete_server(server_id: str, session: AsyncSession = Depends(get_sess
 # Ping / tool sync
 # ---------------------------------------------------------------------------
 
+
 @router.post("/servers/{server_id}/ping")
 async def ping_server(server_id: str, session: AsyncSession = Depends(get_session)):
-    server_row = (await session.execute(
-        text("SELECT * FROM mcp_servers WHERE id = CAST(:id AS uuid)"),
-        {"id": server_id},
-    )).mappings().first()
+    server_row = (
+        (
+            await session.execute(
+                text("SELECT * FROM mcp_servers WHERE id = CAST(:id AS uuid)"),
+                {"id": server_id},
+            )
+        )
+        .mappings()
+        .first()
+    )
     if not server_row:
         raise HTTPException(status_code=404, detail="MCP server not found")
 
@@ -299,7 +345,11 @@ async def ping_server(server_id: str, session: AsyncSession = Depends(get_sessio
     error_msg = None
     latency_ms = 0
 
-    _rpc_headers = {**headers, "Content-Type": "application/json", "Accept": "application/json, text/event-stream"}
+    _rpc_headers = {
+        **headers,
+        "Content-Type": "application/json",
+        "Accept": "application/json, text/event-stream",
+    }
 
     def _extract_tools_from_rpc(body: bytes) -> list[dict]:
         """Parse tools/list result from JSON-RPC response (plain JSON or SSE stream)."""
@@ -323,16 +373,28 @@ async def ping_server(server_id: str, session: AsyncSession = Depends(get_sessio
 
             # ── Strategy 1: MCP session handshake (initialize → tools/list) ─
             init_resp = await client.post(
-                mcp_url, headers=_rpc_headers,
-                json={"jsonrpc": "2.0", "id": 1, "method": "initialize",
-                      "params": {"protocolVersion": "2024-11-05", "capabilities": {},
-                                 "clientInfo": {"name": "ai-gateway-admin", "version": "1.0"}}},
+                mcp_url,
+                headers=_rpc_headers,
+                json={
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "initialize",
+                    "params": {
+                        "protocolVersion": "2024-11-05",
+                        "capabilities": {},
+                        "clientInfo": {"name": "ai-gateway-admin", "version": "1.0"},
+                    },
+                },
             )
             if init_resp.status_code == 200:
                 session_id = init_resp.headers.get("mcp-session-id")
-                list_headers = {**_rpc_headers, **({"Mcp-Session-Id": session_id} if session_id else {})}
+                list_headers = {
+                    **_rpc_headers,
+                    **({"Mcp-Session-Id": session_id} if session_id else {}),
+                }
                 list_resp = await client.post(
-                    mcp_url, headers=list_headers,
+                    mcp_url,
+                    headers=list_headers,
                     json={"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
                 )
                 if list_resp.status_code == 200:
@@ -344,7 +406,8 @@ async def ping_server(server_id: str, session: AsyncSession = Depends(get_sessio
             elif init_resp.status_code in (404, 405):
                 # ── Strategy 2: direct tools/list (no session required) ──────
                 list_resp = await client.post(
-                    mcp_url, headers=_rpc_headers,
+                    mcp_url,
+                    headers=_rpc_headers,
                     json={"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}},
                 )
                 if list_resp.status_code == 200:
@@ -362,7 +425,9 @@ async def ping_server(server_id: str, session: AsyncSession = Depends(get_sessio
                         elif isinstance(data, dict) and "tools" in data:
                             tools = data["tools"]
                         elif isinstance(data, dict):
-                            tools = [{"name": k, **v} for k, v in data.items() if isinstance(v, dict)]
+                            tools = [
+                                {"name": k, **v} for k, v in data.items() if isinstance(v, dict)
+                            ]
                     else:
                         status = "error"
                         error_msg = f"HTTP {get_resp.status_code}: {get_resp.text[:200]}"
@@ -387,7 +452,9 @@ async def ping_server(server_id: str, session: AsyncSession = Depends(get_sessio
             if not tool_name:
                 continue
             tool_description = tool.get("description") or tool.get("summary")
-            input_schema = tool.get("input_schema") or tool.get("parameters") or tool.get("inputSchema") or {}
+            input_schema = (
+                tool.get("input_schema") or tool.get("parameters") or tool.get("inputSchema") or {}
+            )
             await session.execute(
                 text("""
                     INSERT INTO mcp_tools (server_id, name, description, input_schema)
@@ -404,11 +471,18 @@ async def ping_server(server_id: str, session: AsyncSession = Depends(get_sessio
                 },
             )
 
-    tool_count = len(tools) if tools else (
-        (await session.execute(
-            text("SELECT COUNT(*) FROM mcp_tools WHERE server_id = CAST(:id AS uuid)"),
-            {"id": server_id},
-        )).scalar() or 0
+    tool_count = (
+        len(tools)
+        if tools
+        else (
+            (
+                await session.execute(
+                    text("SELECT COUNT(*) FROM mcp_tools WHERE server_id = CAST(:id AS uuid)"),
+                    {"id": server_id},
+                )
+            ).scalar()
+            or 0
+        )
     )
 
     await session.execute(
@@ -444,19 +518,30 @@ async def ping_server(server_id: str, session: AsyncSession = Depends(get_sessio
 # Tools
 # ---------------------------------------------------------------------------
 
+
 @router.get("/servers/{server_id}/tools")
 async def list_tools(server_id: str, session: AsyncSession = Depends(get_session)):
-    server_row = (await session.execute(
-        text("SELECT id FROM mcp_servers WHERE id = CAST(:id AS uuid)"),
-        {"id": server_id},
-    )).first()
+    server_row = (
+        await session.execute(
+            text("SELECT id FROM mcp_servers WHERE id = CAST(:id AS uuid)"),
+            {"id": server_id},
+        )
+    ).first()
     if not server_row:
         raise HTTPException(status_code=404, detail="MCP server not found")
 
-    rows = (await session.execute(
-        text("SELECT * FROM mcp_tools WHERE server_id = CAST(:server_id AS uuid) ORDER BY name"),
-        {"server_id": server_id},
-    )).mappings().all()
+    rows = (
+        (
+            await session.execute(
+                text(
+                    "SELECT * FROM mcp_tools WHERE server_id = CAST(:server_id AS uuid) ORDER BY name"
+                ),
+                {"server_id": server_id},
+            )
+        )
+        .mappings()
+        .all()
+    )
     return [dict(r) for r in rows]
 
 
@@ -487,6 +572,7 @@ async def update_tool(
 # Tool call proxy
 # ---------------------------------------------------------------------------
 
+
 class ToolCallRequest(BaseModel):
     arguments: dict = Field(default_factory=dict)
 
@@ -498,15 +584,24 @@ async def call_tool(
     body: ToolCallRequest,
     session: AsyncSession = Depends(get_session),
 ):
-    server_row = (await session.execute(
-        text("SELECT * FROM mcp_servers WHERE id = CAST(:id AS uuid)"),
-        {"id": server_id},
-    )).mappings().first()
+    server_row = (
+        (
+            await session.execute(
+                text("SELECT * FROM mcp_servers WHERE id = CAST(:id AS uuid)"),
+                {"id": server_id},
+            )
+        )
+        .mappings()
+        .first()
+    )
     if not server_row:
         raise HTTPException(status_code=404, detail="MCP server not found")
 
     server = dict(server_row)
-    headers: dict[str, str] = {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"}
+    headers: dict[str, str] = {
+        "Content-Type": "application/json",
+        "Accept": "application/json, text/event-stream",
+    }
     auth_type = server.get("auth_type", "none")
     if auth_type == "bearer" and server.get("auth_secret"):
         headers["Authorization"] = f"Bearer {server['auth_secret']}"
@@ -532,25 +627,41 @@ async def call_tool(
             # Initialize to get session ID
             session_id: str | None = None
             init_resp = await client.post(
-                mcp_url, headers=headers,
-                json={"jsonrpc": "2.0", "id": 1, "method": "initialize",
-                      "params": {"protocolVersion": "2024-11-05", "capabilities": {},
-                                 "clientInfo": {"name": "ai-gateway-admin", "version": "1.0"}}},
+                mcp_url,
+                headers=headers,
+                json={
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "initialize",
+                    "params": {
+                        "protocolVersion": "2024-11-05",
+                        "capabilities": {},
+                        "clientInfo": {"name": "ai-gateway-admin", "version": "1.0"},
+                    },
+                },
             )
             if init_resp.status_code == 200:
                 session_id = init_resp.headers.get("mcp-session-id")
 
             call_headers = {**headers, **({"Mcp-Session-Id": session_id} if session_id else {})}
             call_resp = await client.post(
-                mcp_url, headers=call_headers,
-                json={"jsonrpc": "2.0", "id": 2, "method": "tools/call",
-                      "params": {"name": tool_name, "arguments": body.arguments}},
+                mcp_url,
+                headers=call_headers,
+                json={
+                    "jsonrpc": "2.0",
+                    "id": 2,
+                    "method": "tools/call",
+                    "params": {"name": tool_name, "arguments": body.arguments},
+                },
             )
 
         latency_ms = int((time.monotonic() - start) * 1000)
 
         if call_resp.status_code >= 400:
-            raise HTTPException(status_code=502, detail=f"MCP server returned HTTP {call_resp.status_code}: {call_resp.text[:300]}")
+            raise HTTPException(
+                status_code=502,
+                detail=f"MCP server returned HTTP {call_resp.status_code}: {call_resp.text[:300]}",
+            )
 
         rpc = _parse_rpc_body(call_resp.content)
         return {
@@ -570,25 +681,34 @@ async def call_tool(
 # Access control
 # ---------------------------------------------------------------------------
 
+
 @router.get("/servers/{server_id}/access")
 async def list_access(server_id: str, session: AsyncSession = Depends(get_session)):
-    server_row = (await session.execute(
-        text("SELECT id FROM mcp_servers WHERE id = CAST(:id AS uuid)"),
-        {"id": server_id},
-    )).first()
+    server_row = (
+        await session.execute(
+            text("SELECT id FROM mcp_servers WHERE id = CAST(:id AS uuid)"),
+            {"id": server_id},
+        )
+    ).first()
     if not server_row:
         raise HTTPException(status_code=404, detail="MCP server not found")
 
-    rows = (await session.execute(
-        text("""
+    rows = (
+        (
+            await session.execute(
+                text("""
             SELECT a.server_id, a.team_id, t.name AS team_name, a.granted_at
             FROM mcp_server_access a
             JOIN organization_nodes t ON t.id = a.team_id
             WHERE a.server_id = CAST(:server_id AS uuid)
             ORDER BY t.name
         """),
-        {"server_id": server_id},
-    )).mappings().all()
+                {"server_id": server_id},
+            )
+        )
+        .mappings()
+        .all()
+    )
     return [dict(r) for r in rows]
 
 
@@ -598,17 +718,23 @@ async def grant_access(
     body: McpAccessGrant,
     session: AsyncSession = Depends(get_session),
 ):
-    server_row = (await session.execute(
-        text("SELECT id FROM mcp_servers WHERE id = CAST(:id AS uuid)"),
-        {"id": server_id},
-    )).first()
+    server_row = (
+        await session.execute(
+            text("SELECT id FROM mcp_servers WHERE id = CAST(:id AS uuid)"),
+            {"id": server_id},
+        )
+    ).first()
     if not server_row:
         raise HTTPException(status_code=404, detail="MCP server not found")
 
-    team_row = (await session.execute(
-        text("SELECT id FROM organization_nodes WHERE id = CAST(:id AS uuid) AND type = 'team'"),
-        {"id": body.team_id},
-    )).first()
+    team_row = (
+        await session.execute(
+            text(
+                "SELECT id FROM organization_nodes WHERE id = CAST(:id AS uuid) AND type = 'team'"
+            ),
+            {"id": body.team_id},
+        )
+    ).first()
     if not team_row:
         raise HTTPException(status_code=404, detail="Team not found")
 
@@ -649,9 +775,13 @@ async def revoke_access(
 # Summary
 # ---------------------------------------------------------------------------
 
+
 @router.get("/summary")
 async def mcp_summary(session: AsyncSession = Depends(get_session)):
-    row = (await session.execute(text("""
+    row = (
+        (
+            await session.execute(
+                text("""
         SELECT
             COUNT(*) AS server_count,
             COUNT(*) FILTER (WHERE status = 'active') AS active_count,
@@ -659,19 +789,40 @@ async def mcp_summary(session: AsyncSession = Depends(get_session)):
             COUNT(*) FILTER (WHERE status = 'error') AS error_count,
             COUNT(*) FILTER (WHERE status = 'pending') AS pending_count
         FROM mcp_servers
-    """))).mappings().first()
+    """)
+            )
+        )
+        .mappings()
+        .first()
+    )
 
-    tools_row = (await session.execute(text("""
+    tools_row = (
+        (
+            await session.execute(
+                text("""
         SELECT
             COUNT(*) AS total_tools,
             COUNT(*) FILTER (WHERE enabled) AS enabled_tools
         FROM mcp_tools
-    """))).mappings().first()
+    """)
+            )
+        )
+        .mappings()
+        .first()
+    )
 
-    access_row = (await session.execute(text("""
+    access_row = (
+        (
+            await session.execute(
+                text("""
         SELECT COUNT(DISTINCT team_id) AS teams_with_access
         FROM mcp_server_access
-    """))).mappings().first()
+    """)
+            )
+        )
+        .mappings()
+        .first()
+    )
 
     return {
         "server_count": row["server_count"] if row else 0,

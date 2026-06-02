@@ -3,7 +3,9 @@ import httpx
 from app.config import settings
 
 
-async def grant_points(*, engineer_id: str, delta: int, reason: str, ref_id: str | None = None) -> None:
+async def grant_points(
+    *, engineer_id: str, delta: int, reason: str, ref_id: str | None = None
+) -> None:
     """Award (or deduct) points via the league internal grant API.
 
     Raises RuntimeError on non-201 responses so callers can surface a 502

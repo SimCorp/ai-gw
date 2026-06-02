@@ -1,4 +1,5 @@
 """Admin-only endpoints to nominate and retire AI Champions."""
+
 from typing import Literal
 from uuid import UUID
 
@@ -81,13 +82,15 @@ async def retire(
 
 # ---------- flag moderation ----------
 
+
 @router.get("/flags")
 async def list_flags(
     session: AsyncSession = Depends(get_session),
     _auth: dict | None = Depends(require_admin_auth),
 ):
     """List open flags joined with contribution metadata for moderation review."""
-    result = await session.execute(text("""
+    result = await session.execute(
+        text("""
         SELECT f.id, f.contribution_id, f.flagged_by, f.reason, f.created_at,
                COALESCE(c.auto_metadata->>'title', '') AS contribution_title
         FROM champion_flags f
@@ -95,7 +98,8 @@ async def list_flags(
         WHERE f.status = 'open'
         ORDER BY f.created_at DESC
         LIMIT 200
-    """))
+    """)
+    )
     return [
         {
             "id": str(r["id"]),
@@ -124,10 +128,16 @@ async def resolve_flag(
       which the public feed query filters out (WHERE flag_count < 999). This is a
       deliberate hack to avoid a schema migration; the marker doubles as a tombstone.
     """
-    row = (await session.execute(
-        text("SELECT contribution_id FROM champion_flags WHERE id = :id"),
-        {"id": str(flag_id)},
-    )).mappings().one_or_none()
+    row = (
+        (
+            await session.execute(
+                text("SELECT contribution_id FROM champion_flags WHERE id = :id"),
+                {"id": str(flag_id)},
+            )
+        )
+        .mappings()
+        .one_or_none()
+    )
     if row is None:
         raise HTTPException(status_code=404, detail="flag not found")
 
@@ -164,13 +174,17 @@ async def resolve_flag(
 
 # ---------- Wave 3: org-wide activity dashboard ----------
 
+
 @router.get("/activity")
 async def activity(
     session: AsyncSession = Depends(get_session),
     _auth: dict | None = Depends(require_admin_auth),
 ):
     """Aggregate org-wide and per-champion stats for the activity dashboard."""
-    org = (await session.execute(text("""
+    org = (
+        (
+            await session.execute(
+                text("""
         SELECT
             COALESCE((SELECT COUNT(*) FROM champions WHERE active = TRUE), 0) AS active_champions,
             COALESCE((SELECT COUNT(*) FROM champion_contributions), 0) AS contributions_total,
@@ -181,9 +195,17 @@ async def activity(
                       WHERE status = 'resolved' AND confirmed_at >= NOW() - INTERVAL '30 days'), 0) AS asks_resolved_30d,
             COALESCE((SELECT COUNT(*) FROM champion_bookings
                       WHERE status = 'done' AND created_at >= NOW() - INTERVAL '30 days'), 0) AS bookings_done_30d
-    """))).mappings().one()
+    """)
+            )
+        )
+        .mappings()
+        .one()
+    )
 
-    per_champion_rows = (await session.execute(text("""
+    per_champion_rows = (
+        (
+            await session.execute(
+                text("""
         SELECT
             c.developer_id,
             COALESCE((SELECT COUNT(*) FROM champion_contributions cc WHERE cc.champion_id = c.developer_id), 0) AS contributions,
@@ -198,7 +220,12 @@ async def activity(
         FROM champions c
         WHERE c.active = TRUE
         ORDER BY points_30d DESC, c.developer_id
-    """))).mappings().all()
+    """)
+            )
+        )
+        .mappings()
+        .all()
+    )
 
     return {
         "org": {

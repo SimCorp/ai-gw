@@ -1,4 +1,5 @@
 """Unit tests for SSE parsers and intent classifier in cache router."""
+
 import json
 
 import pytest
@@ -12,6 +13,7 @@ from app.router import (
 # ---------------------------------------------------------------------------
 # _parse_sse_usage_openai
 # ---------------------------------------------------------------------------
+
 
 def _openai_chunk(**kwargs) -> bytes:
     return (f"data: {json.dumps(kwargs)}\n\n").encode()
@@ -82,6 +84,7 @@ def test_openai_usage_only_completion_tokens():
 # _parse_sse_usage_anthropic
 # ---------------------------------------------------------------------------
 
+
 def _anthropic_event(event_type: str, **payload) -> bytes:
     obj = {"type": event_type, **payload}
     return (f"data: {json.dumps(obj)}\n\n").encode()
@@ -90,8 +93,12 @@ def _anthropic_event(event_type: str, **payload) -> bytes:
 def test_anthropic_message_start_and_delta():
     stream = (
         _anthropic_event("message_start", message={"usage": {"input_tokens": 55}})
-        + _anthropic_event("content_block_start", index=0, content_block={"type": "text", "text": ""})
-        + _anthropic_event("content_block_delta", index=0, delta={"type": "text_delta", "text": "hi"})
+        + _anthropic_event(
+            "content_block_start", index=0, content_block={"type": "text", "text": ""}
+        )
+        + _anthropic_event(
+            "content_block_delta", index=0, delta={"type": "text_delta", "text": "hi"}
+        )
         + _anthropic_event("message_delta", usage={"output_tokens": 20})
         + _anthropic_event("message_stop")
     )
@@ -138,41 +145,45 @@ def test_anthropic_multiple_deltas_last_wins():
 # _classify_intent
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("text,expected", [
-    # debugging
-    ("Why is this throwing a TypeError?", "debugging"),
-    ("There's an exception in the traceback", "debugging"),
-    ("The app will crash on startup", "debugging"),
-    ("fix the broken import", "debugging"),
-    # testing
-    ("Write a pytest for this function", "testing"),
-    ("Add a unit test with mock objects", "testing"),
-    ("Check the coverage for this module", "testing"),
-    # refactoring
-    ("Refactor this into smaller functions", "refactoring"),
-    ("Clean up this messy code", "refactoring"),
-    ("Extract the validation logic", "refactoring"),
-    # code_review
-    ("Please review this PR diff", "code_review"),
-    ("What do you think about this implementation?", "code_review"),
-    ("Give me feedback on my approach", "code_review"),
-    # documentation
-    ("Add a docstring to this function", "documentation"),
-    ("Write a README for the project", "documentation"),
-    ("Explain this function to me", "documentation"),
-    # code_generation
-    ("Write a function that parses JSON", "code_generation"),
-    ("Implement a binary search algorithm", "code_generation"),
-    ("Create a FastAPI endpoint for login", "code_generation"),
-    # question
-    ("How do I use asyncio.gather?", "question"),
-    ("What is a context manager?", "question"),
-    ("Can you explain decorators?", "question"),
-    # general fallback
-    ("", "general"),
-    ("   ", "general"),
-    ("banana sandwich", "general"),
-])
+
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        # debugging
+        ("Why is this throwing a TypeError?", "debugging"),
+        ("There's an exception in the traceback", "debugging"),
+        ("The app will crash on startup", "debugging"),
+        ("fix the broken import", "debugging"),
+        # testing
+        ("Write a pytest for this function", "testing"),
+        ("Add a unit test with mock objects", "testing"),
+        ("Check the coverage for this module", "testing"),
+        # refactoring
+        ("Refactor this into smaller functions", "refactoring"),
+        ("Clean up this messy code", "refactoring"),
+        ("Extract the validation logic", "refactoring"),
+        # code_review
+        ("Please review this PR diff", "code_review"),
+        ("What do you think about this implementation?", "code_review"),
+        ("Give me feedback on my approach", "code_review"),
+        # documentation
+        ("Add a docstring to this function", "documentation"),
+        ("Write a README for the project", "documentation"),
+        ("Explain this function to me", "documentation"),
+        # code_generation
+        ("Write a function that parses JSON", "code_generation"),
+        ("Implement a binary search algorithm", "code_generation"),
+        ("Create a FastAPI endpoint for login", "code_generation"),
+        # question
+        ("How do I use asyncio.gather?", "question"),
+        ("What is a context manager?", "question"),
+        ("Can you explain decorators?", "question"),
+        # general fallback
+        ("", "general"),
+        ("   ", "general"),
+        ("banana sandwich", "general"),
+    ],
+)
 def test_classify_intent(text, expected):
     assert _classify_intent(text) == expected
 
@@ -190,6 +201,7 @@ def test_classify_intent_case_insensitive():
 # ---------------------------------------------------------------------------
 # _replay_as_sse
 # ---------------------------------------------------------------------------
+
 
 async def _collect(gen) -> list[dict]:
     """Drain an async generator and parse each SSE data line as JSON (skip [DONE])."""
@@ -218,7 +230,9 @@ async def test_replay_as_sse_basic_content():
     cached = {
         "id": "chatcmpl-abc",
         "model": "gpt-4",
-        "choices": [{"message": {"role": "assistant", "content": "Hello!"}, "finish_reason": "stop"}],
+        "choices": [
+            {"message": {"role": "assistant", "content": "Hello!"}, "finish_reason": "stop"}
+        ],
     }
     chunks = await _collect(_replay_as_sse(cached))
 
@@ -257,9 +271,13 @@ async def test_replay_as_sse_includes_usage_in_finish_chunk():
 
 
 async def test_replay_as_sse_with_tool_calls():
-    tool_calls = [{"id": "call_1", "type": "function", "function": {"name": "get_time", "arguments": "{}"}}]
+    tool_calls = [
+        {"id": "call_1", "type": "function", "function": {"name": "get_time", "arguments": "{}"}}
+    ]
     cached = {
-        "choices": [{"message": {"content": "", "tool_calls": tool_calls}, "finish_reason": "tool_calls"}],
+        "choices": [
+            {"message": {"content": "", "tool_calls": tool_calls}, "finish_reason": "tool_calls"}
+        ],
     }
     chunks = await _collect(_replay_as_sse(cached))
     tool_chunk = next((c for c in chunks if c["choices"][0]["delta"].get("tool_calls")), None)

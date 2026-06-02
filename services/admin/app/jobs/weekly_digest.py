@@ -3,6 +3,7 @@ Weekly AI usage digest for team admins/managers.
 Runs every Monday 07:00 UTC.
 Queries usage data from spend_logs/audit_log and emails each team_admin.
 """
+
 from __future__ import annotations
 
 import logging
@@ -16,6 +17,7 @@ log = logging.getLogger(__name__)
 async def send_weekly_digests(session: AsyncSession) -> None:
     """Called by scheduler. Sends one email per team_admin user."""
     import os
+
     portal_url = os.getenv("PORTAL_BASE_URL", "http://localhost:3001")
 
     # Get all team admins with their teams.
@@ -23,7 +25,10 @@ async def send_weekly_digests(session: AsyncSession) -> None:
     # lives in node_members(node_id, user_id, role); the team-admin role on a
     # node is 'admin' (CHECK role IN ('admin','member')). The old user_roles
     # `expires_at` filter has no equivalent in node_members and is dropped.
-    admins = (await session.execute(text("""
+    admins = (
+        (
+            await session.execute(
+                text("""
         SELECT DISTINCT u.id::text, u.email, u.display_name,
                t.id::text AS team_id,
                t.name AS team_name
@@ -32,25 +37,44 @@ async def send_weekly_digests(session: AsyncSession) -> None:
         JOIN organization_nodes t ON t.id = nm.node_id AND t.type = 'team'
         WHERE u.status = 'active' AND u.email IS NOT NULL
         ORDER BY u.email
-    """))).mappings().all()
+    """)
+            )
+        )
+        .mappings()
+        .all()
+    )
 
     for admin in admins:
         try:
             # Get spend data for this team over the last 7 days
-            team_size = (await session.execute(text("""
+            team_size = (
+                await session.execute(
+                    text("""
                 SELECT COUNT(*) FROM node_members WHERE node_id = CAST(:tid AS uuid)
-            """), {"tid": admin["team_id"]})).scalar() or 0
+            """),
+                    {"tid": admin["team_id"]},
+                )
+            ).scalar() or 0
 
             # Try to get actual spend — use a safe query that won't fail if table doesn't exist
             try:
-                spend_row = (await session.execute(text("""
+                spend_row = (
+                    (
+                        await session.execute(
+                            text("""
                     SELECT
                         COALESCE(SUM(total_cost), 0) as total_cost,
                         COUNT(DISTINCT user_id) as active_users
                     FROM spend_logs
                     WHERE team_id = CAST(:tid AS uuid)
                       AND created_at > NOW() - INTERVAL '7 days'
-                """), {"tid": admin["team_id"]})).mappings().first()
+                """),
+                            {"tid": admin["team_id"]},
+                        )
+                    )
+                    .mappings()
+                    .first()
+                )
                 total_cost = float(spend_row["total_cost"] or 0)
                 active_users = int(spend_row["active_users"] or 0)
             except Exception:
@@ -59,9 +83,14 @@ async def send_weekly_digests(session: AsyncSession) -> None:
 
             # Get team budget
             try:
-                budget_row = (await session.execute(text("""
+                budget_row = (
+                    await session.execute(
+                        text("""
                     SELECT monthly_budget_usd FROM organization_nodes WHERE id = CAST(:tid AS uuid)
-                """), {"tid": admin["team_id"]})).first()
+                """),
+                        {"tid": admin["team_id"]},
+                    )
+                ).first()
                 monthly_budget = float(budget_row[0]) if budget_row and budget_row[0] else None
             except Exception:
                 monthly_budget = None
@@ -77,6 +106,7 @@ async def send_weekly_digests(session: AsyncSession) -> None:
             )
 
             from app.email import send_email
+
             await send_email(admin["email"], f"Weekly AI digest: {admin['team_name']}", html)
             log.info("Sent weekly digest to %s for team %s", admin["email"], admin["team_name"])
 
@@ -96,7 +126,9 @@ def _digest_html(
     budget_line = ""
     if monthly_budget and monthly_budget > 0:
         pct = round(total_cost / monthly_budget * 100 * 4, 1)  # 4 weeks in month approx
-        budget_line = f"<p><strong>Budget utilisation:</strong> {pct}% of ${monthly_budget:,.2f}/mo</p>"
+        budget_line = (
+            f"<p><strong>Budget utilisation:</strong> {pct}% of ${monthly_budget:,.2f}/mo</p>"
+        )
 
     return f"""
 <html><body style="font-family:sans-serif;color:#1a1a2e;max-width:560px;margin:auto">

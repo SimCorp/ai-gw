@@ -1,4 +1,5 @@
 """Tests for the POST /events router endpoint."""
+
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -78,9 +79,8 @@ async def test_invalid_body_missing_team_id_returns_422(client):
 async def test_missing_internal_key_returns_401(client):
     """POST /events without X-Internal-Key must return 401."""
     from app.main import app
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as anon:
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as anon:
         response = await anon.post("/events", json={"team_id": "team-1"})
     assert response.status_code == 401
 
@@ -88,6 +88,7 @@ async def test_missing_internal_key_returns_401(client):
 async def test_wrong_internal_key_returns_401(client):
     """POST /events with wrong X-Internal-Key must return 401."""
     from app.main import app
+
     async with AsyncClient(
         transport=ASGITransport(app=app),
         base_url="http://test",

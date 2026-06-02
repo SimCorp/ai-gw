@@ -6,6 +6,7 @@ Three groups under one module for v0.1 simplicity (each can split later):
 - /runs            T6  submit / fetch / cancel runs (rate-limited per team)
 - /runs/{id}/stream T7  SSE firehose of workflow events for a single run
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -34,6 +35,7 @@ router = APIRouter(tags=["workflow-designer"])
 # =============================================================================
 # /agents — T5
 # =============================================================================
+
 
 class AgentCreateBody(BaseModel):
     slug: str = Field(..., min_length=1, max_length=128, pattern=r"^[a-z0-9][a-z0-9-]*$")
@@ -79,14 +81,14 @@ async def create_agent(
         raise HTTPException(
             status_code=422,
             detail=(
-                "image must match pattern ^[a-z0-9][a-z0-9._/-]*:[a-z0-9._-]+$ "
-                "or be a relay:// URI"
+                "image must match pattern ^[a-z0-9][a-z0-9._/-]*:[a-z0-9._-]+$ or be a relay:// URI"
             ),
         )
 
-    row = (await session.execute(
-        text(
-            """
+    row = (
+        await session.execute(
+            text(
+                """
             INSERT INTO agents (slug, name, description, image, manifest, category, managed,
                                 owner_team_id, owner_project_id)
             VALUES (:slug, :name, :description, :image, CAST(:manifest AS jsonb), :category, :managed,
@@ -101,19 +103,20 @@ async def create_agent(
                 updated_at = NOW()
             RETURNING id
             """
-        ),
-        {
-            "slug": body.slug,
-            "name": body.name,
-            "description": body.description,
-            "image": body.image,
-            "manifest": json.dumps(body.manifest),
-            "category": body.category,
-            "managed": body.managed,
-            "owner_team_id": body.owner_team_id,
-            "owner_project_id": body.owner_project_id,
-        },
-    )).first()
+            ),
+            {
+                "slug": body.slug,
+                "name": body.name,
+                "description": body.description,
+                "image": body.image,
+                "manifest": json.dumps(body.manifest),
+                "category": body.category,
+                "managed": body.managed,
+                "owner_team_id": body.owner_team_id,
+                "owner_project_id": body.owner_project_id,
+            },
+        )
+    ).first()
     await session.commit()
     return {"id": str(row[0]), "slug": body.slug}
 
@@ -121,6 +124,7 @@ async def create_agent(
 # =============================================================================
 # /workflows — T5
 # =============================================================================
+
 
 class WorkflowCreateBody(BaseModel):
     slug: str = Field(..., min_length=1, max_length=128, pattern=r"^[a-z0-9][a-z0-9-]*$")
@@ -168,16 +172,18 @@ async def create_workflow(
     session: AsyncSession = Depends(get_session),
     _auth: dict = Depends(require_admin_auth),
 ) -> dict:
-    row = (await session.execute(
-        text(
-            """
+    row = (
+        await session.execute(
+            text(
+                """
             INSERT INTO workflows (slug, team_id, project_id, name, description)
             VALUES (:slug, :team_id, :project_id, :name, :description)
             RETURNING id
             """
-        ),
-        body.model_dump(),
-    )).first()
+            ),
+            body.model_dump(),
+        )
+    ).first()
     await session.commit()
     return {"id": str(row[0]), "slug": body.slug}
 
@@ -202,9 +208,9 @@ async def create_workflow_version(
         raise HTTPException(422, "entry_node not found in nodes")
 
     # --- Security invariants ---
-    _IMAGE_RE = re.compile(r'^[a-z0-9][a-z0-9._/\-]*:[a-z0-9._\-]+$')
-    _RELAY_RE = re.compile(r'^relay://[a-z0-9][a-z0-9\-]*$')
-    _CONDITION_RE = re.compile(r'^[\w.]+\s*(==|!=|>|>=|<|<=)\s*.+$')
+    _IMAGE_RE = re.compile(r"^[a-z0-9][a-z0-9._/\-]*:[a-z0-9._\-]+$")
+    _RELAY_RE = re.compile(r"^relay://[a-z0-9][a-z0-9\-]*$")
+    _CONDITION_RE = re.compile(r"^[\w.]+\s*(==|!=|>|>=|<|<=)\s*.+$")
     _MAX_NODES = 50
     _MAX_LOOP_ITERATIONS = 10
 
@@ -219,18 +225,22 @@ async def create_workflow_version(
         if node.get("image"):
             img = node["image"]
             if not (_IMAGE_RE.match(img) or _RELAY_RE.match(img)):
-                raise HTTPException(422,
+                raise HTTPException(
+                    422,
                     f"Node '{node['id']}': invalid image format '{img}'. "
-                    "Use registry/image:tag or relay://agent-slug")
+                    "Use registry/image:tag or relay://agent-slug",
+                )
 
         # Validate loop configuration
         loop = node.get("loop")
         if loop and isinstance(loop, dict) and loop.get("enabled"):
             max_iter = int(loop.get("max_iterations", 10))
             if max_iter > _MAX_LOOP_ITERATIONS:
-                raise HTTPException(422,
+                raise HTTPException(
+                    422,
                     f"Node '{node['id']}': loop max_iterations={max_iter} exceeds "
-                    f"limit of {_MAX_LOOP_ITERATIONS}")
+                    f"limit of {_MAX_LOOP_ITERATIONS}",
+                )
 
     # Validate edge conditions
     for edge in dag.get("edges", []):
@@ -239,9 +249,11 @@ async def create_workflow_version(
         condition = edge.get("condition")
         if condition is not None and condition != "":
             if not _CONDITION_RE.match(str(condition)):
-                raise HTTPException(422,
+                raise HTTPException(
+                    422,
                     f"Edge {edge.get('from')}→{edge.get('to')}: invalid condition syntax "
-                    f"'{condition}'. Use: field.path == 'value'")
+                    f"'{condition}'. Use: field.path == 'value'",
+                )
 
     # Validate reachability (no orphan nodes)
     node_ids_set = {n["id"] for n in dag["nodes"]}
@@ -256,22 +268,26 @@ async def create_workflow_version(
                 changed = True
     orphans = node_ids_set - reachable
     if orphans:
-        raise HTTPException(422,
+        raise HTTPException(
+            422,
             f"Unreachable nodes detected: {sorted(orphans)}. "
-            "Every node must be reachable from entry_node.")
+            "Every node must be reachable from entry_node.",
+        )
 
     # Append new version; bump latest_version atomically
-    new_version = (await session.execute(
-        text(
-            """
+    new_version = (
+        await session.execute(
+            text(
+                """
             UPDATE workflows
             SET latest_version = latest_version + 1
             WHERE id = :wid
             RETURNING latest_version
             """
-        ),
-        {"wid": workflow_id},
-    )).scalar_one_or_none()
+            ),
+            {"wid": workflow_id},
+        )
+    ).scalar_one_or_none()
     if new_version is None:
         raise HTTPException(404, "workflow not found")
 
@@ -300,10 +316,14 @@ async def get_workflow_version(
     session: AsyncSession = Depends(get_session),
     _auth: dict = Depends(require_admin_auth),
 ) -> dict:
-    row = (await session.execute(
-        text("SELECT dag, created_by, created_at FROM workflow_versions WHERE workflow_id = :wid AND version = :v"),
-        {"wid": workflow_id, "v": version},
-    )).first()
+    row = (
+        await session.execute(
+            text(
+                "SELECT dag, created_by, created_at FROM workflow_versions WHERE workflow_id = :wid AND version = :v"
+            ),
+            {"wid": workflow_id, "v": version},
+        )
+    ).first()
     if row is None:
         raise HTTPException(404, "workflow version not found")
     return {
@@ -319,6 +339,7 @@ async def get_workflow_version(
 # /runs — T6
 # =============================================================================
 
+
 class RunSubmitBody(BaseModel):
     workflow_id: str
     version: int | None = None  # default: latest
@@ -330,7 +351,9 @@ class RunSubmitBody(BaseModel):
     triggered_by_kind: str = Field(default="user", pattern=r"^(user|api_key)$")
 
 
-async def _check_run_rate_limit(redis, team_id: str, limit: int = 100, window_s: int = 3600) -> None:
+async def _check_run_rate_limit(
+    redis, team_id: str, limit: int = 100, window_s: int = 3600
+) -> None:
     """Redis-counter rate limit: N runs per team per window. Fail open on Redis errors."""
     if redis is None:
         return
@@ -367,20 +390,24 @@ async def submit_run(
 
     # Resolve workflow + version
     if body.version is None:
-        wf = (await session.execute(
-            text("SELECT latest_version FROM workflows WHERE id = :wid"),
-            {"wid": body.workflow_id},
-        )).scalar_one_or_none()
+        wf = (
+            await session.execute(
+                text("SELECT latest_version FROM workflows WHERE id = :wid"),
+                {"wid": body.workflow_id},
+            )
+        ).scalar_one_or_none()
         if wf is None:
             raise HTTPException(404, "workflow not found")
         version = wf
     else:
         version = body.version
 
-    dag_row = (await session.execute(
-        text("SELECT dag FROM workflow_versions WHERE workflow_id = :wid AND version = :v"),
-        {"wid": body.workflow_id, "v": version},
-    )).scalar_one_or_none()
+    dag_row = (
+        await session.execute(
+            text("SELECT dag FROM workflow_versions WHERE workflow_id = :wid AND version = :v"),
+            {"wid": body.workflow_id, "v": version},
+        )
+    ).scalar_one_or_none()
     if dag_row is None:
         raise HTTPException(404, "workflow version not found")
     dag = dag_row
@@ -401,27 +428,29 @@ async def submit_run(
     )
 
     # Insert the run row using the pre-generated id
-    run_id = (await session.execute(
-        text(
-            """
+    run_id = (
+        await session.execute(
+            text(
+                """
             INSERT INTO workflow_runs (id, workflow_id, version, status, inputs, triggered_by, triggered_by_kind,
                                        team_id, project_id, scoped_api_key_id)
             VALUES (:id, :wid, :v, 'pending', CAST(:inputs AS jsonb), :tb, :tbk, :team, :project, :key_id)
             RETURNING id
             """
-        ),
-        {
-            "id": run_id_val,
-            "wid": body.workflow_id,
-            "v": version,
-            "inputs": json.dumps(body.inputs),
-            "tb": body.triggered_by,
-            "tbk": body.triggered_by_kind,
-            "team": body.team_id,
-            "project": body.project_id,
-            "key_id": key_id,
-        },
-    )).scalar_one()
+            ),
+            {
+                "id": run_id_val,
+                "wid": body.workflow_id,
+                "v": version,
+                "inputs": json.dumps(body.inputs),
+                "tb": body.triggered_by,
+                "tbk": body.triggered_by_kind,
+                "team": body.team_id,
+                "project": body.project_id,
+                "key_id": key_id,
+            },
+        )
+    ).scalar_one()
 
     # Enqueue the entry node
     entry_node = dag.get("entry_node")
@@ -448,9 +477,14 @@ async def submit_run(
     # Publish run.started — best-effort
     if redis is not None:
         try:
-            await wf_events.run_started(redis, run_id, uuid.UUID(body.workflow_id), version,
-                                        uuid.UUID(body.team_id),
-                                        uuid.UUID(body.project_id) if body.project_id else None)
+            await wf_events.run_started(
+                redis,
+                run_id,
+                uuid.UUID(body.workflow_id),
+                version,
+                uuid.UUID(body.team_id),
+                uuid.UUID(body.project_id) if body.project_id else None,
+            )
         except Exception as exc:
             _log.warning("run.started publish failed: %s", exc)
 
@@ -466,31 +500,43 @@ async def get_run(
     session: AsyncSession = Depends(get_session),
     _auth: dict = Depends(require_admin_auth),
 ) -> dict:
-    run = (await session.execute(
-        text(
-            """
+    run = (
+        (
+            await session.execute(
+                text(
+                    """
             SELECT id, workflow_id, version, status, inputs, outputs, error,
                    triggered_by, triggered_by_kind, team_id, project_id,
                    started_at, finished_at, created_at
             FROM workflow_runs WHERE id = :rid
             """
-        ),
-        {"rid": run_id},
-    )).mappings().first()
+                ),
+                {"rid": run_id},
+            )
+        )
+        .mappings()
+        .first()
+    )
     if run is None:
         raise HTTPException(404, "run not found")
 
-    nodes = (await session.execute(
-        text(
-            """
+    nodes = (
+        (
+            await session.execute(
+                text(
+                    """
             SELECT node_id, iteration, status, agent_id, inputs, outputs, error,
                    started_at, finished_at
             FROM run_nodes WHERE run_id = :rid
             ORDER BY started_at NULLS LAST, node_id
             """
-        ),
-        {"rid": run_id},
-    )).mappings().all()
+                ),
+                {"rid": run_id},
+            )
+        )
+        .mappings()
+        .all()
+    )
 
     def _stringify(row: dict) -> dict:
         out = dict(row)
@@ -516,17 +562,19 @@ async def cancel_run(
     _auth: dict = Depends(require_admin_auth),
 ) -> dict:
     # Set status to cancelled and revoke the scoped key
-    row = (await session.execute(
-        text(
-            """
+    row = (
+        await session.execute(
+            text(
+                """
             UPDATE workflow_runs
             SET status = 'cancelled', finished_at = NOW()
             WHERE id = :rid AND status IN ('pending', 'running')
             RETURNING scoped_api_key_id
             """
-        ),
-        {"rid": run_id},
-    )).first()
+            ),
+            {"rid": run_id},
+        )
+    ).first()
     if row is None:
         raise HTTPException(409, "run is not cancellable (already finished or not found)")
     if row[0]:
@@ -546,6 +594,7 @@ async def cancel_run(
 # =============================================================================
 # /runs/{id}/stream — T7 (SSE)
 # =============================================================================
+
 
 @router.get("/runs/{run_id}/stream")
 async def stream_run_events(
@@ -569,19 +618,27 @@ async def stream_run_events(
         raise HTTPException(422, "invalid run_id")
 
     # Initial snapshot
-    run = (await session.execute(
-        text("SELECT status FROM workflow_runs WHERE id = :rid"),
-        {"rid": run_id},
-    )).first()
+    run = (
+        await session.execute(
+            text("SELECT status FROM workflow_runs WHERE id = :rid"),
+            {"rid": run_id},
+        )
+    ).first()
     if run is None:
         raise HTTPException(404, "run not found")
 
     async def _generator():
         # Backfill: current run state + nodes
-        nodes = (await session.execute(
-            text("SELECT node_id, iteration, status FROM run_nodes WHERE run_id = :rid"),
-            {"rid": run_id},
-        )).mappings().all()
+        nodes = (
+            (
+                await session.execute(
+                    text("SELECT node_id, iteration, status FROM run_nodes WHERE run_id = :rid"),
+                    {"rid": run_id},
+                )
+            )
+            .mappings()
+            .all()
+        )
         snap = {
             "kind": "snapshot",
             "ts": datetime.now(timezone.utc).isoformat(),

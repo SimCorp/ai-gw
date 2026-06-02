@@ -68,11 +68,14 @@ async def validate_api_key(key: str, db: asyncpg.Connection, redis=None) -> dict
                 if cached:
                     _log.warning(
                         "Postgres unavailable, serving API key from Redis cache (key_hash=%.8s...): %s",
-                        key_hash, pg_exc,
+                        key_hash,
+                        pg_exc,
                     )
                     return json.loads(cached)
             except Exception:
                 pass
 
         _log.error("Postgres unavailable and no Redis cache for API key validation: %s", pg_exc)
-        raise HTTPException(status_code=503, detail="Authentication service temporarily unavailable")
+        raise HTTPException(
+            status_code=503, detail="Authentication service temporarily unavailable"
+        )

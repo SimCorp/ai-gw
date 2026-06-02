@@ -12,6 +12,7 @@ dropped — a mapping's scope is now simply the organization node it targets:
 The legacy request/response shape (scope_type + scope_id + scope_name) is kept
 for backwards compatibility with the admin UI; it is derived from the node row.
 """
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -34,17 +35,29 @@ class GroupMappingCreate(BaseModel):
 
 
 _VALID_ROLES = {
-    "platform_admin", "area_owner", "unit_lead",
-    "team_admin", "developer", "viewer",
+    "platform_admin",
+    "area_owner",
+    "unit_lead",
+    "team_admin",
+    "developer",
+    "viewer",
 }
 _VALID_SCOPE_TYPES = {"global", "area", "unit", "team"}
 
 
 async def _root_node_id(session: AsyncSession) -> str:
-    row = (await session.execute(
-        text("SELECT id::text AS id FROM organization_nodes "
-             "WHERE type = 'root' ORDER BY created_at LIMIT 1")
-    )).mappings().first()
+    row = (
+        (
+            await session.execute(
+                text(
+                    "SELECT id::text AS id FROM organization_nodes "
+                    "WHERE type = 'root' ORDER BY created_at LIMIT 1"
+                )
+            )
+        )
+        .mappings()
+        .first()
+    )
     if not row:
         raise HTTPException(status_code=500, detail="Root organization node missing")
     return row["id"]
@@ -55,7 +68,10 @@ async def list_mappings(
     admin: dict = Depends(require_platform_admin),
     session: AsyncSession = Depends(get_session),
 ):
-    rows = (await session.execute(text("""
+    rows = (
+        (
+            await session.execute(
+                text("""
         SELECT ra.id, ra.entra_group_id, ra.entra_group_name, ra.role,
                ra.node_id::text AS scope_id, ra.granted_at AS created_at,
                CASE WHEN n.type = 'root' THEN 'global' ELSE n.type END AS scope_type,
@@ -65,7 +81,12 @@ async def list_mappings(
         JOIN organization_nodes n ON n.id = ra.node_id
         LEFT JOIN users u ON u.id = ra.granted_by
         ORDER BY ra.entra_group_name, ra.role
-    """))).mappings().all()
+    """)
+            )
+        )
+        .mappings()
+        .all()
+    )
     return [dict(r) for r in rows]
 
 
@@ -91,7 +112,10 @@ async def create_mapping(
             )
         node_id = body.scope_id
 
-    row = (await session.execute(text("""
+    row = (
+        (
+            await session.execute(
+                text("""
         INSERT INTO role_assignments
             (entra_group_id, entra_group_name, role, node_id, granted_by)
         VALUES (:gid, :gname, :role, CAST(:nid AS uuid), CAST(:by AS uuid))
@@ -99,13 +123,19 @@ async def create_mapping(
             SET entra_group_name = EXCLUDED.entra_group_name
         RETURNING id, entra_group_id, entra_group_name, role,
                   node_id::text AS scope_id, granted_at AS created_at
-    """), {
-        "gid": body.entra_group_id,
-        "gname": body.entra_group_name,
-        "role": body.role,
-        "nid": node_id,
-        "by": admin["user_id"],
-    })).mappings().one()
+    """),
+                {
+                    "gid": body.entra_group_id,
+                    "gname": body.entra_group_name,
+                    "role": body.role,
+                    "nid": node_id,
+                    "by": admin["user_id"],
+                },
+            )
+        )
+        .mappings()
+        .one()
+    )
     await session.commit()
     return dict(row)
 

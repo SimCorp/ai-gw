@@ -8,6 +8,7 @@ Concurrency is bounded by an asyncio.Semaphore (default 5). Stale claims
 (worker crashed mid-execution) are recovered by a background sweeper that
 resets expired claim_expires rows.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -41,6 +42,7 @@ _log = logging.getLogger("workflow-worker")
 # Queue operations
 # ---------------------------------------------------------------------------
 
+
 async def _claim_one(pool: asyncpg.Pool, worker_id: str, claim_ttl_s: int) -> dict | None:
     """Claim a single work item using SELECT ... FOR UPDATE SKIP LOCKED."""
     async with pool.acquire() as conn:
@@ -63,12 +65,23 @@ async def _claim_one(pool: asyncpg.Pool, worker_id: str, claim_ttl_s: int) -> di
                 SET claimed_by = $1, claim_expires = NOW() + ($2 || ' seconds')::interval, attempts = attempts + 1
                 WHERE id = $3
                 """,
-                worker_id, str(claim_ttl_s), row["id"],
+                worker_id,
+                str(claim_ttl_s),
+                row["id"],
             )
             return dict(row)
 
 
-async def _finalize_node(pool: asyncpg.Pool, queue_id: int, run_id: uuid.UUID, node_id: str, iteration: int, status: str, outputs: dict | None, error: str | None) -> None:
+async def _finalize_node(
+    pool: asyncpg.Pool,
+    queue_id: int,
+    run_id: uuid.UUID,
+    node_id: str,
+    iteration: int,
+    status: str,
+    outputs: dict | None,
+    error: str | None,
+) -> None:
     async with pool.acquire() as conn:
         async with conn.transaction():
             await conn.execute(
@@ -77,12 +90,19 @@ async def _finalize_node(pool: asyncpg.Pool, queue_id: int, run_id: uuid.UUID, n
                 SET status = $4, outputs = $5::jsonb, error = $6, finished_at = NOW()
                 WHERE run_id = $1 AND node_id = $2 AND iteration = $3
                 """,
-                run_id, node_id, iteration, status, json.dumps(outputs) if outputs is not None else None, error,
+                run_id,
+                node_id,
+                iteration,
+                status,
+                json.dumps(outputs) if outputs is not None else None,
+                error,
             )
             await conn.execute("DELETE FROM work_queue WHERE id = $1", queue_id)
 
 
-async def _mark_node_running(pool: asyncpg.Pool, run_id: uuid.UUID, node_id: str, iteration: int, agent_id: uuid.UUID | None) -> None:
+async def _mark_node_running(
+    pool: asyncpg.Pool, run_id: uuid.UUID, node_id: str, iteration: int, agent_id: uuid.UUID | None
+) -> None:
     async with pool.acquire() as conn:
         await conn.execute(
             """
@@ -90,7 +110,10 @@ async def _mark_node_running(pool: asyncpg.Pool, run_id: uuid.UUID, node_id: str
             SET status = 'running', started_at = NOW(), agent_id = $4
             WHERE run_id = $1 AND node_id = $2 AND iteration = $3
             """,
-            run_id, node_id, iteration, agent_id,
+            run_id,
+            node_id,
+            iteration,
+            agent_id,
         )
         await conn.execute(
             "UPDATE workflow_runs SET status = 'running', started_at = COALESCE(started_at, NOW()) WHERE id = $1 AND status = 'pending'",
@@ -130,25 +153,33 @@ async def _enqueue_successor(pool: asyncpg.Pool, run_id: uuid.UUID, node_id: str
         async with conn.transaction():
             await conn.execute(
                 "INSERT INTO run_nodes (run_id, node_id, iteration, status) VALUES ($1, $2, 0, 'pending') ON CONFLICT DO NOTHING",
-                run_id, node_id,
+                run_id,
+                node_id,
             )
             await conn.execute(
                 "INSERT INTO work_queue (run_id, node_id) VALUES ($1, $2)",
-                run_id, node_id,
+                run_id,
+                node_id,
             )
 
 
-async def _enqueue_loop_iteration(pool: asyncpg.Pool, run_id: uuid.UUID, node_id: str, iteration: int) -> None:
+async def _enqueue_loop_iteration(
+    pool: asyncpg.Pool, run_id: uuid.UUID, node_id: str, iteration: int
+) -> None:
     """Re-enqueue the same node for the next loop iteration."""
     async with pool.acquire() as conn:
         async with conn.transaction():
             await conn.execute(
                 "INSERT INTO run_nodes (run_id, node_id, iteration, status) VALUES ($1, $2, $3, 'pending') ON CONFLICT DO NOTHING",
-                run_id, node_id, iteration,
+                run_id,
+                node_id,
+                iteration,
             )
             await conn.execute(
                 "INSERT INTO work_queue (run_id, node_id, iteration) VALUES ($1, $2, $3)",
-                run_id, node_id, iteration,
+                run_id,
+                node_id,
+                iteration,
             )
 
 
@@ -159,7 +190,13 @@ async def _cleanup_run_key(redis: Redis, run_id: uuid.UUID) -> None:
         pass
 
 
-async def _mark_run_finished(pool: asyncpg.Pool, run_id: uuid.UUID, status: str, outputs: dict | None = None, error: str | None = None) -> None:
+async def _mark_run_finished(
+    pool: asyncpg.Pool,
+    run_id: uuid.UUID,
+    status: str,
+    outputs: dict | None = None,
+    error: str | None = None,
+) -> None:
     async with pool.acquire() as conn:
         await conn.execute(
             """
@@ -167,7 +204,10 @@ async def _mark_run_finished(pool: asyncpg.Pool, run_id: uuid.UUID, status: str,
             SET status = $2, finished_at = NOW(), outputs = $3::jsonb, error = $4
             WHERE id = $1
             """,
-            run_id, status, json.dumps(outputs) if outputs is not None else None, error,
+            run_id,
+            status,
+            json.dumps(outputs) if outputs is not None else None,
+            error,
         )
         # Revoke the scoped key
         await conn.execute(
@@ -194,7 +234,10 @@ async def _run_node_state(pool: asyncpg.Pool, run_id: uuid.UUID) -> dict[str, st
 # Sweeper — reclaim stale claims
 # ---------------------------------------------------------------------------
 
-async def _sweeper_loop(pool: asyncpg.Pool, interval_s: float, stop: asyncio.Event, redis: Redis | None = None) -> None:
+
+async def _sweeper_loop(
+    pool: asyncpg.Pool, interval_s: float, stop: asyncio.Event, redis: Redis | None = None
+) -> None:
     while not stop.is_set():
         try:
             async with pool.acquire() as conn:
@@ -222,7 +265,11 @@ async def _sweeper_loop(pool: asyncpg.Pool, interval_s: float, stop: asyncio.Eve
                                 try:
                                     await redis.delete(f"workflow:scoped_key:{row['run_id']}")
                                 except Exception as exc:
-                                    _log.warning("sweeper redis cleanup error run_id=%s: %s", row["run_id"], exc)
+                                    _log.warning(
+                                        "sweeper redis cleanup error run_id=%s: %s",
+                                        row["run_id"],
+                                        exc,
+                                    )
         except Exception as exc:
             _log.warning("sweeper error: %s", exc)
         try:
@@ -234,6 +281,7 @@ async def _sweeper_loop(pool: asyncpg.Pool, interval_s: float, stop: asyncio.Eve
 # ---------------------------------------------------------------------------
 # Per-job handler
 # ---------------------------------------------------------------------------
+
 
 async def _handle_job(
     *,
@@ -262,8 +310,12 @@ async def _handle_job(
     dag = ctx["dag"] if isinstance(ctx["dag"], dict) else json.loads(ctx["dag"])
     nspec = dag_node(dag, node_id)
     if nspec is None:
-        await _finalize_node(pool, queue_id, run_id, node_id, iteration, "failed", None, f"node {node_id} not in DAG")
-        await node_finished(redis, run_id, node_id, iteration, "failed", error=f"node {node_id} not in DAG")
+        await _finalize_node(
+            pool, queue_id, run_id, node_id, iteration, "failed", None, f"node {node_id} not in DAG"
+        )
+        await node_finished(
+            redis, run_id, node_id, iteration, "failed", error=f"node {node_id} not in DAG"
+        )
         await _mark_run_finished(pool, run_id, "failed", error=f"node {node_id} not in DAG")
         await run_finished(redis, run_id, "failed")
         await _cleanup_run_key(redis, run_id)
@@ -285,7 +337,9 @@ async def _handle_job(
     # If this is the entry node, merge run-level inputs
     if node_id == dag.get("entry_node"):
         async with pool.acquire() as conn:
-            run_inputs = await conn.fetchval("SELECT inputs FROM workflow_runs WHERE id = $1", run_id)
+            run_inputs = await conn.fetchval(
+                "SELECT inputs FROM workflow_runs WHERE id = $1", run_id
+            )
         if run_inputs:
             inputs.update(run_inputs if isinstance(run_inputs, dict) else json.loads(run_inputs))
     # Merge predecessor outputs (linear v0.1: one predecessor)
@@ -306,11 +360,14 @@ async def _handle_job(
         async with pool.acquire() as conn:
             pred_rows = await conn.fetch(
                 "SELECT node_id, outputs FROM run_nodes WHERE run_id = $1 AND node_id = ANY($2)",
-                run_id, pred_ids,
+                run_id,
+                pred_ids,
             )
         for pr in pred_rows:
             if pr["outputs"]:
-                out = pr["outputs"] if isinstance(pr["outputs"], dict) else json.loads(pr["outputs"])
+                out = (
+                    pr["outputs"] if isinstance(pr["outputs"], dict) else json.loads(pr["outputs"])
+                )
                 pred_outputs[pr["node_id"]] = out
     if pred_outputs:
         inputs["_predecessors"] = pred_outputs
@@ -342,7 +399,9 @@ async def _handle_job(
     # Choose runtime: RelayRuntime for relay:// agents, DockerRuntime otherwise
     image: str = agent["image"]
     active_runtime: DockerRuntime | RelayRuntime = (
-        RelayRuntime(relay_url, relay_secret=relay_secret) if image.startswith("relay://") else runtime
+        RelayRuntime(relay_url, relay_secret=relay_secret)
+        if image.startswith("relay://")
+        else runtime
     )
 
     on_log = functools.partial(_forward_log, redis, run_id, node_id)
@@ -399,7 +458,9 @@ async def _handle_job(
         await _cleanup_run_key(redis, run_id)
         return
 
-    await _finalize_node(pool, queue_id, run_id, node_id, iteration, "succeeded", result.outputs, None)
+    await _finalize_node(
+        pool, queue_id, run_id, node_id, iteration, "succeeded", result.outputs, None
+    )
     await node_finished(redis, run_id, node_id, iteration, "succeeded", outputs=result.outputs)
 
     outputs = result.outputs or {}
@@ -407,7 +468,9 @@ async def _handle_job(
     # Autonomous agent: fire-and-forget sub-workflow spawn if _spawn key present
     spawn_payload = outputs.get("_spawn")
     if spawn_payload and isinstance(spawn_payload, dict):
-        asyncio.create_task(_fire_spawn(admin_url, spawn_payload, ctx["team_id"], admin_internal_token))
+        asyncio.create_task(
+            _fire_spawn(admin_url, spawn_payload, ctx["team_id"], admin_internal_token)
+        )
 
     # Loop check: re-enqueue same node if loop condition met
     if should_loop(nspec, outputs, iteration):
@@ -424,9 +487,7 @@ async def _handle_job(
     elif is_terminal(dag, node_id):
         # No successors: run is complete when all nodes have succeeded
         all_done = all(
-            state.get(n["id"]) == "succeeded"
-            for n in dag.get("nodes", [])
-            if n.get("id") in state
+            state.get(n["id"]) == "succeeded" for n in dag.get("nodes", []) if n.get("id") in state
         )
         if all_done:
             await _mark_run_finished(pool, run_id, "succeeded", outputs=result.outputs)
@@ -437,7 +498,9 @@ async def _handle_job(
                 pass
 
 
-async def _fire_spawn(admin_url: str, spawn_payload: dict, team_id: str, admin_internal_token: str) -> None:
+async def _fire_spawn(
+    admin_url: str, spawn_payload: dict, team_id: str, admin_internal_token: str
+) -> None:
     """Fire-and-forget: POST sub-workflow spawn to admin service.
 
     Restricts spawn_payload to only allowed fields (workflow_id, version, inputs)
@@ -476,11 +539,12 @@ async def _fire_spawn(admin_url: str, spawn_payload: dict, team_id: str, admin_i
 def _redact_outputs(outputs: dict) -> dict:
     """Redact any scoped API keys or known secrets from outputs before DB persistence."""
     import re
-    SECRET_RE = re.compile(r'aigw_run_[A-Za-z0-9_\-]{20,}')
+
+    SECRET_RE = re.compile(r"aigw_run_[A-Za-z0-9_\-]{20,}")
 
     def _redact_value(v):
         if isinstance(v, str):
-            return SECRET_RE.sub('[REDACTED]', v)
+            return SECRET_RE.sub("[REDACTED]", v)
         elif isinstance(v, dict):
             return {k: _redact_value(val) for k, val in v.items()}
         elif isinstance(v, list):
@@ -502,14 +566,19 @@ async def _forward_log(redis: Redis, run_id: uuid.UUID, node_id: str, line: str)
 # Main loop
 # ---------------------------------------------------------------------------
 
+
 async def _main() -> None:
     cfg = Settings.from_env()
     _runtime_label = (
-        cfg.agent_runtime if cfg.agent_runtime != "kubernetes" else "kubernetes (not yet configured)"
+        cfg.agent_runtime
+        if cfg.agent_runtime != "kubernetes"
+        else "kubernetes (not yet configured)"
     )
     _log.info(
         "workflow-worker starting (id=%s concurrency=%d runtime=%s)",
-        cfg.worker_id, cfg.concurrency, _runtime_label,
+        cfg.worker_id,
+        cfg.concurrency,
+        _runtime_label,
     )
 
     pool = await asyncpg.create_pool(cfg.database_url, min_size=2, max_size=10)

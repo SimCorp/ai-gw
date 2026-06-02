@@ -2,6 +2,7 @@
 Minimal SMTP email sender. All sends are no-ops when SMTP_HOST is not set.
 Uses asyncio.to_thread to avoid blocking the event loop.
 """
+
 import asyncio
 import logging
 import smtplib
@@ -15,6 +16,7 @@ log = logging.getLogger(__name__)
 def _get_smtp_settings():
     """Read SMTP config from env at send time (not import time)."""
     import os
+
     return {
         "host": os.getenv("SMTP_HOST", ""),
         "port": int(os.getenv("SMTP_PORT", "587")),

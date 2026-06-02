@@ -6,6 +6,7 @@ Idempotent: runs GET first, only creates if missing (matched by name).
 Run: python services/admin/scripts/seed_workday_org.py
 Or inside docker: docker compose -f infra/docker-compose.yml exec admin python /app/scripts/seed_workday_org.py
 """
+
 import os
 import sys
 
@@ -31,14 +32,54 @@ def main():
         existing_areas = {a["name"]: a for a in c.get("/areas", headers=headers).json()}
 
         areas_data = [
-            {"name": "Product & Technology",      "slug": "product-technology",   "color": "#3B82F6", "description": "Marc Schröter — Engineering, Platform, Product"},
-            {"name": "Operations",                "slug": "operations",           "color": "#10B981", "description": "Ronan Donnelly — Value Streams, Client Operations"},
-            {"name": "Commercial",                "slug": "commercial",           "color": "#F59E0B", "description": "Oliver Johnson — EMEA, APAC, Americas"},
-            {"name": "Finance & IT",              "slug": "finance-it",           "color": "#8B5CF6", "description": "Jeroen van den Heuvel — Group IT, Finance, CISO"},
-            {"name": "Professional Services",     "slug": "professional-services","color": "#EF4444", "description": "Fred Bouteiller — Consulting, Delivery"},
-            {"name": "People & Culture",          "slug": "people-culture",       "color": "#EC4899", "description": "Debbie Townley — HR, Comms, Learning"},
-            {"name": "Strategy",                  "slug": "strategy",             "color": "#6366F1", "description": "Anders Halsteen Thomsen — Group Strategy"},
-            {"name": "Managed Business Services", "slug": "mbs",                 "color": "#14B8A6", "description": "Ulrik Modigh — MBS Delivery"},
+            {
+                "name": "Product & Technology",
+                "slug": "product-technology",
+                "color": "#3B82F6",
+                "description": "Marc Schröter — Engineering, Platform, Product",
+            },
+            {
+                "name": "Operations",
+                "slug": "operations",
+                "color": "#10B981",
+                "description": "Ronan Donnelly — Value Streams, Client Operations",
+            },
+            {
+                "name": "Commercial",
+                "slug": "commercial",
+                "color": "#F59E0B",
+                "description": "Oliver Johnson — EMEA, APAC, Americas",
+            },
+            {
+                "name": "Finance & IT",
+                "slug": "finance-it",
+                "color": "#8B5CF6",
+                "description": "Jeroen van den Heuvel — Group IT, Finance, CISO",
+            },
+            {
+                "name": "Professional Services",
+                "slug": "professional-services",
+                "color": "#EF4444",
+                "description": "Fred Bouteiller — Consulting, Delivery",
+            },
+            {
+                "name": "People & Culture",
+                "slug": "people-culture",
+                "color": "#EC4899",
+                "description": "Debbie Townley — HR, Comms, Learning",
+            },
+            {
+                "name": "Strategy",
+                "slug": "strategy",
+                "color": "#6366F1",
+                "description": "Anders Halsteen Thomsen — Group Strategy",
+            },
+            {
+                "name": "Managed Business Services",
+                "slug": "mbs",
+                "color": "#14B8A6",
+                "description": "Ulrik Modigh — MBS Delivery",
+            },
         ]
 
         area_ids = {}
@@ -68,23 +109,38 @@ def main():
             )
         }
 
-        pt_id   = area_ids.get("Product & Technology")
-        fi_id   = area_ids.get("Finance & IT")
+        pt_id = area_ids.get("Product & Technology")
+        fi_id = area_ids.get("Finance & IT")
         comm_id = area_ids.get("Commercial")
 
         units_data = [
             # Product & Technology
-            {"name": "Platform",                "slug": "platform",           "area_id": pt_id,   "color": "#3B82F6"},
-            {"name": "Application Engineering", "slug": "app-engineering",    "area_id": pt_id,   "color": "#60A5FA"},
-            {"name": "Product Management",      "slug": "product-management", "area_id": pt_id,   "color": "#93C5FD"},
+            {"name": "Platform", "slug": "platform", "area_id": pt_id, "color": "#3B82F6"},
+            {
+                "name": "Application Engineering",
+                "slug": "app-engineering",
+                "area_id": pt_id,
+                "color": "#60A5FA",
+            },
+            {
+                "name": "Product Management",
+                "slug": "product-management",
+                "area_id": pt_id,
+                "color": "#93C5FD",
+            },
             # Finance & IT
-            {"name": "Group IT",                "slug": "group-it",           "area_id": fi_id,   "color": "#8B5CF6"},
-            {"name": "Information Security",    "slug": "infosec",            "area_id": fi_id,   "color": "#A78BFA"},
+            {"name": "Group IT", "slug": "group-it", "area_id": fi_id, "color": "#8B5CF6"},
+            {
+                "name": "Information Security",
+                "slug": "infosec",
+                "area_id": fi_id,
+                "color": "#A78BFA",
+            },
             # Commercial
-            {"name": "EMEA",                    "slug": "emea",               "area_id": comm_id, "color": "#F59E0B"},
-            {"name": "APAC",                    "slug": "apac",               "area_id": comm_id, "color": "#FBB040"},
-            {"name": "Americas",                "slug": "americas",           "area_id": comm_id, "color": "#FCD34D"},
-            {"name": "UK & Nordics",            "slug": "uk-nordics",         "area_id": comm_id, "color": "#FDE68A"},
+            {"name": "EMEA", "slug": "emea", "area_id": comm_id, "color": "#F59E0B"},
+            {"name": "APAC", "slug": "apac", "area_id": comm_id, "color": "#FBB040"},
+            {"name": "Americas", "slug": "americas", "area_id": comm_id, "color": "#FCD34D"},
+            {"name": "UK & Nordics", "slug": "uk-nordics", "area_id": comm_id, "color": "#FDE68A"},
         ]
 
         unit_ids = {}
@@ -122,14 +178,44 @@ def main():
 
         teams_data = [
             # Platform engineering squads
-            {"name": "LIFT",                             "slug": "lift",            "unit_id": platform_id, "area_id": pt_id},
-            {"name": "Connectivity & Cloud Foundation",  "slug": "ccf",             "unit_id": platform_id, "area_id": pt_id},
-            {"name": "Hosting",                          "slug": "hosting",         "unit_id": platform_id, "area_id": pt_id},
-            {"name": "Core & Platform",                  "slug": "core-platform",   "unit_id": platform_id, "area_id": pt_id},
-            {"name": "Connectivity & Platform Services", "slug": "cps",             "unit_id": platform_id, "area_id": pt_id},
-            {"name": "Application",                      "slug": "application",     "unit_id": platform_id, "area_id": pt_id},
-            {"name": "Release & Adoption",               "slug": "release-adoption","unit_id": platform_id, "area_id": pt_id},
-            {"name": "Architecture",                     "slug": "architecture",    "unit_id": platform_id, "area_id": pt_id},
+            {"name": "LIFT", "slug": "lift", "unit_id": platform_id, "area_id": pt_id},
+            {
+                "name": "Connectivity & Cloud Foundation",
+                "slug": "ccf",
+                "unit_id": platform_id,
+                "area_id": pt_id,
+            },
+            {"name": "Hosting", "slug": "hosting", "unit_id": platform_id, "area_id": pt_id},
+            {
+                "name": "Core & Platform",
+                "slug": "core-platform",
+                "unit_id": platform_id,
+                "area_id": pt_id,
+            },
+            {
+                "name": "Connectivity & Platform Services",
+                "slug": "cps",
+                "unit_id": platform_id,
+                "area_id": pt_id,
+            },
+            {
+                "name": "Application",
+                "slug": "application",
+                "unit_id": platform_id,
+                "area_id": pt_id,
+            },
+            {
+                "name": "Release & Adoption",
+                "slug": "release-adoption",
+                "unit_id": platform_id,
+                "area_id": pt_id,
+            },
+            {
+                "name": "Architecture",
+                "slug": "architecture",
+                "unit_id": platform_id,
+                "area_id": pt_id,
+            },
         ]
 
         for t in teams_data:

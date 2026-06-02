@@ -8,6 +8,7 @@ All endpoints require a valid session (supplied via the _auth dependency at
 include_router call-site in main.py). Permission checks use can_access() /
 require_node_role() from unified_auth.
 """
+
 from __future__ import annotations
 
 import json
@@ -30,17 +31,26 @@ router = APIRouter(prefix="/nodes", tags=["nodes"])
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _slugify(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
 
 
 async def _get_node_row(session: AsyncSession, node_id: str) -> Any:
-    row = (await session.execute(
-        text("SELECT id, name, slug, type, parent_id, path, color, description, location, "
-             "monthly_budget_usd, budget_alert_threshold, created_at "
-             "FROM organization_nodes WHERE id = CAST(:nid AS uuid)"),
-        {"nid": node_id},
-    )).mappings().first()
+    row = (
+        (
+            await session.execute(
+                text(
+                    "SELECT id, name, slug, type, parent_id, path, color, description, location, "
+                    "monthly_budget_usd, budget_alert_threshold, created_at "
+                    "FROM organization_nodes WHERE id = CAST(:nid AS uuid)"
+                ),
+                {"nid": node_id},
+            )
+        )
+        .mappings()
+        .first()
+    )
     if not row:
         raise HTTPException(404, "Node not found")
     return row
@@ -61,7 +71,9 @@ def _node_to_dict(row: Any) -> dict:
             float(row["monthly_budget_usd"]) if row["monthly_budget_usd"] is not None else None
         ),
         "budget_alert_threshold": (
-            float(row["budget_alert_threshold"]) if row["budget_alert_threshold"] is not None else None
+            float(row["budget_alert_threshold"])
+            if row["budget_alert_threshold"] is not None
+            else None
         ),
         "created_at": row["created_at"].isoformat() if row["created_at"] else None,
     }
@@ -71,10 +83,13 @@ def _node_to_dict(row: Any) -> dict:
 # Root node bootstrap (called from lifespan in main.py)
 # ---------------------------------------------------------------------------
 
+
 async def ensure_root_node(session: AsyncSession) -> dict:
-    row = (await session.execute(
-        text("SELECT id, path FROM organization_nodes WHERE parent_id IS NULL LIMIT 1")
-    )).first()
+    row = (
+        await session.execute(
+            text("SELECT id, path FROM organization_nodes WHERE parent_id IS NULL LIMIT 1")
+        )
+    ).first()
     if row:
         return {"id": str(row[0]), "path": row[1]}
     root_id = str(uuid.uuid4())
@@ -87,16 +102,19 @@ async def ensure_root_node(session: AsyncSession) -> dict:
         {"id": root_id, "path": path},
     )
     await session.commit()
-    result = (await session.execute(
-        text("SELECT id, path FROM organization_nodes WHERE id = CAST(:id AS uuid)"),
-        {"id": root_id},
-    )).first()
+    result = (
+        await session.execute(
+            text("SELECT id, path FROM organization_nodes WHERE id = CAST(:id AS uuid)"),
+            {"id": root_id},
+        )
+    ).first()
     return {"id": str(result[0]), "path": result[1]}
 
 
 # ---------------------------------------------------------------------------
 # Schemas
 # ---------------------------------------------------------------------------
+
 
 class CreateNodeRequest(BaseModel):
     name: str
@@ -143,6 +161,7 @@ class AddPermissionRequest(BaseModel):
 # List / search
 # ---------------------------------------------------------------------------
 
+
 @router.get("")
 async def list_nodes(
     parent_id: str | None = Query(default=None),
@@ -167,8 +186,10 @@ async def list_nodes(
         params["search"] = f"%{search}%"
 
     where = " AND ".join(conditions)
-    rows = (await session.execute(
-        text(f"""
+    rows = (
+        (
+            await session.execute(
+                text(f"""
             SELECT id, name, slug, type, parent_id, path, color, description, location,
                    monthly_budget_usd, budget_alert_threshold, created_at
             FROM organization_nodes
@@ -176,8 +197,12 @@ async def list_nodes(
             ORDER BY path
             LIMIT :limit OFFSET :offset
         """),
-        params,
-    )).mappings().all()
+                params,
+            )
+        )
+        .mappings()
+        .all()
+    )
     return [_node_to_dict(r) for r in rows]
 
 
@@ -185,20 +210,27 @@ async def list_nodes(
 # Tree
 # ---------------------------------------------------------------------------
 
+
 @router.get("/tree")
 async def get_tree(
     current_user: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
     """Return full org tree as nested JSON, ordered by path."""
-    rows = (await session.execute(
-        text("""
+    rows = (
+        (
+            await session.execute(
+                text("""
             SELECT id, name, slug, type, parent_id, path, color, description, location,
                    monthly_budget_usd, budget_alert_threshold, created_at
             FROM organization_nodes
             ORDER BY path
         """)
-    )).mappings().all()
+            )
+        )
+        .mappings()
+        .all()
+    )
 
     # Build nested tree from flat path-ordered list
     nodes_by_id: dict[str, dict] = {}
@@ -225,6 +257,7 @@ async def get_tree(
 # Create
 # ---------------------------------------------------------------------------
 
+
 @router.post("", status_code=201)
 async def create_node(
     body: CreateNodeRequest,
@@ -234,10 +267,12 @@ async def create_node(
 ):
     # Determine parent path for permission check
     if body.parent_id:
-        parent_row = (await session.execute(
-            text("SELECT id, path FROM organization_nodes WHERE id = CAST(:pid AS uuid)"),
-            {"pid": body.parent_id},
-        )).first()
+        parent_row = (
+            await session.execute(
+                text("SELECT id, path FROM organization_nodes WHERE id = CAST(:pid AS uuid)"),
+                {"pid": body.parent_id},
+            )
+        ).first()
         if not parent_row:
             raise HTTPException(404, "Parent node not found")
         parent_path = parent_row[1]
@@ -277,8 +312,13 @@ async def create_node(
         },
     )
     from app import audit
+
     await audit.record(
-        session, request, "create_node", "node", resource_id=node_id,
+        session,
+        request,
+        "create_node",
+        "node",
+        resource_id=node_id,
         details={"name": body.name, "type": body.type, "parent_id": body.parent_id},
     )
     await session.commit()
@@ -289,6 +329,7 @@ async def create_node(
 # ---------------------------------------------------------------------------
 # Get detail
 # ---------------------------------------------------------------------------
+
 
 @router.get("/{node_id}")
 async def get_node(
@@ -301,42 +342,60 @@ async def get_node(
     if not can_access(current_user, row["path"], "viewer"):
         raise HTTPException(403, "Insufficient permissions")
 
-    children = (await session.execute(
-        text("""
+    children = (
+        (
+            await session.execute(
+                text("""
             SELECT id, name, slug, type, parent_id, path, color, description, location,
                    monthly_budget_usd, budget_alert_threshold, created_at
             FROM organization_nodes WHERE parent_id = CAST(:nid AS uuid)
             ORDER BY name
         """),
-        {"nid": node_id},
-    )).mappings().all()
+                {"nid": node_id},
+            )
+        )
+        .mappings()
+        .all()
+    )
 
     parent = None
     if row["parent_id"]:
-        parent_row = (await session.execute(
-            text("SELECT id, name, slug, type, parent_id, path, color, description, location, "
-                 "monthly_budget_usd, budget_alert_threshold, created_at "
-                 "FROM organization_nodes WHERE id = CAST(:pid AS uuid)"),
-            {"pid": str(row["parent_id"])},
-        )).mappings().first()
+        parent_row = (
+            (
+                await session.execute(
+                    text(
+                        "SELECT id, name, slug, type, parent_id, path, color, description, location, "
+                        "monthly_budget_usd, budget_alert_threshold, created_at "
+                        "FROM organization_nodes WHERE id = CAST(:pid AS uuid)"
+                    ),
+                    {"pid": str(row["parent_id"])},
+                )
+            )
+            .mappings()
+            .first()
+        )
         if parent_row:
             parent = _node_to_dict(parent_row)
 
-    member_count = (await session.execute(
-        text("SELECT COUNT(*) FROM node_members WHERE node_id = CAST(:nid AS uuid)"),
-        {"nid": node_id},
-    )).scalar() or 0
+    member_count = (
+        await session.execute(
+            text("SELECT COUNT(*) FROM node_members WHERE node_id = CAST(:nid AS uuid)"),
+            {"nid": node_id},
+        )
+    ).scalar() or 0
 
     # MTD spend for this node only (not subtree)
-    spend_mtd = (await session.execute(
-        text("""
+    spend_mtd = (
+        await session.execute(
+            text("""
             SELECT COALESCE(SUM(cost_usd), 0)
             FROM cost_records
             WHERE node_id = CAST(:nid AS uuid)
               AND created_at >= date_trunc('month', NOW())
         """),
-        {"nid": node_id},
-    )).scalar() or 0
+            {"nid": node_id},
+        )
+    ).scalar() or 0
 
     result = _node_to_dict(row)
     result["parent"] = parent
@@ -349,6 +408,7 @@ async def get_node(
 # ---------------------------------------------------------------------------
 # Update
 # ---------------------------------------------------------------------------
+
 
 @router.put("/{node_id}")
 async def update_node(
@@ -392,6 +452,7 @@ async def update_node(
 # Delete
 # ---------------------------------------------------------------------------
 
+
 @router.delete("/{node_id}", status_code=204)
 async def delete_node(
     node_id: str,
@@ -415,6 +476,7 @@ async def delete_node(
 # Ancestry (breadcrumb)
 # ---------------------------------------------------------------------------
 
+
 @router.get("/{node_id}/ancestry")
 async def get_ancestry(
     node_id: str,
@@ -431,16 +493,22 @@ async def get_ancestry(
     if not parts:
         return []
 
-    rows = (await session.execute(
-        text("""
+    rows = (
+        (
+            await session.execute(
+                text("""
             SELECT id, name, slug, type, parent_id, path, color, description, location,
                    monthly_budget_usd, budget_alert_threshold, created_at
             FROM organization_nodes
             WHERE id = ANY(CAST(:ids AS uuid[]))
             ORDER BY path
         """),
-        {"ids": parts},
-    )).mappings().all()
+                {"ids": parts},
+            )
+        )
+        .mappings()
+        .all()
+    )
 
     return [_node_to_dict(r) for r in rows]
 
@@ -448,6 +516,7 @@ async def get_ancestry(
 # ---------------------------------------------------------------------------
 # Children
 # ---------------------------------------------------------------------------
+
 
 @router.get("/{node_id}/children")
 async def get_children(
@@ -459,16 +528,22 @@ async def get_children(
     if not can_access(current_user, row["path"], "viewer"):
         raise HTTPException(403, "Insufficient permissions")
 
-    children = (await session.execute(
-        text("""
+    children = (
+        (
+            await session.execute(
+                text("""
             SELECT id, name, slug, type, parent_id, path, color, description, location,
                    monthly_budget_usd, budget_alert_threshold, created_at
             FROM organization_nodes
             WHERE parent_id = CAST(:nid AS uuid)
             ORDER BY name
         """),
-        {"nid": node_id},
-    )).mappings().all()
+                {"nid": node_id},
+            )
+        )
+        .mappings()
+        .all()
+    )
 
     return [_node_to_dict(c) for c in children]
 
@@ -476,6 +551,7 @@ async def get_children(
 # ---------------------------------------------------------------------------
 # Members
 # ---------------------------------------------------------------------------
+
 
 @router.get("/{node_id}/members")
 async def list_members(
@@ -489,8 +565,10 @@ async def list_members(
     if not can_access(current_user, row["path"], "viewer"):
         raise HTTPException(403, "Insufficient permissions")
 
-    members = (await session.execute(
-        text("""
+    members = (
+        (
+            await session.execute(
+                text("""
             SELECT nm.id, nm.node_id, nm.user_id, nm.role, nm.created_at,
                    u.email, u.display_name
             FROM node_members nm
@@ -499,8 +577,12 @@ async def list_members(
             ORDER BY u.display_name, u.email
             LIMIT :limit OFFSET :offset
         """),
-        {"nid": node_id, "limit": limit, "offset": offset},
-    )).mappings().all()
+                {"nid": node_id, "limit": limit, "offset": offset},
+            )
+        )
+        .mappings()
+        .all()
+    )
 
     return [
         {
@@ -564,6 +646,7 @@ async def remove_member(
 # Policy (inherited + explicit)
 # ---------------------------------------------------------------------------
 
+
 @router.get("/{node_id}/policy")
 async def get_policy(
     node_id: str,
@@ -579,8 +662,10 @@ async def get_policy(
 
     # Fetch policies for all ancestors + current node in path order
     all_ids = parts  # root first (all UUIDs from path, including current)
-    policies_raw = (await session.execute(
-        text("""
+    policies_raw = (
+        (
+            await session.execute(
+                text("""
             SELECT p.*, n.path AS node_path, n.name AS node_name, n.id AS node_id_col
             FROM policies p
             JOIN organization_nodes n ON n.id = p.node_id
@@ -588,13 +673,21 @@ async def get_policy(
               AND p.project_id IS NULL
             ORDER BY length(n.path)
         """),
-        {"ids": all_ids},
-    )).mappings().all()
+                {"ids": all_ids},
+            )
+        )
+        .mappings()
+        .all()
+    )
 
     # Build inherited (ancestors) and explicit (current node)
     policy_fields = [
-        "cache_ttl_seconds", "cache_similarity_threshold", "cache_opt_out",
-        "embedding_model", "rate_limit_rpm", "allowed_models",
+        "cache_ttl_seconds",
+        "cache_similarity_threshold",
+        "cache_opt_out",
+        "embedding_model",
+        "rate_limit_rpm",
+        "allowed_models",
     ]
 
     inherited = []
@@ -659,6 +752,7 @@ async def set_policy(
 # Budget
 # ---------------------------------------------------------------------------
 
+
 @router.get("/{node_id}/budget")
 async def get_budget(
     node_id: str,
@@ -670,28 +764,32 @@ async def get_budget(
         raise HTTPException(403, "Insufficient permissions")
 
     # Spend for this node subtree (all descendants via path LIKE)
-    spend_subtree = (await session.execute(
-        text("""
+    spend_subtree = (
+        await session.execute(
+            text("""
             SELECT COALESCE(SUM(cr.cost_usd), 0)
             FROM cost_records cr
             JOIN organization_nodes n ON n.id = cr.node_id
             WHERE n.path LIKE :path_prefix || '%'
               AND cr.created_at >= date_trunc('month', NOW())
         """),
-        {"path_prefix": row["path"]},
-    )).scalar() or 0
+            {"path_prefix": row["path"]},
+        )
+    ).scalar() or 0
 
     # Spend for direct children only (excluding current node)
-    spend_children = (await session.execute(
-        text("""
+    spend_children = (
+        await session.execute(
+            text("""
             SELECT COALESCE(SUM(cr.cost_usd), 0)
             FROM cost_records cr
             JOIN organization_nodes n ON n.id = cr.node_id
             WHERE n.path LIKE :path_prefix || '/%'
               AND cr.created_at >= date_trunc('month', NOW())
         """),
-        {"path_prefix": row["path"]},
-    )).scalar() or 0
+            {"path_prefix": row["path"]},
+        )
+    ).scalar() or 0
 
     # Own spend (not counting children)
     spend_own = float(spend_subtree) - float(spend_children)
@@ -702,10 +800,14 @@ async def get_budget(
     # Parent budget
     parent_budget = None
     if row["parent_id"]:
-        parent_budget_row = (await session.execute(
-            text("SELECT monthly_budget_usd FROM organization_nodes WHERE id = CAST(:pid AS uuid)"),
-            {"pid": str(row["parent_id"])},
-        )).first()
+        parent_budget_row = (
+            await session.execute(
+                text(
+                    "SELECT monthly_budget_usd FROM organization_nodes WHERE id = CAST(:pid AS uuid)"
+                ),
+                {"pid": str(row["parent_id"])},
+            )
+        ).first()
         if parent_budget_row and parent_budget_row[0] is not None:
             parent_budget = float(parent_budget_row[0])
 
@@ -718,7 +820,9 @@ async def get_budget(
         "pct_used": pct_used,
         "parent_budget": parent_budget,
         "alert_threshold": (
-            float(row["budget_alert_threshold"]) if row["budget_alert_threshold"] is not None else 0.80
+            float(row["budget_alert_threshold"])
+            if row["budget_alert_threshold"] is not None
+            else 0.80
         ),
     }
 
@@ -737,12 +841,19 @@ async def set_budget(
 
     # Validate: budget must not exceed parent's budget
     if body.monthly_budget_usd is not None and row["parent_id"]:
-        parent_budget_row = (await session.execute(
-            text("SELECT monthly_budget_usd FROM organization_nodes WHERE id = CAST(:pid AS uuid)"),
-            {"pid": str(row["parent_id"])},
-        )).first()
-        if (parent_budget_row and parent_budget_row[0] is not None
-                and body.monthly_budget_usd > float(parent_budget_row[0])):
+        parent_budget_row = (
+            await session.execute(
+                text(
+                    "SELECT monthly_budget_usd FROM organization_nodes WHERE id = CAST(:pid AS uuid)"
+                ),
+                {"pid": str(row["parent_id"])},
+            )
+        ).first()
+        if (
+            parent_budget_row
+            and parent_budget_row[0] is not None
+            and body.monthly_budget_usd > float(parent_budget_row[0])
+        ):
             raise HTTPException(422, "Budget cannot exceed parent node's budget")
 
     updates: dict = {}
@@ -767,19 +878,32 @@ async def set_budget(
     # this, a node budget set here would never be enforced at request time.
     redis = getattr(request.app.state, "redis", None)
     if redis is not None:
-        final = (await session.execute(
-            text("SELECT monthly_budget_usd, budget_alert_threshold "
-                 "FROM organization_nodes WHERE id = CAST(:nid AS uuid)"),
-            {"nid": node_id},
-        )).mappings().first()
+        final = (
+            (
+                await session.execute(
+                    text(
+                        "SELECT monthly_budget_usd, budget_alert_threshold "
+                        "FROM organization_nodes WHERE id = CAST(:nid AS uuid)"
+                    ),
+                    {"nid": node_id},
+                )
+            )
+            .mappings()
+            .first()
+        )
         key = f"budget_limit:team:{node_id}"
         if final and final["monthly_budget_usd"] is not None:
             threshold = final["budget_alert_threshold"]
-            await redis.set(key, json.dumps({
-                "limit": float(final["monthly_budget_usd"]),
-                "action": "alert",
-                "alert_pct": float(threshold) if threshold is not None else 0.8,
-            }))
+            await redis.set(
+                key,
+                json.dumps(
+                    {
+                        "limit": float(final["monthly_budget_usd"]),
+                        "action": "alert",
+                        "alert_pct": float(threshold) if threshold is not None else 0.8,
+                    }
+                ),
+            )
         else:
             await redis.delete(key)
 
@@ -789,6 +913,7 @@ async def set_budget(
 # ---------------------------------------------------------------------------
 # Permissions (role_assignments)
 # ---------------------------------------------------------------------------
+
 
 @router.get("/{node_id}/permissions")
 async def list_permissions(
@@ -800,8 +925,10 @@ async def list_permissions(
     if not can_access(current_user, row["path"], "team_admin"):
         raise HTTPException(403, "Insufficient permissions")
 
-    assignments = (await session.execute(
-        text("""
+    assignments = (
+        (
+            await session.execute(
+                text("""
             SELECT ra.id, ra.entra_group_id, ra.entra_group_name, ra.role,
                    ra.node_id, ra.granted_at, ra.granted_by,
                    u.email AS granted_by_email
@@ -810,8 +937,12 @@ async def list_permissions(
             WHERE ra.node_id = CAST(:nid AS uuid)
             ORDER BY ra.granted_at DESC
         """),
-        {"nid": node_id},
-    )).mappings().all()
+                {"nid": node_id},
+            )
+        )
+        .mappings()
+        .all()
+    )
 
     return [
         {

@@ -6,6 +6,7 @@ it to a laptop-hosted agent connected via WebSocket.
 
 Image format: "relay://{slug}" signals relay dispatch.
 """
+
 from __future__ import annotations
 
 import logging
@@ -61,6 +62,7 @@ class RelayRuntime:
             except httpx.TimeoutException:
                 _log.warning("relay timeout for slug=%s run_id=%s", slug, run_id)
                 import asyncio
+
                 raise asyncio.TimeoutError()
             except httpx.RequestError as exc:
                 _log.error("relay request error for slug=%s: %s", slug, exc)
@@ -70,6 +72,7 @@ class RelayRuntime:
             raise RuntimeError(f"relay agent '{slug}' not connected: {resp.text}")
         if resp.status_code == 504:
             import asyncio
+
             raise asyncio.TimeoutError()
         if not resp.is_success:
             raise RuntimeError(f"relay invoke failed ({resp.status_code}): {resp.text}")

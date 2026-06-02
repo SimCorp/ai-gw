@@ -37,6 +37,7 @@ def _mappings_result(rows: list[dict]):
 
 # ── Adoption ──────────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_adoption_summary(client, mock_session):
     call_count = 0
@@ -50,9 +51,16 @@ async def test_adoption_summary(client, mock_session):
             r.scalar = MagicMock(return_value=100)
             return r
         # Active devs CTE
-        return _mappings_result([{
-            "active_users": 62, "rare": 10, "occasional": 22, "regular": 30,
-        }])
+        return _mappings_result(
+            [
+                {
+                    "active_users": 62,
+                    "rare": 10,
+                    "occasional": 22,
+                    "regular": 30,
+                }
+            ]
+        )
 
     mock_session.execute = AsyncMock(side_effect=side_effect)
 
@@ -67,15 +75,21 @@ async def test_adoption_summary(client, mock_session):
 
 @pytest.mark.asyncio
 async def test_adoption_by_team(client, mock_session):
-    mock_session.execute = AsyncMock(return_value=_mappings_result([
-        {
-            "team_id": "00000000-0000-0000-0000-000000000001",
-            "team_name": "Backend",
-            "licensed_count": 20,
-            "active_users": 15,
-            "rare": 2, "occasional": 5, "regular": 8,
-        }
-    ]))
+    mock_session.execute = AsyncMock(
+        return_value=_mappings_result(
+            [
+                {
+                    "team_id": "00000000-0000-0000-0000-000000000001",
+                    "team_name": "Backend",
+                    "licensed_count": 20,
+                    "active_users": 15,
+                    "rare": 2,
+                    "occasional": 5,
+                    "regular": 8,
+                }
+            ]
+        )
+    )
 
     resp = await client.get("/genai-adoption/adoption/by-team?period_days=30")
     assert resp.status_code == 200
@@ -88,6 +102,7 @@ async def test_adoption_by_team(client, mock_session):
 @pytest.mark.asyncio
 async def test_adoption_trend(client, mock_session):
     from datetime import datetime, timezone
+
     week = datetime(2026, 5, 5, tzinfo=timezone.utc)
 
     row = MagicMock()
@@ -108,26 +123,31 @@ async def test_adoption_trend(client, mock_session):
 
 # ── Productivity ──────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_productivity_summary(client, mock_session):
-    mock_session.execute = AsyncMock(return_value=_mappings_result([
-        {
-            "cohort": "high",
-            "avg_quality_score": 3.9,
-            "avg_inter_request_s": 145,
-            "avg_turn_count": 6.2,
-            "avg_tool_invocations": 4.1,
-            "session_count": 8420,
-        },
-        {
-            "cohort": "low",
-            "avg_quality_score": 2.8,
-            "avg_inter_request_s": 62,
-            "avg_turn_count": 4.1,
-            "avg_tool_invocations": 1.2,
-            "session_count": 3210,
-        },
-    ]))
+    mock_session.execute = AsyncMock(
+        return_value=_mappings_result(
+            [
+                {
+                    "cohort": "high",
+                    "avg_quality_score": 3.9,
+                    "avg_inter_request_s": 145,
+                    "avg_turn_count": 6.2,
+                    "avg_tool_invocations": 4.1,
+                    "session_count": 8420,
+                },
+                {
+                    "cohort": "low",
+                    "avg_quality_score": 2.8,
+                    "avg_inter_request_s": 62,
+                    "avg_turn_count": 4.1,
+                    "avg_tool_invocations": 1.2,
+                    "session_count": 3210,
+                },
+            ]
+        )
+    )
 
     resp = await client.get("/genai-adoption/productivity/summary?period_days=30")
     assert resp.status_code == 200
@@ -138,16 +158,20 @@ async def test_productivity_summary(client, mock_session):
 
 @pytest.mark.asyncio
 async def test_productivity_by_team(client, mock_session):
-    mock_session.execute = AsyncMock(return_value=_mappings_result([
-        {
-            "team_id": "00000000-0000-0000-0000-000000000001",
-            "team_name": "Platform",
-            "avg_quality_score": 4.1,
-            "avg_inter_request_s": 160,
-            "avg_turn_count": 7.0,
-            "session_count": 500,
-        }
-    ]))
+    mock_session.execute = AsyncMock(
+        return_value=_mappings_result(
+            [
+                {
+                    "team_id": "00000000-0000-0000-0000-000000000001",
+                    "team_name": "Platform",
+                    "avg_quality_score": 4.1,
+                    "avg_inter_request_s": 160,
+                    "avg_turn_count": 7.0,
+                    "session_count": 500,
+                }
+            ]
+        )
+    )
 
     resp = await client.get("/genai-adoption/productivity/by-team?period_days=30")
     assert resp.status_code == 200
@@ -157,22 +181,27 @@ async def test_productivity_by_team(client, mock_session):
 
 # ── Quality ───────────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_quality_summary(client, mock_session):
-    mock_session.execute = AsyncMock(return_value=_mappings_result([
-        {
-            "cohort": "high",
-            "avg_error_rate_pct": 4.1,
-            "avg_retry_rate_pct": 6.3,
-            "cache_hit_rate_pct": 38.0,
-        },
-        {
-            "cohort": "low",
-            "avg_error_rate_pct": 9.8,
-            "avg_retry_rate_pct": 14.2,
-            "cache_hit_rate_pct": 12.0,
-        },
-    ]))
+    mock_session.execute = AsyncMock(
+        return_value=_mappings_result(
+            [
+                {
+                    "cohort": "high",
+                    "avg_error_rate_pct": 4.1,
+                    "avg_retry_rate_pct": 6.3,
+                    "cache_hit_rate_pct": 38.0,
+                },
+                {
+                    "cohort": "low",
+                    "avg_error_rate_pct": 9.8,
+                    "avg_retry_rate_pct": 14.2,
+                    "cache_hit_rate_pct": 12.0,
+                },
+            ]
+        )
+    )
 
     resp = await client.get("/genai-adoption/quality/summary?period_days=30")
     assert resp.status_code == 200
@@ -183,16 +212,20 @@ async def test_quality_summary(client, mock_session):
 
 @pytest.mark.asyncio
 async def test_quality_by_team(client, mock_session):
-    mock_session.execute = AsyncMock(return_value=_mappings_result([
-        {
-            "team_id": "00000000-0000-0000-0000-000000000001",
-            "team_name": "Risk",
-            "avg_error_rate_pct": 12.5,
-            "avg_retry_rate_pct": 8.0,
-            "cache_hit_rate_pct": 20.0,
-            "session_count": 200,
-        }
-    ]))
+    mock_session.execute = AsyncMock(
+        return_value=_mappings_result(
+            [
+                {
+                    "team_id": "00000000-0000-0000-0000-000000000001",
+                    "team_name": "Risk",
+                    "avg_error_rate_pct": 12.5,
+                    "avg_retry_rate_pct": 8.0,
+                    "cache_hit_rate_pct": 20.0,
+                    "session_count": 200,
+                }
+            ]
+        )
+    )
 
     resp = await client.get("/genai-adoption/quality/by-team?period_days=30")
     assert resp.status_code == 200
@@ -213,6 +246,7 @@ async def test_period_validation(client, mock_session):
 
 # ── AI Insights ───────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_insights_returns_structured_data(client, mock_session):
     """Insights endpoint returns summary/highlights/recommendations/risks when LLM responds."""
@@ -221,27 +255,44 @@ async def test_insights_returns_structured_data(client, mock_session):
     from unittest.mock import patch
 
     # All DB calls return empty data so _gather_metrics completes without error
-    mock_session.execute = AsyncMock(return_value=_mappings_result([
-        {"active_days": 15, "rare": 0, "occasional": 0, "regular": 0,
-         "cohort": "high", "avg_quality_score": 4.0, "avg_inter_request_s": 120,
-         "avg_turn_count": 6.0, "session_count": 100,
-         "avg_error_rate_pct": 3.0, "avg_retry_rate_pct": 5.0, "cache_hit_rate_pct": 35.0,
-         "team_name": "Backend", "licensed_count": 20, "active_users": 15,
-         "avg_quality": 4.0, "error_rate_pct": 3.0}
-    ]))
+    mock_session.execute = AsyncMock(
+        return_value=_mappings_result(
+            [
+                {
+                    "active_days": 15,
+                    "rare": 0,
+                    "occasional": 0,
+                    "regular": 0,
+                    "cohort": "high",
+                    "avg_quality_score": 4.0,
+                    "avg_inter_request_s": 120,
+                    "avg_turn_count": 6.0,
+                    "session_count": 100,
+                    "avg_error_rate_pct": 3.0,
+                    "avg_retry_rate_pct": 5.0,
+                    "cache_hit_rate_pct": 35.0,
+                    "team_name": "Backend",
+                    "licensed_count": 20,
+                    "active_users": 15,
+                    "avg_quality": 4.0,
+                    "error_rate_pct": 3.0,
+                }
+            ]
+        )
+    )
 
-    ai_reply = json.dumps({
-        "summary": "Adoption is healthy at 75%.",
-        "highlights": ["75% adoption rate", "High cohort quality score 4.0"],
-        "recommendations": ["Onboard low-adoption teams"],
-        "risks": ["Backend team error rate elevated"],
-    })
+    ai_reply = json.dumps(
+        {
+            "summary": "Adoption is healthy at 75%.",
+            "highlights": ["75% adoption rate", "High cohort quality score 4.0"],
+            "recommendations": ["Onboard low-adoption teams"],
+            "risks": ["Backend team error rate elevated"],
+        }
+    )
 
     mock_response = MagicMock()
     mock_response.status_code = 200
-    mock_response.json = MagicMock(return_value={
-        "choices": [{"message": {"content": ai_reply}}]
-    })
+    mock_response.json = MagicMock(return_value={"choices": [{"message": {"content": ai_reply}}]})
     mock_response.raise_for_status = MagicMock()
 
     with patch("app.routers.genai_adoption.httpx.AsyncClient") as mock_client_cls:
@@ -267,14 +318,31 @@ async def test_insights_graceful_degradation(client, mock_session):
     from unittest.mock import AsyncMock as AM
     from unittest.mock import patch
 
-    mock_session.execute = AsyncMock(return_value=_mappings_result([
-        {"active_days": 0, "rare": 0, "occasional": 0, "regular": 0,
-         "cohort": "low", "avg_quality_score": None, "avg_inter_request_s": None,
-         "avg_turn_count": None, "session_count": 0,
-         "avg_error_rate_pct": None, "avg_retry_rate_pct": None, "cache_hit_rate_pct": None,
-         "team_name": "Backend", "licensed_count": 5, "active_users": 0,
-         "avg_quality": None, "error_rate_pct": None}
-    ]))
+    mock_session.execute = AsyncMock(
+        return_value=_mappings_result(
+            [
+                {
+                    "active_days": 0,
+                    "rare": 0,
+                    "occasional": 0,
+                    "regular": 0,
+                    "cohort": "low",
+                    "avg_quality_score": None,
+                    "avg_inter_request_s": None,
+                    "avg_turn_count": None,
+                    "session_count": 0,
+                    "avg_error_rate_pct": None,
+                    "avg_retry_rate_pct": None,
+                    "cache_hit_rate_pct": None,
+                    "team_name": "Backend",
+                    "licensed_count": 5,
+                    "active_users": 0,
+                    "avg_quality": None,
+                    "error_rate_pct": None,
+                }
+            ]
+        )
+    )
 
     with patch("app.routers.genai_adoption.httpx.AsyncClient") as mock_client_cls:
         mock_http = AM()

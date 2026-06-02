@@ -57,7 +57,9 @@ class WorkflowRun(Base):
     )
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("NOW()"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("NOW()")
+    )
 
 
 class RunNode(Base):
@@ -84,8 +86,7 @@ class WorkQueueItem(Base):
     __tablename__ = "work_queue"
     __table_args__ = (
         # Partial index for the SELECT ... FOR UPDATE SKIP LOCKED claim pattern
-        Index("work_queue_available_idx", "available_at",
-              postgresql_where="(claimed_by IS NULL)"),
+        Index("work_queue_available_idx", "available_at", postgresql_where="(claimed_by IS NULL)"),
         Index("work_queue_claim_expires_idx", "claim_expires"),
     )
 
@@ -95,7 +96,9 @@ class WorkQueueItem(Base):
     )
     node_id: Mapped[str] = mapped_column(String, nullable=False)
     iteration: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
-    available_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
+    available_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("NOW()")
+    )
     claimed_by: Mapped[str | None] = mapped_column(String, nullable=True)
     claim_expires: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))

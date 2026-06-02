@@ -3,8 +3,10 @@ from app.models import GatewayEvent
 
 def make_handler(connection_string: str):
     if not connection_string:
+
         async def noop(event: GatewayEvent) -> None:
             pass
+
         return noop
 
     from opencensus.ext.azure import metrics_exporter
@@ -15,7 +17,9 @@ def make_handler(connection_string: str):
 
     m_latency = measure.MeasureFloat("gateway/latency_ms", "Request latency", "ms")
     m_tokens = measure.MeasureInt("gateway/tokens", "Total tokens", "tokens")
-    latency_view = view.View("gateway/latency_ms", "", [], m_latency, aggregation.LastValueAggregation())
+    latency_view = view.View(
+        "gateway/latency_ms", "", [], m_latency, aggregation.LastValueAggregation()
+    )
     token_view = view.View("gateway/tokens", "", [], m_tokens, aggregation.SumAggregation())
     stats.stats.view_manager.register_view(latency_view)
     stats.stats.view_manager.register_view(token_view)

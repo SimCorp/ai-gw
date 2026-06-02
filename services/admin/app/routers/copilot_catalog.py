@@ -8,6 +8,7 @@ instructions/skills directories) via the GitHub API and exposes it as:
 The catalog is cached in Redis and refreshed every 6 hours. On first
 startup an immediate sync is performed as a background task.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -29,15 +30,16 @@ router = APIRouter(prefix="/mcp/copilot-catalog", tags=["copilot-catalog"])
 
 _REPO = "github/awesome-copilot"
 _DIRS = [
-    ("agents",       "agent"),
+    ("agents", "agent"),
     ("instructions", "instruction"),
-    ("cookbook",     "recipe"),
+    ("cookbook", "recipe"),
 ]
 _REDIS_KEY = "copilot_catalog:items"
 _REDIS_META = "copilot_catalog:meta"
 _SYNC_INTERVAL = 6 * 3600  # 6 hours
 
 # ── GitHub fetch helpers ──────────────────────────────────────────────────────
+
 
 async def _fetch_dir(client: httpx.AsyncClient, directory: str) -> list[dict]:
     r = await client.get(
@@ -67,7 +69,7 @@ def _parse_frontmatter(raw: str) -> dict[str, Any]:
             for line in fm.splitlines():
                 if ":" in line:
                     k, _, v = line.partition(":")
-                    meta[k.strip().lower()] = v.strip().strip('"\'')
+                    meta[k.strip().lower()] = v.strip().strip("\"'")
     return meta
 
 
@@ -99,16 +101,19 @@ async def sync_catalog(redis) -> int:
                 body = re.sub(r"^---.*?---\s*", "", content, flags=re.S).strip()
                 first_para = re.search(r"^(?:#{1,3}\s+[^\n]+\n+)?([^#\n][^\n]{10,})", body)
                 description = first_para.group(1).strip() if first_para else ""
-                items.append({
-                    "id": _slug(name.removesuffix(".md")),
-                    "name": fm.get("name") or name.removesuffix(".md").replace("-", " ").title(),
-                    "kind": kind,
-                    "description": fm.get("description") or description[:300],
-                    "tags": [t.strip() for t in fm.get("tags", "").split(",") if t.strip()],
-                    "source_file": f"{directory}/{name}",
-                    "github_url": f"https://github.com/{_REPO}/blob/main/{directory}/{name}",
-                    "content_preview": body[:500],
-                })
+                items.append(
+                    {
+                        "id": _slug(name.removesuffix(".md")),
+                        "name": fm.get("name")
+                        or name.removesuffix(".md").replace("-", " ").title(),
+                        "kind": kind,
+                        "description": fm.get("description") or description[:300],
+                        "tags": [t.strip() for t in fm.get("tags", "").split(",") if t.strip()],
+                        "source_file": f"{directory}/{name}",
+                        "github_url": f"https://github.com/{_REPO}/blob/main/{directory}/{name}",
+                        "content_preview": body[:500],
+                    }
+                )
 
     if not items:
         _log.warning("copilot catalog sync returned 0 items")
@@ -117,10 +122,15 @@ async def sync_catalog(redis) -> int:
     if redis is not None:
         try:
             await redis.set(_REDIS_KEY, json.dumps(items))
-            await redis.set(_REDIS_META, json.dumps({
-                "synced_at": time.time(),
-                "count": len(items),
-            }))
+            await redis.set(
+                _REDIS_META,
+                json.dumps(
+                    {
+                        "synced_at": time.time(),
+                        "count": len(items),
+                    }
+                ),
+            )
         except Exception as exc:
             _log.warning("redis catalog cache write failed: %s", exc)
     return len(items)
@@ -145,6 +155,7 @@ def start_background_sync(app):
 
 # ── Catalog helpers ───────────────────────────────────────────────────────────
 
+
 async def _get_items(redis) -> list[dict]:
     if redis is not None:
         try:
@@ -156,7 +167,9 @@ async def _get_items(redis) -> list[dict]:
     return []
 
 
-def _search_items(items: list[dict], query: str, kind: str | None = None, limit: int = 10) -> list[dict]:
+def _search_items(
+    items: list[dict], query: str, kind: str | None = None, limit: int = 10
+) -> list[dict]:
     q = query.lower()
     results = []
     for item in items:
@@ -178,6 +191,7 @@ def _search_items(items: list[dict], query: str, kind: str | None = None, limit:
 
 
 # ── REST catalog API ─────────────────────────────────────────────────────────
+
 
 @router.get("/items")
 async def list_items(
@@ -241,7 +255,11 @@ _MCP_MANIFEST = {
                 "type": "object",
                 "properties": {
                     "query": {"type": "string", "description": "Search keywords"},
-                    "kind": {"type": "string", "enum": ["agent", "instruction", "recipe"], "description": "Filter by type"},
+                    "kind": {
+                        "type": "string",
+                        "enum": ["agent", "instruction", "recipe"],
+                        "description": "Filter by type",
+                    },
                     "limit": {"type": "integer", "default": 5, "description": "Max results"},
                 },
                 "required": ["query"],
@@ -285,7 +303,9 @@ async def mcp_tools() -> dict:
 async def mcp_search(body: dict, request: Request) -> dict:
     redis = getattr(request.app.state, "redis", None)
     items = await _get_items(redis)
-    results = _search_items(items, body.get("query", ""), kind=body.get("kind"), limit=body.get("limit", 5))
+    results = _search_items(
+        items, body.get("query", ""), kind=body.get("kind"), limit=body.get("limit", 5)
+    )
     return {"items": results, "count": len(results)}
 
 
@@ -311,6 +331,7 @@ async def mcp_get(body: dict, request: Request) -> dict:
 
 
 # ── JSON-RPC 2.0 MCP endpoint ─────────────────────────────────────────────────
+
 
 async def _tool_search(arguments: dict, request: Request) -> dict:
     redis = getattr(request.app.state, "redis", None)

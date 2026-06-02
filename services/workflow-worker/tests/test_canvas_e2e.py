@@ -6,6 +6,7 @@ Run (from repo root):
 
 Prerequisites: same as test_acceptance.py (docker stack up, echo-agent image built).
 """
+
 from __future__ import annotations
 
 import uuid
@@ -20,6 +21,7 @@ HEADERS: dict[str, str] = {}  # no token needed in DEV_BYPASS_AUTH mode
 # ---------------------------------------------------------------------------
 # Helpers (mirrors test_acceptance.py)
 # ---------------------------------------------------------------------------
+
 
 def _get(path: str) -> dict:
     r = httpx.get(f"{ADMIN}{path}", headers=HEADERS, timeout=10)
@@ -63,16 +65,20 @@ def echo_agent_id() -> str:
 # Test 1: create workflow + version, verify DAG round-trip
 # ---------------------------------------------------------------------------
 
+
 def test_canvas_create_workflow(team_id, echo_agent_id):
     """POST a workflow, POST a version with a 2-node DAG including a conditional
     edge, GET the version back and verify the DAG round-trips correctly."""
 
     # Create workflow
-    wf = _post("/workflows", {
-        "slug": f"canvas-{uuid.uuid4().hex[:8]}",
-        "name": "Canvas Test Workflow",
-        "team_id": team_id,
-    })
+    wf = _post(
+        "/workflows",
+        {
+            "slug": f"canvas-{uuid.uuid4().hex[:8]}",
+            "name": "Canvas Test Workflow",
+            "team_id": team_id,
+        },
+    )
     wf_id = wf["id"]
     assert wf_id, "Expected workflow id in response"
 
@@ -92,10 +98,13 @@ def test_canvas_create_workflow(team_id, echo_agent_id):
     }
 
     # Post version
-    version = _post(f"/workflows/{wf_id}/versions", {
-        "dag": dag,
-        "created_by": str(uuid.uuid4()),
-    })
+    version = _post(
+        f"/workflows/{wf_id}/versions",
+        {
+            "dag": dag,
+            "created_by": str(uuid.uuid4()),
+        },
+    )
     # API returns {"workflow_id": ..., "version": 2}
     version_id = version.get("version") or version.get("id") or version.get("version_id")
     assert version_id, f"Expected version number in response, got: {version}"
@@ -128,44 +137,54 @@ def test_canvas_create_workflow(team_id, echo_agent_id):
 # Test 2: conditional edge routes to n2 when n1 outputs status=success
 # ---------------------------------------------------------------------------
 
+
 def test_canvas_conditional_edge_dag(team_id, echo_agent_id):
     """Submit a run where n1 produces {'status': 'success'} and a conditional
     edge leads to n2.  Verify n2 runs (echo-agent returns success)."""
     import time
 
-    wf = _post("/workflows", {
-        "slug": f"cond-{uuid.uuid4().hex[:8]}",
-        "name": "Conditional Edge Test",
-        "team_id": team_id,
-    })
+    wf = _post(
+        "/workflows",
+        {
+            "slug": f"cond-{uuid.uuid4().hex[:8]}",
+            "name": "Conditional Edge Test",
+            "team_id": team_id,
+        },
+    )
     wf_id = wf["id"]
 
-    _post(f"/workflows/{wf_id}/versions", {
-        "dag": {
-            "entry_node": "n1",
-            "nodes": [
-                {"id": "n1", "agent_slug": "echo-agent"},
-                {"id": "n2", "agent_slug": "echo-agent"},
-            ],
-            "edges": [
-                {
-                    "from": "n1",
-                    "to": "n2",
-                    # echo-agent wraps inputs under "echoed" key — use dotted path
-                    "condition": "outputs.echoed.status == 'success'",
-                }
-            ],
+    _post(
+        f"/workflows/{wf_id}/versions",
+        {
+            "dag": {
+                "entry_node": "n1",
+                "nodes": [
+                    {"id": "n1", "agent_slug": "echo-agent"},
+                    {"id": "n2", "agent_slug": "echo-agent"},
+                ],
+                "edges": [
+                    {
+                        "from": "n1",
+                        "to": "n2",
+                        # echo-agent wraps inputs under "echoed" key — use dotted path
+                        "condition": "outputs.echoed.status == 'success'",
+                    }
+                ],
+            },
+            "created_by": str(uuid.uuid4()),
         },
-        "created_by": str(uuid.uuid4()),
-    })
+    )
 
-    run = _post("/runs", {
-        "workflow_id": wf_id,
-        "inputs": {"status": "success"},
-        "team_id": team_id,
-        "triggered_by": str(uuid.uuid4()),
-        "triggered_by_kind": "user",
-    })
+    run = _post(
+        "/runs",
+        {
+            "workflow_id": wf_id,
+            "inputs": {"status": "success"},
+            "team_id": team_id,
+            "triggered_by": str(uuid.uuid4()),
+            "triggered_by_kind": "user",
+        },
+    )
     run_id = run["id"]
 
     # Wait for completion (up to 120s)
@@ -185,12 +204,8 @@ def test_canvas_conditional_edge_dag(team_id, echo_agent_id):
 
     # Verify n2 ran (conditional edge was evaluated true and n2 was executed)
     node_statuses = {n["node_id"]: n["status"] for n in result["nodes"]}
-    assert "n2" in node_statuses, (
-        f"n2 not found in node statuses: {node_statuses}"
-    )
-    assert node_statuses["n2"] == "succeeded", (
-        f"n2 did not succeed: {node_statuses['n2']}"
-    )
+    assert "n2" in node_statuses, f"n2 not found in node statuses: {node_statuses}"
+    assert node_statuses["n2"] == "succeeded", f"n2 did not succeed: {node_statuses['n2']}"
 
 
 # ---------------------------------------------------------------------------
@@ -198,42 +213,52 @@ def test_canvas_conditional_edge_dag(team_id, echo_agent_id):
 #         {"_loop_continue": false}
 # ---------------------------------------------------------------------------
 
+
 def test_canvas_loop_node(team_id, echo_agent_id):
     """Submit a workflow where n1 is a loop node with max_iterations=2.
     The echo-agent always returns {"_loop_continue": false} so the loop
     runs once and terminates.  Verify run succeeds."""
     import time
 
-    wf = _post("/workflows", {
-        "slug": f"loop-{uuid.uuid4().hex[:8]}",
-        "name": "Loop Node Test",
-        "team_id": team_id,
-    })
+    wf = _post(
+        "/workflows",
+        {
+            "slug": f"loop-{uuid.uuid4().hex[:8]}",
+            "name": "Loop Node Test",
+            "team_id": team_id,
+        },
+    )
     wf_id = wf["id"]
 
-    _post(f"/workflows/{wf_id}/versions", {
-        "dag": {
-            "entry_node": "n1",
-            "nodes": [
-                {
-                    "id": "n1",
-                    "agent_slug": "echo-agent",
-                    # loop as dict so max_iterations is accessible
-                    "loop": {"enabled": True, "max_iterations": 2},
-                }
-            ],
-            "edges": [],
+    _post(
+        f"/workflows/{wf_id}/versions",
+        {
+            "dag": {
+                "entry_node": "n1",
+                "nodes": [
+                    {
+                        "id": "n1",
+                        "agent_slug": "echo-agent",
+                        # loop as dict so max_iterations is accessible
+                        "loop": {"enabled": True, "max_iterations": 2},
+                    }
+                ],
+                "edges": [],
+            },
+            "created_by": str(uuid.uuid4()),
         },
-        "created_by": str(uuid.uuid4()),
-    })
+    )
 
-    run = _post("/runs", {
-        "workflow_id": wf_id,
-        "inputs": {"_loop_continue": False},
-        "team_id": team_id,
-        "triggered_by": str(uuid.uuid4()),
-        "triggered_by_kind": "user",
-    })
+    run = _post(
+        "/runs",
+        {
+            "workflow_id": wf_id,
+            "inputs": {"_loop_continue": False},
+            "team_id": team_id,
+            "triggered_by": str(uuid.uuid4()),
+            "triggered_by_kind": "user",
+        },
+    )
     run_id = run["id"]
 
     # Wait for completion
@@ -253,14 +278,13 @@ def test_canvas_loop_node(team_id, echo_agent_id):
 
     # Verify the loop node itself shows as succeeded
     node_statuses = {n["node_id"]: n["status"] for n in result["nodes"]}
-    assert node_statuses.get("n1") == "succeeded", (
-        f"Loop node n1 status: {node_statuses.get('n1')}"
-    )
+    assert node_statuses.get("n1") == "succeeded", f"Loop node n1 status: {node_statuses.get('n1')}"
 
 
 # ---------------------------------------------------------------------------
 # Smoke test: Awesome Copilot catalog endpoints
 # ---------------------------------------------------------------------------
+
 
 def test_awesome_copilot_catalog():
     """Basic smoke test: catalog items endpoint returns data and meta is sane."""

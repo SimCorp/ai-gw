@@ -16,8 +16,8 @@ _log = logging.getLogger(__name__)
 
 _jwks_cache: dict = {}
 _jwks_cache_expires: float = 0.0
-_JWKS_TTL = 3600          # 1 hour in-process cache TTL
-_JWKS_REDIS_TTL = 90000   # 25 hours Redis fallback TTL (survives overnight outages)
+_JWKS_TTL = 3600  # 1 hour in-process cache TTL
+_JWKS_REDIS_TTL = 90000  # 25 hours Redis fallback TTL (survives overnight outages)
 _JWKS_REDIS_KEY = "jwks:cache"
 _jwks_lock = asyncio.Lock()
 
@@ -60,6 +60,7 @@ def _validate_jwks_uri(uri: str) -> None:
             raise
         # Not an IP literal — resolve hostname
         import os
+
         try:
             resolved = socket.gethostbyname(host)
             addr = ipaddress.ip_address(resolved)
@@ -169,6 +170,7 @@ async def _get_identity_jwks(settings: Settings, redis=None) -> dict:
 async def _validate_identity_jwt(token: str, settings: Settings, redis=None) -> dict:
     """Verify an admin-issued identity JWT and extract team_id + capabilities as scopes."""
     import base64 as _b64
+
     try:
         parts = token.split(".")
         if len(parts) < 2:
@@ -187,6 +189,7 @@ async def _validate_identity_jwt(token: str, settings: Settings, redis=None) -> 
         raise HTTPException(status_code=401, detail="Unknown signing key")
 
     from jwt import algorithms as jwt_alg
+
     rsa_key = jwt_alg.RSAAlgorithm.from_jwk(key)
     try:
         payload = jwt.decode(
@@ -214,6 +217,7 @@ async def validate_jwt(token: str, settings: Settings, redis=None) -> dict:
     (admin-issued agent tokens). Falls back to OIDC path for Dex/Entra tokens.
     """
     import base64 as _b64
+
     try:
         parts = token.split(".")
         if len(parts) >= 2:
@@ -250,6 +254,7 @@ async def validate_jwt(token: str, settings: Settings, redis=None) -> dict:
 
         # Build a PyJWT signing key from the JWK
         from jwt import algorithms as jwt_alg
+
         rsa_key = jwt_alg.RSAAlgorithm.from_jwk(key)
 
         payload = jwt.decode(

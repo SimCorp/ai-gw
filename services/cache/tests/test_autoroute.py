@@ -6,6 +6,7 @@ model from the configured pool and records stats that feed future routing.
 Prerequisite: compose stack running (cache:8002, litellm:8003).
 Run: pytest services/cache/tests/test_autoroute.py -v
 """
+
 import sys
 from pathlib import Path
 
@@ -89,7 +90,9 @@ def test_autoroute_records_stats_in_redis():
 def test_autoroute_config_toggle_via_admin():
     """POST /config/notify can toggle autoroute_enabled; GET /config reflects it."""
     # Enable
-    r = httpx.post(f"{ADMIN}/config/notify", json={"key": "autoroute_enabled", "value": "true"}, timeout=10)
+    r = httpx.post(
+        f"{ADMIN}/config/notify", json={"key": "autoroute_enabled", "value": "true"}, timeout=10
+    )
     assert r.status_code in (200, 201), f"config/notify failed: {r.text}"
 
     r = httpx.get(f"{ADMIN}/config", timeout=10)
@@ -99,4 +102,6 @@ def test_autoroute_config_toggle_via_admin():
     assert isinstance(cfg, dict)
 
     # Restore
-    httpx.post(f"{ADMIN}/config/notify", json={"key": "autoroute_enabled", "value": "false"}, timeout=10)
+    httpx.post(
+        f"{ADMIN}/config/notify", json={"key": "autoroute_enabled", "value": "false"}, timeout=10
+    )

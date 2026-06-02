@@ -1,4 +1,3 @@
-
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -49,7 +48,10 @@ async def create_model(
     )
     session.add(model)
     await audit.record(
-        session, request, "create_model", "model_registry",
+        session,
+        request,
+        "create_model",
+        "model_registry",
         details={"model_id": body.model_id, "provider": body.provider},
     )
     await session.commit()
@@ -64,9 +66,7 @@ async def update_model(
     request: Request,
     session: AsyncSession = Depends(get_session),
 ):
-    result = await session.execute(
-        select(ModelRegistry).where(ModelRegistry.model_id == model_id)
-    )
+    result = await session.execute(select(ModelRegistry).where(ModelRegistry.model_id == model_id))
     model = result.scalar_one_or_none()
     if not model:
         raise HTTPException(status_code=404, detail="Model not found")
@@ -75,7 +75,10 @@ async def update_model(
     if body.enabled is not None:
         model.enabled = body.enabled
     await audit.record(
-        session, request, "update_model", "model_registry",
+        session,
+        request,
+        "update_model",
+        "model_registry",
         resource_id=model_id,
         details=body.model_dump(exclude_none=True),
     )
@@ -90,14 +93,10 @@ async def delete_model(
     request: Request,
     session: AsyncSession = Depends(get_session),
 ):
-    result = await session.execute(
-        select(ModelRegistry).where(ModelRegistry.model_id == model_id)
-    )
+    result = await session.execute(select(ModelRegistry).where(ModelRegistry.model_id == model_id))
     model = result.scalar_one_or_none()
     if not model:
         raise HTTPException(status_code=404, detail="Model not found")
-    await audit.record(
-        session, request, "delete_model", "model_registry", resource_id=model_id
-    )
+    await audit.record(session, request, "delete_model", "model_registry", resource_id=model_id)
     await session.delete(model)
     await session.commit()

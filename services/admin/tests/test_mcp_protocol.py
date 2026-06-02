@@ -2,6 +2,7 @@
 
 All tests run without a real HTTP server — MCPServer.handle() is called directly.
 """
+
 from __future__ import annotations
 
 import json
@@ -13,6 +14,7 @@ from app.mcp_protocol import MCPServer
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _fake_request() -> MagicMock:
     """Return a minimal stand-in for a FastAPI Request object."""
@@ -47,6 +49,7 @@ def _build_server() -> MCPServer:
 # initialize
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_initialize_returns_protocol_version():
     server = _build_server()
@@ -74,6 +77,7 @@ async def test_initialize_returns_protocol_version():
 # tools/list
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_tools_list_returns_registered_tools():
     server = _build_server()
@@ -90,6 +94,7 @@ async def test_tools_list_returns_registered_tools():
 # ---------------------------------------------------------------------------
 # tools/call — success
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_tools_call_dispatches_to_handler():
@@ -113,6 +118,7 @@ async def test_tools_call_dispatches_to_handler():
 # tools/call — unknown tool
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_tools_call_unknown_tool_returns_error():
     server = _build_server()
@@ -130,6 +136,7 @@ async def test_tools_call_unknown_tool_returns_error():
 # ---------------------------------------------------------------------------
 # tools/call — handler raises
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_tools_call_handler_exception_returns_internal_error():
@@ -155,6 +162,7 @@ async def test_tools_call_handler_exception_returns_internal_error():
 # Unknown method
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_unknown_method_returns_error():
     server = _build_server()
@@ -168,6 +176,7 @@ async def test_unknown_method_returns_error():
 # ---------------------------------------------------------------------------
 # Notifications (no id field) — must return HTTP 204 response, not a dict
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_notification_returns_no_response():
@@ -205,6 +214,7 @@ async def test_unknown_notification_returns_no_response():
 # ping
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_ping_returns_empty_result():
     server = _build_server()
@@ -217,6 +227,7 @@ async def test_ping_returns_empty_result():
 # ---------------------------------------------------------------------------
 # Multiple tools registration
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_tools_list_reflects_all_registered_tools():

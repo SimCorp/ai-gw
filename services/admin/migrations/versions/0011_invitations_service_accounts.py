@@ -8,6 +8,7 @@ Revision ID: 0011
 Revises: 0010
 Create Date: 2026-05-13
 """
+
 from __future__ import annotations
 
 from typing import Sequence, Union
@@ -40,7 +41,9 @@ def upgrade() -> None:
     """)
     op.execute("CREATE INDEX IF NOT EXISTS idx_invitations_email ON user_invitations(email)")
     op.execute("CREATE INDEX IF NOT EXISTS idx_invitations_token ON user_invitations(token_hash)")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_invitations_expires ON user_invitations(expires_at) WHERE accepted_at IS NULL")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_invitations_expires ON user_invitations(expires_at) WHERE accepted_at IS NULL"
+    )
 
     op.execute("""
         CREATE TABLE IF NOT EXISTS service_accounts (

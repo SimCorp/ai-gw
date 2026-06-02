@@ -7,6 +7,7 @@ to a developer account, and writes to developer_output_events.
 Register this URL (POST /webhooks/github) in your GitHub org/repo settings.
 Set the GITHUB_WEBHOOK_SECRET env var to the same secret used in GitHub.
 """
+
 import hashlib
 import hmac
 import logging
@@ -40,6 +41,7 @@ async def github_webhook(
         raise HTTPException(status_code=401, detail="Invalid webhook signature")
 
     import json
+
     try:
         payload = json.loads(body)
     except Exception:
@@ -65,7 +67,8 @@ async def _resolve_developer(pool, github_user: str) -> str | None:
     """Try to match github username to a developer by email heuristic or exact match."""
     row = await pool.fetchrow(
         "SELECT id FROM developers WHERE email = $1 OR split_part(email, '@', 1) = $2",
-        github_user, github_user,
+        github_user,
+        github_user,
     )
     return str(row["id"]) if row else None
 
@@ -83,7 +86,8 @@ async def _mark_recent_sessions_with_commit(pool, developer_id: str | None, repo
               AND last_request_at >= NOW() - INTERVAL '24 hours'
               AND (produced_commit IS NULL OR produced_commit = FALSE)
             """,
-            developer_id, repo,
+            developer_id,
+            repo,
         )
     except Exception:
         pass
@@ -100,6 +104,7 @@ async def _handle_push(pool, payload: dict) -> None:
     developer_id = await _resolve_developer(pool, github_user)
 
     import json
+
     await pool.execute(
         """
         INSERT INTO developer_output_events
@@ -107,9 +112,15 @@ async def _handle_push(pool, payload: dict) -> None:
              commit_count, lines_added, lines_removed, raw)
         VALUES ($1, $2, 'push', $3, $4, $5, $6, $7::jsonb)
         """,
-        developer_id, repo, github_user,
-        commit_count, lines_added, lines_removed,
-        json.dumps({"ref": payload.get("ref"), "head_commit": payload.get("head_commit", {}).get("id")}),
+        developer_id,
+        repo,
+        github_user,
+        commit_count,
+        lines_added,
+        lines_removed,
+        json.dumps(
+            {"ref": payload.get("ref"), "head_commit": payload.get("head_commit", {}).get("id")}
+        ),
     )
     await _mark_recent_sessions_with_commit(pool, developer_id, repo)
 
@@ -129,6 +140,7 @@ async def _handle_pull_request(pool, payload: dict) -> None:
     developer_id = await _resolve_developer(pool, github_user)
 
     import json
+
     await pool.execute(
         """
         INSERT INTO developer_output_events
@@ -136,8 +148,13 @@ async def _handle_pull_request(pool, payload: dict) -> None:
              lines_added, lines_removed, pr_number, raw)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
         """,
-        developer_id, repo, event_type, github_user,
-        additions, deletions, pr_number,
+        developer_id,
+        repo,
+        event_type,
+        github_user,
+        additions,
+        deletions,
+        pr_number,
         json.dumps({"title": pr.get("title"), "merged": pr.get("merged")}),
     )
     if pr.get("merged"):
@@ -153,12 +170,16 @@ async def _handle_review(pool, payload: dict) -> None:
     developer_id = await _resolve_developer(pool, github_user)
 
     import json
+
     await pool.execute(
         """
         INSERT INTO developer_output_events
             (developer_id, repo, event_type, github_user, pr_number, raw)
         VALUES ($1, $2, 'review', $3, $4, $5::jsonb)
         """,
-        developer_id, repo, github_user, pr_number,
+        developer_id,
+        repo,
+        github_user,
+        pr_number,
         json.dumps({"state": review.get("state")}),
     )

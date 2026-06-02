@@ -24,6 +24,7 @@ Condition syntax: simple dotted path comparisons, e.g.
     outputs.score > 0.8
     outputs._loop_continue == true
 """
+
 from __future__ import annotations
 
 import operator
@@ -34,9 +35,10 @@ from typing import Any
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _resolve_path(obj: Any, path: str) -> Any:
     """Walk dot-separated path into obj, returning None if any segment missing."""
-    for part in path.split('.'):
+    for part in path.split("."):
         if isinstance(obj, dict):
             obj = obj.get(part)
         elif hasattr(obj, part):
@@ -47,18 +49,16 @@ def _resolve_path(obj: Any, path: str) -> Any:
 
 
 _OPS = {
-    '==': operator.eq,
-    '!=': operator.ne,
-    '>':  operator.gt,
-    '>=': operator.ge,
-    '<':  operator.lt,
-    '<=': operator.le,
+    "==": operator.eq,
+    "!=": operator.ne,
+    ">": operator.gt,
+    ">=": operator.ge,
+    "<": operator.lt,
+    "<=": operator.le,
 }
 
 # Tokenize: path OP literal (string or number or bool)
-_COND_RE = re.compile(
-    r'^(?P<path>[\w.]+)\s*(?P<op>==|!=|>=|<=|>|<)\s*(?P<lit>.+)$'
-)
+_COND_RE = re.compile(r"^(?P<path>[\w.]+)\s*(?P<op>==|!=|>=|<=|>|<)\s*(?P<lit>.+)$")
 
 
 def _parse_literal(raw: str) -> Any:
@@ -67,11 +67,11 @@ def _parse_literal(raw: str) -> Any:
         return raw[1:-1]
     if raw.startswith("'") and raw.endswith("'"):
         return raw[1:-1]
-    if raw.lower() == 'true':
+    if raw.lower() == "true":
         return True
-    if raw.lower() == 'false':
+    if raw.lower() == "false":
         return False
-    if raw.lower() == 'null' or raw.lower() == 'none':
+    if raw.lower() == "null" or raw.lower() == "none":
         return None
     try:
         return int(raw)
@@ -87,6 +87,7 @@ def _parse_literal(raw: str) -> Any:
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 def evaluate_condition(condition: str | None, outputs: dict) -> bool:
     """Evaluate a condition string against node outputs.
@@ -106,16 +107,16 @@ def evaluate_condition(condition: str | None, outputs: dict) -> bool:
     # Strip leading "outputs." prefix — conditions are evaluated against the
     # outputs dict directly, so "outputs.field" and "field" are equivalent.
     if cond.startswith("outputs."):
-        cond = cond[len("outputs."):]
+        cond = cond[len("outputs.") :]
     m = _COND_RE.match(cond)
     if not m:
         # Non-parseable condition: treat as path truthiness check
         val = _resolve_path(outputs, cond)
         return bool(val)
 
-    path = m.group('path')
-    op_str = m.group('op')
-    literal = _parse_literal(m.group('lit'))
+    path = m.group("path")
+    op_str = m.group("op")
+    literal = _parse_literal(m.group("lit"))
     op_fn = _OPS.get(op_str)
     if op_fn is None:
         return False
@@ -135,21 +136,22 @@ def should_loop(node_spec: dict, outputs: dict, current_iteration: int) -> bool:
     - current_iteration < loop.max_iterations - 1  (0-indexed)
     - outputs contains _loop_continue: True
     """
-    loop = node_spec.get('loop') or {}
+    loop = node_spec.get("loop") or {}
     # Handle both "loop": true and "loop": {"enabled": true, "max_iterations": N}
     if isinstance(loop, bool):
         loop = {"enabled": loop, "max_iterations": 10}
-    if not loop.get('enabled', False):
+    if not loop.get("enabled", False):
         return False
-    max_iter = int(loop.get('max_iterations', 10))
+    max_iter = int(loop.get("max_iterations", 10))
     if current_iteration >= max_iter - 1:
         return False
-    return bool(outputs.get('_loop_continue', False))
+    return bool(outputs.get("_loop_continue", False))
 
 
 # ---------------------------------------------------------------------------
 # DAG graph traversal
 # ---------------------------------------------------------------------------
+
 
 def successors(dag: dict[str, Any], node_id: str) -> list[str]:
     """Direct successors of node_id (ignores conditions)."""

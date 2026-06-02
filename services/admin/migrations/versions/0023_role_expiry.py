@@ -1,4 +1,5 @@
 """Add expiry and reason to user_roles (granted_by already exists as UUID column)"""
+
 from typing import Sequence, Union
 
 import sqlalchemy as sa

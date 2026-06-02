@@ -4,6 +4,7 @@
 Revision ID: 0017
 Revises: 0016
 """
+
 from typing import Sequence, Union
 
 from alembic import op
@@ -47,7 +48,9 @@ def upgrade():
             created_at           TIMESTAMPTZ NOT NULL DEFAULT now()
         )
     """)
-    op.execute("CREATE INDEX IF NOT EXISTS idx_league_challenges_season ON league_challenges(season_id)")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_league_challenges_season ON league_challenges(season_id)"
+    )
 
     op.execute("""
         CREATE TABLE IF NOT EXISTS league_submissions (
@@ -63,9 +66,15 @@ def upgrade():
             submitted_at     TIMESTAMPTZ NOT NULL DEFAULT now()
         )
     """)
-    op.execute("CREATE INDEX IF NOT EXISTS idx_league_submissions_challenge ON league_submissions(challenge_id)")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_league_submissions_engineer ON league_submissions(engineer_id)")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_league_submissions_challenge_engineer ON league_submissions(challenge_id, engineer_id)")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_league_submissions_challenge ON league_submissions(challenge_id)"
+    )
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_league_submissions_engineer ON league_submissions(engineer_id)"
+    )
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_league_submissions_challenge_engineer ON league_submissions(challenge_id, engineer_id)"
+    )
 
     op.execute("""
         CREATE TABLE IF NOT EXISTS league_scores (
@@ -81,7 +90,9 @@ def upgrade():
             composite         NUMERIC(7,2) NOT NULL DEFAULT 0
         )
     """)
-    op.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_league_scores_submission ON league_scores(submission_id)")
+    op.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_league_scores_submission ON league_scores(submission_id)"
+    )
 
     op.execute("""
         CREATE TABLE IF NOT EXISTS league_leaderboard (
@@ -94,7 +105,9 @@ def upgrade():
             PRIMARY KEY (season_id, engineer_id)
         )
     """)
-    op.execute("CREATE INDEX IF NOT EXISTS idx_league_leaderboard_season_score ON league_leaderboard(season_id, composite_score DESC)")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_league_leaderboard_season_score ON league_leaderboard(season_id, composite_score DESC)"
+    )
 
     op.execute("""
         CREATE TABLE IF NOT EXISTS league_points_ledger (
@@ -112,8 +125,12 @@ def upgrade():
             created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
         )
     """)
-    op.execute("CREATE INDEX IF NOT EXISTS idx_league_points_engineer ON league_points_ledger(engineer_id)")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_league_points_engineer_time ON league_points_ledger(engineer_id, created_at DESC)")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_league_points_engineer ON league_points_ledger(engineer_id)"
+    )
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_league_points_engineer_time ON league_points_ledger(engineer_id, created_at DESC)"
+    )
 
     op.execute("""
         CREATE TABLE IF NOT EXISTS league_store_items (

@@ -7,6 +7,7 @@ from unittest.mock import MagicMock
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_key_orm(team_id):
     k = MagicMock()
     k.id = uuid.uuid4()
@@ -27,6 +28,7 @@ def _scalars_all(objs):
 # ---------------------------------------------------------------------------
 # GET /teams/{team_id}/keys
 # ---------------------------------------------------------------------------
+
 
 async def test_list_keys_returns_200(client, mock_session):
     team_id = uuid.uuid4()
@@ -54,10 +56,12 @@ async def test_list_keys_empty(client, mock_session):
 # POST /teams/{team_id}/keys
 # ---------------------------------------------------------------------------
 
+
 async def test_create_key_returns_201_with_sk_prefix(client, mock_session):
     team_id = uuid.uuid4()
 
     import app.routers.api_keys as api_keys_module
+
     original_class = api_keys_module.APIKey
 
     created_key = _make_key_orm(team_id)
@@ -95,6 +99,7 @@ async def test_create_key_key_returned_once(client, mock_session):
     team_id = uuid.uuid4()
 
     import app.routers.api_keys as api_keys_module
+
     original_class = api_keys_module.APIKey
 
     created_key = _make_key_orm(team_id)
@@ -134,6 +139,7 @@ async def test_create_key_key_returned_once(client, mock_session):
 # ---------------------------------------------------------------------------
 # DELETE /teams/{team_id}/keys/{key_id}
 # ---------------------------------------------------------------------------
+
 
 async def test_revoke_key_found_returns_204(client, mock_session):
     team_id = uuid.uuid4()

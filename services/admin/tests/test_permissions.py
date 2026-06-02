@@ -20,6 +20,7 @@ def _user(*roles):
 # _ROLE_POWER ordering
 # ---------------------------------------------------------------------------
 
+
 def test_role_power_strict_descending_hierarchy():
     assert (
         _ROLE_POWER["platform_admin"]
@@ -40,6 +41,7 @@ def test_role_power_unknown_role_is_zero_via_can_access():
 # ---------------------------------------------------------------------------
 # Prefix inheritance — ancestor grants access to descendants
 # ---------------------------------------------------------------------------
+
 
 def test_role_at_ancestor_grants_descendant():
     # area_owner at /root/area → can access /root/area/unit/team
@@ -62,6 +64,7 @@ def test_role_at_exact_node_grants_that_node():
 # Non-inheritance — sibling / descendant roles do NOT grant ancestor access
 # ---------------------------------------------------------------------------
 
+
 def test_role_at_sibling_does_not_grant():
     # team_admin at /root/area/team-a must not reach /root/area/team-b
     user = _user(("team_admin", "/root/area/team-a"))
@@ -83,6 +86,7 @@ def test_unrelated_path_does_not_grant():
 # Role power vs min_role requirement
 # ---------------------------------------------------------------------------
 
+
 def test_higher_power_satisfies_lower_requirement():
     # area_owner (5) satisfies a viewer (1) requirement on the same subtree.
     user = _user(("area_owner", "/root/area"))
@@ -103,6 +107,7 @@ def test_equal_power_satisfies_requirement():
 # ---------------------------------------------------------------------------
 # Edge cases
 # ---------------------------------------------------------------------------
+
 
 def test_empty_roles_denies():
     assert can_access({"roles": []}, "/root/area", "viewer") is False

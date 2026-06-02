@@ -4,6 +4,7 @@ Two-step fallback:
 1. POST {AUTH_URL}/validate → get key_id → query DB for developer_id
 2. GET {ADMIN_URL}/dev-auth/me with Bearer token → get developer_id directly
 """
+
 from __future__ import annotations
 
 import logging

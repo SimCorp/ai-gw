@@ -8,6 +8,7 @@ Prerequisites:
 Run:
   pytest services/workflow-worker/tests/test_smoke.py -v
 """
+
 from __future__ import annotations
 
 import json
@@ -40,14 +41,17 @@ def _get_team_id() -> str:
 
 def test_3node_linear_chain():
     # Register the echo agent
-    _post("/agents", {
-        "slug": "echo-agent",
-        "name": "Echo Agent",
-        "image": "ai-gateway-echo-agent:dev",
-        "manifest": {},
-        "category": "utility",
-        "managed": True,
-    })
+    _post(
+        "/agents",
+        {
+            "slug": "echo-agent",
+            "name": "Echo Agent",
+            "image": "ai-gateway-echo-agent:dev",
+            "manifest": {},
+            "category": "utility",
+            "managed": True,
+        },
+    )
 
     # Find a team to scope the workflow to
     teams = _get("/teams")
@@ -55,11 +59,14 @@ def test_3node_linear_chain():
     team_id = (teams[0] if isinstance(teams, list) else teams["teams"][0])["id"]
 
     # Create a workflow
-    wf = _post("/workflows", {
-        "slug": f"smoke-{uuid.uuid4().hex[:6]}",
-        "name": "Smoke Workflow",
-        "team_id": team_id,
-    })
+    wf = _post(
+        "/workflows",
+        {
+            "slug": f"smoke-{uuid.uuid4().hex[:6]}",
+            "name": "Smoke Workflow",
+            "team_id": team_id,
+        },
+    )
 
     # Define a 3-node linear DAG
     dag = {
@@ -74,19 +81,25 @@ def test_3node_linear_chain():
             {"from": "n2", "to": "n3"},
         ],
     }
-    _post(f"/workflows/{wf['id']}/versions", {
-        "dag": dag,
-        "created_by": str(uuid.uuid4()),
-    })
+    _post(
+        f"/workflows/{wf['id']}/versions",
+        {
+            "dag": dag,
+            "created_by": str(uuid.uuid4()),
+        },
+    )
 
     # Submit a run
-    submit = _post("/runs", {
-        "workflow_id": wf["id"],
-        "inputs": {"greeting": "hello"},
-        "team_id": team_id,
-        "triggered_by": str(uuid.uuid4()),
-        "triggered_by_kind": "user",
-    })
+    submit = _post(
+        "/runs",
+        {
+            "workflow_id": wf["id"],
+            "inputs": {"greeting": "hello"},
+            "team_id": team_id,
+            "triggered_by": str(uuid.uuid4()),
+            "triggered_by_kind": "user",
+        },
+    )
     run_id = submit["id"]
 
     # Poll until terminal
@@ -98,7 +111,9 @@ def test_3node_linear_chain():
             break
         time.sleep(2)
 
-    assert status == "succeeded", f"run did not succeed; got {status}; run={json.dumps(run, default=str)}"
+    assert status == "succeeded", (
+        f"run did not succeed; got {status}; run={json.dumps(run, default=str)}"
+    )
     # All three nodes should be succeeded
     statuses = {n["node_id"]: n["status"] for n in run["nodes"]}
     assert statuses.get("n1") == "succeeded"

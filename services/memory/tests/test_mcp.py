@@ -2,6 +2,7 @@
 
 All store calls are mocked so no real DB is required.
 """
+
 from __future__ import annotations
 
 import json
@@ -116,11 +117,14 @@ async def test_mcp_add_and_search_drawer(client):
     ):
         add_r = await client.post(
             "/mcp",
-            json=_tool_call("mempalace_add_drawer", {
-                "wing": "code",
-                "room": "python",
-                "content": "asyncpg connection pools are reusable",
-            }),
+            json=_tool_call(
+                "mempalace_add_drawer",
+                {
+                    "wing": "code",
+                    "room": "python",
+                    "content": "asyncpg connection pools are reusable",
+                },
+            ),
             headers={"Authorization": "Bearer test-token"},
         )
     assert add_r.status_code == 200
@@ -159,10 +163,13 @@ async def test_mcp_diary_write_and_read(client):
     with patch("app.store.diary_write", new=AsyncMock(return_value=fake_entry)):
         write_r = await client.post(
             "/mcp",
-            json=_tool_call("mempalace_diary_write", {
-                "entry": "Implemented memory palace service today.",
-                "date": "2026-05-12",
-            }),
+            json=_tool_call(
+                "mempalace_diary_write",
+                {
+                    "entry": "Implemented memory palace service today.",
+                    "date": "2026-05-12",
+                },
+            ),
             headers={"Authorization": "Bearer test-token"},
         )
     assert write_r.status_code == 200
@@ -199,12 +206,15 @@ async def test_mcp_kg_add_node_and_query(client):
     with patch("app.store.kg_add_node", new=AsyncMock(return_value=fake_node)):
         add_r = await client.post(
             "/mcp",
-            json=_tool_call("mempalace_kg_add", {
-                "type": "node",
-                "name": "FastAPI",
-                "entity_type": "framework",
-                "attributes": {"language": "python"},
-            }),
+            json=_tool_call(
+                "mempalace_kg_add",
+                {
+                    "type": "node",
+                    "name": "FastAPI",
+                    "entity_type": "framework",
+                    "attributes": {"language": "python"},
+                },
+            ),
             headers={"Authorization": "Bearer test-token"},
         )
     assert add_r.status_code == 200

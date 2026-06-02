@@ -9,6 +9,7 @@ Scoring formula:
 Redis key scheme (per-minute bucket, TTL 360 s):
   autoroute:stats:{model}:{metric}:m{epoch_minute}
 """
+
 from __future__ import annotations
 
 import logging
@@ -17,7 +18,7 @@ import time
 _log = logging.getLogger(__name__)
 
 _WINDOW_SECONDS = 300  # 5-minute rolling window
-_BUCKET_TTL = 360      # bucket expiry — a bit longer than the window
+_BUCKET_TTL = 360  # bucket expiry — a bit longer than the window
 _EXPLORATION_SCORE = 0.5  # score assigned to models with zero request data
 
 
@@ -83,12 +84,14 @@ async def get_model_scores(redis) -> dict[str, float]:
         cursor = b"0"
         model_names: set[str] = set()
         while True:
-            cursor, keys = await redis.scan(cursor, match="autoroute:stats:*:requests:m*", count=200)
+            cursor, keys = await redis.scan(
+                cursor, match="autoroute:stats:*:requests:m*", count=200
+            )
             for k in keys:
                 # Pattern: autoroute:stats:{model}:requests:m{minute}
                 parts = k.decode() if isinstance(k, bytes) else k
                 # strip prefix "autoroute:stats:" and suffix ":requests:m{N}"
-                inner = parts[len("autoroute:stats:"):]
+                inner = parts[len("autoroute:stats:") :]
                 model_part = inner.rsplit(":requests:", 1)[0]
                 model_names.add(model_part)
             if cursor == b"0" or cursor == 0:

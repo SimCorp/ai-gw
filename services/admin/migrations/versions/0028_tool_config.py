@@ -1,4 +1,5 @@
 """Create tool_config table and seed from catalog"""
+
 from typing import Sequence, Union
 
 import sqlalchemy as sa

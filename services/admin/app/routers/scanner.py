@@ -36,13 +36,32 @@ class RevokeBody(BaseModel):
     notes: str | None = None
 
 
-_INTERNAL_IP_PREFIXES = ("10.", "172.16.", "172.17.", "172.18.", "172.19.",
-    "172.20.", "172.21.", "172.22.", "172.23.", "172.24.", "172.25.", "172.26.",
-    "172.27.", "172.28.", "172.29.", "172.30.", "172.31.", "192.168.", "127.")
+_INTERNAL_IP_PREFIXES = (
+    "10.",
+    "172.16.",
+    "172.17.",
+    "172.18.",
+    "172.19.",
+    "172.20.",
+    "172.21.",
+    "172.22.",
+    "172.23.",
+    "172.24.",
+    "172.25.",
+    "172.26.",
+    "172.27.",
+    "172.28.",
+    "172.29.",
+    "172.30.",
+    "172.31.",
+    "192.168.",
+    "127.",
+)
 
 
 def _is_external(url: str) -> bool:
     from urllib.parse import urlparse
+
     host = urlparse(url).hostname or ""
     if host.endswith(".simcorp.internal"):
         return False
@@ -63,23 +82,39 @@ async def list_targets(
         where_clauses.append("status = :status")
         params["status"] = status
     where = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
-    rows = (await session.execute(
-        text(f"SELECT * FROM scan_targets {where} ORDER BY created_at DESC"),
-        params,
-    )).mappings().all()
+    rows = (
+        (
+            await session.execute(
+                text(f"SELECT * FROM scan_targets {where} ORDER BY created_at DESC"),
+                params,
+            )
+        )
+        .mappings()
+        .all()
+    )
     return [dict(r) for r in rows]
 
 
 @router.post("/targets", status_code=201)
 async def register_target(body: TargetCreate, session: AsyncSession = Depends(get_session)):
     if _is_external(body.url):
-        quota_row = (await session.execute(
-            text("SELECT scanner_quota FROM organization_nodes WHERE id = CAST(:nid AS uuid)"),
-            {"nid": body.node_id},
-        )).mappings().first()
+        quota_row = (
+            (
+                await session.execute(
+                    text(
+                        "SELECT scanner_quota FROM organization_nodes WHERE id = CAST(:nid AS uuid)"
+                    ),
+                    {"nid": body.node_id},
+                )
+            )
+            .mappings()
+            .first()
+        )
         quota = quota_row["scanner_quota"] if quota_row else {}
         if not quota.get("allow_external_targets", False):
-            raise HTTPException(status_code=403, detail="Team is not permitted to register external targets")
+            raise HTTPException(
+                status_code=403, detail="Team is not permitted to register external targets"
+            )
     result = await session.execute(
         text("""
             INSERT INTO scan_targets (node_id, url, label, openapi_spec_url, allowed_scan_types, created_by)
@@ -104,10 +139,16 @@ async def register_target(body: TargetCreate, session: AsyncSession = Depends(ge
 async def approve_target(
     target_id: str, body: TargetApprove, session: AsyncSession = Depends(get_session)
 ):
-    row = (await session.execute(
-        text("SELECT id FROM scan_targets WHERE id = CAST(:id AS uuid)"),
-        {"id": target_id},
-    )).mappings().first()
+    row = (
+        (
+            await session.execute(
+                text("SELECT id FROM scan_targets WHERE id = CAST(:id AS uuid)"),
+                {"id": target_id},
+            )
+        )
+        .mappings()
+        .first()
+    )
     if not row:
         raise HTTPException(status_code=404, detail="Target not found")
     await session.execute(
@@ -152,9 +193,15 @@ async def revoke_target(
 
 @router.get("/quotas")
 async def list_quotas(session: AsyncSession = Depends(get_session)):
-    rows = (await session.execute(
-        text("SELECT id, name, scanner_quota FROM organization_nodes ORDER BY name")
-    )).mappings().all()
+    rows = (
+        (
+            await session.execute(
+                text("SELECT id, name, scanner_quota FROM organization_nodes ORDER BY name")
+            )
+        )
+        .mappings()
+        .all()
+    )
     return [dict(r) for r in rows]
 
 
@@ -174,14 +221,18 @@ async def update_quota(
     set_parts = []
     params: dict[str, Any] = {"node_id": node_id}
     for k, v in updates.items():
-        sql_key = _QUOTA_SQL_KEYS[k]  # KeyError is impossible — keys come from QuotaUpdate.model_dump()
+        sql_key = _QUOTA_SQL_KEYS[
+            k
+        ]  # KeyError is impossible — keys come from QuotaUpdate.model_dump()
         param_name = f"quota_{sql_key}"
         set_parts.append(
             f"scanner_quota = scanner_quota || jsonb_build_object('{sql_key}', CAST(:{param_name} AS jsonb))"
         )
         params[param_name] = json.dumps(v)
     result = await session.execute(
-        text(f"UPDATE organization_nodes SET {', '.join(set_parts)} WHERE id = CAST(:node_id AS uuid) RETURNING scanner_quota"),
+        text(
+            f"UPDATE organization_nodes SET {', '.join(set_parts)} WHERE id = CAST(:node_id AS uuid) RETURNING scanner_quota"
+        ),
         params,
     )
     row = result.mappings().first()

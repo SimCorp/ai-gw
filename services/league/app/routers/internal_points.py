@@ -5,6 +5,7 @@ for activities tracked outside the league service itself — currently AI
 Champions content contributions. Auth is via the shared `X-Admin-Token`
 header, not user sessions.
 """
+
 import secrets
 from uuid import UUID
 

@@ -1,4 +1,5 @@
 """Worker configuration. Reads from env vars set in docker-compose."""
+
 from __future__ import annotations
 
 import os
@@ -27,7 +28,9 @@ class Settings:
     def from_env(cls) -> "Settings":
         return cls(
             # asyncpg URL (no driver suffix; asyncpg.connect accepts plain postgresql://)
-            database_url=os.environ["DATABASE_URL"].replace("postgresql+asyncpg://", "postgresql://").replace("postgresql+psycopg2://", "postgresql://"),
+            database_url=os.environ["DATABASE_URL"]
+            .replace("postgresql+asyncpg://", "postgresql://")
+            .replace("postgresql+psycopg2://", "postgresql://"),
             redis_url=os.getenv("REDIS_URL", "redis://redis:6379/0"),
             worker_id=os.getenv("WORKER_ID", f"worker-{socket.gethostname()}"),
             concurrency=int(os.getenv("WORKER_CONCURRENCY", "5")),

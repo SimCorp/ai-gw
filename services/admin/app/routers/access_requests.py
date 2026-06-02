@@ -5,6 +5,7 @@ Developers submit requests for model access or budget increases.
 Team admins / area owners / platform admins approve or reject.
 Approving a model_access request automatically adds the model to the user's allowed_models.
 """
+
 from __future__ import annotations
 
 import uuid as _uuid
@@ -21,13 +22,13 @@ router = APIRouter(prefix="/access-requests", tags=["access-requests"])
 
 
 class AccessRequestCreate(BaseModel):
-    request_type: str   # model_access | budget_increase
-    resource_id: str    # model name or team_id
+    request_type: str  # model_access | budget_increase
+    resource_id: str  # model name or team_id
     justification: str | None = None
 
 
 class AccessRequestDecision(BaseModel):
-    status: str         # approved | rejected
+    status: str  # approved | rejected
     review_note: str | None = None
     expires_at: str | None = None  # reserved for future time-bounded approvals
 
@@ -87,8 +88,10 @@ async def list_requests(
         where += " AND ar.status = :status"
         params["status"] = status
 
-    rows = (await session.execute(
-        text(f"""
+    rows = (
+        (
+            await session.execute(
+                text(f"""
             SELECT ar.id, ar.request_type, ar.node_id, ar.justification,
                    ar.status, ar.reviewed_by, ar.reviewed_at, ar.review_note,
                    ar.created_at, u.email AS requester_email, u.display_name AS requester_name
@@ -98,8 +101,12 @@ async def list_requests(
             ORDER BY ar.created_at DESC
             LIMIT 200
         """),
-        params,
-    )).mappings().all()
+                params,
+            )
+        )
+        .mappings()
+        .all()
+    )
 
     return [dict(r) for r in rows]
 
@@ -122,14 +129,20 @@ async def decide_request(
     if not can_review:
         raise HTTPException(403, "Insufficient permissions to review requests")
 
-    row = (await session.execute(
-        text("""
+    row = (
+        (
+            await session.execute(
+                text("""
             SELECT id, user_id::text, request_type, node_id, status
             FROM access_requests
             WHERE id = CAST(:rid AS uuid)
         """),
-        {"rid": request_id},
-    )).mappings().first()
+                {"rid": request_id},
+            )
+        )
+        .mappings()
+        .first()
+    )
     if not row:
         raise HTTPException(404, "Request not found")
     if row["status"] != "pending":

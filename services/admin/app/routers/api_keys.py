@@ -50,14 +50,16 @@ async def portal_list_keys(
     session_data = await _require_team_member(team_id, request, authorization)
     developer_id = session_data["developer_id"]
     # Verify the developer is a member of the requested team
-    membership = (await session.execute(
-        text("""
+    membership = (
+        await session.execute(
+            text("""
             SELECT 1 FROM node_members
             WHERE node_id = CAST(:team_id AS uuid)
               AND developer_id = CAST(:developer_id AS uuid)
         """),
-        {"team_id": str(team_id), "developer_id": developer_id},
-    )).first()
+            {"team_id": str(team_id), "developer_id": developer_id},
+        )
+    ).first()
     if not membership:
         raise HTTPException(status_code=403, detail="Not a member of this team")
     result = await session.execute(
@@ -76,14 +78,16 @@ async def portal_create_key(
 ):
     session_data = await _require_team_member(team_id, request, authorization)
     developer_id = session_data["developer_id"]
-    membership = (await session.execute(
-        text("""
+    membership = (
+        await session.execute(
+            text("""
             SELECT 1 FROM node_members
             WHERE node_id = CAST(:team_id AS uuid)
               AND developer_id = CAST(:developer_id AS uuid)
         """),
-        {"team_id": str(team_id), "developer_id": developer_id},
-    )).first()
+            {"team_id": str(team_id), "developer_id": developer_id},
+        )
+    ).first()
     if not membership:
         raise HTTPException(status_code=403, detail="Not a member of this team")
     scopes = body.scopes if body.scopes else DEFAULT_KEY_SCOPES
@@ -99,8 +103,17 @@ async def portal_create_key(
     session.add(api_key)
     await session.flush()
     await audit.record(
-        session, request, "create_api_key", "api_key", resource_id=api_key.id,
-        details={"name": body.name, "team_id": str(team_id), "developer_id": developer_id, "scopes": scopes},
+        session,
+        request,
+        "create_api_key",
+        "api_key",
+        resource_id=api_key.id,
+        details={
+            "name": body.name,
+            "team_id": str(team_id),
+            "developer_id": developer_id,
+            "scopes": scopes,
+        },
     )
     await session.commit()
     await session.refresh(api_key)
@@ -123,14 +136,16 @@ async def portal_revoke_key(
 ):
     session_data = await _require_team_member(team_id, request, authorization)
     developer_id = session_data["developer_id"]
-    membership = (await session.execute(
-        text("""
+    membership = (
+        await session.execute(
+            text("""
             SELECT 1 FROM node_members
             WHERE node_id = CAST(:team_id AS uuid)
               AND developer_id = CAST(:developer_id AS uuid)
         """),
-        {"team_id": str(team_id), "developer_id": developer_id},
-    )).first()
+            {"team_id": str(team_id), "developer_id": developer_id},
+        )
+    ).first()
     if not membership:
         raise HTTPException(status_code=403, detail="Not a member of this team")
     key = await session.get(APIKey, key_id)
@@ -138,7 +153,11 @@ async def portal_revoke_key(
         raise HTTPException(status_code=404, detail="Key not found")
     key.revoked_at = datetime.now(timezone.utc)
     await audit.record(
-        session, request, "revoke_api_key", "api_key", resource_id=key_id,
+        session,
+        request,
+        "revoke_api_key",
+        "api_key",
+        resource_id=key_id,
         details={"name": key.name, "team_id": str(team_id), "developer_id": developer_id},
     )
     await session.commit()
@@ -174,6 +193,7 @@ async def create_key(
     expires_at = None
     if body.expires_at:
         from datetime import datetime as _dt
+
         expires_at = _dt.fromisoformat(body.expires_at.replace("Z", "+00:00"))
 
     api_key = APIKey(
@@ -187,7 +207,11 @@ async def create_key(
     session.add(api_key)
     await session.flush()
     await audit.record(
-        session, request, "create_api_key", "api_key", resource_id=api_key.id,
+        session,
+        request,
+        "create_api_key",
+        "api_key",
+        resource_id=api_key.id,
         details={"name": body.name, "team_id": str(team_id), "scopes": scopes},
     )
     await session.commit()
@@ -214,7 +238,11 @@ async def revoke_key(
         raise HTTPException(status_code=404, detail="Key not found")
     key.revoked_at = datetime.now(timezone.utc)
     await audit.record(
-        session, request, "revoke_api_key", "api_key", resource_id=key_id,
+        session,
+        request,
+        "revoke_api_key",
+        "api_key",
+        resource_id=key_id,
         details={"name": key.name, "team_id": str(team_id)},
     )
     await session.commit()

@@ -17,6 +17,7 @@ Tables that had FK to teams but are out of scope for this migration
   developers, ai_insights, guardrails, guardrail_hits,
   workflows, workflow_runs, projects
 """
+
 from __future__ import annotations
 
 from typing import Sequence, Union
@@ -50,7 +51,9 @@ def upgrade() -> None:
             UNIQUE(parent_id, slug)
         )
     """)
-    op.execute("CREATE INDEX IF NOT EXISTS idx_nodes_path ON organization_nodes USING btree (path text_pattern_ops)")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_nodes_path ON organization_nodes USING btree (path text_pattern_ops)"
+    )
     op.execute("CREATE INDEX IF NOT EXISTS idx_nodes_parent_id ON organization_nodes(parent_id)")
 
     # ------------------------------------------------------------------ #
@@ -70,7 +73,9 @@ def upgrade() -> None:
             UNIQUE(entra_group_id, role, node_id)
         )
     """)
-    op.execute("CREATE INDEX IF NOT EXISTS idx_role_assignments_group ON role_assignments(entra_group_id)")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_role_assignments_group ON role_assignments(entra_group_id)"
+    )
     op.execute("CREATE INDEX IF NOT EXISTS idx_role_assignments_node ON role_assignments(node_id)")
 
     # ------------------------------------------------------------------ #
@@ -100,7 +105,9 @@ def upgrade() -> None:
     op.execute("ALTER TABLE cost_records ALTER COLUMN node_id DROP NOT NULL")
     # Update index name
     op.execute("DROP INDEX IF EXISTS cost_records_team_id_created_at_idx")
-    op.execute("CREATE INDEX IF NOT EXISTS cost_records_node_id_created_at_idx ON cost_records(node_id, created_at DESC)")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS cost_records_node_id_created_at_idx ON cost_records(node_id, created_at DESC)"
+    )
 
     # ------------------------------------------------------------------ #
     # 6. api_keys: team_id → node_id                                     #
@@ -121,7 +128,9 @@ def upgrade() -> None:
     # ------------------------------------------------------------------ #
     op.execute("ALTER TABLE team_members DROP CONSTRAINT IF EXISTS team_members_team_id_fkey")
     # Drop the unique constraint that references team_id before renaming
-    op.execute("ALTER TABLE team_members DROP CONSTRAINT IF EXISTS team_members_team_id_user_id_key")
+    op.execute(
+        "ALTER TABLE team_members DROP CONSTRAINT IF EXISTS team_members_team_id_user_id_key"
+    )
     op.execute("ALTER TABLE team_members RENAME COLUMN team_id TO node_id")
     op.execute("ALTER TABLE team_members RENAME TO node_members")
     op.execute("""
@@ -201,7 +210,9 @@ def upgrade() -> None:
     op.execute("ALTER TABLE projects ALTER COLUMN team_id DROP NOT NULL")
 
     # service_accounts.team_id
-    op.execute("ALTER TABLE service_accounts DROP CONSTRAINT IF EXISTS service_accounts_team_id_fkey")
+    op.execute(
+        "ALTER TABLE service_accounts DROP CONSTRAINT IF EXISTS service_accounts_team_id_fkey"
+    )
 
     # developers.team_id
     op.execute("ALTER TABLE developers DROP CONSTRAINT IF EXISTS developers_team_id_fkey")
@@ -223,14 +234,22 @@ def upgrade() -> None:
     op.execute("ALTER TABLE workflow_runs DROP CONSTRAINT IF EXISTS workflow_runs_team_id_fkey")
 
     # mcp_server_access.team_id
-    op.execute("ALTER TABLE mcp_server_access DROP CONSTRAINT IF EXISTS mcp_server_access_team_id_fkey")
+    op.execute(
+        "ALTER TABLE mcp_server_access DROP CONSTRAINT IF EXISTS mcp_server_access_team_id_fkey"
+    )
 
     # plugin_team_overrides.team_id
-    op.execute("ALTER TABLE plugin_team_overrides DROP CONSTRAINT IF EXISTS plugin_team_overrides_team_id_fkey")
+    op.execute(
+        "ALTER TABLE plugin_team_overrides DROP CONSTRAINT IF EXISTS plugin_team_overrides_team_id_fkey"
+    )
 
     # access_grants.grantor_team_id and grantee_team_id
-    op.execute("ALTER TABLE access_grants DROP CONSTRAINT IF EXISTS access_grants_grantor_team_id_fkey")
-    op.execute("ALTER TABLE access_grants DROP CONSTRAINT IF EXISTS access_grants_grantee_team_id_fkey")
+    op.execute(
+        "ALTER TABLE access_grants DROP CONSTRAINT IF EXISTS access_grants_grantor_team_id_fkey"
+    )
+    op.execute(
+        "ALTER TABLE access_grants DROP CONSTRAINT IF EXISTS access_grants_grantee_team_id_fkey"
+    )
 
     # scan_jobs.team_id and scan_targets.team_id (only present on legacy DBs where
     # the scanner migration ran before this one; on a fresh chain the scanner
@@ -259,8 +278,12 @@ def upgrade() -> None:
     op.execute("ALTER TABLE units DROP CONSTRAINT IF EXISTS units_area_id_fkey")
 
     # access_grants has two FKs to teams
-    op.execute("ALTER TABLE access_grants DROP CONSTRAINT IF EXISTS access_grants_grantee_team_id_fkey")
-    op.execute("ALTER TABLE access_grants DROP CONSTRAINT IF EXISTS access_grants_grantor_team_id_fkey")
+    op.execute(
+        "ALTER TABLE access_grants DROP CONSTRAINT IF EXISTS access_grants_grantee_team_id_fkey"
+    )
+    op.execute(
+        "ALTER TABLE access_grants DROP CONSTRAINT IF EXISTS access_grants_grantor_team_id_fkey"
+    )
 
     # ------------------------------------------------------------------ #
     # 12. Drop units, teams, areas (CASCADE catches any remaining FKs)   #

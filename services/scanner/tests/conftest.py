@@ -32,12 +32,16 @@ def client(mock_redis, mock_session):
     app.dependency_overrides = {}
 
     from app.db import get_session
+
     app.dependency_overrides[get_session] = override_session
 
-    with patch("app.routers.jobs.get_identity", return_value={
-        "team_id": "aaaaaaaa-0000-0000-0000-000000000001",
-        "user_id": "bbbbbbbb-0000-0000-0000-000000000001",
-    }):
+    with patch(
+        "app.routers.jobs.get_identity",
+        return_value={
+            "team_id": "aaaaaaaa-0000-0000-0000-000000000001",
+            "user_id": "bbbbbbbb-0000-0000-0000-000000000001",
+        },
+    ):
         yield AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
 
     app.dependency_overrides = {}

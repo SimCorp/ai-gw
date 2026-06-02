@@ -3,6 +3,7 @@ Background task that checks if any team has consumed >80% of their monthly budge
 Runs every 5 minutes; results are written to Redis so the admin portal can surface them.
 When a webhook URL is configured in org_settings, an HTTP POST is fired on each alert.
 """
+
 import asyncio
 import json
 import logging
@@ -83,7 +84,9 @@ async def _check_once(pool: asyncpg.Pool, redis) -> None:
                 await redis.setex(alert_key, _ALERT_TTL, json.dumps(payload))
                 _log.warning(
                     "Budget alert: team %s (%s) at %.1f%% of monthly budget",
-                    team_id, row["name"], pct * 100,
+                    team_id,
+                    row["name"],
+                    pct * 100,
                 )
 
                 if webhook_url:

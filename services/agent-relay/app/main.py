@@ -20,6 +20,7 @@ Flow:
      {outputs: {}, exit_code: 0}
   5. On WS disconnect, agent is unregistered
 """
+
 from __future__ import annotations
 
 import asyncio

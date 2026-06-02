@@ -8,6 +8,7 @@ Fail-open by design: if the admin service is unreachable or patterns are
 unavailable, all outputs are allowed through (consistent with the Gateway's
 existing fail-open philosophy).
 """
+
 import logging
 import re
 from typing import Any
@@ -26,10 +27,10 @@ def _compile_defaults() -> None:
     """Bootstrap with known-dangerous patterns even if guardrails unreachable."""
     global _SECRET_PATTERNS, _INJECTION_PHRASES, _PATTERNS_LOADED
     _SECRET_PATTERNS = [
-        re.compile(r'aigw_run_[A-Za-z0-9_\-]{20,}', re.I),   # scoped gateway keys
-        re.compile(r'sk-ant-api[A-Za-z0-9\-_]{20,}', re.I),  # Anthropic keys
-        re.compile(r'sk-[a-zA-Z0-9]{20,}', re.I),             # OpenAI-style keys
-        re.compile(r'-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----'),  # private keys
+        re.compile(r"aigw_run_[A-Za-z0-9_\-]{20,}", re.I),  # scoped gateway keys
+        re.compile(r"sk-ant-api[A-Za-z0-9\-_]{20,}", re.I),  # Anthropic keys
+        re.compile(r"sk-[a-zA-Z0-9]{20,}", re.I),  # OpenAI-style keys
+        re.compile(r"-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----"),  # private keys
         re.compile(r'(?i)(password|passwd|secret|token)\s*[=:]\s*["\']?[A-Za-z0-9!@#$%^&*]{8,}'),
     ]
     _INJECTION_PHRASES = [
@@ -50,6 +51,7 @@ async def load_patterns_from_admin(admin_url: str) -> None:
     _compile_defaults()  # always load defaults first
     try:
         import httpx
+
         async with httpx.AsyncClient(timeout=5) as client:
             r = await client.get(f"{admin_url}/guardrails?enabled=true")
             if r.status_code != 200:
@@ -67,12 +69,12 @@ async def load_patterns_from_admin(admin_url: str) -> None:
 def _enrich_from_pattern_name(name: str) -> None:
     """Map guardrail pattern names to compiled regexes."""
     KNOWN = {
-        "aws_access_key": re.compile(r'AKIA[0-9A-Z]{16}'),
-        "github_token": re.compile(r'gh[opsu]_[A-Za-z0-9]{36,}'),
-        "openai_key": re.compile(r'sk-[a-zA-Z0-9]{20,}', re.I),
-        "anthropic_key": re.compile(r'sk-ant-[a-zA-Z0-9\-_]{20,}', re.I),
-        "jwt": re.compile(r'eyJ[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+'),
-        "private_key_header": re.compile(r'-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----'),
+        "aws_access_key": re.compile(r"AKIA[0-9A-Z]{16}"),
+        "github_token": re.compile(r"gh[opsu]_[A-Za-z0-9]{36,}"),
+        "openai_key": re.compile(r"sk-[a-zA-Z0-9]{20,}", re.I),
+        "anthropic_key": re.compile(r"sk-ant-[a-zA-Z0-9\-_]{20,}", re.I),
+        "jwt": re.compile(r"eyJ[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+"),
+        "private_key_header": re.compile(r"-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----"),
         "db_connstring": re.compile(r'(postgresql|mysql|mongodb)\+?://[^\s"\']+:[^\s"\']+@'),
     }
     if name in KNOWN and KNOWN[name] not in _SECRET_PATTERNS:
@@ -112,6 +114,7 @@ def scan_outputs(outputs: dict) -> tuple[bool, list[str]]:
 
     findings = _scan_value(outputs)
     if findings:
-        _log.warning("threat-detection: %d finding(s) in agent outputs: %s",
-                     len(findings), findings[:3])
+        _log.warning(
+            "threat-detection: %d finding(s) in agent outputs: %s", len(findings), findings[:3]
+        )
     return (len(findings) == 0, findings)

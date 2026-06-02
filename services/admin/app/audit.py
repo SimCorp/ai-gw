@@ -20,6 +20,7 @@ def _actor(request: Request) -> str:
 
     # Fallback: check X-Admin-Token header directly (for callers that bypassed the dep)
     import hashlib
+
     token = request.headers.get("x-admin-token")
     if token:
         digest = hashlib.sha256(token.encode()).hexdigest()[:12]
