@@ -77,3 +77,65 @@ async def test_invoke_requires_relay_secret_when_configured(client, monkeypatch)
     # Missing header → 401, even before connection lookup.
     resp = await client.post("/invoke/anything", json={"inputs": {}, "env": {}})
     assert resp.status_code == 401
+
+
+async def test_register_returns_token_and_populates_state(client):
+    from app import main
+
+    main._redis = AsyncMock()  # capture the Redis write
+
+    resp = await client.post(
+        "/register", json={"slug": "agent-a", "name": "Agent A", "capabilities": ["x"]}
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    token = body["relay_token"]
+    assert body["slug"] == "agent-a"
+    assert main._registered_agents[token]["slug"] == "agent-a"
+    assert main._slug_to_token["agent-a"] == token
+    main._redis.set.assert_awaited_once()
+    key, value = main._redis.set.call_args[0]
+    assert key == "relay:agent:agent-a:token"
+    assert value == token
+
+
+async def test_register_enforces_relay_secret_when_configured(client, monkeypatch):
+    from app import config
+
+    monkeypatch.setattr(config, "_settings", config.Settings(relay_secret="s3cret"))
+
+    bad = await client.post("/register", json={"slug": "a", "name": "A"})
+    assert bad.status_code == 401
+
+    ok = await client.post(
+        "/register",
+        json={"slug": "a", "name": "A"},
+        headers={"X-Relay-Secret": "s3cret"},
+    )
+    assert ok.status_code == 200
+
+
+async def test_list_agents_only_returns_connected(client):
+    from app import main
+
+    # One registered+connected, one registered but not connected.
+    main._registered_agents["t1"] = {
+        "slug": "online-agent",
+        "name": "Online",
+        "capabilities": [],
+        "connected_at": "2026-06-02T00:00:00+00:00",
+    }
+    main._connections["t1"] = AsyncMock()
+    main._registered_agents["t2"] = {
+        "slug": "offline-agent",
+        "name": "Offline",
+        "capabilities": [],
+    }
+
+    resp = await client.get("/agents")
+    assert resp.status_code == 200
+    agents = resp.json()
+    slugs = {a["slug"] for a in agents}
+    assert slugs == {"online-agent"}
+    # relay_token must never be exposed.
+    assert all("relay_token" not in a for a in agents)
