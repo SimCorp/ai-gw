@@ -1,0 +1,22 @@
+# gitleaks config for the CI `security` job.
+# All entries below are confirmed NON-secrets (documentation examples and
+# frontend mock/placeholder data), allowlisted so the secret scan stays green
+# while still catching real secrets elsewhere. Add new entries only with a
+# justification.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Documentation example tokens and frontend mock data — not real secrets"
+paths = [
+  # API docs that intentionally contain example JWTs / api_key samples.
+  '''docs/api/auth\.md''',
+  '''docs/api-reference\.md''',
+  '''docs/SYSTEM_REFERENCE\.md''',
+]
+regexes = [
+  # React object key flagged by generic-api-key (apps/admin .../activity/page.tsx)
+  '''contributions_30d''',
+  # Mock Stripe-style key rendered in the portal keys page (UI placeholder)
+  '''sk_live_8a31fc02e1b4d57f0c9a2e8d4f6b1a7e3d8c5b9f2e''',
+]
