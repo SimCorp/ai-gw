@@ -19,10 +19,11 @@ from uuid import UUID
 
 import asyncpg
 import httpx
-from app.config import settings
 from fastapi import FastAPI, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from redis.asyncio import Redis
+
+from app.config import settings
 
 log = logging.getLogger("identity")
 
