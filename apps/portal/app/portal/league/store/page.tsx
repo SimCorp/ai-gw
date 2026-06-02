@@ -47,6 +47,7 @@ export default function StorePage() {
   const [filterType, setFilterType] = useState<"all" | ItemType>("all");
   const [buying, setBuying] = useState<string | null>(null);
   const [buyError, setBuyError] = useState<string | null>(null);
+  const [equipping, setEquipping] = useState<string | null>(null);
 
   const { data: storeData, isLoading } = useQuery<StoreItem[] | { items?: StoreItem[] }>({
     queryKey: ["portal-store"],
@@ -62,6 +63,12 @@ export default function StorePage() {
     queryKey: ["portal-purchases"],
     queryFn: () => fetch(`${LEAGUE}/store/owned`).then(r => r.json()),
   });
+
+  const { data: equippedData, refetch: refetchEquipped } = useQuery<Array<{id: string; name: string; type: string}>>({
+    queryKey: ["portal-equipped"],
+    queryFn: () => fetch(`${LEAGUE}/equipped`).then(r => r.ok ? r.json() : []),
+  });
+  const equippedIds = new Set((equippedData ?? []).map(e => e.id));
 
   const items = Array.isArray(storeData) ? storeData : storeData?.items ?? [];
   const balance = balanceData?.balance ?? 0;
@@ -90,6 +97,28 @@ export default function StorePage() {
       setBuyError(e instanceof Error ? e.message : "Purchase failed");
     } finally {
       setBuying(null);
+    }
+  }
+
+  async function handleEquip(itemId: string) {
+    setEquipping(itemId);
+    try {
+      await fetch(`${LEAGUE}/equip/${itemId}`, { method: "POST" });
+      qc.invalidateQueries({ queryKey: ["portal-equipped"] });
+      refetchEquipped();
+    } finally {
+      setEquipping(null);
+    }
+  }
+
+  async function handleUnequip(itemId: string) {
+    setEquipping(itemId);
+    try {
+      await fetch(`${LEAGUE}/equip/${itemId}`, { method: "DELETE" });
+      qc.invalidateQueries({ queryKey: ["portal-equipped"] });
+      refetchEquipped();
+    } finally {
+      setEquipping(null);
     }
   }
 
@@ -138,6 +167,36 @@ export default function StorePage() {
           </div>
         )}
       </div>
+
+      {equippedData && equippedData.length > 0 && (
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 11.5, fontWeight: 600, textTransform: "uppercase" as const, letterSpacing: "0.06em", color: "var(--fg-3)", marginBottom: 10 }}>
+            Currently equipped
+          </div>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            {equippedData.map(item => (
+              <div key={item.id} style={{
+                display: "flex", alignItems: "center", gap: 8,
+                padding: "8px 14px", borderRadius: 8,
+                background: "rgba(31,138,91,0.08)", border: "1px solid rgba(31,138,91,0.25)",
+              }}>
+                <span style={{ fontSize: 16 }}>{TYPE_ICONS[item.type as ItemType] ?? "✨"}</span>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--fg-1)" }}>{item.name}</div>
+                  <div style={{ fontSize: 11, color: "var(--fg-3)" }}>{TYPE_LABELS[item.type as ItemType] ?? item.type} · equipped</div>
+                </div>
+                <button
+                  onClick={() => handleUnequip(item.id)}
+                  disabled={equipping === item.id}
+                  style={{ marginLeft: 4, padding: "3px 8px", fontSize: 11.5, borderRadius: 4, border: "1px solid rgba(31,138,91,0.3)", background: "transparent", color: "var(--good, #1F8A5B)", cursor: "pointer" }}
+                >
+                  {equipping === item.id ? "…" : "Unequip"}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {buyError && (
         <div style={{
@@ -232,8 +291,24 @@ export default function StorePage() {
                     </button>
                   )}
                   {owned && (
-                    <div style={{ fontSize: 12.5, color: "var(--good, #1F8A5B)", fontWeight: 500 }}>
-                      ✓ In your collection
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      {equippedIds.has(item.id) ? (
+                        <button
+                          onClick={() => handleUnequip(item.id)}
+                          disabled={equipping === item.id}
+                          style={{ padding: "7px 12px", borderRadius: 6, border: "1px solid rgba(31,138,91,0.4)", background: "rgba(31,138,91,0.1)", color: "var(--good, #1F8A5B)", cursor: "pointer", fontSize: 12.5, fontWeight: 600 }}
+                        >
+                          {equipping === item.id ? "…" : "✓ Equipped · Unequip"}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleEquip(item.id)}
+                          disabled={equipping === item.id}
+                          style={{ padding: "7px 12px", borderRadius: 6, border: "1px solid var(--rule)", background: "var(--surface)", color: "var(--fg-2)", cursor: "pointer", fontSize: 12.5, fontWeight: 500 }}
+                        >
+                          {equipping === item.id ? "…" : "Equip"}
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
