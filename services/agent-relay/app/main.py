@@ -14,12 +14,16 @@ Flow:
   1. Laptop agent POSTs /register with {slug, name, capabilities: []} → gets relay_token (UUID)
   2. Laptop agent connects WS to /connect/{relay_token} — connection is kept alive
   3. Relay stores relay_token → websocket mapping in memory, plus slug in Redis
-     for multi-instance coordination: relay:agent:{slug}:token
+     (relay:agent:{slug}:token) which the identity service reads to gate
+     heartbeats. NOTE: this service is single-instance — invocations are routed
+     only via in-process connection state; the Redis key is not used to route
+     /invoke across instances.
   4. When workflow-worker wants to invoke, it POSTs /invoke/{slug} with
      {inputs: {}, env: {}} → relay forwards to WS, waits for response, returns
      {outputs: {}, exit_code: 0}
   5. On WS disconnect, agent is unregistered
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -233,13 +237,6 @@ async def invoke(agent_slug: str, req: InvokeRequest, request: Request):
     """Invoke a relay agent by slug. Forwards to the agent's WS and waits for the response."""
     _check_relay_secret(request)
     relay_token = _slug_to_token.get(agent_slug)
-
-    # Fallback: look up from Redis (another relay instance may have registered)
-    if relay_token is None and _redis:
-        try:
-            relay_token = await _redis.get(f"relay:agent:{agent_slug}:token")
-        except Exception as exc:
-            _log.warning("redis lookup failed for slug=%s: %s", agent_slug, exc)
 
     if relay_token is None or relay_token not in _connections:
         raise HTTPException(status_code=503, detail=f"agent '{agent_slug}' not connected")

@@ -175,3 +175,16 @@ def test_ws_connect_then_disconnect_cleans_up_state():
         # After the WS context exits (disconnect), state is cleaned up.
         assert token not in main._connections
         assert main._slug_to_token.get("ws-agent") is None
+
+
+async def test_invoke_does_not_consult_redis(client):
+    """invoke() is single-instance: an unknown slug 503s without a Redis lookup."""
+    from app import main
+
+    main._redis = AsyncMock()
+    main._redis.get = AsyncMock(return_value="some-token-from-another-instance")
+
+    resp = await client.post("/invoke/elsewhere", json={"inputs": {}, "env": {}})
+
+    assert resp.status_code == 503
+    main._redis.get.assert_not_called()
