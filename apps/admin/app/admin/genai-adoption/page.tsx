@@ -101,6 +101,7 @@ const MOCK = {
 };
 
 // ── TypeScript interfaces ──────────────────────────────────────────────────────
+interface HeatmapData { teams: Array<{id: string; name: string; licensed: number}>; weeks: string[]; data: number[][] }
 interface AdoptionSummary  { period_days:number; total_licensed_developers:number; active_users:number; adoption_rate_pct:number; frequency_buckets:{rare:number;occasional:number;regular:number} }
 interface AdoptionByTeam   { team_id:string; team_name:string; licensed_count:number; active_users:number; adoption_rate_pct:number; frequency_buckets:{rare:number;occasional:number;regular:number} }
 interface CohortStats      { avg_quality_score:number|null; avg_inter_request_s:number|null; avg_turn_count:number|null; avg_tool_invocations:number|null; session_count:number }
@@ -420,6 +421,7 @@ function AdoptionTab({period}:{period:Period}) {
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState('');
   const [chartType,setChartType]=useState('bars');
+  const [heatmap,setHeatmap]=useState<HeatmapData|null>(null);
   const km=MOCK.kpis.adoption;
 
   const load=useCallback(async()=>{
@@ -434,6 +436,12 @@ function AdoptionTab({period}:{period:Period}) {
     finally{setLoading(false);}
   },[period]);
   useEffect(()=>{load();},[load]);
+
+  useEffect(()=>{
+    apiFetch<HeatmapData>(`/genai-adoption/adoption/heatmap?period_weeks=12`)
+      .then(d=>setHeatmap(d))
+      .catch(()=>{});
+  },[]);
 
   const adoptionPct=summary?.adoption_rate_pct??km.overall;
   const activeDev=summary?.active_users??km.active;
@@ -450,14 +458,15 @@ function AdoptionTab({period}:{period:Period}) {
 
   if(loading) return <Spinner/>;
   if(error)   return <ErrorBox msg={`Failed to load adoption data: ${error} — showing illustrative data below`}/>;
-  return <AdoptionMockContent km={km} activeDev={activeDev} totalDev={totalDev} adoptionPct={adoptionPct} trendSeries={trendSeries} displayTeams={displayTeams} chartType={chartType} setChartType={setChartType}/>;
+  return <AdoptionMockContent km={km} activeDev={activeDev} totalDev={totalDev} adoptionPct={adoptionPct} trendSeries={trendSeries} displayTeams={displayTeams} chartType={chartType} setChartType={setChartType} heatmap={heatmap}/>;
 }
 
-function AdoptionMockContent({km,activeDev,totalDev,adoptionPct,trendSeries,displayTeams,chartType,setChartType}:{
+function AdoptionMockContent({km,activeDev,totalDev,adoptionPct,trendSeries,displayTeams,chartType,setChartType,heatmap}:{
   km:typeof MOCK.kpis.adoption; activeDev:number; totalDev:number; adoptionPct:number;
   trendSeries:{name:string;color:string;data:number[]}[];
   displayTeams:{id:string;name:string;icon:string;size:number;adoption:number;productivity:number}[];
   chartType:string; setChartType:(v:string)=>void;
+  heatmap?: HeatmapData | null;
 }) {
   return (
     <div style={{display:'flex',flexDirection:'column',gap:16}}>
@@ -531,17 +540,30 @@ function AdoptionMockContent({km,activeDev,totalDev,adoptionPct,trendSeries,disp
       {/* Heatmap + Tool mix */}
       <div style={{display:'grid',gridTemplateColumns:'2fr 1fr',gap:16}}>
         <CardWrap>
-          <CardHead title="Adoption heatmap" sub="Team × week · last 12 weeks" help="% of team active per week"/>
-          <div style={{display:'grid',gridTemplateColumns:`110px repeat(12,1fr)`,gap:3,overflowX:'auto'}}>
-            <div/>
-            {MOCK.weekLabels.map(w=><div key={w} style={{textAlign:'center',fontSize:9,color:C.fg2,padding:'2px 0'}}>{w}</div>)}
-            {MOCK.heatTeams.map((team,i)=>(
-              <Fragment key={team}>
-                <div style={{fontSize:11,color:C.fg2,display:'flex',alignItems:'center',paddingRight:6,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{team}</div>
-                {MOCK.heatmap[i].map((v,j)=><HeatCell key={j} v={v}/>)}
-              </Fragment>
-            ))}
-          </div>
+          <CardHead title="Adoption heatmap" sub={heatmap ? `Team × week · last ${heatmap.weeks.length} weeks · live` : "Team × week · representative data"} help="% of team active per week"/>
+          {heatmap && heatmap.teams.length > 0 ? (
+            <div style={{display:'grid',gridTemplateColumns:`110px repeat(${heatmap.weeks.length},1fr)`,gap:3,overflowX:'auto'}}>
+              <div/>
+              {heatmap.weeks.map((w,i)=><div key={i} style={{textAlign:'center',fontSize:9,color:C.fg2,padding:'2px 0'}}>W{i+1}</div>)}
+              {heatmap.teams.map((team,ti)=>(
+                <Fragment key={team.id}>
+                  <div style={{fontSize:11,color:C.fg2,display:'flex',alignItems:'center',paddingRight:6,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{team.name}</div>
+                  {heatmap.data[ti]?.map((v,j)=><HeatCell key={j} v={v}/>)}
+                </Fragment>
+              ))}
+            </div>
+          ) : (
+            <div style={{display:'grid',gridTemplateColumns:`110px repeat(12,1fr)`,gap:3,overflowX:'auto'}}>
+              <div/>
+              {MOCK.weekLabels.map(w=><div key={w} style={{textAlign:'center',fontSize:9,color:C.fg2,padding:'2px 0'}}>{w}</div>)}
+              {MOCK.heatTeams.map((team,i)=>(
+                <Fragment key={team}>
+                  <div style={{fontSize:11,color:C.fg2,display:'flex',alignItems:'center',paddingRight:6,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{team}</div>
+                  {MOCK.heatmap[i].map((v,j)=><HeatCell key={j} v={v}/>)}
+                </Fragment>
+              ))}
+            </div>
+          )}
           <div style={{display:'flex',alignItems:'center',gap:8,fontSize:11,color:C.fg2,justifyContent:'flex-end'}}>
             <span>Less</span>
             {[0.08,.2,.4,.65,.9].map((o,i)=><span key={i} style={{width:12,height:12,borderRadius:2,background:`rgba(86,182,245,${o})`,display:'inline-block'}}/>)}

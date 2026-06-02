@@ -37,6 +37,32 @@ const CACHE_TOP_PROMPTS = [
   { fingerprint: 'Incident postmortem draft · weekly',                            team: 'risk-engineering',     model: 'claude-sonnet-4.5', hits: '62',  avgSim: '0.974', tokensSaved: '388K', lastHit: '28 min ago' },
 ];
 
+function LiveHitRateChart({ snapshots }: { snapshots: Array<{ts: string; hit_rate: number | null}> }) {
+  const W = 600, H = 220, padL = 40, padR = 12, padT = 20, padB = 26;
+  const innerW = W - padL - padR, innerH = H - padT - padB;
+  const valid = snapshots.filter(s => s.hit_rate != null);
+  if (valid.length < 2) return <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--fg-3)', fontSize: 13 }}>Collecting data…</div>;
+  const vals = valid.map(s => (s.hit_rate ?? 0) * 100);
+  const min = 0, max = 100;
+  const xAt = (i: number) => padL + (i / (valid.length - 1)) * innerW;
+  const yAt = (v: number) => padT + innerH - ((v - min) / (max - min)) * innerH;
+  const pts = valid.map((_, i) => `${xAt(i).toFixed(1)},${yAt(vals[i]).toFixed(1)}`).join(' ');
+  const first = new Date(valid[0].ts).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  const last = new Date(valid[valid.length - 1].ts).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: H, display: 'block' }}>
+      <g stroke="var(--rule)" strokeWidth="1">
+        {[0, 25, 50, 75, 100].map(v => (
+          <g key={v}><line x1={padL} x2={W - padR} y1={yAt(v)} y2={yAt(v)}/><text x={padL - 4} y={yAt(v) + 4} textAnchor="end" fill="var(--fg-3)" fontSize="10" fontFamily="var(--font-mono)">{v}%</text></g>
+        ))}
+      </g>
+      <polyline points={pts} fill="none" stroke="var(--sc-teal)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      <text x={padL} y={H - 6} fill="var(--fg-3)" fontSize="10" fontFamily="var(--font-mono)">{first}</text>
+      <text x={W - padR} y={H - 6} textAnchor="end" fill="var(--fg-3)" fontSize="10" fontFamily="var(--font-mono)">{last}</text>
+    </svg>
+  );
+}
+
 function noteVariant(note: string) {
   if (note === 'stricter') return 'info';
   if (note === 'opted-out') return 'bad';
@@ -50,6 +76,13 @@ export default function CachePage() {
     queryFn: () => fetch(`${ADMIN_BASE}/system/health`).then(r => r.json()),
     refetchInterval: 15000,
   });
+
+  const snapshotsQuery = useQuery<Array<{ts: string; hit_rate: number | null; requests_60s: number | null}>>({
+    queryKey: ['cache-snapshots'],
+    queryFn: () => fetch(`${ADMIN_BASE}/cache/snapshots?range=7d`).then(r => r.ok ? r.json() : []),
+    staleTime: 60_000,
+  });
+  const snapshots = snapshotsQuery.data ?? [];
 
   if (isLoading) return <section className="page"><LoadingState rows={6} /></section>;
   if (isError) return <section className="page"><ErrorState error={error as Error} retry={() => refetch()} /></section>;
@@ -113,29 +146,33 @@ export default function CachePage() {
         <div className="card">
           <div className="card__head">
             <h3 className="card__title">Hit rate over time</h3>
-            <span className="card__sub">representative · no time-series endpoint</span>
+            <span className="card__sub">{snapshots.length > 1 ? 'live · last 7 days' : 'representative · no time-series endpoint'}</span>
             <div className="card__actions">
               <span className="pill"><span className="dot" style={{ background: 'var(--sc-teal)' }}></span>Semantic</span>
               <span className="pill"><span className="dot" style={{ background: 'var(--sc-blue)' }}></span>Exact</span>
             </div>
           </div>
           <div className="card__body">
-            <svg viewBox="0 0 600 220" style={{ width: '100%', height: 220, display: 'block' }}>
-              <g stroke="var(--rule)" strokeWidth="1">
-                <line x1="36" y1="20" x2="588" y2="20"/><line x1="36" y1="70" x2="588" y2="70"/>
-                <line x1="36" y1="120" x2="588" y2="120"/><line x1="36" y1="170" x2="588" y2="170"/>
-              </g>
-              <g fill="var(--fg-3)" fontSize="10" fontFamily="var(--font-mono)">
-                <text x="32" y="24" textAnchor="end">50%</text><text x="32" y="74" textAnchor="end">35%</text>
-                <text x="32" y="124" textAnchor="end">20%</text><text x="32" y="174" textAnchor="end">5%</text>
-              </g>
-              <path d="M40,150 L120,148 L200,142 L280,138 L360,135 L440,132 L520,128 L588,125 L588,170 L40,170 Z" fill="var(--sc-blue)" opacity="0.85"/>
-              <path d="M40,118 L120,112 L200,108 L280,100 L360,95 L440,88 L520,82 L588,78 L588,125 L520,128 L440,132 L360,135 L280,138 L200,142 L120,148 L40,150 Z" fill="var(--sc-teal)" opacity="0.85"/>
-              <g fill="var(--fg-3)" fontSize="10" fontFamily="var(--font-mono)">
-                <text x="40" y="190">Apr 30</text><text x="296" y="190">May 3</text>
-                <text x="588" y="190" textAnchor="end">May 6</text>
-              </g>
-            </svg>
+            {snapshots.length > 1 ? (
+              <LiveHitRateChart snapshots={snapshots} />
+            ) : (
+              <svg viewBox="0 0 600 220" style={{ width: '100%', height: 220, display: 'block' }}>
+                <g stroke="var(--rule)" strokeWidth="1">
+                  <line x1="36" y1="20" x2="588" y2="20"/><line x1="36" y1="70" x2="588" y2="70"/>
+                  <line x1="36" y1="120" x2="588" y2="120"/><line x1="36" y1="170" x2="588" y2="170"/>
+                </g>
+                <g fill="var(--fg-3)" fontSize="10" fontFamily="var(--font-mono)">
+                  <text x="32" y="24" textAnchor="end">50%</text><text x="32" y="74" textAnchor="end">35%</text>
+                  <text x="32" y="124" textAnchor="end">20%</text><text x="32" y="174" textAnchor="end">5%</text>
+                </g>
+                <path d="M40,150 L120,148 L200,142 L280,138 L360,135 L440,132 L520,128 L588,125 L588,170 L40,170 Z" fill="var(--sc-blue)" opacity="0.85"/>
+                <path d="M40,118 L120,112 L200,108 L280,100 L360,95 L440,88 L520,82 L588,78 L588,125 L520,128 L440,132 L360,135 L280,138 L200,142 L120,148 L40,150 Z" fill="var(--sc-teal)" opacity="0.85"/>
+                <g fill="var(--fg-3)" fontSize="10" fontFamily="var(--font-mono)">
+                  <text x="40" y="190">Apr 30</text><text x="296" y="190">May 3</text>
+                  <text x="588" y="190" textAnchor="end">May 6</text>
+                </g>
+              </svg>
+            )}
           </div>
         </div>
 
