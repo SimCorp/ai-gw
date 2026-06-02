@@ -36,7 +36,7 @@ These ports are pinned — they do not change. See `infra/html/index.html` for t
 | dex (mock OIDC) | — | http://localhost:5556 | Local Entra ID substitute |
 | ollama | — | http://localhost:11434 | Local model serving (opt-in: `--profile ollama`) |
 
-## Running tests (no Docker needed)
+## Running tests
 
 ```bash
 pip install \
