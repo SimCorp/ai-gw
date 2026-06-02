@@ -43,10 +43,16 @@ pip install \
   -e "services/auth[dev]" \
   -e "services/cache[dev]" \
   -e "services/observability[dev]" \
-  -e "services/admin[dev]"
+  -e "services/admin[dev]" \
+  -e "services/identity[dev]" \
+  -e "services/agent-relay[dev]"
 
 pytest services/ -v
 ```
+
+> Note: most service tests run without Docker. The `identity` suite is the
+> exception — it uses `testcontainers[postgres]` and needs a running Docker
+> daemon (matching the `admin` service's approach).
 
 ## Linting
 
