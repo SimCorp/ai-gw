@@ -150,6 +150,8 @@ async def test_heartbeat_rejects_wrong_relay_token(client, insert_agent):
         "/agents/guarded/heartbeat", headers={"X-Relay-Token": "correct-token"}
     )
     assert good.status_code == 200
+    # The gate must read the slug-scoped relay-token key, not some other key.
+    client.redis.get.assert_awaited_with("relay:agent:guarded:token")
 
 
 async def test_register_inserts_then_upserts(client):
@@ -211,7 +213,7 @@ async def test_register_enforces_service_token_when_configured(client, monkeypat
     assert ok.status_code == 201
 
 
-async def test_deregister(client, insert_agent, monkeypatch):
+async def test_deregister(client, insert_agent):
     await insert_agent("byebye")
     resp = await client.delete("/agents/byebye")
     assert resp.status_code == 204
