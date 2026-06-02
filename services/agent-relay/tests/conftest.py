@@ -6,7 +6,6 @@ stays None unless a test sets it. The autouse fixture below resets ALL module
 state between tests so they cannot leak into each other.
 """
 
-
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient

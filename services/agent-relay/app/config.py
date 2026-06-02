@@ -1,4 +1,5 @@
 """Agent Relay configuration. Reads from env vars set in docker-compose."""
+
 from __future__ import annotations
 
 from pydantic_settings import BaseSettings
