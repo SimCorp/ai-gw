@@ -1,4 +1,5 @@
 """System health — JSON API + HTML dashboard."""
+
 import asyncio
 import time
 from datetime import datetime, timezone
@@ -13,16 +14,16 @@ from app.db import get_session
 
 router = APIRouter(prefix="/system", tags=["system"])
 _SERVICES = {
-    "auth":          (settings.auth_url,          "/health"),
-    "cache":         (settings.cache_url,          "/health"),
-    "litellm":       (settings.litellm_url,        "/health/liveliness"),
-    "observability": (settings.observability_url,  "/health"),
+    "auth": (settings.auth_url, "/health"),
+    "cache": (settings.cache_url, "/health"),
+    "litellm": (settings.litellm_url, "/health/liveliness"),
+    "observability": (settings.observability_url, "/health"),
 }
 
 _SERVICE_ICONS = {
-    "auth":          "shield-check",
-    "cache":         "lightning-charge",
-    "litellm":       "cpu",
+    "auth": "shield-check",
+    "cache": "lightning-charge",
+    "litellm": "cpu",
     "observability": "eye",
 }
 
@@ -34,15 +35,21 @@ async def _check_service(name: str, base_url: str, path: str) -> dict:
             resp = await asyncio.wait_for(client.get(f"{base_url}{path}"), timeout=3.0)
         latency_ms = round((time.monotonic() - t0) * 1000, 1)
         return {
-            "service": name, "icon": _SERVICE_ICONS.get(name, "circle"),
+            "service": name,
+            "icon": _SERVICE_ICONS.get(name, "circle"),
             "status": "ok" if resp.is_success else "degraded",
-            "code": resp.status_code, "latency_ms": latency_ms, "error": None,
+            "code": resp.status_code,
+            "latency_ms": latency_ms,
+            "error": None,
         }
     except Exception as exc:
         latency_ms = round((time.monotonic() - t0) * 1000, 1)
         return {
-            "service": name, "icon": _SERVICE_ICONS.get(name, "circle"),
-            "status": "unreachable", "code": None, "latency_ms": latency_ms,
+            "service": name,
+            "icon": _SERVICE_ICONS.get(name, "circle"),
+            "status": "unreachable",
+            "code": None,
+            "latency_ms": latency_ms,
             "error": str(exc)[:200],
         }
 
@@ -50,6 +57,7 @@ async def _check_service(name: str, base_url: str, path: str) -> dict:
 async def _check_redis(redis) -> dict:
     t0 = time.monotonic()
     try:
+
         async def _probe():
             await redis.ping()
             mem = await redis.info("memory")
@@ -66,13 +74,19 @@ async def _check_redis(redis) -> dict:
             "error": None,
         }
     except Exception as exc:
-        return {"status": "unreachable", "ping_ms": None, "used_memory_mb": None,
-                "connected_clients": None, "error": str(exc)[:200]}
+        return {
+            "status": "unreachable",
+            "ping_ms": None,
+            "used_memory_mb": None,
+            "connected_clients": None,
+            "error": str(exc)[:200],
+        }
 
 
 async def _check_postgres(session: AsyncSession) -> dict:
     t0 = time.monotonic()
     try:
+
         async def _probe():
             r = await session.execute(
                 text("SELECT count(*) FROM pg_stat_activity WHERE state = 'active'")
@@ -81,11 +95,19 @@ async def _check_postgres(session: AsyncSession) -> dict:
 
         active = await asyncio.wait_for(_probe(), timeout=3.0)
         latency_ms = round((time.monotonic() - t0) * 1000, 1)
-        return {"status": "ok", "ping_ms": latency_ms,
-                "active_connections": int(active), "error": None}
+        return {
+            "status": "ok",
+            "ping_ms": latency_ms,
+            "active_connections": int(active),
+            "error": None,
+        }
     except Exception as exc:
-        return {"status": "unreachable", "ping_ms": None,
-                "active_connections": None, "error": str(exc)[:200]}
+        return {
+            "status": "unreachable",
+            "ping_ms": None,
+            "active_connections": None,
+            "error": str(exc)[:200],
+        }
 
 
 async def _check_litellm_models() -> dict:
@@ -101,10 +123,7 @@ async def _check_litellm_models() -> dict:
             resp.raise_for_status()
         models = resp.json().get("data", [])
         # Derive provider names from model IDs configured in LiteLLM
-        providers = sorted({
-            m["id"].split("/")[0] for m in models
-            if "/" in m.get("id", "")
-        })
+        providers = sorted({m["id"].split("/")[0] for m in models if "/" in m.get("id", "")})
         return {
             "status": "ok",
             "models_available": len(models),
@@ -112,14 +131,20 @@ async def _check_litellm_models() -> dict:
             "error": None,
         }
     except Exception as exc:
-        return {"status": "unreachable", "models_available": None,
-                "providers_with_keys": None, "error": str(exc)[:200]}
+        return {
+            "status": "unreachable",
+            "models_available": None,
+            "providers_with_keys": None,
+            "error": str(exc)[:200],
+        }
 
 
 async def _check_gateway_metrics(session: AsyncSession) -> dict:
     try:
+
         async def _probe():
-            r = await session.execute(text("""
+            r = await session.execute(
+                text("""
                 SELECT
                     COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '60 seconds') AS req60,
                     ROUND(
@@ -127,7 +152,8 @@ async def _check_gateway_metrics(session: AsyncSession) -> dict:
                         FILTER (WHERE created_at >= NOW() - INTERVAL '60 seconds')::numeric, 4
                     ) AS hit_rate
                 FROM cost_records
-            """))
+            """)
+            )
             return r.mappings().one()
 
         row = await asyncio.wait_for(_probe(), timeout=3.0)
@@ -138,19 +164,26 @@ async def _check_gateway_metrics(session: AsyncSession) -> dict:
             "error": None,
         }
     except Exception as exc:
-        return {"status": "unreachable", "requests_last_60s": None,
-                "cache_hit_rate_last_60s": None, "error": str(exc)[:200]}
+        return {
+            "status": "unreachable",
+            "requests_last_60s": None,
+            "cache_hit_rate_last_60s": None,
+            "error": str(exc)[:200],
+        }
 
 
 async def _fetch_recent_errors(session: AsyncSession) -> list:
     try:
+
         async def _probe():
-            r = await session.execute(text("""
+            r = await session.execute(
+                text("""
                 SELECT timestamp, actor, action, resource_type, resource_id
                 FROM audit_log
                 WHERE action ILIKE '%error%' OR action ILIKE '%fail%' OR action ILIKE '%revok%'
                 ORDER BY timestamp DESC LIMIT 8
-            """))
+            """)
+            )
             return r.mappings().all()
 
         rows = await asyncio.wait_for(_probe(), timeout=3.0)
@@ -171,12 +204,19 @@ async def _fetch_recent_errors(session: AsyncSession) -> list:
 async def _collect_health(request: Request, session: AsyncSession) -> dict:
     redis = request.app.state.redis
     (
-        svc_auth, svc_cache, svc_litellm, svc_obs,
-        redis_r, pg_r, litellm_r, gw_r, errors,
+        svc_auth,
+        svc_cache,
+        svc_litellm,
+        svc_obs,
+        redis_r,
+        pg_r,
+        litellm_r,
+        gw_r,
+        errors,
     ) = await asyncio.gather(
-        _check_service("auth",          settings.auth_url,          "/health"),
-        _check_service("cache",         settings.cache_url,         "/health"),
-        _check_service("litellm",       settings.litellm_url,       "/health/liveliness"),
+        _check_service("auth", settings.auth_url, "/health"),
+        _check_service("cache", settings.cache_url, "/health"),
+        _check_service("litellm", settings.litellm_url, "/health/liveliness"),
         _check_service("observability", settings.observability_url, "/health"),
         _check_redis(redis),
         _check_postgres(session),
@@ -205,3 +245,39 @@ async def system_health(request: Request, session: AsyncSession = Depends(get_se
     return await _collect_health(request, session)
 
 
+@router.get("/cache/snapshots")
+async def cache_snapshots(
+    range: str = Query("7d", pattern=r"^\d+[hdm]$"),
+    session: AsyncSession = Depends(get_session),
+    _auth: dict = Depends(require_admin_auth),
+) -> list[dict]:
+    """Return cached hit-rate snapshots for time-series chart."""
+    # Parse range: e.g. "7d" -> 7 days, "24h" -> 24 hours
+    unit = range[-1]
+    val = int(range[:-1])
+    interval = f"{val} days" if unit == "d" else f"{val} hours" if unit == "h" else f"{val} minutes"
+    rows = (
+        (
+            await session.execute(
+                text("""
+        SELECT captured_at, hit_rate, requests_60s, redis_mem_mb, redis_ping_ms
+        FROM cache_snapshots
+        WHERE captured_at >= NOW() - (:interval)::INTERVAL
+        ORDER BY captured_at ASC
+    """),
+                {"interval": interval},
+            )
+        )
+        .mappings()
+        .all()
+    )
+    return [
+        {
+            "ts": r["captured_at"].isoformat(),
+            "hit_rate": float(r["hit_rate"]) if r["hit_rate"] is not None else None,
+            "requests_60s": r["requests_60s"],
+            "redis_mem_mb": float(r["redis_mem_mb"]) if r["redis_mem_mb"] is not None else None,
+            "redis_ping_ms": float(r["redis_ping_ms"]) if r["redis_ping_ms"] is not None else None,
+        }
+        for r in rows
+    ]

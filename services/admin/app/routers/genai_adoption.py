@@ -17,23 +17,26 @@ router = APIRouter(prefix="/genai-adoption", tags=["genai-adoption"])
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
+
 def _f(v) -> float | None:
     return float(v) if v is not None else None
 
 
 # ── Adoption ──────────────────────────────────────────────────────────────────
 
+
 @router.get("/adoption/summary")
 async def adoption_summary(
     period_days: int = Query(default=30, ge=7, le=365),
     session: AsyncSession = Depends(get_session),
 ):
-    total_row = await session.execute(
-        text("SELECT COUNT(*) AS total FROM developers")
-    )
+    total_row = await session.execute(text("SELECT COUNT(*) AS total FROM developers"))
     total = int(total_row.scalar() or 0)
 
-    rows = (await session.execute(text(f"""
+    rows = (
+        (
+            await session.execute(
+                text(f"""
         WITH active_devs AS (
             SELECT developer_id,
                    COUNT(DISTINCT date) AS active_days
@@ -47,7 +50,12 @@ async def adoption_summary(
             COUNT(CASE WHEN active_days BETWEEN 4 AND 14 THEN 1 END) AS occasional,
             COUNT(CASE WHEN active_days >= 15            THEN 1 END) AS regular
         FROM active_devs
-    """))).mappings().one()
+    """)
+            )
+        )
+        .mappings()
+        .one()
+    )
 
     active = int(rows["active_users"])
     return {
@@ -56,9 +64,9 @@ async def adoption_summary(
         "active_users": active,
         "adoption_rate_pct": round(active * 100.0 / max(total, 1), 1),
         "frequency_buckets": {
-            "rare":       int(rows["rare"]),
+            "rare": int(rows["rare"]),
             "occasional": int(rows["occasional"]),
-            "regular":    int(rows["regular"]),
+            "regular": int(rows["regular"]),
         },
     }
 
@@ -68,7 +76,10 @@ async def adoption_by_team(
     period_days: int = Query(default=30, ge=7, le=365),
     session: AsyncSession = Depends(get_session),
 ):
-    rows = (await session.execute(text(f"""
+    rows = (
+        (
+            await session.execute(
+                text(f"""
         WITH active_devs AS (
             SELECT developer_id,
                    COUNT(DISTINCT date) AS active_days
@@ -97,7 +108,12 @@ async def adoption_by_team(
         WHERE t.type = 'team'
         GROUP BY t.id, t.name, tl.licensed_count
         ORDER BY active_users DESC NULLS LAST
-    """))).mappings().all()
+    """)
+            )
+        )
+        .mappings()
+        .all()
+    )
 
     return [
         {
@@ -109,9 +125,9 @@ async def adoption_by_team(
                 int(r["active_users"]) * 100.0 / max(int(r["licensed_count"]), 1), 1
             ),
             "frequency_buckets": {
-                "rare":       int(r["rare"]),
+                "rare": int(r["rare"]),
                 "occasional": int(r["occasional"]),
-                "regular":    int(r["regular"]),
+                "regular": int(r["regular"]),
             },
         }
         for r in rows
@@ -123,7 +139,10 @@ async def adoption_trend(
     period_days: int = Query(default=90, ge=7, le=365),
     session: AsyncSession = Depends(get_session),
 ):
-    rows = (await session.execute(text(f"""
+    rows = (
+        (
+            await session.execute(
+                text(f"""
         SELECT
             date_trunc('week', date::timestamptz) AS week_start,
             COUNT(DISTINCT developer_id)          AS active_users
@@ -131,7 +150,12 @@ async def adoption_trend(
         WHERE date >= CURRENT_DATE - INTERVAL '{period_days} days'
         GROUP BY week_start
         ORDER BY week_start
-    """))).mappings().all()
+    """)
+            )
+        )
+        .mappings()
+        .all()
+    )
 
     return [
         {"week_start": r["week_start"].isoformat(), "active_users": int(r["active_users"])}
@@ -141,12 +165,16 @@ async def adoption_trend(
 
 # ── Productivity ──────────────────────────────────────────────────────────────
 
+
 @router.get("/productivity/summary")
 async def productivity_summary(
     period_days: int = Query(default=30, ge=7, le=365),
     session: AsyncSession = Depends(get_session),
 ):
-    rows = (await session.execute(text(f"""
+    rows = (
+        (
+            await session.execute(
+                text(f"""
         WITH cohorts AS (
             SELECT developer_id,
                    COUNT(DISTINCT date) AS active_days
@@ -178,17 +206,22 @@ async def productivity_summary(
         JOIN cohorts c ON c.developer_id = ss.developer_id
         WHERE c.active_days >= 15 OR c.active_days < 4
         GROUP BY cohort
-    """))).mappings().all()
+    """)
+            )
+        )
+        .mappings()
+        .all()
+    )
 
     result: dict = {"high_adoption": {}, "low_adoption": {}}
     for r in rows:
         key = "high_adoption" if r["cohort"] == "high" else "low_adoption"
         result[key] = {
-            "avg_quality_score":    _f(r["avg_quality_score"]),
-            "avg_inter_request_s":  _f(r["avg_inter_request_s"]),
-            "avg_turn_count":       _f(r["avg_turn_count"]),
+            "avg_quality_score": _f(r["avg_quality_score"]),
+            "avg_inter_request_s": _f(r["avg_inter_request_s"]),
+            "avg_turn_count": _f(r["avg_turn_count"]),
             "avg_tool_invocations": _f(r["avg_tool_invocations"]),
-            "session_count":        int(r["session_count"]),
+            "session_count": int(r["session_count"]),
         }
     return result
 
@@ -198,7 +231,10 @@ async def productivity_by_team(
     period_days: int = Query(default=30, ge=7, le=365),
     session: AsyncSession = Depends(get_session),
 ):
-    rows = (await session.execute(text(f"""
+    rows = (
+        (
+            await session.execute(
+                text(f"""
         SELECT
             t.id                                                   AS team_id,
             t.name                                                 AS team_name,
@@ -212,16 +248,21 @@ async def productivity_by_team(
         WHERE t.type = 'team'
         GROUP BY t.id, t.name
         ORDER BY avg_quality_score DESC NULLS LAST
-    """))).mappings().all()
+    """)
+            )
+        )
+        .mappings()
+        .all()
+    )
 
     return [
         {
-            "team_id":             str(r["team_id"]),
-            "team_name":           r["team_name"],
-            "avg_quality_score":   _f(r["avg_quality_score"]),
+            "team_id": str(r["team_id"]),
+            "team_name": r["team_name"],
+            "avg_quality_score": _f(r["avg_quality_score"]),
             "avg_inter_request_s": _f(r["avg_inter_request_s"]),
-            "avg_turn_count":      _f(r["avg_turn_count"]),
-            "session_count":       int(r["session_count"]),
+            "avg_turn_count": _f(r["avg_turn_count"]),
+            "session_count": int(r["session_count"]),
         }
         for r in rows
     ]
@@ -232,7 +273,10 @@ async def productivity_trend(
     period_days: int = Query(default=90, ge=7, le=365),
     session: AsyncSession = Depends(get_session),
 ):
-    rows = (await session.execute(text(f"""
+    rows = (
+        (
+            await session.execute(
+                text(f"""
         WITH cohorts AS (
             SELECT developer_id, COUNT(DISTINCT date) AS active_days
             FROM developer_activity_log
@@ -250,13 +294,18 @@ async def productivity_trend(
         WHERE s.first_request_at >= NOW() - INTERVAL '{period_days} days'
         GROUP BY week_start
         ORDER BY week_start
-    """))).mappings().all()
+    """)
+            )
+        )
+        .mappings()
+        .all()
+    )
 
     return [
         {
-            "week_start":           r["week_start"].isoformat(),
+            "week_start": r["week_start"].isoformat(),
             "high_adoption_quality": _f(r["high_adoption_quality"]),
-            "low_adoption_quality":  _f(r["low_adoption_quality"]),
+            "low_adoption_quality": _f(r["low_adoption_quality"]),
         }
         for r in rows
     ]
@@ -264,12 +313,16 @@ async def productivity_trend(
 
 # ── Code Quality ──────────────────────────────────────────────────────────────
 
+
 @router.get("/quality/summary")
 async def quality_summary(
     period_days: int = Query(default=30, ge=7, le=365),
     session: AsyncSession = Depends(get_session),
 ):
-    rows = (await session.execute(text(f"""
+    rows = (
+        (
+            await session.execute(
+                text(f"""
         WITH cohorts AS (
             SELECT developer_id, COUNT(DISTINCT date) AS active_days
             FROM developer_activity_log
@@ -306,15 +359,20 @@ async def quality_summary(
         LEFT JOIN cache_stats cs ON cs.developer_id = ss.developer_id
         WHERE c.active_days >= 15 OR c.active_days < 4
         GROUP BY cohort
-    """))).mappings().all()
+    """)
+            )
+        )
+        .mappings()
+        .all()
+    )
 
     result: dict = {"high_adoption": {}, "low_adoption": {}}
     for r in rows:
         key = "high_adoption" if r["cohort"] == "high" else "low_adoption"
         result[key] = {
-            "avg_error_rate_pct":  _f(r["avg_error_rate_pct"]),
-            "avg_retry_rate_pct":  _f(r["avg_retry_rate_pct"]),
-            "cache_hit_rate_pct":  _f(r["cache_hit_rate_pct"]),
+            "avg_error_rate_pct": _f(r["avg_error_rate_pct"]),
+            "avg_retry_rate_pct": _f(r["avg_retry_rate_pct"]),
+            "cache_hit_rate_pct": _f(r["cache_hit_rate_pct"]),
         }
     return result
 
@@ -324,7 +382,10 @@ async def quality_by_team(
     period_days: int = Query(default=30, ge=7, le=365),
     session: AsyncSession = Depends(get_session),
 ):
-    rows = (await session.execute(text(f"""
+    rows = (
+        (
+            await session.execute(
+                text(f"""
         SELECT
             t.id AS team_id,
             t.name AS team_name,
@@ -345,18 +406,24 @@ async def quality_by_team(
         WHERE t.type = 'team'
         GROUP BY t.id, t.name
         ORDER BY avg_error_rate_pct ASC NULLS LAST
-    """))).mappings().all()
+    """)
+            )
+        )
+        .mappings()
+        .all()
+    )
 
     return [
         {
-            "team_id":            str(r["team_id"]),
-            "team_name":          r["team_name"],
+            "team_id": str(r["team_id"]),
+            "team_name": r["team_name"],
             "avg_error_rate_pct": _f(r["avg_error_rate_pct"]),
             "avg_retry_rate_pct": _f(r["avg_retry_rate_pct"]),
             "cache_hit_rate_pct": _f(r["cache_hit_rate_pct"]),
-            "session_count":      int(r["session_count"]),
-            "high_error_flag":    (float(r["avg_error_rate_pct"]) > 10)
-                                  if r["avg_error_rate_pct"] is not None else False,
+            "session_count": int(r["session_count"]),
+            "high_error_flag": (float(r["avg_error_rate_pct"]) > 10)
+            if r["avg_error_rate_pct"] is not None
+            else False,
         }
         for r in rows
     ]
@@ -367,7 +434,10 @@ async def quality_trend(
     period_days: int = Query(default=90, ge=7, le=365),
     session: AsyncSession = Depends(get_session),
 ):
-    rows = (await session.execute(text(f"""
+    rows = (
+        (
+            await session.execute(
+                text(f"""
         WITH cohorts AS (
             SELECT developer_id, COUNT(DISTINCT date) AS active_days
             FROM developer_activity_log
@@ -387,13 +457,18 @@ async def quality_trend(
         WHERE s.first_request_at >= NOW() - INTERVAL '{period_days} days'
         GROUP BY week_start
         ORDER BY week_start
-    """))).mappings().all()
+    """)
+            )
+        )
+        .mappings()
+        .all()
+    )
 
     return [
         {
-            "week_start":              r["week_start"].isoformat(),
+            "week_start": r["week_start"].isoformat(),
             "high_adoption_error_pct": _f(r["high_adoption_error_pct"]),
-            "low_adoption_error_pct":  _f(r["low_adoption_error_pct"]),
+            "low_adoption_error_pct": _f(r["low_adoption_error_pct"]),
         }
         for r in rows
     ]
@@ -432,7 +507,10 @@ async def _gather_metrics(session: AsyncSession, period_days: int) -> dict:
     async def _adoption_summary():
         total_row = await session.execute(text("SELECT COUNT(*) FROM developers"))
         total = int(total_row.scalar() or 0)
-        row = (await session.execute(text(f"""
+        row = (
+            (
+                await session.execute(
+                    text(f"""
             WITH a AS (
                 SELECT developer_id, COUNT(DISTINCT date) AS active_days
                 FROM developer_activity_log
@@ -444,7 +522,12 @@ async def _gather_metrics(session: AsyncSession, period_days: int) -> dict:
                    COUNT(CASE WHEN active_days BETWEEN 4 AND 14 THEN 1 END) AS occasional,
                    COUNT(CASE WHEN active_days >= 15            THEN 1 END) AS regular
             FROM a
-        """))).mappings().one()
+        """)
+                )
+            )
+            .mappings()
+            .one()
+        )
         active = int(row["active_users"])
         return {
             "total_developers": total,
@@ -456,7 +539,10 @@ async def _gather_metrics(session: AsyncSession, period_days: int) -> dict:
         }
 
     async def _productivity_summary():
-        rows = (await session.execute(text(f"""
+        rows = (
+            (
+                await session.execute(
+                    text(f"""
             WITH cohorts AS (
                 SELECT developer_id, COUNT(DISTINCT date) AS active_days
                 FROM developer_activity_log
@@ -482,7 +568,12 @@ async def _gather_metrics(session: AsyncSession, period_days: int) -> dict:
             FROM ss JOIN cohorts c ON c.developer_id = ss.developer_id
             WHERE c.active_days >= 15 OR c.active_days < 4
             GROUP BY cohort
-        """))).mappings().all()
+        """)
+                )
+            )
+            .mappings()
+            .all()
+        )
         out: dict = {}
         for r in rows:
             out[r["cohort"]] = {
@@ -494,7 +585,10 @@ async def _gather_metrics(session: AsyncSession, period_days: int) -> dict:
         return out
 
     async def _quality_summary():
-        rows = (await session.execute(text(f"""
+        rows = (
+            (
+                await session.execute(
+                    text(f"""
             WITH cohorts AS (
                 SELECT developer_id, COUNT(DISTINCT date) AS active_days
                 FROM developer_activity_log
@@ -525,7 +619,12 @@ async def _gather_metrics(session: AsyncSession, period_days: int) -> dict:
             LEFT JOIN cs ON cs.developer_id = ss.developer_id
             WHERE c.active_days >= 15 OR c.active_days < 4
             GROUP BY cohort
-        """))).mappings().all()
+        """)
+                )
+            )
+            .mappings()
+            .all()
+        )
         out: dict = {}
         for r in rows:
             out[r["cohort"]] = {
@@ -536,7 +635,10 @@ async def _gather_metrics(session: AsyncSession, period_days: int) -> dict:
         return out
 
     async def _team_summary():
-        rows = (await session.execute(text(f"""
+        rows = (
+            (
+                await session.execute(
+                    text(f"""
             WITH active_devs AS (
                 SELECT developer_id, COUNT(DISTINCT date) AS active_days
                 FROM developer_activity_log
@@ -559,13 +661,20 @@ async def _gather_metrics(session: AsyncSession, period_days: int) -> dict:
             HAVING COUNT(DISTINCT d.id) > 0
             ORDER BY active_users DESC NULLS LAST
             LIMIT 10
-        """))).mappings().all()
+        """)
+                )
+            )
+            .mappings()
+            .all()
+        )
         return [
             {
                 "team": r["team_name"],
                 "licensed": int(r["licensed_count"]),
                 "active": int(r["active_users"]),
-                "adoption_pct": round(int(r["active_users"]) * 100.0 / max(int(r["licensed_count"]), 1), 1),
+                "adoption_pct": round(
+                    int(r["active_users"]) * 100.0 / max(int(r["licensed_count"]), 1), 1
+                ),
                 "avg_quality": _f(r["avg_quality"]),
                 "error_rate_pct": _f(r["error_rate_pct"]),
             }
@@ -593,10 +702,12 @@ async def team_adoption_score(
     session: AsyncSession = Depends(get_session),
 ):
     """Return a composite AI adoption health score (0–100) for a team."""
-    team_size = (await session.execute(
-        text("SELECT COUNT(*) FROM node_members WHERE node_id=CAST(:tid AS uuid)"),
-        {"tid": team_id},
-    )).scalar() or 0
+    team_size = (
+        await session.execute(
+            text("SELECT COUNT(*) FROM node_members WHERE node_id=CAST(:tid AS uuid)"),
+            {"tid": team_id},
+        )
+    ).scalar() or 0
 
     if team_size == 0:
         return {
@@ -610,13 +721,18 @@ async def team_adoption_score(
 
     # Active users this week, inferred from developer_activity_log via team membership
     try:
-        active_users = (await session.execute(text("""
+        active_users = (
+            await session.execute(
+                text("""
             SELECT COUNT(DISTINCT dal.developer_id)
             FROM developer_activity_log dal
             JOIN developers d ON d.id = dal.developer_id
             WHERE d.team_id = CAST(:tid AS uuid)
               AND dal.date >= CURRENT_DATE - INTERVAL '7 days'
-        """), {"tid": team_id})).scalar() or 0
+        """),
+                {"tid": team_id},
+            )
+        ).scalar() or 0
     except Exception:
         active_users = 0
 
@@ -654,7 +770,7 @@ async def genai_insights(
         "model": "claude-sonnet-4-6",
         "messages": [
             {"role": "system", "content": _INSIGHTS_SYSTEM},
-            {"role": "user",   "content": prompt},
+            {"role": "user", "content": prompt},
         ],
         "max_tokens": 800,
         "temperature": 0.2,
@@ -684,3 +800,90 @@ async def genai_insights(
         }
 
     return {"period_days": period_days, "metrics": metrics, "insights": insights}
+
+
+@router.get("/adoption/heatmap")
+async def adoption_heatmap(
+    period_weeks: int = Query(12, ge=1, le=52),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Per-team × per-week adoption % for the heatmap chart."""
+    rows = (
+        (
+            await session.execute(
+                text("""
+        WITH weeks AS (
+            SELECT generate_series(
+                date_trunc('week', NOW() - (:period_weeks || ' weeks')::INTERVAL),
+                date_trunc('week', NOW()),
+                '1 week'::INTERVAL
+            ) AS week_start
+        ),
+        team_licensed AS (
+            SELECT n.id AS team_id, n.name AS team_name,
+                   COUNT(d.developer_id) AS licensed_count
+            FROM organization_nodes n
+            LEFT JOIN developers d ON d.node_id = n.id
+            WHERE n.type = 'team'
+            GROUP BY n.id, n.name
+            HAVING COUNT(d.developer_id) > 0
+        ),
+        activity AS (
+            SELECT d.node_id AS team_id,
+                   date_trunc('week', dal.date::timestamptz) AS week_start,
+                   COUNT(DISTINCT dal.developer_id) AS active_users
+            FROM developer_activity_log dal
+            JOIN developers d ON d.developer_id = dal.developer_id
+            WHERE dal.date >= NOW() - (:period_weeks || ' weeks')::INTERVAL
+              AND d.node_id IS NOT NULL
+            GROUP BY d.node_id, week_start
+        )
+        SELECT
+            tl.team_id::text,
+            tl.team_name,
+            tl.licensed_count,
+            w.week_start,
+            COALESCE(a.active_users, 0) AS active_users,
+            CASE WHEN tl.licensed_count > 0
+                 THEN ROUND(COALESCE(a.active_users, 0)::NUMERIC / tl.licensed_count * 100)
+                 ELSE 0
+            END AS adoption_pct
+        FROM team_licensed tl
+        CROSS JOIN weeks w
+        LEFT JOIN activity a ON a.team_id = tl.team_id AND a.week_start = w.week_start
+        ORDER BY tl.team_name, w.week_start
+    """),
+                {"period_weeks": period_weeks},
+            )
+        )
+        .mappings()
+        .all()
+    )
+
+    # Pivot into { teams: [...], weeks: [...], data: [[pct,...], ...] }
+    if not rows:
+        return {"teams": [], "weeks": [], "data": []}
+
+    seen_teams: dict = {}
+    seen_weeks: list = []
+    for r in rows:
+        tid = r["team_id"]
+        ws = r["week_start"].isoformat()
+        if tid not in seen_teams:
+            seen_teams[tid] = {
+                "id": tid,
+                "name": r["team_name"],
+                "licensed": int(r["licensed_count"]),
+            }
+        if ws not in seen_weeks:
+            seen_weeks.append(ws)
+
+    team_list = list(seen_teams.values())
+    data = []
+    # Build a lookup: (team_id, week_start_iso) -> pct
+    pct_lookup = {(r["team_id"], r["week_start"].isoformat()): int(r["adoption_pct"]) for r in rows}
+    for t in team_list:
+        row_data = [pct_lookup.get((t["id"], w), 0) for w in seen_weeks]
+        data.append(row_data)
+
+    return {"teams": team_list, "weeks": seen_weeks, "data": data}

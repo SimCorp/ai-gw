@@ -96,6 +96,9 @@ from app.routers import (
     plugins as plugins_router,
 )
 from app.routers import (
+    prompts as prompts_router,
+)
+from app.routers import (
     reports as reports_router,
 )
 from app.routers import (
@@ -109,6 +112,9 @@ from app.routers import (
 )
 from app.routers import (
     settings as settings_router,
+)
+from app.routers import (
+    skills as skills_router,
 )
 from app.routers import (
     tools as tools_router,
@@ -127,19 +133,180 @@ from app.routers import (
 )
 
 _GUARDRAIL_SEED = [
-    ("PII Detector", "Blocks prompts containing personal identifiers: email, IBAN, credit card, CPR, SSN", "pii_detector", "input", "block", "critical", 10, {"patterns": ["email", "iban", "credit_card", "cpr", "ssn", "phone_eu"]}),
-    ("Secrets Scanner", "Blocks API keys, JWTs, PEM fragments, and database connection strings", "secrets_scanner", "input", "block", "critical", 20, {"patterns": ["aws_access_key", "github_token", "openai_key", "anthropic_key", "jwt", "private_key_header", "db_connstring"]}),
-    ("Prompt Injection", "Flags known injection phrases and base64-obfuscated payloads", "prompt_injection", "input", "flag", "high", 30, {"base64_payload_threshold_chars": 200}),
-    ("Topic Block — Trading Advice", "Blocks investment advice language outside the compliance team scope", "topic_block", "input", "block", "high", 40, {"blocked_topics": ["trading recommendation", "investment advice", "buy signal", "sell signal", "short position"]}),
-    ("MNPI Detector", "Blocks prompts combining ticker symbols with material non-public information keywords", "mnpi_detector", "input", "block", "critical", 15, {"ticker_proximity_words": 30, "mnpi_keywords": ["not yet public", "earnings guidance", "merger", "acquisition", "take private"]}),
-    ("Token Budget Cap", "Truncates prompts exceeding the per-call token limit", "token_budget_cap", "input", "truncate", "low", 5, {"max_tokens": 8192}),
-    ("Output PII Redactor", "Redacts PII from model responses before returning to caller", "output_pii_redactor", "output", "redact", "critical", 10, {"redact_token": "[REDACTED]", "patterns": ["email", "iban", "credit_card", "cpr"]}),
-    ("Hallucinated Citation Check", "Flags responses with numerical claims lacking a citation marker", "citation_check", "output", "flag", "medium", 50, {"min_citation_words": 15}),
-    ("Toxicity Filter", "Blocks harmful or harassing output (multilingual: da, sv, en, de, fr)", "toxicity_filter", "output", "block", "high", 20, {"languages": ["da", "sv", "en", "de", "fr"], "threshold": 0.85}),
-    ("Confidence Floor on Numbers", "Flags bare numerical claims without citation context", "confidence_floor", "output", "rewrite", "medium", 60, {"flag_bare_numbers": True, "require_citation_pattern": True}),
+    (
+        "PII Detector",
+        "Blocks prompts containing personal identifiers: email, IBAN, credit card, CPR, SSN",
+        "pii_detector",
+        "input",
+        "block",
+        "critical",
+        10,
+        {"patterns": ["email", "iban", "credit_card", "cpr", "ssn", "phone_eu"]},
+    ),
+    (
+        "Secrets Scanner",
+        "Blocks API keys, JWTs, PEM fragments, and database connection strings",
+        "secrets_scanner",
+        "input",
+        "block",
+        "critical",
+        20,
+        {
+            "patterns": [
+                "aws_access_key",
+                "github_token",
+                "openai_key",
+                "anthropic_key",
+                "jwt",
+                "private_key_header",
+                "db_connstring",
+            ]
+        },
+    ),
+    (
+        "Prompt Injection",
+        "Flags known injection phrases and base64-obfuscated payloads",
+        "prompt_injection",
+        "input",
+        "flag",
+        "high",
+        30,
+        {"base64_payload_threshold_chars": 200},
+    ),
+    (
+        "Topic Block — Trading Advice",
+        "Blocks investment advice language outside the compliance team scope",
+        "topic_block",
+        "input",
+        "block",
+        "high",
+        40,
+        {
+            "blocked_topics": [
+                "trading recommendation",
+                "investment advice",
+                "buy signal",
+                "sell signal",
+                "short position",
+            ]
+        },
+    ),
+    (
+        "MNPI Detector",
+        "Blocks prompts combining ticker symbols with material non-public information keywords",
+        "mnpi_detector",
+        "input",
+        "block",
+        "critical",
+        15,
+        {
+            "ticker_proximity_words": 30,
+            "mnpi_keywords": [
+                "not yet public",
+                "earnings guidance",
+                "merger",
+                "acquisition",
+                "take private",
+            ],
+        },
+    ),
+    (
+        "Token Budget Cap",
+        "Truncates prompts exceeding the per-call token limit",
+        "token_budget_cap",
+        "input",
+        "truncate",
+        "low",
+        5,
+        {"max_tokens": 8192},
+    ),
+    (
+        "Output PII Redactor",
+        "Redacts PII from model responses before returning to caller",
+        "output_pii_redactor",
+        "output",
+        "redact",
+        "critical",
+        10,
+        {"redact_token": "[REDACTED]", "patterns": ["email", "iban", "credit_card", "cpr"]},
+    ),
+    (
+        "Hallucinated Citation Check",
+        "Flags responses with numerical claims lacking a citation marker",
+        "citation_check",
+        "output",
+        "flag",
+        "medium",
+        50,
+        {"min_citation_words": 15},
+    ),
+    (
+        "Toxicity Filter",
+        "Blocks harmful or harassing output (multilingual: da, sv, en, de, fr)",
+        "toxicity_filter",
+        "output",
+        "block",
+        "high",
+        20,
+        {"languages": ["da", "sv", "en", "de", "fr"], "threshold": 0.85},
+    ),
+    (
+        "Confidence Floor on Numbers",
+        "Flags bare numerical claims without citation context",
+        "confidence_floor",
+        "output",
+        "rewrite",
+        "medium",
+        60,
+        {"flag_bare_numbers": True, "require_citation_pattern": True},
+    ),
 ]
 
 _auth = [Depends(require_admin_auth)]
+
+
+async def _collect_cache_snapshot():
+    """Background: record a cache snapshot every 60 seconds for analytics."""
+    import asyncio as _asyncio
+
+    import httpx as _httpx
+
+    from app.db import async_session_maker
+
+    await _asyncio.sleep(30)  # wait for services to be ready
+    while True:
+        try:
+            async with _httpx.AsyncClient(timeout=5) as client:
+                r = await client.get("http://localhost:8005/system/health")
+                if r.status_code == 200:
+                    data = r.json()
+                    gw = data.get("gateway", {})
+                    redis = data.get("redis", {})
+                    async with async_session_maker() as session:
+                        from sqlalchemy import text as _text
+
+                        await session.execute(
+                            _text("""
+                            INSERT INTO cache_snapshots (hit_rate, requests_60s, redis_mem_mb, redis_ping_ms)
+                            VALUES (:hit_rate, :requests_60s, :redis_mem_mb, :redis_ping_ms)
+                        """),
+                            {
+                                "hit_rate": gw.get("cache_hit_rate_last_60s"),
+                                "requests_60s": gw.get("requests_last_60s"),
+                                "redis_mem_mb": redis.get("used_memory_mb"),
+                                "redis_ping_ms": redis.get("ping_ms"),
+                            },
+                        )
+                        # Prune snapshots older than 30 days
+                        await session.execute(
+                            _text(
+                                "DELETE FROM cache_snapshots WHERE captured_at < NOW() - INTERVAL '30 days'"
+                            )
+                        )
+                        await session.commit()
+        except Exception:
+            pass  # fail silently — non-critical analytics
+        await _asyncio.sleep(60)
 
 
 @asynccontextmanager
@@ -155,6 +322,7 @@ async def lifespan(app: FastAPI):
                 f"Current ENVIRONMENT={env!r}. Set ENVIRONMENT=development to suppress."
             )
         import logging as _logging
+
         _logging.getLogger(__name__).warning(
             "DEV_BYPASS_AUTH is active — all admin auth checks are skipped. "
             "Never enable this in staging or production."
@@ -168,39 +336,59 @@ async def lifespan(app: FastAPI):
     # In production, accounts must be created explicitly via the provisioning script.
     if os.getenv("ENVIRONMENT", "production") in ("development", "test", "ci"):
         # bcrypt hash of "password"
-        _default_hash = '$2b$12$97tEM5lfcioIn4w9wDRHQe3qQNeU9OIBDImBuWj6wQRF30UCpIWom'
+        _default_hash = "$2b$12$97tEM5lfcioIn4w9wDRHQe3qQNeU9OIBDImBuWj6wQRF30UCpIWom"
         # bcrypt hash of "Admin1234!" — the documented admin credential
         # (docs/SYSTEM_REFERENCE.md, portal login). Keep dev@ on "password".
-        _admin_hash = '$2b$12$w4aAEPPdqbjhNDH7kWPV6uQKSllc3EFzxvQvns5PlNgbfbkGkSi3e'
+        _admin_hash = "$2b$12$w4aAEPPdqbjhNDH7kWPV6uQKSllc3EFzxvQvns5PlNgbfbkGkSi3e"
         async with engine.begin() as conn:
             try:
                 # Admin account — must_change_password=FALSE so local dev works immediately
                 # Roles are granted via dev escape hatch (ENVIRONMENT=development)
                 # so no user_roles row is needed.
-                await conn.execute(text("""
+                await conn.execute(
+                    text("""
                     INSERT INTO users (email, display_name, password_hash, hash_type, status, must_change_password)
                     VALUES ('admin@simcorp.com', 'Default Admin', :hash, 'bcrypt', 'active', FALSE)
                     ON CONFLICT (email) DO NOTHING
-                """), {"hash": _admin_hash})
+                """),
+                    {"hash": _admin_hash},
+                )
                 # Developer test account for local dev and E2E tests
-                await conn.execute(text("""
+                await conn.execute(
+                    text("""
                     INSERT INTO users (email, display_name, password_hash, hash_type, status, must_change_password)
                     VALUES ('dev@simcorp.com', 'Test Developer', :hash, 'bcrypt', 'active', FALSE)
                     ON CONFLICT (email) DO NOTHING
-                """), {"hash": _default_hash})
+                """),
+                    {"hash": _default_hash},
+                )
             except Exception:
                 # users table not yet created (before migration 0010) — seed admin_users as fallback
-                await conn.execute(text("""
+                await conn.execute(
+                    text("""
                     INSERT INTO admin_users (email, display_name, password_hash, role, must_change_password)
                     VALUES ('admin@simcorp.com', 'Default Admin', :hash, 'superadmin', FALSE)
                     ON CONFLICT (email) DO NOTHING
-                """), {"hash": _default_hash})
+                """),
+                    {"hash": _default_hash},
+                )
 
     # Seed guardrails if table is empty
     async with engine.begin() as conn:
-        count = (await conn.execute(text("SELECT COUNT(*) FROM guardrails WHERE team_id IS NULL"))).scalar()
+        count = (
+            await conn.execute(text("SELECT COUNT(*) FROM guardrails WHERE team_id IS NULL"))
+        ).scalar()
         if count == 0:
-            for name, desc, gtype, applies_to, action, severity, priority, config in _GUARDRAIL_SEED:
+            for (
+                name,
+                desc,
+                gtype,
+                applies_to,
+                action,
+                severity,
+                priority,
+                config,
+            ) in _GUARDRAIL_SEED:
                 await conn.execute(
                     text("""
                         INSERT INTO guardrails (name, description, type, applies_to, action, severity, priority, config)
@@ -208,8 +396,13 @@ async def lifespan(app: FastAPI):
                         ON CONFLICT DO NOTHING
                     """),
                     {
-                        "name": name, "desc": desc, "type": gtype, "applies_to": applies_to,
-                        "action": action, "severity": severity, "priority": priority,
+                        "name": name,
+                        "desc": desc,
+                        "type": gtype,
+                        "applies_to": applies_to,
+                        "action": action,
+                        "severity": severity,
+                        "priority": priority,
                         "config": _json.dumps(config),
                     },
                 )
@@ -267,39 +460,55 @@ async def lifespan(app: FastAPI):
     # Pre-generate the RSA identity signing key on startup so the first JWKS
     # request is served without a generation delay.
     from app.identity_signing import get_or_create_signing_key as _get_signing_key
+
     await _get_signing_key(app.state.redis)
 
     # Bootstrap root organization node (idempotent — creates only if missing)
     try:
         from app.db import async_session_maker as _asm
         from app.routers.nodes import ensure_root_node as _ensure_root
+
         async with _asm() as _ns:
             await _ensure_root(_ns)
     except Exception as _e:
         import logging as _logging
+
         _logging.getLogger(__name__).warning(f"Root node bootstrap skipped: {_e}")
 
     # Start Awesome Copilot catalog background sync (first sync + every 6h)
     from app.routers.copilot_catalog import start_background_sync as _start_catalog_sync
+
     _start_catalog_sync(app)
 
     # Auto-register gateway MCP servers (best-effort)
     _mcp_seeds = [
-        ("Awesome Copilot", "Community agents, instructions, and recipes from Awesome GitHub Copilot",
-         "http://admin:8005/mcp/copilot-catalog"),
-        ("AI Librarian", "Shared research knowledge base with semantic search",
-         "http://librarian:8008/mcp"),
-        ("CodeMate Tools", "SimCorp codebase search tools — requires SimCorp network",
-         "http://admin:8005/mcp/codemate"),
+        (
+            "Awesome Copilot",
+            "Community agents, instructions, and recipes from Awesome GitHub Copilot",
+            "http://admin:8005/mcp/copilot-catalog",
+        ),
+        (
+            "AI Librarian",
+            "Shared research knowledge base with semantic search",
+            "http://librarian:8008/mcp",
+        ),
+        (
+            "CodeMate Tools",
+            "SimCorp codebase search tools — requires SimCorp network",
+            "http://admin:8005/mcp/codemate",
+        ),
     ]
     try:
         async with engine.begin() as conn:
             for name, desc, url in _mcp_seeds:
-                await conn.execute(text("""
+                await conn.execute(
+                    text("""
                     INSERT INTO mcp_servers (name, description, url, auth_type, enabled, status)
                     VALUES (:name, :desc, :url, 'none', TRUE, 'active')
                     ON CONFLICT (url) DO NOTHING
-                """), {"name": name, "desc": desc, "url": url})
+                """),
+                    {"name": name, "desc": desc, "url": url},
+                )
     except Exception:
         pass  # table may not exist on first migration run
 
@@ -307,9 +516,8 @@ async def lifespan(app: FastAPI):
     import asyncpg as _asyncpg
 
     from app.workers.optimization_worker import start_optimization_worker as _opt_worker
-    _pg_dsn = app_settings.database_url.replace(
-        "postgresql+asyncpg://", "postgresql://"
-    )
+
+    _pg_dsn = app_settings.database_url.replace("postgresql+asyncpg://", "postgresql://")
     _pool = await _asyncpg.create_pool(_pg_dsn, min_size=1, max_size=3)
     _worker_task = asyncio.create_task(_opt_worker(_pool))
 
@@ -322,17 +530,20 @@ async def lifespan(app: FastAPI):
     async def _run_weekly_digest():
         from app.db import async_session_maker
         from app.jobs.weekly_digest import send_weekly_digests
+
         async with async_session_maker() as session:
             await send_weekly_digests(session)
 
     async def _run_workday_sync():
         from app.db import async_session_maker
         from app.jobs.workday_sync import run_workday_sync
+
         async with async_session_maker() as session:
             await run_workday_sync(session)
 
     async def _run_auto_confirm_asks():
         from app.jobs.auto_confirm_asks import run_auto_confirm
+
         await run_auto_confirm()
 
     _scheduler.add_job(
@@ -394,11 +605,13 @@ async def _security_headers(request: Request, call_next):
     response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
     response.headers.setdefault("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
     return response
+
+
 app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 app.include_router(dev_auth.router)  # public — no admin auth
 app.include_router(admin_auth_router.router)  # public — IS the auth, no token required
-app.include_router(unified_auth_router.router)      # public — unified /auth/* endpoints
-app.include_router(unified_auth_router.oidc_router) # public — OIDC SSO flow
+app.include_router(unified_auth_router.router)  # public — unified /auth/* endpoints
+app.include_router(unified_auth_router.oidc_router)  # public — OIDC SSO flow
 app.include_router(users_router.router, dependencies=_auth)  # admin user management UI
 app.include_router(settings_router.router, dependencies=_auth)
 app.include_router(dashboard.router, dependencies=_auth)
@@ -407,7 +620,9 @@ app.include_router(nodes_router.router, dependencies=_auth)
 # Use /nodes/{id}/members instead.
 app.include_router(developers_router.router, dependencies=_auth)
 app.include_router(api_keys_module.router, dependencies=_auth)
-app.include_router(api_keys_module.portal_keys_router)  # portal: authenticated via dev session, no admin token
+app.include_router(
+    api_keys_module.portal_keys_router
+)  # portal: authenticated via dev session, no admin token
 app.include_router(policies.router, dependencies=_auth)
 app.include_router(policies.summary_router, dependencies=_auth)
 app.include_router(pricing.router, dependencies=_auth)
@@ -425,19 +640,23 @@ app.include_router(workflows_router.router, dependencies=_auth)
 app.include_router(mcp_router.router, dependencies=_auth)
 app.include_router(plugins_router.router, dependencies=_auth)
 app.include_router(reports_router.router, dependencies=_auth)
-app.include_router(ai_help_router.router)       # own auth per endpoint (admin or dev session)
+app.include_router(ai_help_router.router)  # own auth per endpoint (admin or dev session)
 app.include_router(devops_agent_router.router)  # own auth: require_admin_auth
-app.include_router(insights_router.router)      # own auth per endpoint (admin or dev session)
-app.include_router(identity_router.router, dependencies=_auth)  # POST /identity/tokens, POST /identity/verify
+app.include_router(insights_router.router)  # own auth per endpoint (admin or dev session)
+app.include_router(
+    identity_router.router, dependencies=_auth
+)  # POST /identity/tokens, POST /identity/verify
 app.include_router(identity_router.public_router)  # GET /identity/jwks — no auth required
 app.include_router(memory_admin_router.router, dependencies=_auth)
-app.include_router(transformation_router.dev_router)    # own auth: dev session
+app.include_router(transformation_router.dev_router)  # own auth: dev session
 app.include_router(transformation_router.admin_router, dependencies=_auth)
 app.include_router(genai_adoption_router.router, dependencies=_auth)
 app.include_router(alerts_router.router, dependencies=_auth)
 app.include_router(access_requests_router.router, dependencies=_auth)
 app.include_router(scim_router.router)  # SCIM uses its own SCIM_BEARER_TOKEN auth
 app.include_router(tools_router.router)  # per-route auth: GET any user, PATCH admin-only
+app.include_router(skills_router.router)  # own auth per endpoint
+app.include_router(prompts_router.router)  # own auth per endpoint
 app.include_router(admin_ops_router.router, dependencies=_auth)
 app.include_router(admin_champions_router.router)  # own auth: require_admin_auth
 app.include_router(champions_router.router)  # developer-facing — no admin token required
