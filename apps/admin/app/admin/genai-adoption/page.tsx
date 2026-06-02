@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useId, Fragment } from 'react';
+import React, { useState, useEffect, useCallback, useId, Fragment } from 'react';
 import { getAdminToken } from '../../../lib/adminAuth';
 
 const ADMIN_API = process.env.NEXT_PUBLIC_ADMIN_API ?? 'http://localhost:8005';
@@ -309,6 +309,49 @@ function SegControl({options,value,onChange}:{options:{value:string;label:string
   );
 }
 
+function IntegrationCallout({title, description, fields}: {
+  title: string;
+  description: string;
+  fields: Array<{label: string; envVar: string; placeholder: string; docs?: string}>;
+}) {
+  const [open, setOpen] = React.useState(false);
+  return (
+    <div style={{border:`1px solid rgba(245,181,86,0.3)`,borderRadius:8,overflow:'hidden',marginTop:8}}>
+      <div
+        onClick={()=>setOpen(o=>!o)}
+        style={{display:'flex',alignItems:'center',gap:8,padding:'8px 12px',background:'rgba(245,181,86,0.08)',cursor:'pointer',userSelect:'none'}}
+      >
+        <span style={{color:'#f5b556',fontSize:13}}>⚙</span>
+        <span style={{fontWeight:600,fontSize:12,color:'#f5b556',flex:1}}>{title}</span>
+        <span style={{color:C.fg2,fontSize:11}}>{open?'▲':'▼'} {open?'Hide':'Configure'}</span>
+      </div>
+      {open&&(
+        <div style={{padding:'12px 14px',background:'rgba(15,23,41,0.6)'}}>
+          <p style={{margin:'0 0 12px',fontSize:12.5,color:C.fg2,lineHeight:1.6}}>{description}</p>
+          <div style={{display:'flex',flexDirection:'column',gap:8}}>
+            {fields.map(f=>(
+              <div key={f.envVar}>
+                <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:3}}>
+                  <span style={{fontSize:12,fontWeight:600,color:'#fff'}}>{f.label}</span>
+                  <span style={{fontSize:11,fontFamily:C.mono,color:'#f5b556',background:'rgba(245,181,86,0.1)',padding:'1px 6px',borderRadius:3}}>{f.envVar}</span>
+                  {f.docs&&<a href={f.docs} target="_blank" rel="noopener noreferrer" style={{fontSize:11,color:C.azure,textDecoration:'none'}}>docs ↗</a>}
+                </div>
+                <input
+                  type="password"
+                  placeholder={f.placeholder}
+                  disabled
+                  style={{width:'100%',padding:'6px 10px',background:'rgba(255,255,255,0.04)',border:`1px solid rgba(255,255,255,0.1)`,borderRadius:5,color:C.fg2,fontSize:12,fontFamily:C.mono,cursor:'not-allowed',boxSizing:'border-box'}}
+                />
+                <div style={{fontSize:11,color:C.fg2,marginTop:3}}>Set this environment variable on the admin service to enable live data.</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function HeatCell({v}:{v:number}) {
   const intensity=Math.max(0.06,v/100);
   return <div style={{padding:'4px 2px',background:`rgba(86,182,245,${intensity*0.95})`,color:v>60?'rgba(10,17,31,0.85)':'rgba(255,255,255,0.75)',fontSize:9,fontWeight:600,textAlign:'center',borderRadius:3,fontFamily:C.mono}}>{v}</div>;
@@ -512,6 +555,14 @@ function AdoptionMockContent({km,activeDev,totalDev,adoptionPct,trendSeries,disp
           {MOCK.tools.map(t=><ToolTile key={t.id} tool={t} chartType={chartType}/>)}
         </div>
       </CardWrap>
+      <IntegrationCallout
+        title="GitHub Copilot API required for per-tool breakdown"
+        description="Per-developer Copilot acceptance rates and seat utilisation require the Copilot Business/Enterprise usage API. Connect both tools to see Copilot vs Claude Code side-by-side."
+        fields={[
+          {label:'Copilot API token', envVar:'GITHUB_COPILOT_TOKEN', placeholder:'ghu_...', docs:'https://docs.github.com/en/copilot/managing-copilot/monitoring-usage-and-entitlements'},
+          {label:'GitHub org', envVar:'GITHUB_ORG', placeholder:'your-org-name'},
+        ]}
+      />
 
       {/* Adoption trend + Team list */}
       <div style={{display:'grid',gridTemplateColumns:'2fr 1fr',gap:16}}>
@@ -634,14 +685,36 @@ function ProductivityTab({period}:{period:Period}) {
       {/* KPI row */}
       <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:16}}>
         <CardWrap>
-          <CardHead title="Productivity impact" sub="Improvement in PR cycle time" help="GenAI-assisted PR cycle time vs. baseline, 90-day window"/>
-          <BigNum value={`${km.cycleImpact}%`} color={C.azure}/>
-          <div style={{display:'flex',alignItems:'center',gap:8}}><DeltaChip value={km.cycleImpactDelta}/><span style={{fontSize:11,color:C.fg2}}>vs. baseline</span></div>
+          <CardHead title="Session quality score" sub="High-adoption cohort avg" help="Average session quality score for developers with ≥15 active days. Scale 0–5."/>
+          {summary ? (
+            <>
+              <BigNum value={summary.high_adoption.avg_quality_score != null ? fmt(summary.high_adoption.avg_quality_score, 2) : '—'} color={C.azure}/>
+              <div style={{display:'flex',alignItems:'center',gap:8}}>
+                <span style={{fontSize:11,color:C.fg2}}>vs {summary.low_adoption.avg_quality_score != null ? fmt(summary.low_adoption.avg_quality_score, 2) : '—'} low-adoption</span>
+              </div>
+            </>
+          ) : (
+            <>
+              <BigNum value={`${km.cycleImpact}%`} color={C.azure}/>
+              <div style={{display:'flex',alignItems:'center',gap:8}}><DeltaChip value={km.cycleImpactDelta}/><span style={{fontSize:11,color:C.fg2}}>vs. baseline · representative</span></div>
+            </>
+          )}
         </CardWrap>
         <CardWrap>
-          <CardHead title="Time saved" sub="Estimated engineering hours"/>
-          <BigNum value={km.timeSavedHrs.toLocaleString()} unit="hrs"/>
-          <div style={{display:'flex',alignItems:'center',gap:8}}><DeltaChip value={km.timeSavedDelta}/><span style={{fontSize:11,color:C.fg2}}>this month</span></div>
+          <CardHead title="Active sessions" sub="High-adoption developers"/>
+          {summary ? (
+            <>
+              <BigNum value={(summary.high_adoption.session_count ?? 0).toLocaleString()} unit="sessions"/>
+              <div style={{display:'flex',alignItems:'center',gap:8}}>
+                <span style={{fontSize:11,color:C.fg2}}>vs {(summary.low_adoption.session_count ?? 0).toLocaleString()} low-adoption</span>
+              </div>
+            </>
+          ) : (
+            <>
+              <BigNum value={km.timeSavedHrs.toLocaleString()} unit="hrs"/>
+              <div style={{display:'flex',alignItems:'center',gap:8}}><DeltaChip value={km.timeSavedDelta}/><span style={{fontSize:11,color:C.fg2}}>this month · representative</span></div>
+            </>
+          )}
         </CardWrap>
         <CardWrap>
           <CardHead title="Throughput" sub="GenAI PRs/week vs baseline"/>
@@ -682,6 +755,14 @@ function ProductivityTab({period}:{period:Period}) {
               </div>
             </div>
           ))}
+          <IntegrationCallout
+            title="GitHub integration required for DORA metrics"
+            description="PR lifecycle data (coding time, pickup time, review time, time to deploy) requires read access to your GitHub organisation. Set the following environment variables on the admin service."
+            fields={[
+              {label:'GitHub token', envVar:'GITHUB_TOKEN', placeholder:'ghp_...', docs:'https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens'},
+              {label:'GitHub org', envVar:'GITHUB_ORG', placeholder:'your-org-name'},
+            ]}
+          />
         </CardWrap>
       </div>
 
@@ -722,6 +803,15 @@ function ProductivityTab({period}:{period:Period}) {
           </div>
         </CardWrap>
       </div>
+
+      <IntegrationCallout
+        title="GitHub integration required for throughput and cycle time charts"
+        description="PR merge rates, cycle time trends, and deploy frequency require GitHub webhook events or API access. These charts show representative data until the integration is configured."
+        fields={[
+          {label:'GitHub token', envVar:'GITHUB_TOKEN', placeholder:'ghp_...', docs:'https://docs.github.com/en/rest/repos/webhooks'},
+          {label:'GitHub org', envVar:'GITHUB_ORG', placeholder:'your-org-name'},
+        ]}
+      />
 
       {/* Deploys + Hours saved */}
       <div style={{display:'grid',gridTemplateColumns:'2fr 1fr',gap:16}}>
@@ -810,24 +900,57 @@ function QualityTab({period}:{period:Period}) {
       {/* KPI row */}
       <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:16}}>
         <CardWrap>
-          <CardHead title="Code durability" sub="More stable code with GenAI" help="Code that remains unchanged after 30 days"/>
-          <BigNum value={`+${km.durability}%`} color={C.azure}/>
-          <div style={{display:'flex',alignItems:'center',gap:8}}><DeltaChip value={km.durabilityDelta}/><span style={{fontSize:11,color:C.fg2}}>vs non-GenAI</span></div>
+          <CardHead title="AI session error rate" sub="High-adoption cohort" help="Average error rate for developers with ≥15 active days"/>
+          {summary ? (
+            <>
+              <BigNum value={`${fmt(summary.high_adoption.avg_error_rate_pct)}%`} color={C.rose}/>
+              <div style={{display:'flex',alignItems:'center',gap:8}}>
+                <span style={{fontSize:11,color:C.fg2}}>vs {fmt(summary.low_adoption.avg_error_rate_pct)}% low-adoption</span>
+              </div>
+            </>
+          ) : (
+            <>
+              <BigNum value={`+${km.durability}%`} color={C.azure}/>
+              <div style={{display:'flex',alignItems:'center',gap:8}}><DeltaChip value={km.durabilityDelta}/><span style={{fontSize:11,color:C.fg2}}>vs non-GenAI · representative</span></div>
+            </>
+          )}
         </CardWrap>
         <CardWrap>
-          <CardHead title="Tests covered" sub="Commits with tests added" help="GenAI-assisted commits adding test coverage"/>
+          <CardHead title="Retry rate" sub="High-adoption cohort" help="Average prompt retry rate for high-adoption developers"/>
+          {summary ? (
+            <>
+              <BigNum value={`${fmt(summary.high_adoption.avg_retry_rate_pct)}%`} color={C.amber}/>
+              <div style={{display:'flex',alignItems:'center',gap:8}}>
+                <span style={{fontSize:11,color:C.fg2}}>vs {fmt(summary.low_adoption.avg_retry_rate_pct)}% low-adoption</span>
+              </div>
+            </>
+          ) : (
+            <>
+              <BigNum value={`${km.revertRate}%`} color={C.amber}/>
+              <div style={{display:'flex',alignItems:'center',gap:8}}><DeltaChip value={km.revertRateDelta} inverted={true}/><span style={{fontSize:11,color:C.fg2}}>improving · representative</span></div>
+            </>
+          )}
+        </CardWrap>
+        <CardWrap>
+          <CardHead title="Cache hit rate" sub="High vs low adoption" help="Semantic cache effectiveness by adoption cohort"/>
+          {summary ? (
+            <>
+              <BigNum value={`${fmt(summary.high_adoption.cache_hit_rate_pct)}%`} color={C.azure}/>
+              <div style={{display:'flex',alignItems:'center',gap:8}}>
+                <span style={{fontSize:11,color:C.fg2}}>vs {fmt(summary.low_adoption.cache_hit_rate_pct)}% low-adoption</span>
+              </div>
+            </>
+          ) : (
+            <>
+              <BigNum value={`${km.reviewImpact}%`} color={C.rose}/>
+              <div style={{display:'flex',alignItems:'center',gap:8}}><DeltaChip value={km.reviewImpactDelta} inverted={true}/><span style={{fontSize:11,color:C.fg2}}>faster reviews · representative</span></div>
+            </>
+          )}
+        </CardWrap>
+        <CardWrap>
+          <CardHead title="Tests covered" sub="GenAI-assisted commits" help="% of commits adding test coverage"/>
           <BigNum value={`${km.testCovered}%`} color={C.azure}/>
-          <div style={{display:'flex',alignItems:'center',gap:8}}><DeltaChip value={km.testCoveredDelta}/><span style={{fontSize:11,color:C.fg2}}>vs non-GenAI</span></div>
-        </CardWrap>
-        <CardWrap>
-          <CardHead title="Revert rate" sub="PRs reverted within 7d" help="% of merged PRs reverted within 7 days"/>
-          <BigNum value={`${km.revertRate}%`} color={C.amber}/>
-          <div style={{display:'flex',alignItems:'center',gap:8}}><DeltaChip value={km.revertRateDelta} inverted={true}/><span style={{fontSize:11,color:C.fg2}}>improving</span></div>
-        </CardWrap>
-        <CardWrap>
-          <CardHead title="Review impact" sub="Review time vs non-GenAI" help="Change in code review time on GenAI-assisted PRs"/>
-          <BigNum value={`${km.reviewImpact}%`} color={C.rose}/>
-          <div style={{display:'flex',alignItems:'center',gap:8}}><DeltaChip value={km.reviewImpactDelta} inverted={true}/><span style={{fontSize:11,color:C.fg2}}>faster reviews</span></div>
+          <div style={{display:'flex',alignItems:'center',gap:8}}><DeltaChip value={km.testCoveredDelta}/><span style={{fontSize:11,color:C.fg2}}>vs non-GenAI · representative</span></div>
         </CardWrap>
       </div>
 
