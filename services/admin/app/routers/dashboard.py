@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import text
+from sqlalchemy import String, bindparam, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
@@ -37,7 +37,7 @@ async def dashboard_stats(
         WHERE t.type = 'team'
         GROUP BY t.id, t.name
         ORDER BY total_tokens DESC NULLS LAST
-    """),
+    """).bindparams(bindparam("interval", type_=String)),
                 {"interval": interval},
             )
         )
