@@ -61,10 +61,33 @@ the redacted version, so future cache hits are safe too).
   buffering; `block`/`flag`/`redact` apply to non-streaming completions only). Input guardrails still
   apply to streaming requests (input is always buffered).
 
+## Correctness requirements (pinned from review)
+
+- **Provider scope = OpenAI-compatible path only** (`/v1/chat/completions[/auto]`), where guardrail
+  enforcement already lives. The `/anthropic/*` native passthrough is **NOT guarded** — this is a
+  *pre-existing* gap (input block never ran there either), and Anthropic's content-block/streaming
+  body shape needs its own design. **Document this loudly** in the PR; it is a tracked follow-up, not
+  silently dropped.
+- **Redaction is per-message.** `_prompt_text` concatenates all messages, so block/flag may scan the
+  concatenation, but `redact` MUST be applied by the caller to each `message.content` string
+  individually (loop the `messages` array; skip non-string content). `evaluate_guardrails` works on
+  one string; the caller maps it over messages.
+- **Output: iterate all `choices`, skip null content.** Real completions have
+  `choices[i].message.content == null` (tool/function calls) and may have `n > 1`. Never assume
+  `choices[0].message.content` is a string.
+- **Output block must NOT skip usage/cost accounting.** The tokens were already spent. Insert output
+  enforcement so the existing observability/usage emit still runs (replace content + skip cache, but
+  fall through to the usage emit — do not early-return past it).
+- **Priority order:** the admin sync writes rules `ORDER BY priority ASC`, so the Redis list is
+  already priority-sorted; evaluate in list order (block-first-wins respects priority).
+- **Streaming:** input guardrails already fire on `stream:true` (input hook precedes the stream
+  branch — keep it that way). Only *output* scanning is skipped for streamed responses.
+
 ## Out of scope
+- The `/anthropic/*` native path (documented follow-up — see above).
 - `rewrite` / `route` / `truncate` actions (not core PII/content; keep YAGNI).
 - ML-based PII classification (regex/pattern rules only, as the registry already models).
-- Scanning streamed completions.
+- Scanning/redacting streamed completions.
 
 ## Plan (TDD)
 1. **Pure `evaluate_guardrails` + `GuardrailOutcome`** in `services/cache/app/router.py` (or a small
