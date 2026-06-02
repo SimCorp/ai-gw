@@ -150,3 +150,89 @@ async def test_heartbeat_rejects_wrong_relay_token(client, insert_agent):
         "/agents/guarded/heartbeat", headers={"X-Relay-Token": "correct-token"}
     )
     assert good.status_code == 200
+
+
+async def test_register_inserts_then_upserts(client):
+    first = await client.post(
+        "/agents/register",
+        json={"slug": "reg", "name": "Reg One", "capabilities": ["a"]},
+    )
+    assert first.status_code == 201
+    assert first.json()["name"] == "Reg One"
+    assert first.json()["token_verified"] is False
+
+    # Same slug → ON CONFLICT updates in place (no duplicate, new name).
+    second = await client.post(
+        "/agents/register",
+        json={"slug": "reg", "name": "Reg Two", "capabilities": ["a", "b"]},
+    )
+    assert second.status_code == 201
+    assert second.json()["name"] == "Reg Two"
+    assert second.json()["capabilities"] == ["a", "b"]
+
+    listed = await client.get("/agents")
+    assert sum(1 for a in listed.json() if a["slug"] == "reg") == 1
+
+
+async def test_register_verifies_identity_token(client, monkeypatch):
+    from app import main
+
+    async def fake_verify(token, admin_url):
+        return token == "good-token"
+
+    monkeypatch.setattr(main, "_verify_identity_token", fake_verify)
+
+    verified = await client.post(
+        "/agents/register",
+        json={"slug": "v", "name": "V", "identity_token": "good-token"},
+    )
+    assert verified.json()["token_verified"] is True
+
+    unverified = await client.post(
+        "/agents/register",
+        json={"slug": "u", "name": "U", "identity_token": "bad-token"},
+    )
+    assert unverified.json()["token_verified"] is False
+
+
+async def test_register_enforces_service_token_when_configured(client, monkeypatch):
+    from app import main
+
+    monkeypatch.setattr(main.settings, "identity_service_token", "svc-secret")
+
+    bad = await client.post("/agents/register", json={"slug": "s", "name": "S"})
+    assert bad.status_code == 401
+
+    ok = await client.post(
+        "/agents/register",
+        json={"slug": "s", "name": "S"},
+        headers={"X-Service-Token": "svc-secret"},
+    )
+    assert ok.status_code == 201
+
+
+async def test_deregister(client, insert_agent, monkeypatch):
+    await insert_agent("byebye")
+    resp = await client.delete("/agents/byebye")
+    assert resp.status_code == 204
+    client.redis.delete.assert_awaited_with("identity:online:byebye")
+    assert (await client.get("/agents/byebye")).status_code == 404
+
+    # 404 when already gone.
+    assert (await client.delete("/agents/byebye")).status_code == 404
+
+
+async def test_deregister_enforces_service_token_when_configured(client, insert_agent, monkeypatch):
+    from app import main
+
+    await insert_agent("protected")
+    monkeypatch.setattr(main.settings, "identity_service_token", "svc-secret")
+    assert (await client.delete("/agents/protected")).status_code == 401
+
+
+async def test_capabilities_distinct_sorted(client, insert_agent):
+    await insert_agent("c1", capabilities=["web", "shell"])
+    await insert_agent("c2", capabilities=["web", "vision"])
+    resp = await client.get("/capabilities")
+    assert resp.status_code == 200
+    assert resp.json() == {"capabilities": ["shell", "vision", "web"]}
