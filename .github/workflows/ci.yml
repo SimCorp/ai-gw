@@ -86,7 +86,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [auth, cache, observability, admin]
+        service: [auth, cache, observability, admin, librarian, memory, scanner]
 
     steps:
       - uses: actions/checkout@v4
