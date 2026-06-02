@@ -224,10 +224,12 @@ jobs:
             context: services/admin
           - name: observability
             context: services/observability
-          - name: admin-frontend
-            context: apps/admin
-          - name: portal-frontend
-            context: apps/portal
+          # admin-frontend / portal-frontend are intentionally omitted:
+          # this is a pnpm monorepo with workspace:* deps, and their
+          # Dockerfiles (npm ci, single-app context) cannot build. Nothing
+          # consumes the images today — compose runs the apps via
+          # node:20-alpine + npm run dev. Containerize them in a dedicated
+          # effort with a proper pnpm-monorepo build.
 
     steps:
       - uses: actions/checkout@v4
