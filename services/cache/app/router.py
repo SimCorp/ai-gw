@@ -498,8 +498,19 @@ async def _handle_chat_completions(request: Request, body: dict):
     # Guardrails — run lightweight enforcement on input before forwarding
     guardrail_rules = await _load_guardrails(redis, team_id)
     if guardrail_rules:
+        # Block decision is outside the fail-open wrapper — must never be swallowed
+        outcome = evaluate_guardrails(guardrail_rules, _prompt_text(body), "input")
+        if outcome.blocked_rule:
+            return JSONResponse(
+                {
+                    "error": "blocked_by_guardrail",
+                    "message": f"Request blocked by guardrail: {outcome.blocked_rule}",
+                },
+                status_code=400,
+                headers={"x-request-id": request_id},
+            )
         try:
-            outcome = evaluate_guardrails(guardrail_rules, _prompt_text(body), "input")
+            # Hit emit + redaction are fail-open: errors here must not break the request
             for hit in outcome.hits:
                 asyncio.create_task(
                     _emit_guardrail_hit(
@@ -512,15 +523,6 @@ async def _handle_chat_completions(request: Request, body: dict):
                             "model": body.get("model"),
                         },
                     )
-                )
-            if outcome.blocked_rule:
-                return JSONResponse(
-                    {
-                        "error": "blocked_by_guardrail",
-                        "message": f"Request blocked by guardrail: {outcome.blocked_rule}",
-                    },
-                    status_code=400,
-                    headers={"x-request-id": request_id},
                 )
             # per-message redaction (only if any input redact rule exists)
             redact_rules = [
@@ -543,7 +545,7 @@ async def _handle_chat_completions(request: Request, body: dict):
                                     redact_rules, part["text"], "input"
                                 ).text
         except Exception:
-            pass  # fail-open: never break the request on guardrail errors (block is handled above)
+            pass  # fail-open: never break the request on hit-emit / redaction errors
 
     # Streaming + output guardrails: fail closed — streaming cannot be scanned
     has_output_enforcement = any(
