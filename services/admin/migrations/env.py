@@ -5,6 +5,7 @@ at runtime. Autogenerate respects an include_object filter that skips tables
 managed by raw SQL (not ORM-mapped) so autogenerate diffs only reflect drift
 on tables we actually own through SQLAlchemy models.
 """
+
 from __future__ import annotations
 
 import os
@@ -49,6 +50,9 @@ NON_ORM_TABLES = {
     "ai_insights",
     "guardrails",
     "guardrail_hits",
+    "skills",
+    "prompt_templates",
+    "cache_snapshots",
 }
 
 
@@ -65,7 +69,9 @@ def include_object(obj, name, type_, reflected, compare_to):
     # Skip tables from other services that share the same Postgres database
     # (identity service, librarian service — managed by their own startup DDL)
     if type_ == "table" and name in {
-        "agent_identities", "knowledge_items", "research_topics",
+        "agent_identities",
+        "knowledge_items",
+        "research_topics",
     }:
         return False
     # These indexes were created via raw SQL in the baseline migration with DESC
