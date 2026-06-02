@@ -62,9 +62,7 @@ async def _seed_demo_content() -> None:
             )
 
         # 2. Resolve season name → id
-        season_rows = (
-            await session.execute(text("SELECT id, name FROM league_seasons"))
-        ).mappings().all()
+        season_rows = (await session.execute(text("SELECT id, name FROM league_seasons"))).mappings().all()
         season_id_by_name = {r["name"]: r["id"] for r in season_rows}
 
         # 3. Challenges — insert if (season_id, title) doesn't exist
@@ -119,16 +117,8 @@ async def _seed_demo_content() -> None:
             )
 
         # 5. Proposals — need dev@simcorp.com's user id; skip silently if missing
-        dev_id = (
-            await session.execute(
-                text("SELECT id FROM users WHERE email = 'dev@simcorp.com' LIMIT 1")
-            )
-        ).scalar()
-        admin_id = (
-            await session.execute(
-                text("SELECT id FROM users WHERE email = 'admin@simcorp.com' LIMIT 1")
-            )
-        ).scalar()
+        dev_id = (await session.execute(text("SELECT id FROM users WHERE email = 'dev@simcorp.com' LIMIT 1"))).scalar()
+        admin_id = (await session.execute(text("SELECT id FROM users WHERE email = 'admin@simcorp.com' LIMIT 1"))).scalar()
 
         if dev_id:
             for p in PROPOSALS:
@@ -160,6 +150,9 @@ async def _seed_demo_content() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.redis = aioredis.from_url(settings.redis_url, decode_responses=True)
+    async with async_session_maker() as session:
+        await session.execute(text("ALTER TABLE league_purchases ADD COLUMN IF NOT EXISTS equipped BOOLEAN NOT NULL DEFAULT FALSE"))
+        await session.commit()
     try:
         await _seed_demo_content()
     except Exception as exc:

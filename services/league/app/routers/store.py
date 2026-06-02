@@ -117,7 +117,9 @@ async def list_items(
     if include_inactive:
         result = await session.execute(text("SELECT id, name, type, point_cost, asset_url, exclusive_season_id, exclusive_top_n, active FROM league_store_items ORDER BY active DESC, point_cost"))
     else:
-        result = await session.execute(text("SELECT id, name, type, point_cost, asset_url, exclusive_season_id, exclusive_top_n, active FROM league_store_items WHERE active = TRUE ORDER BY point_cost"))
+        result = await session.execute(
+            text("SELECT id, name, type, point_cost, asset_url, exclusive_season_id, exclusive_top_n, active FROM league_store_items WHERE active = TRUE ORDER BY point_cost")
+        )
     return [
         {
             "id": str(r["id"]),
@@ -182,3 +184,73 @@ async def my_items(session: AsyncSession = Depends(get_session), user=Depends(re
         {"uid": user["user_id"]},
     )
     return [{"id": str(r["id"]), "name": r["name"], "type": r["type"], "asset_url": r["asset_url"], "purchased_at": r["purchased_at"].isoformat()} for r in result.mappings().all()]
+
+
+@router.post("/equip/{item_id}", status_code=204)
+async def equip_item(
+    item_id: UUID,
+    session: AsyncSession = Depends(get_session),
+    user=Depends(require_dev_auth),
+):
+    """Equip a purchased item. Automatically unequips any other item of the same type."""
+    # Verify ownership
+    owned = (
+        await session.execute(
+            text("SELECT lp.item_id, li.type FROM league_purchases lp JOIN league_items li ON li.id = lp.item_id WHERE lp.engineer_id = :uid AND lp.item_id = :iid"),
+            {"uid": user["user_id"], "iid": str(item_id)},
+        )
+    ).first()
+    if owned is None:
+        raise HTTPException(404, "Item not owned")
+    item_type = owned[1]
+    # Clear existing equip for this type, then set new one
+    await session.execute(
+        text("""
+            UPDATE league_purchases SET equipped = FALSE
+            WHERE engineer_id = :uid
+              AND item_id IN (SELECT id FROM league_items WHERE type = :itype)
+        """),
+        {"uid": user["user_id"], "itype": item_type},
+    )
+    await session.execute(
+        text("UPDATE league_purchases SET equipped = TRUE WHERE engineer_id = :uid AND item_id = :iid"),
+        {"uid": user["user_id"], "iid": str(item_id)},
+    )
+    await session.commit()
+
+
+@router.delete("/equip/{item_id}", status_code=204)
+async def unequip_item(
+    item_id: UUID,
+    session: AsyncSession = Depends(get_session),
+    user=Depends(require_dev_auth),
+):
+    await session.execute(
+        text("UPDATE league_purchases SET equipped = FALSE WHERE engineer_id = :uid AND item_id = :iid"),
+        {"uid": user["user_id"], "iid": str(item_id)},
+    )
+    await session.commit()
+
+
+@router.get("/equipped")
+async def get_equipped(
+    session: AsyncSession = Depends(get_session),
+    user=Depends(require_dev_auth),
+) -> list[dict]:
+    """Return the items currently equipped by this developer."""
+    rows = (
+        (
+            await session.execute(
+                text("""
+        SELECT li.id::text, li.name, li.type, li.asset_url
+        FROM league_purchases lp
+        JOIN league_items li ON li.id = lp.item_id
+        WHERE lp.engineer_id = :uid AND lp.equipped = TRUE
+    """),
+                {"uid": user["user_id"]},
+            )
+        )
+        .mappings()
+        .all()
+    )
+    return [dict(r) for r in rows]
