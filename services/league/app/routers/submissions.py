@@ -10,12 +10,15 @@ from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import require_dev_auth
+from app.auth import require_admin_auth, require_dev_auth
 from app.config import settings
 from app.db import get_session
 from app.scoring import (
     DEFAULT_WEIGHTS,
+    centroid,
     compute_composite,
+    cosine_distance,
+    score_creativity,
     score_efficiency,
     score_improvement_rate,
     score_quality_exact,
@@ -29,6 +32,19 @@ class SubmissionCreate(BaseModel):
     mode: str  # "training" or "league"
     system_prompt: str
     tool_config: list[dict] = []
+
+
+async def _embed_batch(prompts: list[str]) -> list[list[float]]:
+    """Embed a list of prompts in one litellm call. Returns embeddings in input order."""
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        resp = await client.post(
+            f"{settings.litellm_url}/v1/embeddings",
+            headers={"Authorization": f"Bearer {settings.litellm_master_key}"},
+            json={"model": settings.embedding_model, "input": prompts},
+        )
+        resp.raise_for_status()
+    data = resp.json()
+    return [item["embedding"] for item in data["data"]]
 
 
 async def _call_litellm(system_prompt: str, user_input: str, model: str, max_tokens: int) -> dict:
@@ -362,3 +378,96 @@ async def list_my_submissions(
             }
         out.append(item)
     return out
+
+
+@router.post("/challenges/{challenge_id}/score-creativity")
+async def score_creativity_endpoint(
+    challenge_id: UUID,
+    session: AsyncSession = Depends(get_session),
+    _admin=Depends(require_admin_auth),
+):
+    """Batch-compute creativity scores for all scored submissions in a challenge.
+
+    Embeds all system_prompts in one litellm call, computes cosine distance from
+    the centroid, updates league_scores.creativity, and recomputes composite.
+    Admin-only. Safe to re-run.
+    """
+    # 1. Verify challenge exists
+    challenge_row = (
+        (
+            await session.execute(
+                text("""
+                SELECT c.id, s.scoring_weights
+                FROM league_challenges c
+                JOIN league_seasons s ON s.id = c.season_id
+                WHERE c.id = :id
+            """),
+                {"id": str(challenge_id)},
+            )
+        )
+        .mappings()
+        .one_or_none()
+    )
+    if not challenge_row:
+        raise HTTPException(status_code=404, detail="Challenge not found")
+
+    weights = challenge_row["scoring_weights"] or dict(DEFAULT_WEIGHTS)
+
+    # 2. Load all submissions that have a score row
+    rows = (
+        (
+            await session.execute(
+                text("""
+            SELECT
+                sub.id AS submission_id,
+                sub.system_prompt,
+                sc.quality, sc.robustness, sc.token_efficiency, sc.speed,
+                sc.cost_efficiency, sc.improvement_rate
+            FROM league_submissions sub
+            JOIN league_scores sc ON sc.submission_id = sub.id
+            WHERE sub.challenge_id = :cid
+        """),
+                {"cid": str(challenge_id)},
+            )
+        )
+        .mappings()
+        .all()
+    )
+
+    # 3. Need at least 2 to compute a meaningful centroid
+    if len(rows) < 2:
+        return {"scored": 0, "reason": "need >= 2 submissions"}
+
+    # 4. Batch-embed all system_prompts in one call
+    prompts = [r["system_prompt"] for r in rows]
+    embeddings = await _embed_batch(prompts)
+
+    # 5. Compute centroid and per-submission creativity
+    c = centroid(embeddings)
+    for row, emb in zip(rows, embeddings):
+        creativity = score_creativity(cosine_distance(emb, c))
+        dims = {
+            "quality": float(row["quality"]),
+            "robustness": float(row["robustness"]),
+            "token_efficiency": float(row["token_efficiency"]),
+            "speed": float(row["speed"]),
+            "cost_efficiency": float(row["cost_efficiency"]),
+            "improvement_rate": float(row["improvement_rate"]),
+            "creativity": creativity,
+        }
+        composite = compute_composite(dims, weights)
+        await session.execute(
+            text("""
+            UPDATE league_scores
+            SET creativity = :creativity, composite = :composite
+            WHERE submission_id = :sid
+        """),
+            {
+                "creativity": round(creativity, 2),
+                "composite": round(composite, 2),
+                "sid": str(row["submission_id"]),
+            },
+        )
+
+    await session.commit()
+    return {"scored": len(rows)}

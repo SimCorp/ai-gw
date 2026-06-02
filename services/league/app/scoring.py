@@ -1,5 +1,6 @@
 # services/league/app/scoring.py
 
+import math
 import types
 from collections.abc import Mapping
 
@@ -69,3 +70,29 @@ def compute_composite(scores: Mapping[str, float], weights: Mapping[str, float])
         raise ValueError(f"weights must sum to 1.0, got {weight_sum:.4f}")
     raw = sum(scores.get(dim, 0.0) * w for dim, w in weights.items())
     return round(raw * 10.0, 2)  # scale 0-100 weighted avg -> 0-1000
+
+
+def centroid(vectors: list[list[float]]) -> list[float]:
+    """Component-wise mean of equal-length vectors. Empty list raises ValueError."""
+    if not vectors:
+        raise ValueError("centroid requires at least one vector")
+    n = len(vectors)
+    return [sum(v[i] for v in vectors) / n for i in range(len(vectors[0]))]
+
+
+def cosine_distance(a: list[float], b: list[float]) -> float:
+    """1 - cosine_similarity. Range [0, 2]. Zero-norm vector -> 1.0 (neutral)."""
+    norm_a = math.sqrt(sum(x * x for x in a))
+    norm_b = math.sqrt(sum(x * x for x in b))
+    if norm_a == 0.0 or norm_b == 0.0:
+        return 1.0
+    dot = sum(x * y for x, y in zip(a, b))
+    return 1.0 - dot / (norm_a * norm_b)
+
+
+def score_creativity(distance: float) -> float:
+    """Map cosine distance to 0-100: min(100, max(0, distance * 50)).
+
+    distance 0 (identical to crowd) -> 0; 1 (orthogonal) -> 50; 2 (opposite) -> 100.
+    """
+    return min(100.0, max(0.0, distance * 50.0))

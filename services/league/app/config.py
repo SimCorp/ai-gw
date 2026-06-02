@@ -16,6 +16,7 @@ class Settings(BaseSettings):
         "http://localhost:8080",
     ]
     training_rate_limit_per_hour: int = 10
+    embedding_model: str = "text-embedding-3-small"
 
 
 settings = Settings()
