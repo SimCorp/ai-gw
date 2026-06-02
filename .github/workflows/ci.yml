@@ -242,6 +242,7 @@ jobs:
         id: tags
         run: |
           IMAGE="ghcr.io/${{ github.repository }}/${{ matrix.component.name }}"
+          IMAGE="${IMAGE,,}"  # GHCR requires lowercase repository names
           SHA=$(git rev-parse --short HEAD)
           REF="${{ github.ref_name }}"
           TAGS="${IMAGE}:sha-${SHA},${IMAGE}:${REF}"
