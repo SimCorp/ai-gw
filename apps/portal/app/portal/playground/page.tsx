@@ -39,6 +39,10 @@ export default function PlaygroundPage() {
 
   const searchParams = useSearchParams();
   const challengeId = searchParams.get("challenge");
+  const skillSystemPrompt = searchParams.get("skill_system_prompt");
+  const skillName = searchParams.get("skill_name");
+  const promptContent = searchParams.get("prompt_content");
+  const promptTitle = searchParams.get("prompt_title");
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [models, setModels] = useState<string[]>([]);
@@ -102,6 +106,18 @@ export default function PlaygroundPage() {
       threadRef.current.scrollTop = threadRef.current.scrollHeight;
     }
   }, [messages]);
+
+  // Pre-load skill system prompt when navigated from skills page
+  useEffect(() => {
+    if (!skillSystemPrompt) return;
+    setSystemPrompt(skillSystemPrompt);
+  }, [skillSystemPrompt]);
+
+  // Pre-load prompt content when navigated from prompts library
+  useEffect(() => {
+    if (!promptContent) return;
+    setSystemPrompt(promptContent);
+  }, [promptContent]);
 
   // Pre-load challenge context when navigated from league page
   useEffect(() => {
@@ -297,6 +313,16 @@ export default function PlaygroundPage() {
                 {challengeId && (
                   <div style={{ margin: '0 0 12px', padding: '10px 14px', borderRadius: 8, background: 'rgba(10,123,215,0.08)', border: '1px solid rgba(10,123,215,0.2)', fontSize: 12.5, color: 'var(--sc-blue, #0A7BD7)' }}>
                     ⚔ League challenge loaded — system prompt pre-set. Make your attempt.
+                  </div>
+                )}
+                {skillName && !challengeId && (
+                  <div style={{ margin: '0 0 12px', padding: '10px 14px', borderRadius: 8, background: 'rgba(10,123,215,0.08)', border: '1px solid rgba(10,123,215,0.2)', fontSize: 12.5, color: 'var(--sc-blue, #0A7BD7)' }}>
+                    ✦ Skill loaded: <strong>{skillName}</strong> — system prompt pre-set.
+                  </div>
+                )}
+                {promptTitle && !challengeId && (
+                  <div style={{ margin: '0 0 12px', padding: '10px 14px', borderRadius: 8, background: 'rgba(10,123,215,0.08)', border: '1px solid rgba(10,123,215,0.2)', fontSize: 12.5, color: 'var(--sc-blue, #0A7BD7)' }}>
+                    📋 Prompt loaded: <strong>{promptTitle}</strong> — set as system prompt.
                   </div>
                 )}
                 {messages.map((msg: Message) => (
