@@ -11,6 +11,7 @@ from app.redis_utils import make_redis
 from app.router import router
 from app.workers import insights, postgres
 from app.workers.budget_alert import run_budget_alert_loop
+from app.workers.cost_anomaly import run_cost_anomaly_loop
 from app.workers.session_cleanup import run_session_cleanup_loop
 
 
@@ -29,6 +30,7 @@ async def lifespan(app: FastAPI):
 
     await bus.start()
     budget_task = asyncio.create_task(run_budget_alert_loop(pg_pool, redis))
+    anomaly_task = asyncio.create_task(run_cost_anomaly_loop(pg_pool, redis))
     cleanup_task = asyncio.create_task(run_session_cleanup_loop(pg_pool))
     app.state.bus = bus
     app.state.redis = redis
@@ -36,6 +38,7 @@ async def lifespan(app: FastAPI):
     app.state.settings = settings
     yield
     budget_task.cancel()
+    anomaly_task.cancel()
     cleanup_task.cancel()
     await bus.stop()
     await pg_pool.close()
