@@ -67,3 +67,52 @@ async def test_list_agents_filters(client, insert_agent):
     # no filter → all four
     all_agents = await client.get("/agents")
     assert {a["slug"] for a in all_agents.json()} == {"a1", "a2", "a3", "a4"}
+
+
+from unittest.mock import AsyncMock
+
+
+async def test_get_agent_404_and_found(client, insert_agent):
+    missing = await client.get("/agents/nope")
+    assert missing.status_code == 404
+
+    await insert_agent("found", name="Found", capabilities=["x"])
+    ok = await client.get("/agents/found")
+    assert ok.status_code == 200
+    body = ok.json()
+    assert body["slug"] == "found"
+    assert body["online"] is False  # redis.exists mocked to 0
+
+
+async def test_get_agent_online_flag_reflects_redis(client, insert_agent):
+    await insert_agent("live", name="Live")
+    client.redis.exists = AsyncMock(return_value=1)
+    resp = await client.get("/agents/live")
+    assert resp.json()["online"] is True
+
+
+async def test_endpoint_lookup(client, insert_agent):
+    await insert_agent("worker", endpoint="http://workflow-worker:8000/invoke/worker", managed=True)
+    resp = await client.get("/agents/worker/endpoint")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["endpoint"] == "http://workflow-worker:8000/invoke/worker"
+    assert body["online"] is False
+    assert "agent_id" in body
+
+    assert (await client.get("/agents/ghost/endpoint")).status_code == 404
+
+
+async def test_identity_summary(client, insert_agent):
+    await insert_agent("verified-agent", capabilities=["a", "b"], token_verified=True)
+    resp = await client.get("/agents/verified-agent/identity")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body == {
+        "slug": "verified-agent",
+        "token_verified": True,
+        "capabilities": ["a", "b"],
+        "online": False,
+    }
+
+    assert (await client.get("/agents/ghost/identity")).status_code == 404
