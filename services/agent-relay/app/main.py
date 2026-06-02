@@ -169,7 +169,7 @@ async def register(req: RegisterRequest, request: Request):
     }
     _slug_to_token[req.slug] = relay_token
 
-    # Persist slug → token in Redis for multi-instance routing
+    # Persist slug → token in Redis so the identity service can gate heartbeats.
     if _redis:
         try:
             await _redis.set(f"relay:agent:{req.slug}:token", relay_token, ex=3600)

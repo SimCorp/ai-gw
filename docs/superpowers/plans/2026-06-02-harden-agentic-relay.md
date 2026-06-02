@@ -100,10 +100,9 @@ import sys
 sys.path.insert(0, os.path.dirname(__file__))
 ```
 
-- [ ] **Step 4: Create empty test package markers**
+- [ ] **Step 4: Create the `tests/` directories**
 
-`services/agent-relay/tests/__init__.py`: empty file.
-`services/identity/tests/__init__.py`: empty file.
+Create the `services/agent-relay/tests/` and `services/identity/tests/` directories (the test files below live here). Do NOT add a `tests/__init__.py` — sibling services (auth, cache, admin) have none, and adding one makes the hyphenated `agent-relay` package's `tests/conftest.py` register as the bare module `tests.conftest`, which collides with other services' `tests/conftest.py` and breaks the repo-wide `pytest services/` collection. The root `conftest.py` sys.path shim makes `from app import ...` work without a package marker.
 
 - [ ] **Step 5: Install both services in editable+dev mode**
 

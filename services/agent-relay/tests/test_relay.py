@@ -145,13 +145,15 @@ def test_ws_unknown_token_is_rejected():
     import pytest
     from app.main import app
     from starlette.testclient import TestClient
+    from starlette.websockets import WebSocketDisconnect
 
     with TestClient(app) as tc:
-        with pytest.raises(Exception):
-            # Server closes with code 4004 before accepting; the context
-            # manager surfaces the rejection as an exception on enter.
+        # Server closes with code 4004 before accepting; TestClient surfaces
+        # the rejection as WebSocketDisconnect carrying that close code.
+        with pytest.raises(WebSocketDisconnect) as exc_info:
             with tc.websocket_connect("/connect/does-not-exist"):
                 pass
+        assert exc_info.value.code == 4004
 
 
 def test_ws_connect_then_disconnect_cleans_up_state():
