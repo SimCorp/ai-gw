@@ -33,7 +33,7 @@ async def dashboard_stats(
             ROUND((AVG(CASE WHEN cr.cache_hit THEN 1.0 ELSE 0.0 END) * 100)::numeric, 1) AS cache_hit_pct
         FROM organization_nodes t
         LEFT JOIN cost_records cr ON cr.node_id = t.id
-            AND cr.created_at >= NOW() - :interval::INTERVAL
+            AND cr.created_at >= NOW() - (:interval)::INTERVAL
         WHERE t.type = 'team'
         GROUP BY t.id, t.name
         ORDER BY total_tokens DESC NULLS LAST
