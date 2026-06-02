@@ -2,7 +2,10 @@
 import pytest
 from app.scoring import (
     DEFAULT_WEIGHTS,
+    centroid,
     compute_composite,
+    cosine_distance,
+    score_creativity,
     score_efficiency,
     score_improvement_rate,
     score_quality_exact,
@@ -126,3 +129,64 @@ def test_composite_weights_must_sum_to_1():
     bad_weights = {k: 0.5 for k in DEFAULT_WEIGHTS}  # sums to 3.5
     with pytest.raises(ValueError, match="weights must sum to 1.0"):
         compute_composite({k: 50.0 for k in DEFAULT_WEIGHTS}, bad_weights)
+
+
+# centroid
+def test_centroid_single_vector():
+    assert centroid([[1.0, 2.0, 3.0]]) == pytest.approx([1.0, 2.0, 3.0])
+
+
+def test_centroid_two_vectors():
+    assert centroid([[0.0, 0.0], [2.0, 4.0]]) == pytest.approx([1.0, 2.0])
+
+
+def test_centroid_empty_raises():
+    with pytest.raises(ValueError):
+        centroid([])
+
+
+# cosine_distance
+def test_cosine_distance_identical():
+    v = [1.0, 2.0, 3.0]
+    assert cosine_distance(v, v) == pytest.approx(0.0)
+
+
+def test_cosine_distance_orthogonal():
+    assert cosine_distance([1.0, 0.0], [0.0, 1.0]) == pytest.approx(1.0)
+
+
+def test_cosine_distance_opposite():
+    assert cosine_distance([1.0, 0.0], [-1.0, 0.0]) == pytest.approx(2.0)
+
+
+def test_cosine_distance_zero_norm_a():
+    assert cosine_distance([0.0, 0.0], [1.0, 0.0]) == pytest.approx(1.0)
+
+
+def test_cosine_distance_zero_norm_b():
+    assert cosine_distance([1.0, 0.0], [0.0, 0.0]) == pytest.approx(1.0)
+
+
+def test_cosine_distance_both_zero_norm():
+    assert cosine_distance([0.0, 0.0], [0.0, 0.0]) == pytest.approx(1.0)
+
+
+# score_creativity
+def test_score_creativity_zero_distance():
+    assert score_creativity(0.0) == pytest.approx(0.0)
+
+
+def test_score_creativity_orthogonal():
+    assert score_creativity(1.0) == pytest.approx(50.0)
+
+
+def test_score_creativity_opposite():
+    assert score_creativity(2.0) == pytest.approx(100.0)
+
+
+def test_score_creativity_clamp_high():
+    assert score_creativity(999.0) == pytest.approx(100.0)
+
+
+def test_score_creativity_clamp_low():
+    assert score_creativity(-1.0) == pytest.approx(0.0)
