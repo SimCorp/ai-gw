@@ -14,6 +14,7 @@ from app import exact, semantic
 from app.autoroute import record_request as _autoroute_record
 from app.autoroute import select_best_model
 from app.config import settings
+from app.guardrails import evaluate_guardrails
 from app.policy import CachePolicy, get_policy
 
 router = APIRouter()
@@ -226,7 +227,20 @@ _PII_PATTERNS = re.compile(
 
 def _prompt_text(body: dict) -> str:
     messages = body.get("messages", [])
-    return " ".join(m.get("content", "") for m in messages if isinstance(m.get("content"), str))
+    parts = []
+    for m in messages:
+        content = m.get("content")
+        if isinstance(content, str):
+            parts.append(content)
+        elif isinstance(content, list):
+            for part in content:
+                if (
+                    isinstance(part, dict)
+                    and part.get("type") == "text"
+                    and isinstance(part.get("text"), str)
+                ):
+                    parts.append(part["text"])
+    return " ".join(parts)
 
 
 def _turn_count(body: dict) -> int:
@@ -482,15 +496,69 @@ async def _handle_chat_completions(request: Request, body: dict):
         )
 
     # Guardrails — run lightweight enforcement on input before forwarding
-    try:
-        await _check_guardrails(
-            redis, team_id, key_id, request_id, _prompt_text(body), body.get("model"), http
-        )
-    except _BlockedByGuardrail as exc:
+    guardrail_rules = await _load_guardrails(redis, team_id)
+    if guardrail_rules:
+        # Block decision is outside the fail-open wrapper — must never be swallowed
+        outcome = evaluate_guardrails(guardrail_rules, _prompt_text(body), "input")
+        if outcome.blocked_rule:
+            return JSONResponse(
+                {
+                    "error": "blocked_by_guardrail",
+                    "message": f"Request blocked by guardrail: {outcome.blocked_rule}",
+                },
+                status_code=400,
+                headers={"x-request-id": request_id},
+            )
+        try:
+            # Hit emit + redaction are fail-open: errors here must not break the request
+            for hit in outcome.hits:
+                asyncio.create_task(
+                    _emit_guardrail_hit(
+                        http,
+                        {
+                            **hit,
+                            "team_id": team_id,
+                            "api_key_id": key_id,
+                            "request_id": request_id,
+                            "model": body.get("model"),
+                        },
+                    )
+                )
+            # per-message redaction (only if any input redact rule exists)
+            redact_rules = [
+                r
+                for r in guardrail_rules
+                if r.get("action") == "redact" and r.get("applies_to", "input") in ("input", "both")
+            ]
+            if redact_rules:
+                for m in body.get("messages", []):
+                    if isinstance(m.get("content"), str):
+                        m["content"] = evaluate_guardrails(redact_rules, m["content"], "input").text
+                    elif isinstance(m.get("content"), list):
+                        for part in m["content"]:
+                            if (
+                                isinstance(part, dict)
+                                and part.get("type") == "text"
+                                and isinstance(part.get("text"), str)
+                            ):
+                                part["text"] = evaluate_guardrails(
+                                    redact_rules, part["text"], "input"
+                                ).text
+        except Exception:
+            pass  # fail-open: never break the request on hit-emit / redaction errors
+
+    # Streaming + output guardrails: fail closed — streaming cannot be scanned
+    has_output_enforcement = any(
+        r.get("enabled", True)
+        and r.get("action") in ("block", "redact")
+        and r.get("applies_to", "input") in ("output", "both")
+        for r in guardrail_rules
+    )
+    if has_output_enforcement and body.get("stream"):
         return JSONResponse(
             {
-                "error": "blocked_by_guardrail",
-                "message": f"Request blocked by guardrail: {exc.rule_name}",
+                "error": "streaming_disabled_by_guardrail",
+                "message": "Streaming is disabled because output guardrails are active for this team.",
             },
             status_code=400,
             headers={"x-request-id": request_id},
@@ -700,8 +768,39 @@ async def _handle_chat_completions(request: Request, body: dict):
             headers={"Retry-After": "30", "x-request-id": request_id},
         )
     response_body = resp.json()
+    block_output_cache = False
 
-    if resp.status_code == 200 and not bypass_cache:
+    if resp.status_code == 200 and not body.get("stream") and guardrail_rules:
+        try:
+            for choice in response_body.get("choices", []):
+                content = choice.get("message", {}).get("content")
+                if not isinstance(content, str):
+                    continue
+                out = evaluate_guardrails(guardrail_rules, content, "output")
+                for hit in out.hits:
+                    asyncio.create_task(
+                        _emit_guardrail_hit(
+                            http,
+                            {
+                                **hit,
+                                "team_id": team_id,
+                                "api_key_id": key_id,
+                                "request_id": request_id,
+                                "model": body.get("model"),
+                            },
+                        )
+                    )
+                if out.blocked_rule:
+                    choice["message"]["content"] = (
+                        f"[response withheld by guardrail: {out.blocked_rule}]"
+                    )
+                    block_output_cache = True
+                elif out.text != content:
+                    choice["message"]["content"] = out.text
+        except Exception:
+            pass  # fail-open
+
+    if resp.status_code == 200 and not bypass_cache and not block_output_cache:
         try:
             await exact.set(
                 body,
@@ -757,7 +856,7 @@ async def _handle_chat_completions(request: Request, body: dict):
         )
     )
     return Response(
-        content=resp.content,
+        content=_json.dumps(response_body),
         status_code=resp.status_code,
         media_type="application/json",
         headers={"X-Cache": "MISS", "x-request-id": request_id},

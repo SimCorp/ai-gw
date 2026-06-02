@@ -302,6 +302,177 @@ class TestChatCompletions:
 
 
 # ---------------------------------------------------------------------------
+# Input guardrails
+# ---------------------------------------------------------------------------
+
+_REDACT_RULE = {
+    "id": "gr-1",
+    "name": "secret-redact",
+    "type": "pattern",
+    "action": "redact",
+    "applies_to": "input",
+    "enabled": True,
+    "severity": "medium",
+    "config": {"patterns": ["sk-secret"], "mask": "[REDACTED]"},
+}
+
+import json as _j  # noqa: E402  (used in guardrail helpers below)
+
+
+class TestInputGuardrails:
+    async def test_input_redact_masks_forwarded_body(self, app_and_client):
+        """A redact guardrail must mask matching text in messages before forwarding to LiteLLM."""
+        app, client = app_and_client
+
+        forwarded_bodies = []
+        litellm_url_fragment = "chat/completions"
+
+        async def _post_side_effect(url, **kwargs):
+            if "validate" in url:
+                return _auth_response_ok()
+            if litellm_url_fragment in url:
+                forwarded_bodies.append(kwargs.get("json", {}))
+                return _litellm_chat_response("ok")
+            # observability / guardrail-hits — ignore
+            return HttpxResponse(200, json={})
+
+        app.state.http.post = AsyncMock(side_effect=_post_side_effect)
+
+        guardrail_json = _j.dumps([_REDACT_RULE])
+
+        async def _redis_get_side_effect(key):
+            if key.startswith("guardrails:"):
+                return guardrail_json
+            return None
+
+        app.state.redis.get = AsyncMock(side_effect=_redis_get_side_effect)
+
+        secret_body = {
+            "model": "gpt-4",
+            "messages": [{"role": "user", "content": "my key is sk-secret please help"}],
+        }
+
+        with (
+            patch("app.exact.get", new=AsyncMock(return_value=None)),
+            patch("app.semantic.embed", new=AsyncMock(side_effect=Exception("skip"))),
+            patch("app.exact.set", new=AsyncMock()),
+        ):
+            resp = await client.post(
+                "/v1/chat/completions",
+                json=secret_body,
+                headers={"Authorization": "Bearer valid"},
+            )
+
+        assert resp.status_code == 200
+        assert len(forwarded_bodies) == 1
+        forwarded_content = forwarded_bodies[0]["messages"][0]["content"]
+        assert "sk-secret" not in forwarded_content
+        assert "[REDACTED]" in forwarded_content
+
+    async def test_input_block_list_content_is_blocked(self, app_and_client):
+        """A block guardrail must trigger when content is a list of parts (multimodal format)."""
+        app, client = app_and_client
+
+        _BLOCK_RULE = {
+            "id": "gr-block-list",
+            "name": "secret-block",
+            "type": "pattern",
+            "action": "block",
+            "applies_to": "input",
+            "enabled": True,
+            "severity": "high",
+            "config": {"patterns": ["sk-secret"]},
+        }
+
+        guardrail_json = _j.dumps([_BLOCK_RULE])
+
+        async def _redis_get_side_effect(key):
+            if key.startswith("guardrails:"):
+                return guardrail_json
+            return None
+
+        app.state.redis.get = AsyncMock(side_effect=_redis_get_side_effect)
+        app.state.http.post = AsyncMock(return_value=_auth_response_ok())
+
+        list_content_body = {
+            "model": "gpt-4",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [{"type": "text", "text": "sk-secret here"}],
+                }
+            ],
+        }
+
+        with (
+            patch("app.exact.get", new=AsyncMock(return_value=None)),
+            patch("app.semantic.embed", new=AsyncMock(side_effect=Exception("skip"))),
+        ):
+            resp = await client.post(
+                "/v1/chat/completions",
+                json=list_content_body,
+                headers={"Authorization": "Bearer valid"},
+            )
+
+        assert resp.status_code == 400
+        assert resp.json()["error"] == "blocked_by_guardrail"
+
+    async def test_input_redact_list_content_masks_text_parts(self, app_and_client):
+        """A redact guardrail must mask text parts inside list-format message content."""
+        app, client = app_and_client
+
+        forwarded_bodies = []
+
+        async def _post_side_effect(url, **kwargs):
+            if "validate" in url:
+                return _auth_response_ok()
+            if "chat/completions" in url:
+                forwarded_bodies.append(kwargs.get("json", {}))
+                return _litellm_chat_response("ok")
+            return HttpxResponse(200, json={})
+
+        app.state.http.post = AsyncMock(side_effect=_post_side_effect)
+
+        guardrail_json = _j.dumps([_REDACT_RULE])
+
+        async def _redis_get_side_effect(key):
+            if key.startswith("guardrails:"):
+                return guardrail_json
+            return None
+
+        app.state.redis.get = AsyncMock(side_effect=_redis_get_side_effect)
+
+        list_content_body = {
+            "model": "gpt-4",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [{"type": "text", "text": "my key is sk-secret please help"}],
+                }
+            ],
+        }
+
+        with (
+            patch("app.exact.get", new=AsyncMock(return_value=None)),
+            patch("app.semantic.embed", new=AsyncMock(side_effect=Exception("skip"))),
+            patch("app.exact.set", new=AsyncMock()),
+        ):
+            resp = await client.post(
+                "/v1/chat/completions",
+                json=list_content_body,
+                headers={"Authorization": "Bearer valid"},
+            )
+
+        assert resp.status_code == 200
+        assert len(forwarded_bodies) == 1
+        fwd_parts = forwarded_bodies[0]["messages"][0]["content"]
+        assert isinstance(fwd_parts, list)
+        assert fwd_parts[0]["type"] == "text"
+        assert "sk-secret" not in fwd_parts[0]["text"]
+        assert "[REDACTED]" in fwd_parts[0]["text"]
+
+
+# ---------------------------------------------------------------------------
 # Streaming cache hits (stream: true)
 # ---------------------------------------------------------------------------
 
@@ -414,3 +585,232 @@ class TestStreamingCacheHits:
         assert resp.status_code == 200
         assert "application/json" in resp.headers.get("content-type", "")
         assert resp.json()["id"] == "chatcmpl-cached"
+
+
+# ---------------------------------------------------------------------------
+# Streaming + output guardrails (Fix 2 — fail closed)
+# ---------------------------------------------------------------------------
+
+_OUTPUT_BLOCK_RULE_FOR_STREAM = {
+    "id": "gr-stream-out-1",
+    "name": "stream-output-block",
+    "type": "pattern",
+    "action": "block",
+    "applies_to": "output",
+    "enabled": True,
+    "severity": "high",
+    "config": {"patterns": ["forbidden-output"]},
+}
+
+_INPUT_ONLY_RULE = {
+    "id": "gr-input-only",
+    "name": "input-only-flag",
+    "type": "pattern",
+    "action": "flag",
+    "applies_to": "input",
+    "enabled": True,
+    "severity": "low",
+    "config": {"patterns": ["anything"]},
+}
+
+
+class TestStreamingOutputGuardrails:
+    async def test_stream_with_output_block_rule_returns_400(self, app_and_client):
+        """stream:true + an output block rule → 400 streaming_disabled_by_guardrail."""
+        app, client = app_and_client
+
+        guardrail_json = _j.dumps([_OUTPUT_BLOCK_RULE_FOR_STREAM])
+
+        async def _redis_get_side_effect(key):
+            if key.startswith("guardrails:"):
+                return guardrail_json
+            return None
+
+        app.state.redis.get = AsyncMock(side_effect=_redis_get_side_effect)
+        app.state.http.post = AsyncMock(return_value=_auth_response_ok())
+
+        resp = await client.post(
+            "/v1/chat/completions",
+            json=STREAM_BODY,
+            headers={"Authorization": "Bearer valid"},
+        )
+
+        assert resp.status_code == 400
+        assert resp.json()["error"] == "streaming_disabled_by_guardrail"
+
+    async def test_stream_with_input_only_rule_not_rejected(self, app_and_client):
+        """stream:true + only an input rule → NOT rejected (cache hit returns SSE)."""
+        app, client = app_and_client
+
+        guardrail_json = _j.dumps([_INPUT_ONLY_RULE])
+
+        async def _redis_get_side_effect(key):
+            if key.startswith("guardrails:"):
+                return guardrail_json
+            return None
+
+        app.state.redis.get = AsyncMock(side_effect=_redis_get_side_effect)
+        app.state.http.post = AsyncMock(return_value=_auth_response_ok())
+
+        with patch("app.exact.get", new=AsyncMock(return_value=_CACHED_RESPONSE)):
+            resp = await client.post(
+                "/v1/chat/completions",
+                json=STREAM_BODY,
+                headers={"Authorization": "Bearer valid"},
+            )
+
+        assert resp.status_code == 200
+        # SSE response — confirm it was not rejected as streaming_disabled_by_guardrail
+        assert "streaming_disabled_by_guardrail" not in resp.text
+
+
+# ---------------------------------------------------------------------------
+# Output guardrails
+# ---------------------------------------------------------------------------
+
+_OUTPUT_BLOCK_RULE = {
+    "id": "gr-out-1",
+    "name": "secret-output-block",
+    "type": "pattern",
+    "action": "block",
+    "applies_to": "output",
+    "enabled": True,
+    "severity": "high",
+    "config": {"patterns": ["forbidden-output"]},
+}
+
+_OUTPUT_REDACT_RULE = {
+    "id": "gr-out-2",
+    "name": "secret-output-redact",
+    "type": "pattern",
+    "action": "redact",
+    "applies_to": "output",
+    "enabled": True,
+    "severity": "medium",
+    "config": {"patterns": ["sk-output-secret"], "mask": "[REDACTED]"},
+}
+
+
+class TestOutputGuardrails:
+    async def _make_client_with_guardrail(self, app_and_client, rule, litellm_content):
+        """Helper: set up redis with one guardrail rule and a litellm response."""
+        app, client = app_and_client
+
+        guardrail_json = _j.dumps([rule])
+
+        async def _redis_get_side_effect(key):
+            if key.startswith("guardrails:"):
+                return guardrail_json
+            return None
+
+        app.state.redis.get = AsyncMock(side_effect=_redis_get_side_effect)
+
+        async def _post_side_effect(url, **kwargs):
+            if "validate" in url:
+                return _auth_response_ok()
+            if "chat/completions" in url:
+                return _litellm_chat_response(litellm_content)
+            return HttpxResponse(200, json={})
+
+        app.state.http.post = AsyncMock(side_effect=_post_side_effect)
+        return app, client
+
+    async def test_output_block_withholds_and_skips_cache(self, app_and_client):
+        """Output block rule must replace content with withheld notice and skip cache writes."""
+        app, client = await self._make_client_with_guardrail(
+            app_and_client, _OUTPUT_BLOCK_RULE, "forbidden-output here"
+        )
+
+        mock_exact_set = AsyncMock()
+        mock_semantic_set = AsyncMock()
+        with (
+            patch("app.exact.get", new=AsyncMock(return_value=None)),
+            patch("app.semantic.embed", new=AsyncMock(side_effect=Exception("skip"))),
+            patch("app.exact.set", new=mock_exact_set),
+            patch("app.semantic.set", new=mock_semantic_set),
+        ):
+            resp = await client.post(
+                "/v1/chat/completions",
+                json=CHAT_BODY,
+                headers={"Authorization": "Bearer valid"},
+            )
+
+        assert resp.status_code == 200
+        body = resp.json()
+        content = body["choices"][0]["message"]["content"]
+        assert "withheld" in content
+        assert "secret-output-block" in content
+        mock_exact_set.assert_not_awaited()
+        mock_semantic_set.assert_not_awaited()
+
+    async def test_output_redact_masks_completion(self, app_and_client):
+        """Output redact rule must mask matching text in the completion content."""
+        app, client = await self._make_client_with_guardrail(
+            app_and_client, _OUTPUT_REDACT_RULE, "here is your sk-output-secret key"
+        )
+
+        with (
+            patch("app.exact.get", new=AsyncMock(return_value=None)),
+            patch("app.semantic.embed", new=AsyncMock(side_effect=Exception("skip"))),
+            patch("app.exact.set", new=AsyncMock()),
+        ):
+            resp = await client.post(
+                "/v1/chat/completions",
+                json=CHAT_BODY,
+                headers={"Authorization": "Bearer valid"},
+            )
+
+        assert resp.status_code == 200
+        content = resp.json()["choices"][0]["message"]["content"]
+        assert "sk-output-secret" not in content
+        assert "[REDACTED]" in content
+
+    async def test_output_tool_call_null_content_ok(self, app_and_client):
+        """A completion with null content (tool call) must not crash; return 200."""
+        app, client = app_and_client
+
+        guardrail_json = _j.dumps([_OUTPUT_BLOCK_RULE])
+
+        async def _redis_get_side_effect(key):
+            if key.startswith("guardrails:"):
+                return guardrail_json
+            return None
+
+        app.state.redis.get = AsyncMock(side_effect=_redis_get_side_effect)
+
+        async def _post_side_effect(url, **kwargs):
+            if "validate" in url:
+                return _auth_response_ok()
+            if "chat/completions" in url:
+                return HttpxResponse(
+                    200,
+                    json={
+                        "id": "chatcmpl-tool",
+                        "choices": [
+                            {
+                                "message": {
+                                    "role": "assistant",
+                                    "content": None,
+                                    "tool_calls": [{"id": "tc1", "type": "function"}],
+                                }
+                            }
+                        ],
+                        "usage": {"prompt_tokens": 5, "completion_tokens": 3},
+                    },
+                )
+            return HttpxResponse(200, json={})
+
+        app.state.http.post = AsyncMock(side_effect=_post_side_effect)
+
+        with (
+            patch("app.exact.get", new=AsyncMock(return_value=None)),
+            patch("app.semantic.embed", new=AsyncMock(side_effect=Exception("skip"))),
+            patch("app.exact.set", new=AsyncMock()),
+        ):
+            resp = await client.post(
+                "/v1/chat/completions",
+                json=CHAT_BODY,
+                headers={"Authorization": "Bearer valid"},
+            )
+
+        assert resp.status_code == 200
