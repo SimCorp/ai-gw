@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 import httpx
 from fastapi import APIRouter, Depends, Query, Request
-from sqlalchemy import text
+from sqlalchemy import String, bindparam, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import require_admin_auth
@@ -265,7 +265,7 @@ async def cache_snapshots(
         FROM cache_snapshots
         WHERE captured_at >= NOW() - (:interval)::INTERVAL
         ORDER BY captured_at ASC
-    """),
+    """).bindparams(bindparam("interval", type_=String)),
                 {"interval": interval},
             )
         )
