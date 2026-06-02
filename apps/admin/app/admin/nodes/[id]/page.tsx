@@ -261,6 +261,29 @@ export default function NodeDetailPage({ params }: { params: Promise<{ id: strin
     },
   });
 
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editLocation, setEditLocation] = useState('');
+
+  const editMutation = useMutation({
+    mutationFn: () =>
+      apiFetch<OrgNode>(`/nodes/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: editName.trim(),
+          description: editDescription.trim() || null,
+          location: editLocation.trim() || null,
+        }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['node', id] });
+      queryClient.invalidateQueries({ queryKey: ['node-tree'] });
+      setEditing(false);
+    },
+  });
+
   if (isLoading) return <LoadingState rows={8} />;
   if (error) return <ErrorState error={error as Error} />;
   if (!node) return null;
@@ -321,6 +344,12 @@ export default function NodeDetailPage({ params }: { params: Promise<{ id: strin
             + Add child
           </button>
           <button
+            onClick={() => {
+              setEditName(node.name);
+              setEditDescription(node.description ?? '');
+              setEditLocation(node.location ?? '');
+              setEditing(true);
+            }}
             style={{
               padding: '7px 14px', fontSize: 12,
               background: 'var(--surface-2)', border: '1px solid var(--rule)',
@@ -343,6 +372,40 @@ export default function NodeDetailPage({ params }: { params: Promise<{ id: strin
         </div>
       </div>
 
+      {editing && (
+        <div style={{ padding: '16px 0', borderTop: '1px solid var(--rule)', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg-1)' }}>Edit node</div>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: '2 1 200px' }}>
+              <label style={{ fontSize: 11.5, color: 'var(--fg-2)' }}>Name</label>
+              <input value={editName} onChange={e => setEditName(e.target.value)}
+                style={{ padding: '7px 10px', fontSize: 13, background: 'var(--surface)', border: '1px solid var(--rule)', borderRadius: 5, color: 'var(--fg-1)' }} />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: '1 1 150px' }}>
+              <label style={{ fontSize: 11.5, color: 'var(--fg-2)' }}>Location</label>
+              <input value={editLocation} onChange={e => setEditLocation(e.target.value)}
+                placeholder="e.g. Copenhagen"
+                style={{ padding: '7px 10px', fontSize: 13, background: 'var(--surface)', border: '1px solid var(--rule)', borderRadius: 5, color: 'var(--fg-1)' }} />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: '3 1 280px' }}>
+              <label style={{ fontSize: 11.5, color: 'var(--fg-2)' }}>Description</label>
+              <input value={editDescription} onChange={e => setEditDescription(e.target.value)}
+                placeholder="Optional description"
+                style={{ padding: '7px 10px', fontSize: 13, background: 'var(--surface)', border: '1px solid var(--rule)', borderRadius: 5, color: 'var(--fg-1)' }} />
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => editMutation.mutate()} disabled={!editName.trim() || editMutation.isPending}
+              style={{ padding: '7px 16px', fontSize: 12, background: 'var(--sc-blue)', color: '#fff', border: 'none', borderRadius: 5, cursor: 'pointer' }}>
+              {editMutation.isPending ? 'Saving…' : 'Save'}
+            </button>
+            <button onClick={() => setEditing(false)}
+              style={{ padding: '7px 14px', fontSize: 12, background: 'transparent', color: 'var(--fg-3)', border: '1px solid var(--rule)', borderRadius: 5, cursor: 'pointer' }}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
       {/* Divider */}
       <div style={{ borderBottom: '1px solid var(--rule)', marginBottom: 0 }} />
 
