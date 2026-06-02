@@ -205,6 +205,49 @@ jobs:
           COMPOSE_ANSI: never
 
   # ────────────────────────────────────────────────────────────────────────────
+  # Security — dependency CVE scan (pip-audit) + secret scan (gitleaks)
+  # ────────────────────────────────────────────────────────────────────────────
+  security:
+    name: Security scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # gitleaks scans history
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pip-audit
+        run: pip install --quiet pip-audit
+
+      - name: pip-audit (per service, isolated venv)
+        run: |
+          set -euo pipefail
+          # Advisories with no available fix are allowlisted here with a
+          # justification. Populate from the FIRST CI run's findings — do not
+          # invent IDs. Format: one --ignore-vuln per advisory.
+          IGNORE=(
+            # e.g. --ignore-vuln GHSA-xxxx-xxxx-xxxx  # no fixed version yet (dep X)
+          )
+          fail=0
+          for svc in auth cache observability admin librarian memory scanner; do
+            echo "::group::pip-audit $svc"
+            python3 -m venv "/tmp/venv-$svc"
+            "/tmp/venv-$svc/bin/pip" install --quiet "services/$svc"
+            "/tmp/venv-$svc/bin/pip" install --quiet pip-audit
+            "/tmp/venv-$svc/bin/pip-audit" "${IGNORE[@]}" || fail=1
+            echo "::endgroup::"
+          done
+          exit $fail
+
+      - name: gitleaks secret scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ────────────────────────────────────────────────────────────────────────────
   # Build & push all images to GHCR
   # Only runs on push (not PRs). Uses GitHub Actions cache for layer reuse.
   # ────────────────────────────────────────────────────────────────────────────
