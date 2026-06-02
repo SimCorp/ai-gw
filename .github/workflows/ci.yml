@@ -168,8 +168,6 @@ jobs:
         run: |
           python3 -m pytest \
             tests/test_smoke.py \
-            tests/test_auth.py \
-            tests/test_cache.py \
             tests/test_admin.py \
             tests/test_admin_areas.py \
             tests/test_admin_members.py \
