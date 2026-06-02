@@ -105,8 +105,10 @@ async def test_score_creativity_updates_scores_values(seeded_db, db_session, moc
     from sqlalchemy import text
 
     embed_map = {"prompt_a": _VEC_A, "prompt_b": _VEC_B}
+    embed_calls: list[list[str]] = []
 
     async def fake_embed_batch(prompts):
+        embed_calls.append(list(prompts))
         return [embed_map[p] for p in prompts]
 
     async with _app_client(db_session, mock_redis) as c:
@@ -118,6 +120,10 @@ async def test_score_creativity_updates_scores_values(seeded_db, db_session, moc
 
     assert resp.status_code == 200
     assert resp.json()["scored"] == 2
+
+    # Spec requires exactly ONE batch embedding call with all prompts together
+    assert len(embed_calls) == 1, "expected a single batch embed call"
+    assert sorted(embed_calls[0]) == sorted(["prompt_a", "prompt_b"])
 
     rows = (
         await db_session.execute(
