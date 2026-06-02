@@ -40,17 +40,28 @@ async def list_skills(
     session: AsyncSession = Depends(get_session),
     _user: dict = Depends(require_authenticated_user),
 ) -> list[dict]:
-    where = ["1=1"]
+    is_admin = _user.get("role") in ("admin", "superadmin")
+    where: list[str] = []
     params: dict[str, Any] = {}
+
     if visibility:
-        where.append("visibility = :visibility")
-        params["visibility"] = visibility
+        # Drafts are only visible to admins; non-admins requesting ?visibility=draft get nothing
+        if visibility == "draft" and not is_admin:
+            where.append("visibility = 'draft' AND 1=0")  # returns empty
+        else:
+            where.append("visibility = :visibility")
+            params["visibility"] = visibility
+    else:
+        # Exclude drafts by default for all callers
+        where.append("visibility IN ('team', 'org')")
+
     if team_id:
         where.append("(team_id = :team_id OR visibility = 'org')")
         params["team_id"] = team_id
     if tag:
         where.append(":tag = ANY(tags)")
         params["tag"] = tag
+
     q = f"SELECT * FROM skills WHERE {' AND '.join(where)} ORDER BY uses_total DESC, name"
     rows = (await session.execute(text(q), params)).mappings().all()
     return [_row(r) for r in rows]
@@ -112,6 +123,9 @@ async def get_skill(
     )
     if not row:
         raise HTTPException(404, "skill not found")
+    # Draft skills are only accessible to admins
+    if row["visibility"] == "draft" and _user.get("role") not in ("admin", "superadmin"):
+        raise HTTPException(404, "skill not found")  # 404 avoids confirming UUID existence
     return _row(row)
 
 
