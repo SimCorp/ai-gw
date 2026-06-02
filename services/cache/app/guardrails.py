@@ -16,6 +16,9 @@ class GuardrailOutcome:
     hits: list[dict] = field(default_factory=list)  # one per matched rule
 
 
+_MAX_SCAN_CHARS = 100_000
+
+
 @functools.lru_cache(maxsize=512)
 def _compile(pattern: str) -> re.Pattern | None:
     """Compile a regex pattern; return None if it is invalid (never raises)."""
@@ -39,11 +42,21 @@ def evaluate_guardrails(rules: list[dict], text: str, direction: str) -> Guardra
       - anything else ("flag", unknown): record hit only, text unchanged.
 
     A bad/uncompilable pattern is silently skipped; the function never raises.
+
+    Scan length cap: only the first _MAX_SCAN_CHARS of *text* are scanned/redacted.
+    The untouched remainder is re-appended to the returned .text so the full
+    text is always returned (just unscanned past the cap).
     """
     _INPUT_APPLIES = {"input", "both"}
     _OUTPUT_APPLIES = {"output", "both"}
 
     allowed = _INPUT_APPLIES if direction == "input" else _OUTPUT_APPLIES
+
+    # Cap scan to first _MAX_SCAN_CHARS; remainder is appended untouched at return
+    remainder = ""
+    if len(text) > _MAX_SCAN_CHARS:
+        remainder = text[_MAX_SCAN_CHARS:]
+        text = text[:_MAX_SCAN_CHARS]
 
     hits: list[dict] = []
     blocked_rule: str | None = None
@@ -85,4 +98,4 @@ def evaluate_guardrails(rules: list[dict], text: str, direction: str) -> Guardra
                     text = rx.sub(mask, text)
             # continue to next rule
 
-    return GuardrailOutcome(blocked_rule=blocked_rule, text=text, hits=hits)
+    return GuardrailOutcome(blocked_rule=blocked_rule, text=text + remainder, hits=hits)

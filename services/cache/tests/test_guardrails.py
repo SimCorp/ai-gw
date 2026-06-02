@@ -312,3 +312,55 @@ class TestHitShape:
         rules = [_rule(applies_to="output", action="flag")]
         out = evaluate_guardrails(rules, "secret", "output")
         assert out.hits[0]["input_or_output"] == "output"
+
+
+# ---------------------------------------------------------------------------
+# scan-length cap (Fix 3 — ReDoS / unbounded CPU)
+# ---------------------------------------------------------------------------
+
+
+class TestScanLengthCap:
+    def test_very_long_text_handled_without_error(self):
+        """Text exceeding the scan cap must be handled without raising."""
+        from app.guardrails import _MAX_SCAN_CHARS
+
+        long_text = "a" * (_MAX_SCAN_CHARS + 10_000)
+        rules = [_rule(action="flag", patterns=[r"\bsecret\b"])]
+        out = evaluate_guardrails(rules, long_text, "input")
+        # No match in 'a' * N — no hits, no error, text returned intact
+        assert out.hits == []
+        assert len(out.text) == len(long_text)
+
+    def test_pattern_beyond_cap_not_matched(self):
+        """A pattern that only appears beyond the scan cap must not trigger a match."""
+        from app.guardrails import _MAX_SCAN_CHARS
+
+        # Place the secret word well past the cap
+        text = "x" * (_MAX_SCAN_CHARS + 100) + "secret"
+        rules = [_rule(action="flag", patterns=[r"\bsecret\b"])]
+        out = evaluate_guardrails(rules, text, "input")
+        assert out.hits == [], "pattern past the scan cap should not be matched"
+
+    def test_pattern_within_cap_still_matched(self):
+        """A pattern within the prefix (before the cap) must still be detected."""
+        from app.guardrails import _MAX_SCAN_CHARS
+
+        # "secret " at start (word boundary respected), rest fills cap
+        text = "secret " + "x" * _MAX_SCAN_CHARS
+        rules = [_rule(action="block", patterns=[r"\bsecret\b"])]
+        out = evaluate_guardrails(rules, text, "input")
+        assert out.blocked_rule is not None
+
+    def test_redact_beyond_cap_preserves_full_text_length(self):
+        """After redaction, the full text (prefix redacted + remainder) is returned."""
+        from app.guardrails import _MAX_SCAN_CHARS
+
+        prefix = "secret " * 10  # well within cap; will be redacted
+        remainder = "x" * (_MAX_SCAN_CHARS + 1)
+        text = prefix + remainder
+        rules = [_rule(action="redact", patterns=[r"\bsecret\b"])]
+        out = evaluate_guardrails(rules, text, "input")
+        # Redacted prefix should be shorter than original prefix (secrets replaced),
+        # but remainder is appended verbatim so total text is returned.
+        assert remainder in out.text
+        assert "secret" not in out.text[:_MAX_SCAN_CHARS]
