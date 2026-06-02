@@ -14,6 +14,7 @@ from app import exact, semantic
 from app.autoroute import record_request as _autoroute_record
 from app.autoroute import select_best_model
 from app.config import settings
+from app.guardrails import evaluate_guardrails
 from app.policy import CachePolicy, get_policy
 
 router = APIRouter()
@@ -482,19 +483,44 @@ async def _handle_chat_completions(request: Request, body: dict):
         )
 
     # Guardrails — run lightweight enforcement on input before forwarding
-    try:
-        await _check_guardrails(
-            redis, team_id, key_id, request_id, _prompt_text(body), body.get("model"), http
-        )
-    except _BlockedByGuardrail as exc:
-        return JSONResponse(
-            {
-                "error": "blocked_by_guardrail",
-                "message": f"Request blocked by guardrail: {exc.rule_name}",
-            },
-            status_code=400,
-            headers={"x-request-id": request_id},
-        )
+    guardrail_rules = await _load_guardrails(redis, team_id)
+    if guardrail_rules:
+        try:
+            outcome = evaluate_guardrails(guardrail_rules, _prompt_text(body), "input")
+            for hit in outcome.hits:
+                asyncio.create_task(
+                    _emit_guardrail_hit(
+                        http,
+                        {
+                            **hit,
+                            "team_id": team_id,
+                            "api_key_id": key_id,
+                            "request_id": request_id,
+                            "model": body.get("model"),
+                        },
+                    )
+                )
+            if outcome.blocked_rule:
+                return JSONResponse(
+                    {
+                        "error": "blocked_by_guardrail",
+                        "message": f"Request blocked by guardrail: {outcome.blocked_rule}",
+                    },
+                    status_code=400,
+                    headers={"x-request-id": request_id},
+                )
+            # per-message redaction (only if any input redact rule exists)
+            redact_rules = [
+                r
+                for r in guardrail_rules
+                if r.get("action") == "redact" and r.get("applies_to", "input") in ("input", "both")
+            ]
+            if redact_rules:
+                for m in body.get("messages", []):
+                    if isinstance(m.get("content"), str):
+                        m["content"] = evaluate_guardrails(redact_rules, m["content"], "input").text
+        except Exception:
+            pass  # fail-open: never break the request on guardrail errors (block is handled above)
 
     # Hard budget gate — fail open (allow) if Redis is unavailable
     if not await _check_budget(redis, team_id, key_id, policy.budget_hard_cap):

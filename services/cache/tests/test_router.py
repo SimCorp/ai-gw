@@ -302,6 +302,75 @@ class TestChatCompletions:
 
 
 # ---------------------------------------------------------------------------
+# Input guardrails
+# ---------------------------------------------------------------------------
+
+_REDACT_RULE = {
+    "id": "gr-1",
+    "name": "secret-redact",
+    "type": "pattern",
+    "action": "redact",
+    "applies_to": "input",
+    "enabled": True,
+    "severity": "medium",
+    "config": {"patterns": ["sk-secret"], "mask": "[REDACTED]"},
+}
+
+import json as _j  # noqa: E402  (used in guardrail helpers below)
+
+
+class TestInputGuardrails:
+    async def test_input_redact_masks_forwarded_body(self, app_and_client):
+        """A redact guardrail must mask matching text in messages before forwarding to LiteLLM."""
+        app, client = app_and_client
+
+        forwarded_bodies = []
+        litellm_url_fragment = "chat/completions"
+
+        async def _post_side_effect(url, **kwargs):
+            if "validate" in url:
+                return _auth_response_ok()
+            if litellm_url_fragment in url:
+                forwarded_bodies.append(kwargs.get("json", {}))
+                return _litellm_chat_response("ok")
+            # observability / guardrail-hits — ignore
+            return HttpxResponse(200, json={})
+
+        app.state.http.post = AsyncMock(side_effect=_post_side_effect)
+
+        guardrail_json = _j.dumps([_REDACT_RULE])
+
+        async def _redis_get_side_effect(key):
+            if key.startswith("guardrails:"):
+                return guardrail_json
+            return None
+
+        app.state.redis.get = AsyncMock(side_effect=_redis_get_side_effect)
+
+        secret_body = {
+            "model": "gpt-4",
+            "messages": [{"role": "user", "content": "my key is sk-secret please help"}],
+        }
+
+        with (
+            patch("app.exact.get", new=AsyncMock(return_value=None)),
+            patch("app.semantic.embed", new=AsyncMock(side_effect=Exception("skip"))),
+            patch("app.exact.set", new=AsyncMock()),
+        ):
+            resp = await client.post(
+                "/v1/chat/completions",
+                json=secret_body,
+                headers={"Authorization": "Bearer valid"},
+            )
+
+        assert resp.status_code == 200
+        assert len(forwarded_bodies) == 1
+        forwarded_content = forwarded_bodies[0]["messages"][0]["content"]
+        assert "sk-secret" not in forwarded_content
+        assert "[REDACTED]" in forwarded_content
+
+
+# ---------------------------------------------------------------------------
 # Streaming cache hits (stream: true)
 # ---------------------------------------------------------------------------
 
