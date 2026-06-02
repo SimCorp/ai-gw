@@ -7,6 +7,7 @@ Embeddings are passed as Python list[float] and cast to the pgvector ``vector``
 type using a string literal cast (``$1::vector``) to avoid requiring the
 ``pgvector`` Python package.
 """
+
 from __future__ import annotations
 
 import json
@@ -139,19 +140,25 @@ async def list_drawers(
         rows = await pool.fetch(
             "SELECT * FROM memory_drawers WHERE developer_id = $1::uuid AND wing = $2 AND room = $3 "
             "ORDER BY created_at DESC LIMIT $4",
-            developer_id, wing, room, limit,
+            developer_id,
+            wing,
+            room,
+            limit,
         )
     elif wing:
         rows = await pool.fetch(
             "SELECT * FROM memory_drawers WHERE developer_id = $1::uuid AND wing = $2 "
             "ORDER BY created_at DESC LIMIT $3",
-            developer_id, wing, limit,
+            developer_id,
+            wing,
+            limit,
         )
     else:
         rows = await pool.fetch(
             "SELECT * FROM memory_drawers WHERE developer_id = $1::uuid "
             "ORDER BY created_at DESC LIMIT $2",
-            developer_id, limit,
+            developer_id,
+            limit,
         )
     return _rows(rows)
 
@@ -218,7 +225,10 @@ async def kg_add_node(
         VALUES ($1::uuid, $2, $3, $4::jsonb)
         RETURNING *
         """,
-        developer_id, name, entity_type, json.dumps(attributes),
+        developer_id,
+        name,
+        entity_type,
+        json.dumps(attributes),
     )
     return _row(row)
 
@@ -237,7 +247,11 @@ async def kg_add_edge(
         VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5::jsonb)
         RETURNING *
         """,
-        developer_id, from_id, to_id, relation, json.dumps(attributes),
+        developer_id,
+        from_id,
+        to_id,
+        relation,
+        json.dumps(attributes),
     )
     return _row(row)
 
@@ -253,25 +267,33 @@ async def kg_query(
         rows = await pool.fetch(
             "SELECT * FROM memory_kg_nodes WHERE developer_id = $1::uuid AND name ILIKE $2 "
             "AND entity_type = $3 AND valid_to IS NULL ORDER BY created_at DESC LIMIT $4",
-            developer_id, f"%{name}%", entity_type, limit,
+            developer_id,
+            f"%{name}%",
+            entity_type,
+            limit,
         )
     elif name:
         rows = await pool.fetch(
             "SELECT * FROM memory_kg_nodes WHERE developer_id = $1::uuid AND name ILIKE $2 "
             "AND valid_to IS NULL ORDER BY created_at DESC LIMIT $3",
-            developer_id, f"%{name}%", limit,
+            developer_id,
+            f"%{name}%",
+            limit,
         )
     elif entity_type:
         rows = await pool.fetch(
             "SELECT * FROM memory_kg_nodes WHERE developer_id = $1::uuid AND entity_type = $2 "
             "AND valid_to IS NULL ORDER BY created_at DESC LIMIT $3",
-            developer_id, entity_type, limit,
+            developer_id,
+            entity_type,
+            limit,
         )
     else:
         rows = await pool.fetch(
             "SELECT * FROM memory_kg_nodes WHERE developer_id = $1::uuid "
             "AND valid_to IS NULL ORDER BY created_at DESC LIMIT $2",
-            developer_id, limit,
+            developer_id,
+            limit,
         )
     return _rows(rows)
 
@@ -284,7 +306,8 @@ async def kg_invalidate(
     result = await pool.execute(
         "UPDATE memory_kg_nodes SET valid_to = NOW() "
         "WHERE id = $1::uuid AND developer_id = $2::uuid AND valid_to IS NULL",
-        node_id, developer_id,
+        node_id,
+        developer_id,
     )
     return result.split()[-1] != "0"
 
@@ -324,7 +347,9 @@ async def kg_timeline(
     rows = await pool.fetch(
         "SELECT * FROM memory_kg_nodes WHERE developer_id = $1::uuid "
         "AND created_at >= $2 AND created_at <= $3 ORDER BY created_at ASC",
-        developer_id, since_ts, until_ts,
+        developer_id,
+        since_ts,
+        until_ts,
     )
     return _rows(rows)
 
@@ -342,13 +367,15 @@ async def diary_read(
         rows = await pool.fetch(
             "SELECT * FROM memory_diary WHERE developer_id = $1::uuid AND date = $2 "
             "ORDER BY date DESC LIMIT $3",
-            developer_id, date_filter, limit,
+            developer_id,
+            date_filter,
+            limit,
         )
     else:
         rows = await pool.fetch(
-            "SELECT * FROM memory_diary WHERE developer_id = $1::uuid "
-            "ORDER BY date DESC LIMIT $2",
-            developer_id, limit,
+            "SELECT * FROM memory_diary WHERE developer_id = $1::uuid ORDER BY date DESC LIMIT $2",
+            developer_id,
+            limit,
         )
     return _rows(rows)
 
@@ -366,7 +393,9 @@ async def diary_write(
         ON CONFLICT (developer_id, date) DO UPDATE SET entry = EXCLUDED.entry, updated_at = NOW()
         RETURNING *
         """,
-        developer_id, entry_date, entry,
+        developer_id,
+        entry_date,
+        entry,
     )
     return _row(row)
 
@@ -388,7 +417,11 @@ async def create_tunnel(
         VALUES ($1::uuid, $2, $3, $4, $5)
         RETURNING *
         """,
-        developer_id, from_wing, to_wing, label, bidirectional,
+        developer_id,
+        from_wing,
+        to_wing,
+        label,
+        bidirectional,
     )
     return _row(row)
 
@@ -400,7 +433,8 @@ async def delete_tunnel(
 ) -> bool:
     result = await pool.execute(
         "DELETE FROM memory_tunnels WHERE id = $1::uuid AND developer_id = $2::uuid",
-        tunnel_id, developer_id,
+        tunnel_id,
+        developer_id,
     )
     return result.split()[-1] != "0"
 
@@ -424,7 +458,8 @@ async def find_tunnels(
     rows = await pool.fetch(
         "SELECT * FROM memory_tunnels WHERE developer_id = $1::uuid "
         "AND (from_wing = $2 OR (bidirectional = TRUE AND to_wing = $2))",
-        developer_id, from_wing,
+        developer_id,
+        from_wing,
     )
     return _rows(rows)
 

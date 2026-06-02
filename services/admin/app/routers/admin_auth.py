@@ -5,6 +5,7 @@ Delegates to the users table. Kept for backwards-compatibility with
 the admin portal frontend which calls /admin-auth/login etc.
 Session key: session:{token}  (unified format)
 """
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request

@@ -1,4 +1,5 @@
 """Access requests table for model access and budget approval workflows"""
+
 from typing import Sequence, Union
 
 import sqlalchemy as sa
@@ -14,8 +15,12 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade():
     op.create_table(
         "access_requests",
-        sa.Column("id", PGUUID(as_uuid=False), primary_key=True,
-                  server_default=sa.text("gen_random_uuid()")),
+        sa.Column(
+            "id",
+            PGUUID(as_uuid=False),
+            primary_key=True,
+            server_default=sa.text("gen_random_uuid()"),
+        ),
         sa.Column("user_id", PGUUID(as_uuid=False), nullable=False),
         sa.Column("request_type", sa.Text(), nullable=False),
         sa.Column("resource_id", sa.Text(), nullable=False),

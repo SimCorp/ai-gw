@@ -34,9 +34,8 @@ async def entra_client(mock_session):
     app.state.redis = AsyncMock()
 
     from httpx import ASGITransport, AsyncClient
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as c:
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         yield c
 
     app.dependency_overrides.clear()
@@ -78,12 +77,14 @@ def _override_session(app, sess):
 
     async def override():
         yield sess
+
     app.dependency_overrides[get_session] = override
 
 
 # ===========================================================================
 # GET — list mappings
 # ===========================================================================
+
 
 async def test_list_mappings_maps_root_to_global(entra_client, mock_session):
     # The list query already applies the root→'global' CASE in SQL; we just
@@ -127,6 +128,7 @@ async def test_list_mappings_maps_root_to_global(entra_client, mock_session):
 # POST — create mapping
 # ===========================================================================
 
+
 async def test_create_global_mapping_resolves_root_node(entra_client):
     from app.main import app
 
@@ -143,16 +145,19 @@ async def test_create_global_mapping_resolves_root_node(entra_client):
     # create_mapping (global): _root_node_id SELECT, then INSERT...RETURNING
     sess = _sequence(
         _result_mappings_first({"id": root_id}),  # _root_node_id
-        _result_mappings_one(inserted),           # INSERT RETURNING
+        _result_mappings_one(inserted),  # INSERT RETURNING
     )
     _override_session(app, sess)
 
-    resp = await entra_client.post("/settings/entra", json={
-        "entra_group_id": "grp-glob",
-        "entra_group_name": "Admins",
-        "role": "platform_admin",
-        "scope_type": "global",
-    })
+    resp = await entra_client.post(
+        "/settings/entra",
+        json={
+            "entra_group_id": "grp-glob",
+            "entra_group_name": "Admins",
+            "role": "platform_admin",
+            "scope_type": "global",
+        },
+    )
     assert resp.status_code == 201
     body = resp.json()
     assert body["entra_group_id"] == "grp-glob"
@@ -176,40 +181,50 @@ async def test_create_team_scoped_mapping(entra_client):
     sess = _sequence(_result_mappings_one(inserted))
     _override_session(app, sess)
 
-    resp = await entra_client.post("/settings/entra", json={
-        "entra_group_id": "grp-team",
-        "entra_group_name": "Team",
-        "role": "developer",
-        "scope_type": "team",
-        "scope_id": team_node,
-    })
+    resp = await entra_client.post(
+        "/settings/entra",
+        json={
+            "entra_group_id": "grp-team",
+            "entra_group_name": "Team",
+            "role": "developer",
+            "scope_type": "team",
+            "scope_id": team_node,
+        },
+    )
     assert resp.status_code == 201
     assert resp.json()["scope_id"] == team_node
 
 
 async def test_create_invalid_role_returns_422(entra_client, mock_session):
     # Validation runs before any DB access.
-    resp = await entra_client.post("/settings/entra", json={
-        "entra_group_id": "grp-x",
-        "role": "supreme_leader",
-        "scope_type": "global",
-    })
+    resp = await entra_client.post(
+        "/settings/entra",
+        json={
+            "entra_group_id": "grp-x",
+            "role": "supreme_leader",
+            "scope_type": "global",
+        },
+    )
     assert resp.status_code == 422
 
 
 async def test_create_area_scope_without_scope_id_returns_422(entra_client, mock_session):
-    resp = await entra_client.post("/settings/entra", json={
-        "entra_group_id": "grp-y",
-        "role": "area_owner",
-        "scope_type": "area",
-        # scope_id omitted → must 422
-    })
+    resp = await entra_client.post(
+        "/settings/entra",
+        json={
+            "entra_group_id": "grp-y",
+            "role": "area_owner",
+            "scope_type": "area",
+            # scope_id omitted → must 422
+        },
+    )
     assert resp.status_code == 422
 
 
 # ===========================================================================
 # DELETE
 # ===========================================================================
+
 
 async def test_delete_mapping_returns_204(entra_client):
     from app.main import app

@@ -7,6 +7,7 @@ Two actions:
 
 This means session analytics eventually converge to complete data even without real-time GitHub events.
 """
+
 import asyncio
 import logging
 

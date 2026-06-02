@@ -28,6 +28,7 @@ FAKE_USER = {
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 async def node_client(mock_session):
     from app.auth import require_admin_auth
@@ -44,9 +45,8 @@ async def node_client(mock_session):
     app.state.redis = AsyncMock()
 
     from httpx import ASGITransport, AsyncClient
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as c:
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         yield c
 
     app.dependency_overrides.clear()
@@ -56,10 +56,20 @@ async def node_client(mock_session):
 # Row helpers — complete column set that _node_to_dict reads
 # ---------------------------------------------------------------------------
 
-def _node_row(node_id=None, name="Platform", slug="platform", type="team",
-              parent_id=None, path=None, color=None, description=None,
-              location=None, monthly_budget_usd=None,
-              budget_alert_threshold=None):
+
+def _node_row(
+    node_id=None,
+    name="Platform",
+    slug="platform",
+    type="team",
+    parent_id=None,
+    path=None,
+    color=None,
+    description=None,
+    location=None,
+    monthly_budget_usd=None,
+    budget_alert_threshold=None,
+):
     nid = node_id or str(uuid.uuid4())
     return {
         "id": nid,
@@ -114,6 +124,7 @@ def _sequence(*results):
 # GET /nodes  (list)
 # ===========================================================================
 
+
 async def test_list_nodes_returns_200(node_client, mock_session):
     rows = [_node_row(name="Area", type="area"), _node_row(name="Team", type="team")]
     mock_session.execute.return_value = _result_mappings_all(rows)
@@ -137,14 +148,19 @@ async def test_list_nodes_empty(node_client, mock_session):
 # GET /nodes/tree
 # ===========================================================================
 
+
 async def test_get_tree_nests_children(node_client, mock_session):
     root_id = str(uuid.uuid4())
     child_id = str(uuid.uuid4())
     rows = [
-        _node_row(node_id=root_id, name="Root", type="area",
-                  parent_id=None, path=f"/{root_id}"),
-        _node_row(node_id=child_id, name="Child", type="team",
-                  parent_id=root_id, path=f"/{root_id}/{child_id}"),
+        _node_row(node_id=root_id, name="Root", type="area", parent_id=None, path=f"/{root_id}"),
+        _node_row(
+            node_id=child_id,
+            name="Child",
+            type="team",
+            parent_id=root_id,
+            path=f"/{root_id}/{child_id}",
+        ),
     ]
     mock_session.execute.return_value = _result_mappings_all(rows)
 
@@ -161,6 +177,7 @@ async def test_get_tree_nests_children(node_client, mock_session):
 # POST /nodes  (create)
 # ===========================================================================
 
+
 async def test_create_root_node_returns_201(node_client):
     from app.db import get_session
     from app.main import app
@@ -168,12 +185,13 @@ async def test_create_root_node_returns_201(node_client):
     new_row = _node_row(name="New Area", type="area", parent_id=None)
     # create_node (root branch): 1 INSERT, then _get_node_row SELECT.
     sess = _sequence(
-        MagicMock(),                       # INSERT
-        _result_mappings_first(new_row),   # _get_node_row
+        MagicMock(),  # INSERT
+        _result_mappings_first(new_row),  # _get_node_row
     )
 
     async def override():
         yield sess
+
     app.dependency_overrides[get_session] = override
 
     resp = await node_client.post("/nodes", json={"name": "New Area", "type": "area"})
@@ -189,17 +207,17 @@ async def test_create_child_node_under_parent(node_client):
 
     parent_id = str(uuid.uuid4())
     parent_path = f"/{parent_id}"
-    new_row = _node_row(name="Sub Team", type="team",
-                        parent_id=parent_id, path=f"{parent_path}/x")
+    new_row = _node_row(name="Sub Team", type="team", parent_id=parent_id, path=f"{parent_path}/x")
     # create_node (child branch): SELECT parent path, INSERT, _get_node_row.
     sess = _sequence(
         _result_first((parent_id, parent_path)),  # parent lookup
-        MagicMock(),                               # INSERT
-        _result_mappings_first(new_row),           # _get_node_row
+        MagicMock(),  # INSERT
+        _result_mappings_first(new_row),  # _get_node_row
     )
 
     async def override():
         yield sess
+
     app.dependency_overrides[get_session] = override
 
     resp = await node_client.post(
@@ -214,6 +232,7 @@ async def test_create_child_node_under_parent(node_client):
 # GET /nodes/{id}
 # ===========================================================================
 
+
 async def test_get_node_detail(node_client):
     from app.db import get_session
     from app.main import app
@@ -223,14 +242,15 @@ async def test_get_node_detail(node_client):
     # get_node: _get_node_row, children, member_count, spend_mtd
     # (parent branch skipped because parent_id is None)
     sess = _sequence(
-        _result_mappings_first(row),     # _get_node_row
-        _result_mappings_all([]),        # children
-        _result_scalar(0),               # member_count
-        _result_scalar(0),               # spend_mtd
+        _result_mappings_first(row),  # _get_node_row
+        _result_mappings_all([]),  # children
+        _result_scalar(0),  # member_count
+        _result_scalar(0),  # spend_mtd
     )
 
     async def override():
         yield sess
+
     app.dependency_overrides[get_session] = override
 
     resp = await node_client.get(f"/nodes/{nid}")
@@ -252,6 +272,7 @@ async def test_get_node_not_found(node_client, mock_session):
 # Permissions (role_assignments)
 # ===========================================================================
 
+
 async def test_list_permissions(node_client):
     from app.db import get_session
     from app.main import app
@@ -269,12 +290,13 @@ async def test_list_permissions(node_client):
         "granted_by_email": None,
     }
     sess = _sequence(
-        _result_mappings_first(node),         # _get_node_row
-        _result_mappings_all([assignment]),   # assignments
+        _result_mappings_first(node),  # _get_node_row
+        _result_mappings_all([assignment]),  # assignments
     )
 
     async def override():
         yield sess
+
     app.dependency_overrides[get_session] = override
 
     resp = await node_client.get(f"/nodes/{nid}/permissions")
@@ -293,11 +315,12 @@ async def test_add_permission_returns_201(node_client):
     node = _node_row(node_id=nid)
     sess = _sequence(
         _result_mappings_first(node),  # _get_node_row
-        MagicMock(),                   # INSERT
+        MagicMock(),  # INSERT
     )
 
     async def override():
         yield sess
+
     app.dependency_overrides[get_session] = override
 
     resp = await node_client.post(
@@ -318,6 +341,7 @@ async def test_add_permission_invalid_role_returns_422(node_client):
 
     async def override():
         yield sess
+
     app.dependency_overrides[get_session] = override
 
     resp = await node_client.post(
@@ -336,11 +360,12 @@ async def test_remove_permission_returns_204(node_client):
     node = _node_row(node_id=nid)
     sess = _sequence(
         _result_mappings_first(node),  # _get_node_row
-        MagicMock(),                   # DELETE
+        MagicMock(),  # DELETE
     )
 
     async def override():
         yield sess
+
     app.dependency_overrides[get_session] = override
 
     resp = await node_client.delete(f"/nodes/{nid}/permissions/{aid}")
@@ -350,6 +375,7 @@ async def test_remove_permission_returns_204(node_client):
 # ===========================================================================
 # Members
 # ===========================================================================
+
 
 async def test_list_members(node_client):
     from app.db import get_session
@@ -367,12 +393,13 @@ async def test_list_members(node_client):
         "display_name": "Dev User",
     }
     sess = _sequence(
-        _result_mappings_first(node),     # _get_node_row
-        _result_mappings_all([member]),   # members
+        _result_mappings_first(node),  # _get_node_row
+        _result_mappings_all([member]),  # members
     )
 
     async def override():
         yield sess
+
     app.dependency_overrides[get_session] = override
 
     resp = await node_client.get(f"/nodes/{nid}/members")
@@ -390,11 +417,12 @@ async def test_add_member_returns_201(node_client):
     node = _node_row(node_id=nid)
     sess = _sequence(
         _result_mappings_first(node),  # _get_node_row
-        MagicMock(),                   # INSERT
+        MagicMock(),  # INSERT
     )
 
     async def override():
         yield sess
+
     app.dependency_overrides[get_session] = override
 
     resp = await node_client.post(
@@ -414,11 +442,12 @@ async def test_remove_member_returns_204(node_client):
     node = _node_row(node_id=nid)
     sess = _sequence(
         _result_mappings_first(node),  # _get_node_row
-        MagicMock(),                   # DELETE
+        MagicMock(),  # DELETE
     )
 
     async def override():
         yield sess
+
     app.dependency_overrides[get_session] = override
 
     resp = await node_client.delete(f"/nodes/{nid}/members/{uid}")
@@ -428,6 +457,7 @@ async def test_remove_member_returns_204(node_client):
 # ===========================================================================
 # Budget — including Redis write-through
 # ===========================================================================
+
 
 async def test_put_budget_writes_through_to_redis(node_client):
     from app.db import get_session
@@ -439,13 +469,14 @@ async def test_put_budget_writes_through_to_redis(node_client):
     final_row = {"monthly_budget_usd": 500.0, "budget_alert_threshold": 0.9}
     # set_budget: _get_node_row, UPDATE, final SELECT (then redis write-through)
     sess = _sequence(
-        _result_mappings_first(node),         # _get_node_row
-        MagicMock(),                          # UPDATE
-        _result_mappings_first(final_row),    # final SELECT for write-through
+        _result_mappings_first(node),  # _get_node_row
+        MagicMock(),  # UPDATE
+        _result_mappings_first(final_row),  # final SELECT for write-through
     )
 
     async def override():
         yield sess
+
     app.dependency_overrides[get_session] = override
 
     resp = await node_client.put(
@@ -461,6 +492,7 @@ async def test_put_budget_writes_through_to_redis(node_client):
     call_args = redis.set.call_args
     assert call_args.args[0] == f"budget_limit:team:{nid}"
     import json
+
     payload = json.loads(call_args.args[1])
     assert payload["limit"] == 500.0
     assert payload["alert_pct"] == 0.9
@@ -471,18 +503,20 @@ async def test_get_budget(node_client):
     from app.main import app
 
     nid = str(uuid.uuid4())
-    node = _node_row(node_id=nid, parent_id=None, monthly_budget_usd=1000.0,
-                     budget_alert_threshold=0.75)
+    node = _node_row(
+        node_id=nid, parent_id=None, monthly_budget_usd=1000.0, budget_alert_threshold=0.75
+    )
     # get_budget: _get_node_row, spend_subtree, spend_children
     # (parent branch skipped because parent_id is None)
     sess = _sequence(
         _result_mappings_first(node),  # _get_node_row
-        _result_scalar(200.0),         # spend_subtree
-        _result_scalar(50.0),          # spend_children
+        _result_scalar(200.0),  # spend_subtree
+        _result_scalar(50.0),  # spend_children
     )
 
     async def override():
         yield sess
+
     app.dependency_overrides[get_session] = override
 
     resp = await node_client.get(f"/nodes/{nid}/budget")

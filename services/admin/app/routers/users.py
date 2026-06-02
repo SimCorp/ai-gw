@@ -2,6 +2,7 @@
 Admin user management router — richer queries for the Users admin page.
 Requires admin auth (wired with dependencies=_auth in main.py).
 """
+
 from __future__ import annotations
 
 import json as _json
@@ -55,12 +56,17 @@ async def list_users(
 
     where = " AND ".join(filters)
 
-    count_row = (await session.execute(
-        text(f"SELECT COUNT(DISTINCT u.id) FROM users u WHERE {where}"), params
-    )).scalar()
+    count_row = (
+        await session.execute(
+            text(f"SELECT COUNT(DISTINCT u.id) FROM users u WHERE {where}"), params
+        )
+    ).scalar()
     total = int(count_row or 0)
 
-    rows = (await session.execute(text(f"""
+    rows = (
+        (
+            await session.execute(
+                text(f"""
         SELECT u.id, u.email, u.display_name, u.status, u.must_change_password,
                u.last_login_at, u.created_at,
                COALESCE(
@@ -74,7 +80,13 @@ async def list_users(
         GROUP BY u.id
         ORDER BY u.created_at DESC
         LIMIT :limit OFFSET :offset
-    """), params)).mappings().all()
+    """),
+                params,
+            )
+        )
+        .mappings()
+        .all()
+    )
     return {
         "total": total,
         "items": [
@@ -94,7 +106,10 @@ async def get_user(
     auth: dict = Depends(get_admin_session),
     session: AsyncSession = Depends(get_session),
 ):
-    row = (await session.execute(text("""
+    row = (
+        (
+            await session.execute(
+                text("""
         SELECT u.id, u.email, u.display_name, u.status, u.must_change_password,
                u.last_login_at, u.created_at, u.primary_node_id::text,
                t.name AS team_name,
@@ -108,7 +123,13 @@ async def get_user(
         LEFT JOIN organization_nodes t ON t.id = u.primary_node_id
         WHERE u.id = CAST(:uid AS uuid)
         GROUP BY u.id, t.name
-    """), {"uid": user_id})).mappings().first()
+    """),
+                {"uid": user_id},
+            )
+        )
+        .mappings()
+        .first()
+    )
 
     if not row:
         raise HTTPException(status_code=404, detail="User not found")

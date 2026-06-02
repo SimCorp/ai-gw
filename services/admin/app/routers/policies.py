@@ -33,7 +33,12 @@ async def get_policy(team_id: UUID, session: AsyncSession = Depends(get_session)
 
 
 @router.put("")
-async def upsert_policy(team_id: UUID, body: PolicyUpdate, request: Request, session: AsyncSession = Depends(get_session)):
+async def upsert_policy(
+    team_id: UUID,
+    body: PolicyUpdate,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+):
     stmt = (
         insert(Policy)
         .values(
@@ -64,7 +69,10 @@ async def upsert_policy(team_id: UUID, body: PolicyUpdate, request: Request, ses
     )
     result = await session.execute(stmt)
     await audit.record(
-        session, request, "upsert_policy", "policy",
+        session,
+        request,
+        "upsert_policy",
+        "policy",
         resource_id=str(team_id),
         details=body.model_dump(),
     )
@@ -76,14 +84,18 @@ async def upsert_policy(team_id: UUID, body: PolicyUpdate, request: Request, ses
     if body.project_id:
         cache_key = f"{cache_key}:{body.project_id}"
     import json as _json
-    await redis.hset(cache_key, mapping={
-        "ttl_seconds": body.cache_ttl_seconds,
-        "similarity_threshold": body.cache_similarity_threshold,
-        "opt_out": str(body.cache_opt_out).lower(),
-        "embedding_model": body.embedding_model,
-        "rate_limit_rpm": body.rate_limit_rpm,
-        "allowed_models": _json.dumps(body.allowed_models or []),
-    })
+
+    await redis.hset(
+        cache_key,
+        mapping={
+            "ttl_seconds": body.cache_ttl_seconds,
+            "similarity_threshold": body.cache_similarity_threshold,
+            "opt_out": str(body.cache_opt_out).lower(),
+            "embedding_model": body.embedding_model,
+            "rate_limit_rpm": body.rate_limit_rpm,
+            "allowed_models": _json.dumps(body.allowed_models or []),
+        },
+    )
 
     return result.scalar_one()
 
@@ -126,10 +138,12 @@ async def list_all_policies(session: AsyncSession = Depends(get_session)):
                 "allowed_models": row["allowed_models"] or [],
                 "updated_at": row["updated_at"].isoformat() if row["updated_at"] else None,
             }
-        result.append({
-            "team_id": str(row["team_id"]),
-            "team_name": row["team_name"],
-            "team_slug": row["team_slug"],
-            "policy": policy,
-        })
+        result.append(
+            {
+                "team_id": str(row["team_id"]),
+                "team_name": row["team_name"],
+                "team_slug": row["team_slug"],
+                "policy": policy,
+            }
+        )
     return result

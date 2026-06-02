@@ -50,7 +50,8 @@ def _row_to_area_dict(row) -> dict:
 
 @router.get("")
 async def list_areas(session: AsyncSession = Depends(get_session)):
-    result = await session.execute(text("""
+    result = await session.execute(
+        text("""
         SELECT a.id, a.name, a.slug, a.description, a.color, a.created_at,
                COUNT(t.id) AS team_count,
                CASE WHEN ap.area_id IS NOT NULL THEN TRUE ELSE FALSE END AS has_policy
@@ -59,7 +60,8 @@ async def list_areas(session: AsyncSession = Depends(get_session)):
         LEFT JOIN area_policies ap ON ap.area_id = a.id
         GROUP BY a.id, ap.area_id
         ORDER BY a.name
-    """))
+    """)
+    )
     rows = result.mappings().all()
     return [
         {
@@ -91,7 +93,12 @@ async def create_area(
             VALUES (:name, :slug, :description, :color)
             RETURNING id, name, slug, description, color, created_at
         """),
-        {"name": body.name, "slug": body.slug, "description": body.description, "color": body.color},
+        {
+            "name": body.name,
+            "slug": body.slug,
+            "description": body.description,
+            "color": body.color,
+        },
     )
     row = result.mappings().one()
     area_id = row["id"]
@@ -130,7 +137,9 @@ async def get_area(area_id: UUID, session: AsyncSession = Depends(get_session)):
             "name": r["name"],
             "slug": r["slug"],
             "created_at": r["created_at"].isoformat() if r["created_at"] else None,
-            "monthly_budget_usd": float(r["monthly_budget_usd"]) if r["monthly_budget_usd"] is not None else None,
+            "monthly_budget_usd": float(r["monthly_budget_usd"])
+            if r["monthly_budget_usd"] is not None
+            else None,
             "budget_alert_pct": r["budget_alert_pct"],
             "budget_action": r["budget_action"],
         }
@@ -156,7 +165,9 @@ async def get_area(area_id: UUID, session: AsyncSession = Depends(get_session)):
             "embedding_model": policy_row["embedding_model"],
             "rate_limit_rpm": policy_row["rate_limit_rpm"],
             "allowed_models": policy_row["allowed_models"] or [],
-            "updated_at": policy_row["updated_at"].isoformat() if policy_row["updated_at"] else None,
+            "updated_at": policy_row["updated_at"].isoformat()
+            if policy_row["updated_at"]
+            else None,
         }
 
     return {
@@ -189,13 +200,23 @@ async def update_area(
             WHERE id = :id
             RETURNING id, name, slug, description, color, created_at
         """),
-        {"id": area_id, "name": body.name, "slug": body.slug, "description": body.description, "color": body.color},
+        {
+            "id": area_id,
+            "name": body.name,
+            "slug": body.slug,
+            "description": body.description,
+            "color": body.color,
+        },
     )
     row = result.mappings().one_or_none()
     if not row:
         raise HTTPException(status_code=404, detail="Area not found")
     await audit.record(
-        session, request, "update_area", "area", resource_id=area_id,
+        session,
+        request,
+        "update_area",
+        "area",
+        resource_id=area_id,
         details={"name": body.name, "slug": body.slug},
     )
     await session.commit()
@@ -231,20 +252,26 @@ async def delete_area(
 @router.get("/{area_id}/policy")
 async def get_area_policy(area_id: UUID, session: AsyncSession = Depends(get_session)):
     # Verify area exists
-    area_exists = (await session.execute(
-        text("SELECT id FROM areas WHERE id = :id"), {"id": area_id}
-    )).one_or_none()
+    area_exists = (
+        await session.execute(text("SELECT id FROM areas WHERE id = :id"), {"id": area_id})
+    ).one_or_none()
     if not area_exists:
         raise HTTPException(status_code=404, detail="Area not found")
 
-    row = (await session.execute(
-        text("""
+    row = (
+        (
+            await session.execute(
+                text("""
             SELECT id, area_id, cache_ttl_seconds, cache_similarity_threshold, cache_opt_out,
                    embedding_model, rate_limit_rpm, allowed_models, updated_at
             FROM area_policies WHERE area_id = :area_id
         """),
-        {"area_id": area_id},
-    )).mappings().one_or_none()
+                {"area_id": area_id},
+            )
+        )
+        .mappings()
+        .one_or_none()
+    )
 
     if not row:
         return {}
@@ -273,9 +300,9 @@ async def upsert_area_policy(
     if not await _can_manage_area(user, str(area_id)):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     # Verify area exists
-    area_exists = (await session.execute(
-        text("SELECT id FROM areas WHERE id = :id"), {"id": area_id}
-    )).one_or_none()
+    area_exists = (
+        await session.execute(text("SELECT id FROM areas WHERE id = :id"), {"id": area_id})
+    ).one_or_none()
     if not area_exists:
         raise HTTPException(status_code=404, detail="Area not found")
 
@@ -318,7 +345,10 @@ async def upsert_area_policy(
     row = result.mappings().one()
 
     await audit.record(
-        session, request, "upsert_area_policy", "area_policy",
+        session,
+        request,
+        "upsert_area_policy",
+        "area_policy",
         resource_id=str(area_id),
         details=body.model_dump(),
     )
@@ -326,13 +356,16 @@ async def upsert_area_policy(
 
     # Sync to Redis
     redis = request.app.state.redis
-    await redis.hset(f"policy:area:{area_id}", mapping={
-        "ttl_seconds": body.cache_ttl_seconds,
-        "similarity_threshold": body.cache_similarity_threshold,
-        "opt_out": str(body.cache_opt_out).lower(),
-        "embedding_model": body.embedding_model,
-        "rate_limit_rpm": body.rate_limit_rpm,
-    })
+    await redis.hset(
+        f"policy:area:{area_id}",
+        mapping={
+            "ttl_seconds": body.cache_ttl_seconds,
+            "similarity_threshold": body.cache_similarity_threshold,
+            "opt_out": str(body.cache_opt_out).lower(),
+            "embedding_model": body.embedding_model,
+            "rate_limit_rpm": body.rate_limit_rpm,
+        },
+    )
 
     return {
         "id": str(row["id"]),

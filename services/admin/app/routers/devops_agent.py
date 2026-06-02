@@ -25,7 +25,7 @@ from app.db import get_session
 
 router = APIRouter(prefix="/devops-agent", tags=["devops-agent"])
 
-_MAX_ROUNDS = 6   # maximum tool-call rounds before forcing a final answer
+_MAX_ROUNDS = 6  # maximum tool-call rounds before forcing a final answer
 _LLM_TIMEOUT = 45.0
 _TOOL_TIMEOUT = 8.0
 _MODEL = "claude-sonnet-4-6"
@@ -190,18 +190,26 @@ _TOOLS = [
 # Tool implementations
 # ---------------------------------------------------------------------------
 
+
 async def _tool_check_service_health(request: Request, session: AsyncSession) -> dict:
     from app.routers.system import _collect_health
+
     return await _collect_health(request, session)
 
 
 async def _tool_get_gateway_metrics(session: AsyncSession, period: str = "24h") -> dict:
     _interval = {
-        "1h": "1 hour", "6h": "6 hours", "24h": "24 hours",
-        "7d": "7 days", "30d": "30 days",
+        "1h": "1 hour",
+        "6h": "6 hours",
+        "24h": "24 hours",
+        "7d": "7 days",
+        "30d": "30 days",
     }.get(period, "24 hours")
     try:
-        row = (await session.execute(text(f"""
+        row = (
+            (
+                await session.execute(
+                    text(f"""
             SELECT
                 COUNT(*)                                                        AS total_requests,
                 COUNT(*) FILTER (WHERE request_error_type IS NOT NULL)          AS error_count,
@@ -211,7 +219,12 @@ async def _tool_get_gateway_metrics(session: AsyncSession, period: str = "24h") 
                 COALESCE(SUM(tokens_input + tokens_output), 0)                  AS total_tokens
             FROM cost_records
             WHERE created_at >= NOW() - INTERVAL '{_interval}'
-        """))).mappings().one()
+        """)
+                )
+            )
+            .mappings()
+            .one()
+        )
         total = int(row["total_requests"] or 0)
         errors = int(row["error_count"] or 0)
         return {
@@ -231,7 +244,10 @@ async def _tool_get_gateway_metrics(session: AsyncSession, period: str = "24h") 
 async def _tool_get_recent_errors(session: AsyncSession, limit: int = 20) -> list:
     limit = max(1, min(limit, 50))
     try:
-        rows = (await session.execute(text(f"""
+        rows = (
+            (
+                await session.execute(
+                    text(f"""
             SELECT cr.created_at, cr.request_error_type, cr.model,
                    d.email AS developer_email, t.name AS team_name,
                    cr.latency_ms, cr.retry_count
@@ -241,7 +257,12 @@ async def _tool_get_recent_errors(session: AsyncSession, limit: int = 20) -> lis
             WHERE cr.request_error_type IS NOT NULL
             ORDER BY cr.created_at DESC
             LIMIT {limit}
-        """))).mappings().all()
+        """)
+                )
+            )
+            .mappings()
+            .all()
+        )
         return [
             {
                 "timestamp": str(r["created_at"]),
@@ -260,7 +281,10 @@ async def _tool_get_recent_errors(session: AsyncSession, limit: int = 20) -> lis
 
 async def _tool_get_budget_status(session: AsyncSession) -> list:
     try:
-        rows = (await session.execute(text("""
+        rows = (
+            (
+                await session.execute(
+                    text("""
             SELECT t.name AS team_name,
                    p.monthly_budget_usd,
                    COALESCE(ROUND(SUM(cr.cost_usd)::numeric, 4), 0) AS spent_usd,
@@ -274,7 +298,12 @@ async def _tool_get_budget_status(session: AsyncSession) -> list:
             WHERE p.monthly_budget_usd IS NOT NULL AND p.monthly_budget_usd > 0
             GROUP BY t.name, p.monthly_budget_usd
             ORDER BY pct_used DESC NULLS LAST
-        """))).mappings().all()
+        """)
+                )
+            )
+            .mappings()
+            .all()
+        )
         return [
             {
                 "team": r["team_name"],
@@ -282,9 +311,11 @@ async def _tool_get_budget_status(session: AsyncSession) -> list:
                 "spent_usd": float(r["spent_usd"]),
                 "pct_used": float(r["pct_used"]) if r["pct_used"] is not None else None,
                 "status": (
-                    "over_budget" if (r["pct_used"] or 0) >= 100 else
-                    "warning" if (r["pct_used"] or 0) >= 80 else
-                    "ok"
+                    "over_budget"
+                    if (r["pct_used"] or 0) >= 100
+                    else "warning"
+                    if (r["pct_used"] or 0) >= 80
+                    else "ok"
                 ),
             }
             for r in rows
@@ -296,7 +327,10 @@ async def _tool_get_budget_status(session: AsyncSession) -> list:
 async def _tool_get_model_usage(session: AsyncSession, period: str = "7d") -> list:
     _interval = {"24h": "24 hours", "7d": "7 days", "30d": "30 days"}.get(period, "7 days")
     try:
-        rows = (await session.execute(text(f"""
+        rows = (
+            (
+                await session.execute(
+                    text(f"""
             SELECT model,
                    COUNT(*) AS request_count,
                    COALESCE(SUM(tokens_input + tokens_output), 0) AS total_tokens,
@@ -309,7 +343,12 @@ async def _tool_get_model_usage(session: AsyncSession, period: str = "7d") -> li
             GROUP BY model
             ORDER BY cost_usd DESC
             LIMIT 15
-        """))).mappings().all()
+        """)
+                )
+            )
+            .mappings()
+            .all()
+        )
         return [
             {
                 "model": r["model"],
@@ -332,26 +371,38 @@ async def _tool_get_audit_log(
 ) -> list:
     limit = max(1, min(limit, 50))
     if action_filter:
-        rows = (await session.execute(
-            text("""
+        rows = (
+            (
+                await session.execute(
+                    text("""
                 SELECT timestamp, actor, action, resource_type, resource_id, detail
                 FROM audit_log
                 WHERE action ILIKE :filter
                 ORDER BY timestamp DESC
                 LIMIT :limit
             """),
-            {"filter": f"%{action_filter[:40]}%", "limit": limit},
-        )).mappings().all()
+                    {"filter": f"%{action_filter[:40]}%", "limit": limit},
+                )
+            )
+            .mappings()
+            .all()
+        )
     else:
-        rows = (await session.execute(
-            text("""
+        rows = (
+            (
+                await session.execute(
+                    text("""
                 SELECT timestamp, actor, action, resource_type, resource_id, detail
                 FROM audit_log
                 ORDER BY timestamp DESC
                 LIMIT :limit
             """),
-            {"limit": limit},
-        )).mappings().all()
+                    {"limit": limit},
+                )
+            )
+            .mappings()
+            .all()
+        )
     try:
         rows = list(rows)
         return [
@@ -377,12 +428,15 @@ async def _tool_get_top_teams_by_spend(
     limit = max(1, min(limit, 30))
     _interval = {
         "24h": "AND cr.created_at >= NOW() - INTERVAL '24 hours'",
-        "7d":  "AND cr.created_at >= NOW() - INTERVAL '7 days'",
+        "7d": "AND cr.created_at >= NOW() - INTERVAL '7 days'",
         "30d": "AND cr.created_at >= NOW() - INTERVAL '30 days'",
         "mtd": "AND cr.created_at >= date_trunc('month', NOW())",
     }.get(period, "AND cr.created_at >= date_trunc('month', NOW())")
     try:
-        rows = (await session.execute(text(f"""
+        rows = (
+            (
+                await session.execute(
+                    text(f"""
             SELECT t.name AS team_name,
                    COUNT(cr.id) AS request_count,
                    COALESCE(SUM(cr.tokens_input + cr.tokens_output), 0) AS total_tokens,
@@ -393,7 +447,12 @@ async def _tool_get_top_teams_by_spend(
             GROUP BY t.name
             ORDER BY cost_usd DESC NULLS LAST
             LIMIT {limit}
-        """))).mappings().all()
+        """)
+                )
+            )
+            .mappings()
+            .all()
+        )
         return [
             {
                 "team": r["team_name"],
@@ -412,6 +471,7 @@ async def _tool_get_top_teams_by_spend(
 # Tool dispatch
 # ---------------------------------------------------------------------------
 
+
 async def _dispatch_tool(
     name: str,
     args: dict,
@@ -421,15 +481,23 @@ async def _dispatch_tool(
     t0 = time.monotonic()
     try:
         if name == "check_service_health":
-            result = await asyncio.wait_for(_tool_check_service_health(request, session), _TOOL_TIMEOUT)
+            result = await asyncio.wait_for(
+                _tool_check_service_health(request, session), _TOOL_TIMEOUT
+            )
         elif name == "get_gateway_metrics":
-            result = await asyncio.wait_for(_tool_get_gateway_metrics(session, args.get("period", "24h")), _TOOL_TIMEOUT)
+            result = await asyncio.wait_for(
+                _tool_get_gateway_metrics(session, args.get("period", "24h")), _TOOL_TIMEOUT
+            )
         elif name == "get_recent_errors":
-            result = await asyncio.wait_for(_tool_get_recent_errors(session, args.get("limit", 20)), _TOOL_TIMEOUT)
+            result = await asyncio.wait_for(
+                _tool_get_recent_errors(session, args.get("limit", 20)), _TOOL_TIMEOUT
+            )
         elif name == "get_budget_status":
             result = await asyncio.wait_for(_tool_get_budget_status(session), _TOOL_TIMEOUT)
         elif name == "get_model_usage":
-            result = await asyncio.wait_for(_tool_get_model_usage(session, args.get("period", "7d")), _TOOL_TIMEOUT)
+            result = await asyncio.wait_for(
+                _tool_get_model_usage(session, args.get("period", "7d")), _TOOL_TIMEOUT
+            )
         elif name == "get_audit_log":
             result = await asyncio.wait_for(
                 _tool_get_audit_log(session, args.get("limit", 20), args.get("action_filter")),
@@ -437,7 +505,9 @@ async def _dispatch_tool(
             )
         elif name == "get_top_teams_by_spend":
             result = await asyncio.wait_for(
-                _tool_get_top_teams_by_spend(session, args.get("period", "mtd"), args.get("limit", 10)),
+                _tool_get_top_teams_by_spend(
+                    session, args.get("period", "mtd"), args.get("limit", 10)
+                ),
                 _TOOL_TIMEOUT,
             )
         else:
@@ -453,6 +523,7 @@ async def _dispatch_tool(
 # ---------------------------------------------------------------------------
 # Agentic loop
 # ---------------------------------------------------------------------------
+
 
 async def _run_agent(
     user_messages: list[dict],
@@ -504,19 +575,26 @@ async def _run_agent(
             for tc, outcome in zip(tool_calls, results):
                 fn_name = tc["function"]["name"]
                 fn_args = json.loads(tc["function"]["arguments"] or "{}")
-                tool_log.append({
-                    "tool": fn_name,
-                    "args": fn_args,
-                    "elapsed_ms": outcome["elapsed_ms"],
-                    "result_preview": _preview(outcome["result"]),
-                })
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": tc["id"],
-                    "content": json.dumps(outcome["result"]),
-                })
+                tool_log.append(
+                    {
+                        "tool": fn_name,
+                        "args": fn_args,
+                        "elapsed_ms": outcome["elapsed_ms"],
+                        "result_preview": _preview(outcome["result"]),
+                    }
+                )
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tc["id"],
+                        "content": json.dumps(outcome["result"]),
+                    }
+                )
 
-    return {"reply": "Reached maximum reasoning steps. Partial data collected.", "tool_log": tool_log}
+    return {
+        "reply": "Reached maximum reasoning steps. Partial data collected.",
+        "tool_log": tool_log,
+    }
 
 
 def _preview(result: Any) -> str:
@@ -527,13 +605,19 @@ def _preview(result: Any) -> str:
         return f"{len(result)} items"
     if isinstance(result, dict):
         keys = list(result.keys())[:4]
-        return "{" + ", ".join(f"{k}: {result[k]}" for k in keys) + ("..." if len(result) > 4 else "") + "}"
+        return (
+            "{"
+            + ", ".join(f"{k}: {result[k]}" for k in keys)
+            + ("..." if len(result) > 4 else "")
+            + "}"
+        )
     return str(result)[:80]
 
 
 # ---------------------------------------------------------------------------
 # Endpoint
 # ---------------------------------------------------------------------------
+
 
 class AgentMessage(BaseModel):
     role: str

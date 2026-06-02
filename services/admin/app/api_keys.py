@@ -7,6 +7,7 @@ Plaintext is stored in Redis at `workflow:scoped_key:{run_id}` for the
 duration of the run so the workflow-worker can pass it to agent containers
 as AIGW_API_KEY. The Redis entry expires with the same TTL as the DB key.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -48,23 +49,25 @@ async def issue_scoped_key(
     """
     plaintext, key_hash = _new_key()
     expires_at = datetime.now(timezone.utc) + timedelta(seconds=ttl_seconds)
-    row = (await session.execute(
-        text(
-            """
+    row = (
+        await session.execute(
+            text(
+                """
             INSERT INTO api_keys (team_id, project_id, name, key_hash, scope, expires_at)
             VALUES (:team_id, :project_id, :name, :key_hash, :scope, :expires_at)
             RETURNING id
             """
-        ),
-        {
-            "team_id": team_id,
-            "project_id": project_id,
-            "name": name,
-            "key_hash": key_hash,
-            "scope": scope,
-            "expires_at": expires_at,
-        },
-    )).first()
+            ),
+            {
+                "team_id": team_id,
+                "project_id": project_id,
+                "name": name,
+                "key_hash": key_hash,
+                "scope": scope,
+                "expires_at": expires_at,
+            },
+        )
+    ).first()
     key_id = row[0]
 
     if run_id is not None and redis is not None:

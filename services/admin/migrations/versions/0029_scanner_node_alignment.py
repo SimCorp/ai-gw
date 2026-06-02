@@ -1,4 +1,5 @@
 """Align scanner tables and organization_nodes with the org-nodes model"""
+
 from typing import Sequence, Union
 
 from alembic import op

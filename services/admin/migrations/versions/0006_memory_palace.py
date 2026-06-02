@@ -7,6 +7,7 @@ Revision ID: 0006
 Revises: 0005
 Create Date: 2026-05-12
 """
+
 from __future__ import annotations
 
 from typing import Sequence, Union
@@ -40,8 +41,7 @@ def upgrade() -> None:
         )
     """)
     op.execute(
-        "CREATE INDEX IF NOT EXISTS idx_memory_drawers_developer "
-        "ON memory_drawers(developer_id)"
+        "CREATE INDEX IF NOT EXISTS idx_memory_drawers_developer ON memory_drawers(developer_id)"
     )
     op.execute(
         "CREATE INDEX IF NOT EXISTS idx_memory_drawers_wing "
@@ -66,12 +66,10 @@ def upgrade() -> None:
         )
     """)
     op.execute(
-        "CREATE INDEX IF NOT EXISTS idx_memory_kg_nodes_developer "
-        "ON memory_kg_nodes(developer_id)"
+        "CREATE INDEX IF NOT EXISTS idx_memory_kg_nodes_developer ON memory_kg_nodes(developer_id)"
     )
     op.execute(
-        "CREATE INDEX IF NOT EXISTS idx_memory_kg_nodes_name "
-        "ON memory_kg_nodes(developer_id, name)"
+        "CREATE INDEX IF NOT EXISTS idx_memory_kg_nodes_name ON memory_kg_nodes(developer_id, name)"
     )
 
     # ── memory_kg_edges ────────────────────────────────────────────────────────
@@ -87,8 +85,7 @@ def upgrade() -> None:
         )
     """)
     op.execute(
-        "CREATE INDEX IF NOT EXISTS idx_memory_kg_edges_developer "
-        "ON memory_kg_edges(developer_id)"
+        "CREATE INDEX IF NOT EXISTS idx_memory_kg_edges_developer ON memory_kg_edges(developer_id)"
     )
     op.execute(
         "CREATE INDEX IF NOT EXISTS idx_memory_kg_edges_from "
@@ -125,8 +122,7 @@ def upgrade() -> None:
         )
     """)
     op.execute(
-        "CREATE INDEX IF NOT EXISTS idx_memory_tunnels_developer "
-        "ON memory_tunnels(developer_id)"
+        "CREATE INDEX IF NOT EXISTS idx_memory_tunnels_developer ON memory_tunnels(developer_id)"
     )
     op.execute(
         "CREATE INDEX IF NOT EXISTS idx_memory_tunnels_from_wing "

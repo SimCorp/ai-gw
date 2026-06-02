@@ -9,6 +9,7 @@ from httpx import ASGITransport, AsyncClient
 # Pure classifier unit tests
 # ---------------------------------------------------------------------------
 
+
 def test_classify_show_champions_simple():
     from app.llm.champion_intents import classify
 
@@ -58,6 +59,7 @@ def test_classify_none():
 # ---------------------------------------------------------------------------
 # Endpoint tests
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 async def portal_client_with_session():
@@ -133,10 +135,13 @@ async def test_find_content_returns_content_cards(portal_client_with_session):
             "source_url": "https://docs/rag",
         }
     ]
-    with patch(
-        "app.routers.ai_help.retrieve_champion_chunks",
-        AsyncMock(return_value=chunks),
-    ) as rc, patch("app.routers.ai_help._call_llm", AsyncMock()) as llm:
+    with (
+        patch(
+            "app.routers.ai_help.retrieve_champion_chunks",
+            AsyncMock(return_value=chunks),
+        ) as rc,
+        patch("app.routers.ai_help._call_llm", AsyncMock()) as llm,
+    ):
         resp = await client.post(
             "/ai-help/chat/portal",
             json={"messages": [{"role": "user", "content": "find content on rag"}]},
@@ -162,10 +167,13 @@ async def test_book_unresolved_falls_through_to_rag(portal_client_with_session):
     fake_session.execute.return_value = _mappings_result([])
 
     # No chunks → RAG returns ask_cta (no LLM).
-    with patch(
-        "app.routers.ai_help.retrieve_champion_chunks",
-        AsyncMock(return_value=[]),
-    ), patch("app.routers.ai_help._call_llm", AsyncMock()) as llm:
+    with (
+        patch(
+            "app.routers.ai_help.retrieve_champion_chunks",
+            AsyncMock(return_value=[]),
+        ),
+        patch("app.routers.ai_help._call_llm", AsyncMock()) as llm,
+    ):
         resp = await client.post(
             "/ai-help/chat/portal",
             json={"messages": [{"role": "user", "content": "book alice"}]},

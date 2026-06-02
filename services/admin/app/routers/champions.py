@@ -19,6 +19,7 @@ router = APIRouter(prefix="/champions", tags=["champions"])
 
 # ---------- Wave 2 schemas ----------
 
+
 class AskCreate(BaseModel):
     title: str
     description: str
@@ -65,6 +66,7 @@ class FlagBody(BaseModel):
 
 # ---------- librarian helper ----------
 
+
 async def ingest_to_librarian(
     *,
     title: str,
@@ -99,6 +101,7 @@ async def ingest_to_librarian(
 
 # ---------- schemas ----------
 
+
 class ContentSubmit(BaseModel):
     champion_id: UUID
     type: str
@@ -115,14 +118,17 @@ class ContentSubmit(BaseModel):
 
 # ---------- directory ----------
 
+
 @router.get("")
 async def list_directory(session: AsyncSession = Depends(get_session)):
-    result = await session.execute(text("""
+    result = await session.execute(
+        text("""
         SELECT developer_id, bio, focus_areas, office_hours_text, active, nominated_at
         FROM champions
         WHERE active = TRUE
         ORDER BY nominated_at DESC
-    """))
+    """)
+    )
     return [
         {
             "developer_id": str(r["developer_id"]),
@@ -137,14 +143,17 @@ async def list_directory(session: AsyncSession = Depends(get_session)):
 
 # ---------- content feed (must be declared BEFORE /{developer_id}) ----------
 
+
 @router.get("/content")
 async def list_content(session: AsyncSession = Depends(get_session)):
-    result = await session.execute(text("""
+    result = await session.execute(
+        text("""
         SELECT id, champion_id, type, submitted_at, auto_metadata, upvotes, views
         FROM champion_contributions
         ORDER BY submitted_at DESC
         LIMIT 50
-    """))
+    """)
+    )
     return [
         {
             "id": str(r["id"]),
@@ -161,6 +170,7 @@ async def list_content(session: AsyncSession = Depends(get_session)):
 
 # ---------- content submission ----------
 
+
 @router.post("/content", status_code=201)
 async def submit_content(body: ContentSubmit, session: AsyncSession = Depends(get_session)):
     body_text = (body.text or body.url or "")[:8000]
@@ -174,19 +184,21 @@ async def submit_content(body: ContentSubmit, session: AsyncSession = Depends(ge
         tags=metadata["tags"],
     )
 
-    inserted_id = (await session.execute(
-        text("""
+    inserted_id = (
+        await session.execute(
+            text("""
             INSERT INTO champion_contributions (champion_id, type, librarian_item_id, auto_metadata)
             VALUES (:champion_id, :type, :lib_id, CAST(:meta AS JSONB))
             RETURNING id
         """),
-        {
-            "champion_id": str(body.champion_id),
-            "type": body.type,
-            "lib_id": librarian_id,
-            "meta": json.dumps({**metadata, "title": title}, default=str),
-        },
-    )).scalar_one()
+            {
+                "champion_id": str(body.champion_id),
+                "type": body.type,
+                "lib_id": librarian_id,
+                "meta": json.dumps({**metadata, "title": title}, default=str),
+            },
+        )
+    ).scalar_one()
     await session.commit()
 
     try:
@@ -204,22 +216,25 @@ async def submit_content(body: ContentSubmit, session: AsyncSession = Depends(ge
 
 # ---------- asks ----------
 
+
 @router.post("/asks", status_code=201)
 async def create_ask(body: AskCreate, session: AsyncSession = Depends(get_session)):
-    inserted_id = (await session.execute(
-        text("""
+    inserted_id = (
+        await session.execute(
+            text("""
             INSERT INTO champion_asks (title, description, created_by, team_id, tags, status)
             VALUES (:title, :description, :created_by, :team_id, :tags, 'open')
             RETURNING id
         """),
-        {
-            "title": body.title,
-            "description": body.description,
-            "created_by": str(body.created_by),
-            "team_id": str(body.team_id) if body.team_id else None,
-            "tags": body.tags,
-        },
-    )).scalar_one()
+            {
+                "title": body.title,
+                "description": body.description,
+                "created_by": str(body.created_by),
+                "team_id": str(body.team_id) if body.team_id else None,
+                "tags": body.tags,
+            },
+        )
+    ).scalar_one()
     await session.commit()
     return {"id": str(inserted_id)}
 
@@ -295,16 +310,24 @@ async def resolve_ask(ask_id: UUID, body: AskResolve, session: AsyncSession = De
     )
     await session.commit()
     if result.rowcount == 0:
-        raise HTTPException(status_code=409, detail="ask not in claimed state or not claimed by this champion")
+        raise HTTPException(
+            status_code=409, detail="ask not in claimed state or not claimed by this champion"
+        )
     return {"ok": True, "id": str(ask_id), "status": "resolved_pending"}
 
 
 @router.post("/asks/{ask_id}/confirm")
 async def confirm_ask(ask_id: UUID, body: AskConfirm, session: AsyncSession = Depends(get_session)):
-    row = (await session.execute(
-        text("SELECT status, created_by, claimed_by FROM champion_asks WHERE id = :ask_id"),
-        {"ask_id": str(ask_id)},
-    )).mappings().one_or_none()
+    row = (
+        (
+            await session.execute(
+                text("SELECT status, created_by, claimed_by FROM champion_asks WHERE id = :ask_id"),
+                {"ask_id": str(ask_id)},
+            )
+        )
+        .mappings()
+        .one_or_none()
+    )
     if row is None:
         raise HTTPException(status_code=404, detail="ask not found")
     if str(row["created_by"]) != str(body.asker_id):
@@ -339,19 +362,22 @@ async def confirm_ask(ask_id: UUID, body: AskConfirm, session: AsyncSession = De
 
 # ---------- upvotes ----------
 
+
 @router.post("/content/{contribution_id}/upvote")
 async def upvote_content(
     contribution_id: UUID,
     body: UpvoteBody,
     session: AsyncSession = Depends(get_session),
 ):
-    existing = (await session.execute(
-        text("""
+    existing = (
+        await session.execute(
+            text("""
             SELECT 1 FROM champion_upvotes
             WHERE developer_id = :dev AND contribution_id = :cid
         """),
-        {"dev": str(body.developer_id), "cid": str(contribution_id)},
-    )).scalar_one_or_none()
+            {"dev": str(body.developer_id), "cid": str(contribution_id)},
+        )
+    ).scalar_one_or_none()
 
     if existing is not None:
         # toggle off: delete + decrement
@@ -362,15 +388,17 @@ async def upvote_content(
             """),
             {"dev": str(body.developer_id), "cid": str(contribution_id)},
         )
-        upvotes = (await session.execute(
-            text("""
+        upvotes = (
+            await session.execute(
+                text("""
                 UPDATE champion_contributions
                 SET upvotes = GREATEST(upvotes - 1, 0)
                 WHERE id = :cid
                 RETURNING upvotes
             """),
-            {"cid": str(contribution_id)},
-        )).scalar_one()
+                {"cid": str(contribution_id)},
+            )
+        ).scalar_one()
         await session.commit()
         return {"upvoted": False, "upvotes": upvotes}
 
@@ -382,15 +410,21 @@ async def upvote_content(
         """),
         {"dev": str(body.developer_id), "cid": str(contribution_id)},
     )
-    row = (await session.execute(
-        text("""
+    row = (
+        (
+            await session.execute(
+                text("""
             UPDATE champion_contributions
             SET upvotes = upvotes + 1
             WHERE id = :cid
             RETURNING upvotes, champion_id
         """),
-        {"cid": str(contribution_id)},
-    )).mappings().one()
+                {"cid": str(contribution_id)},
+            )
+        )
+        .mappings()
+        .one()
+    )
     await session.commit()
 
     try:
@@ -408,24 +442,27 @@ async def upvote_content(
 
 # ---------- flags ----------
 
+
 @router.post("/content/{contribution_id}/flag", status_code=201)
 async def flag_content(
     contribution_id: UUID,
     body: FlagBody,
     session: AsyncSession = Depends(get_session),
 ):
-    flag_id = (await session.execute(
-        text("""
+    flag_id = (
+        await session.execute(
+            text("""
             INSERT INTO champion_flags (contribution_id, flagged_by, reason, status)
             VALUES (:cid, :dev, :reason, 'open')
             RETURNING id
         """),
-        {
-            "cid": str(contribution_id),
-            "dev": str(body.developer_id),
-            "reason": body.reason,
-        },
-    )).scalar_one()
+            {
+                "cid": str(contribution_id),
+                "dev": str(body.developer_id),
+                "reason": body.reason,
+            },
+        )
+    ).scalar_one()
     await session.execute(
         text("""
             UPDATE champion_contributions
@@ -440,12 +477,21 @@ async def flag_content(
 
 # ---------- profile (catch-all on /{developer_id} declared AFTER /content) ----------
 
+
 @router.get("/{developer_id}")
 async def profile(developer_id: UUID, session: AsyncSession = Depends(get_session)):
-    row = (await session.execute(
-        text("SELECT developer_id, bio, focus_areas, office_hours_text, active FROM champions WHERE developer_id = :d"),
-        {"d": str(developer_id)},
-    )).mappings().one_or_none()
+    row = (
+        (
+            await session.execute(
+                text(
+                    "SELECT developer_id, bio, focus_areas, office_hours_text, active FROM champions WHERE developer_id = :d"
+                ),
+                {"d": str(developer_id)},
+            )
+        )
+        .mappings()
+        .one_or_none()
+    )
     if row is None:
         raise HTTPException(status_code=404, detail="champion not found")
     return {
@@ -459,26 +505,29 @@ async def profile(developer_id: UUID, session: AsyncSession = Depends(get_sessio
 
 # ---------- Wave 3: bookings ----------
 
+
 @router.post("/{champion_id}/book", status_code=201)
 async def create_booking(
     champion_id: UUID,
     body: BookingCreate,
     session: AsyncSession = Depends(get_session),
 ):
-    inserted_id = (await session.execute(
-        text("""
+    inserted_id = (
+        await session.execute(
+            text("""
             INSERT INTO champion_bookings (champion_id, requested_by, slot_text, topic, team_id, status)
             VALUES (:champion_id, :requested_by, :slot_text, :topic, :team_id, 'requested')
             RETURNING id
         """),
-        {
-            "champion_id": str(champion_id),
-            "requested_by": str(body.requested_by),
-            "slot_text": body.slot_text,
-            "topic": body.topic,
-            "team_id": str(body.team_id) if body.team_id else None,
-        },
-    )).scalar_one()
+            {
+                "champion_id": str(champion_id),
+                "requested_by": str(body.requested_by),
+                "slot_text": body.slot_text,
+                "topic": body.topic,
+                "team_id": str(body.team_id) if body.team_id else None,
+            },
+        )
+    ).scalar_one()
     await session.commit()
     return {"booking_id": str(inserted_id)}
 
@@ -526,7 +575,9 @@ async def confirm_booking(
     )
     await session.commit()
     if result.rowcount == 0:
-        raise HTTPException(status_code=409, detail="booking not in requested state or not for this champion")
+        raise HTTPException(
+            status_code=409, detail="booking not in requested state or not for this champion"
+        )
     return {"ok": True, "id": str(booking_id), "status": "confirmed"}
 
 
@@ -546,7 +597,9 @@ async def done_booking(
     )
     await session.commit()
     if result.rowcount == 0:
-        raise HTTPException(status_code=409, detail="booking not in confirmed state or not for this champion")
+        raise HTTPException(
+            status_code=409, detail="booking not in confirmed state or not for this champion"
+        )
 
     try:
         await grant_points(
@@ -578,23 +631,38 @@ async def cancel_booking(
     await session.commit()
     if result.rowcount == 0:
         raise HTTPException(status_code=409, detail="booking not cancellable")
-    return {"ok": True, "id": str(booking_id), "status": "cancelled", "actor_id": str(body.actor_id)}
+    return {
+        "ok": True,
+        "id": str(booking_id),
+        "status": "cancelled",
+        "actor_id": str(body.actor_id),
+    }
 
 
 # ---------- Wave 3: smart routing ----------
 
+
 @router.post("/asks/{ask_id}/route")
 async def route_ask(ask_id: UUID, session: AsyncSession = Depends(get_session)):
-    ask_row = (await session.execute(
-        text("SELECT id, tags FROM champion_asks WHERE id = :id"),
-        {"id": str(ask_id)},
-    )).mappings().one_or_none()
+    ask_row = (
+        (
+            await session.execute(
+                text("SELECT id, tags FROM champion_asks WHERE id = :id"),
+                {"id": str(ask_id)},
+            )
+        )
+        .mappings()
+        .one_or_none()
+    )
     if ask_row is None:
         raise HTTPException(status_code=404, detail="ask not found")
 
     ask_tags = set(ask_row["tags"] or [])
 
-    rows = (await session.execute(text("""
+    rows = (
+        (
+            await session.execute(
+                text("""
         SELECT c.developer_id,
                c.focus_areas,
                MAX(cc.submitted_at) AS last_submitted_at
@@ -602,9 +670,15 @@ async def route_ask(ask_id: UUID, session: AsyncSession = Depends(get_session)):
         LEFT JOIN champion_contributions cc ON cc.champion_id = c.developer_id
         WHERE c.active = TRUE
         GROUP BY c.developer_id, c.focus_areas
-    """))).mappings().all()
+    """)
+            )
+        )
+        .mappings()
+        .all()
+    )
 
     from datetime import datetime, timedelta, timezone
+
     now = datetime.now(timezone.utc)
 
     scored = []
@@ -629,11 +703,13 @@ async def route_ask(ask_id: UUID, session: AsyncSession = Depends(get_session)):
                 recency_score = 0.3
 
         score = focus_score * 0.6 + recency_score * 0.4
-        scored.append({
-            "developer_id": str(r["developer_id"]),
-            "score": round(score, 4),
-            "focus_areas": focus,
-        })
+        scored.append(
+            {
+                "developer_id": str(r["developer_id"]),
+                "score": round(score, 4),
+                "focus_areas": focus,
+            }
+        )
 
     scored.sort(key=lambda x: (-x["score"], x["developer_id"]))
     top3 = scored[:3]

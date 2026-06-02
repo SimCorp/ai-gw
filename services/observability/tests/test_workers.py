@@ -14,7 +14,9 @@ async def test_event_reaches_handler():
     bus.subscribe(handler)
     await bus.start()
 
-    event = GatewayEvent(team_id="team-1", model="claude-3-5-sonnet", tokens_input=100, tokens_output=50)
+    event = GatewayEvent(
+        team_id="team-1", model="claude-3-5-sonnet", tokens_input=100, tokens_output=50
+    )
     await bus.publish(event)
     await asyncio.sleep(0.05)  # let the dispatch loop run
 

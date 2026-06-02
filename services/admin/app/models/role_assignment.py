@@ -11,7 +11,9 @@ from app.db import Base
 class RoleAssignment(Base):
     __tablename__ = "role_assignments"
     __table_args__ = (
-        UniqueConstraint("entra_group_id", "role", "node_id", name="role_assignments_group_role_node_key"),
+        UniqueConstraint(
+            "entra_group_id", "role", "node_id", name="role_assignments_group_role_node_key"
+        ),
         Index("idx_role_assignments_group", "entra_group_id"),
         Index("idx_role_assignments_node", "node_id"),
     )

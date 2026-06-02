@@ -77,7 +77,10 @@ async def check_budget(team_id: str, key_id: str | None, redis: Redis) -> tuple[
                     key_spend_raw = await redis.get(f"budget:key:{key_id}:{month}")
                     key_spend = float(key_spend_raw or 0)
                     if key_spend >= float(key_limit["limit"]):
-                        return False, f"API key monthly budget of ${float(key_limit['limit']):.4g} exhausted"
+                        return (
+                            False,
+                            f"API key monthly budget of ${float(key_limit['limit']):.4g} exhausted",
+                        )
 
         # Check team-level budget
         team_limit_raw = await redis.get(f"budget_limit:team:{team_id}")
@@ -89,7 +92,10 @@ async def check_budget(team_id: str, key_id: str | None, redis: Redis) -> tuple[
                 if team_spend >= float(team_limit["limit"]):
                     action = team_limit.get("action", "alert")
                     if action == "block":
-                        return False, f"Team monthly budget of ${float(team_limit['limit']):.4g} exhausted"
+                        return (
+                            False,
+                            f"Team monthly budget of ${float(team_limit['limit']):.4g} exhausted",
+                        )
                     # action == "alert": allow through but log it
 
         # Check org-level budget
@@ -111,6 +117,7 @@ async def check_budget(team_id: str, key_id: str | None, redis: Redis) -> tuple[
             return True, ""
         _log.error("Redis unavailable during budget check — failing closed: %s", exc)
         from fastapi import HTTPException
+
         raise HTTPException(status_code=503, detail="Budget enforcement temporarily unavailable")
 
 
@@ -122,6 +129,7 @@ async def validate(body: ValidateRequest, request: Request):
     token = body.token.removeprefix("Bearer ").strip()
     if not token:
         from fastapi import HTTPException
+
         raise HTTPException(status_code=401, detail="Missing token")
 
     if token.startswith("sk-"):
@@ -150,6 +158,7 @@ async def validate(body: ValidateRequest, request: Request):
         required = _model_to_scope(body.model)
         if not _has_scope(required, key_scopes):
             from fastapi import HTTPException
+
             raise HTTPException(
                 status_code=403,
                 detail=f"Key does not have scope '{required}' required for model '{body.model}'",

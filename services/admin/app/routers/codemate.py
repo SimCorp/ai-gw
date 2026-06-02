@@ -12,6 +12,7 @@ Endpoints:
   GET  /mcp/codemate           → manifest / tool list
   POST /mcp/codemate/tools/{tool_name}  → proxied tool call
 """
+
 from __future__ import annotations
 
 import logging
@@ -98,6 +99,7 @@ async def proxy_tool(tool_name: str, body: dict, request: Request) -> dict:
 
 # ── JSON-RPC 2.0 MCP endpoint ─────────────────────────────────────────────────
 
+
 async def _upstream_tool_call(tool_name: str, arguments: dict) -> dict:
     """Proxy a call to the upstream CodeMate server; return a result dict."""
     payload = {"tool": tool_name, "input": arguments}
@@ -119,9 +121,7 @@ async def _tool_search_code(arguments: dict, request: Request) -> dict:
 
 
 async def _tool_find_system_objects(arguments: dict, request: Request) -> dict:
-    return await _upstream_tool_call(
-        "codebase_search__find_system_objects_by_caption", arguments
-    )
+    return await _upstream_tool_call("codebase_search__find_system_objects_by_caption", arguments)
 
 
 _mcp_server = MCPServer(

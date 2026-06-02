@@ -1,4 +1,5 @@
 """Tests for the cache service router (GET /v1/models, POST /v1/chat/completions)."""
+
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -8,6 +9,7 @@ from httpx import Response as HttpxResponse
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _auth_response_ok(team_id="team-1", project_id=None, key_id="key-abc"):
     """Return a mock httpx.Response that looks like a 200 auth validation."""
@@ -44,6 +46,7 @@ def _litellm_chat_response(content="Hello!"):
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 async def app_and_client():
     """Yield (app, client) so tests can mutate app.state.http after the fixture runs."""
@@ -59,15 +62,14 @@ async def app_and_client():
     app.state.redis = mock_redis
     app.state.http = mock_http
 
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as c:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         yield app, c
 
 
 # ---------------------------------------------------------------------------
 # GET /v1/models
 # ---------------------------------------------------------------------------
+
 
 class TestListModels:
     async def test_auth_returns_none_gives_401(self, app_and_client):
@@ -158,8 +160,10 @@ class TestChatCompletions:
 
         app.state.http.post = AsyncMock(side_effect=_post_side_effect)
 
-        with patch("app.exact.get", new=AsyncMock(return_value=None)), \
-             patch("app.semantic.embed", new=AsyncMock(side_effect=Exception("no embed"))):
+        with (
+            patch("app.exact.get", new=AsyncMock(return_value=None)),
+            patch("app.semantic.embed", new=AsyncMock(side_effect=Exception("no embed"))),
+        ):
             resp = await client.post(
                 "/v1/chat/completions",
                 json=CHAT_BODY,
@@ -188,9 +192,11 @@ class TestChatCompletions:
 
         app.state.http.post = AsyncMock(side_effect=_post_side_effect)
 
-        with patch("app.router.get_policy", new=AsyncMock(return_value=opt_out_policy)), \
-             patch("app.exact.get", new=AsyncMock()) as mock_exact_get, \
-             patch("app.semantic.get", new=AsyncMock()) as mock_sem_get:
+        with (
+            patch("app.router.get_policy", new=AsyncMock(return_value=opt_out_policy)),
+            patch("app.exact.get", new=AsyncMock()) as mock_exact_get,
+            patch("app.semantic.get", new=AsyncMock()) as mock_sem_get,
+        ):
             resp = await client.post(
                 "/v1/chat/completions",
                 json=CHAT_BODY,
@@ -215,9 +221,11 @@ class TestChatCompletions:
 
         app.state.http.post = AsyncMock(side_effect=_post_side_effect)
 
-        with patch("app.exact.get", new=AsyncMock(return_value=None)), \
-             patch("app.semantic.embed", new=AsyncMock(return_value=[0.1, 0.2, 0.3])), \
-             patch("app.semantic.get", new=AsyncMock(return_value=sem_cached)):
+        with (
+            patch("app.exact.get", new=AsyncMock(return_value=None)),
+            patch("app.semantic.embed", new=AsyncMock(return_value=[0.1, 0.2, 0.3])),
+            patch("app.semantic.get", new=AsyncMock(return_value=sem_cached)),
+        ):
             resp = await client.post(
                 "/v1/chat/completions",
                 json=CHAT_BODY,
@@ -243,9 +251,11 @@ class TestChatCompletions:
 
         app.state.http.post = AsyncMock(side_effect=_post_side_effect)
 
-        with patch("app.exact.get", new=AsyncMock(return_value=None)), \
-             patch("app.semantic.embed", new=AsyncMock(side_effect=Exception("skip"))), \
-             patch("app.exact.set", new=AsyncMock()):
+        with (
+            patch("app.exact.get", new=AsyncMock(return_value=None)),
+            patch("app.semantic.embed", new=AsyncMock(side_effect=Exception("skip"))),
+            patch("app.exact.set", new=AsyncMock()),
+        ):
             resp = await client.post(
                 "/v1/chat/completions",
                 json=CHAT_BODY,
@@ -255,6 +265,7 @@ class TestChatCompletions:
         assert resp.status_code == 200
         # asyncio.create_task schedules the event call; drain pending tasks.
         import asyncio
+
         await asyncio.sleep(0)
         assert any("/events" in url for url in obs_calls), (
             "Expected an observability event POST after cache miss"
@@ -272,9 +283,11 @@ class TestChatCompletions:
         app.state.http.post = AsyncMock(side_effect=_post_side_effect)
 
         mock_exact_set = AsyncMock()
-        with patch("app.exact.get", new=AsyncMock(return_value=None)), \
-             patch("app.semantic.embed", new=AsyncMock(side_effect=Exception("skip"))), \
-             patch("app.exact.set", new=mock_exact_set):
+        with (
+            patch("app.exact.get", new=AsyncMock(return_value=None)),
+            patch("app.semantic.embed", new=AsyncMock(side_effect=Exception("skip"))),
+            patch("app.exact.set", new=mock_exact_set),
+        ):
             resp = await client.post(
                 "/v1/chat/completions",
                 json=CHAT_BODY,
@@ -336,6 +349,7 @@ class TestStreamingCacheHits:
         assert "data: [DONE]" in body
         # At least one chunk must carry the cached content
         import json as _j
+
         content_found = any(
             _j.loads(line[6:]).get("choices", [{}])[0].get("delta", {}).get("content") == "cached!"
             for line in body.splitlines()
@@ -368,9 +382,11 @@ class TestStreamingCacheHits:
 
         app.state.http.post = AsyncMock(side_effect=_post_side_effect)
 
-        with patch("app.exact.get", new=AsyncMock(return_value=None)), \
-             patch("app.semantic.embed", new=AsyncMock(return_value=[0.1, 0.2, 0.3])), \
-             patch("app.semantic.get", new=AsyncMock(return_value=_CACHED_RESPONSE)):
+        with (
+            patch("app.exact.get", new=AsyncMock(return_value=None)),
+            patch("app.semantic.embed", new=AsyncMock(return_value=[0.1, 0.2, 0.3])),
+            patch("app.semantic.get", new=AsyncMock(return_value=_CACHED_RESPONSE)),
+        ):
             resp = await client.post(
                 "/v1/chat/completions",
                 json=STREAM_BODY,

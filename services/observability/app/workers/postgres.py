@@ -75,15 +75,15 @@ async def _resolve_developer_id(pool: asyncpg.Pool, key_uuid: uuid.UUID | None) 
     if not key_uuid:
         return None
     try:
-        row = await pool.fetchrow(
-            "SELECT developer_id FROM api_keys WHERE id = $1", key_uuid
-        )
+        row = await pool.fetchrow("SELECT developer_id FROM api_keys WHERE id = $1", key_uuid)
         return row["developer_id"] if row else None
     except Exception:
         return None
 
 
-def _session_quality_score(turn_count: int, retry_count: int, error_count: int, avg_inter_s: float | None) -> int:
+def _session_quality_score(
+    turn_count: int, retry_count: int, error_count: int, avg_inter_s: float | None
+) -> int:
     """Rule-based session quality score 1–5 based on DX Agent Experience signals."""
     score = 3
     total = max(1, turn_count)
@@ -118,7 +118,9 @@ def _session_quality_score(turn_count: int, retry_count: int, error_count: int, 
     return max(1, min(5, score))
 
 
-async def _upsert_session(pool: asyncpg.Pool, event: GatewayEvent, developer_id: uuid.UUID | None, cost: float) -> None:
+async def _upsert_session(
+    pool: asyncpg.Pool, event: GatewayEvent, developer_id: uuid.UUID | None, cost: float
+) -> None:
     """Upsert session aggregates keyed by session_trace_id. Fail silently."""
     if not event.session_trace_id:
         return
@@ -146,9 +148,17 @@ async def _upsert_session(pool: asyncpg.Pool, event: GatewayEvent, developer_id:
                     updated_at = NOW()
                 WHERE session_trace_id = $11
                 """,
-                now, new_turns, event.tokens_input + event.tokens_output,
-                cost, new_retries, new_errors, event.tool_invocation_count,
-                quality, avg_inter, event.request_intent, event.session_trace_id,
+                now,
+                new_turns,
+                event.tokens_input + event.tokens_output,
+                cost,
+                new_retries,
+                new_errors,
+                event.tool_invocation_count,
+                quality,
+                avg_inter,
+                event.request_intent,
+                event.session_trace_id,
             )
         else:
             await pool.execute(
@@ -160,19 +170,30 @@ async def _upsert_session(pool: asyncpg.Pool, event: GatewayEvent, developer_id:
                      quality_score, avg_inter_request_s, dominant_intent)
                 VALUES ($1, $2, $3, $4, $4, 1, $5, $6, $7, $8, $9, $10, $11, $12, $13, NULL, $14)
                 """,
-                event.session_trace_id, developer_id, event.team_id, now,
-                event.tokens_input + event.tokens_output, cost,
-                event.retry_count, 1 if event.request_error_type else 0,
-                event.tool_invocation_count, event.session_purpose, event.repo,
+                event.session_trace_id,
+                developer_id,
+                event.team_id,
+                now,
+                event.tokens_input + event.tokens_output,
+                cost,
+                event.retry_count,
+                1 if event.request_error_type else 0,
+                event.tool_invocation_count,
+                event.session_purpose,
+                event.repo,
                 event.model,
-                _session_quality_score(1, event.retry_count, 1 if event.request_error_type else 0, None),
+                _session_quality_score(
+                    1, event.retry_count, 1 if event.request_error_type else 0, None
+                ),
                 event.request_intent,
             )
     except Exception:
         pass
 
 
-async def _upsert_activity_log(pool: asyncpg.Pool, developer_id: uuid.UUID, cost_usd: float, event: GatewayEvent) -> None:
+async def _upsert_activity_log(
+    pool: asyncpg.Pool, developer_id: uuid.UUID, cost_usd: float, event: GatewayEvent
+) -> None:
     """Upsert daily activity rollup for the developer. Fail silently."""
     try:
         today = date.today()

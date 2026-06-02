@@ -19,8 +19,8 @@ from app.config import settings
 
 _log = logging.getLogger(__name__)
 
-_INTERVAL = 6 * 60 * 60   # 6 hours between runs
-_STARTUP_DELAY = 30        # seconds after startup before first run
+_INTERVAL = 6 * 60 * 60  # 6 hours between runs
+_STARTUP_DELAY = 30  # seconds after startup before first run
 _MAX_ROUNDS = 8
 _LLM_TIMEOUT = 60.0
 _TOOL_TIMEOUT = 10.0
@@ -155,9 +155,7 @@ _TOOLS = [
             ),
             "parameters": {
                 "type": "object",
-                "properties": {
-                    "period": {"type": "string", "enum": ["7d", "30d", "mtd"]}
-                },
+                "properties": {"period": {"type": "string", "enum": ["7d", "30d", "mtd"]}},
                 "required": [],
             },
         },
@@ -233,14 +231,18 @@ _TOOLS = [
 # Tool implementations (DB queries, no HTTP round-trips to the proxy)
 # ---------------------------------------------------------------------------
 
+
 async def _tool_check_service_health(pool) -> dict:
     return {"note": "service health check requires request context; skipping in worker"}
 
 
 async def _tool_get_gateway_metrics(pool, period: str = "24h") -> dict:
     _interval = {
-        "1h": "1 hour", "6h": "6 hours", "24h": "24 hours",
-        "7d": "7 days", "30d": "30 days",
+        "1h": "1 hour",
+        "6h": "6 hours",
+        "24h": "24 hours",
+        "7d": "7 days",
+        "30d": "30 days",
     }.get(period, "24 hours")
     async with pool.acquire() as conn:
         row = await conn.fetchrow(f"""
@@ -320,8 +322,11 @@ async def _tool_get_budget_status(pool) -> list:
             "spent_usd": float(r["spent_usd"]),
             "pct_used": float(r["pct_used"]) if r["pct_used"] is not None else None,
             "status": (
-                "over_budget" if (r["pct_used"] or 0) >= 100 else
-                "warning" if (r["pct_used"] or 0) >= 80 else "ok"
+                "over_budget"
+                if (r["pct_used"] or 0) >= 100
+                else "warning"
+                if (r["pct_used"] or 0) >= 80
+                else "ok"
             ),
         }
         for r in rows
@@ -361,7 +366,7 @@ async def _tool_get_top_teams(pool, period: str = "mtd", limit: int = 10) -> lis
     limit = max(1, min(limit, 30))
     _where = {
         "24h": "AND cr.created_at >= NOW() - INTERVAL '24 hours'",
-        "7d":  "AND cr.created_at >= NOW() - INTERVAL '7 days'",
+        "7d": "AND cr.created_at >= NOW() - INTERVAL '7 days'",
         "30d": "AND cr.created_at >= NOW() - INTERVAL '30 days'",
         "mtd": "AND cr.created_at >= date_trunc('month', NOW())",
     }.get(period, "AND cr.created_at >= date_trunc('month', NOW())")
@@ -431,15 +436,17 @@ async def _tool_get_model_rightsizing(pool, period: str = "7d") -> list:
 
 async def _tool_record_insight(pool, pending_insights: list, args: dict) -> dict:
     """Buffer insight for bulk insert after the agent completes."""
-    pending_insights.append({
-        "category": args.get("category", "usage"),
-        "severity": args.get("severity", "info"),
-        "title": str(args.get("title", ""))[:80],
-        "description": str(args.get("description", ""))[:2000],
-        "action": str(args.get("action", ""))[:500] if args.get("action") else None,
-        "team_name": args.get("team_name"),
-        "developer_email": args.get("developer_email"),
-    })
+    pending_insights.append(
+        {
+            "category": args.get("category", "usage"),
+            "severity": args.get("severity", "info"),
+            "title": str(args.get("title", ""))[:80],
+            "description": str(args.get("description", ""))[:2000],
+            "action": str(args.get("action", ""))[:500] if args.get("action") else None,
+            "team_name": args.get("team_name"),
+            "developer_email": args.get("developer_email"),
+        }
+    )
     return {"recorded": True, "total_buffered": len(pending_insights)}
 
 
@@ -447,16 +454,22 @@ async def _tool_tune_cache_threshold(pool, new_threshold: float, reason: str) ->
     """Clamp and apply a new semantic similarity threshold to org_settings."""
     new_threshold = round(max(0.72, min(0.95, new_threshold)), 3)
     async with pool.acquire() as conn:
-        await conn.execute("""
+        await conn.execute(
+            """
             INSERT INTO org_settings (key, value)
             VALUES ('semantic_similarity_threshold', $1)
             ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
-        """, str(new_threshold))
-        await conn.execute("""
+        """,
+            str(new_threshold),
+        )
+        await conn.execute(
+            """
             INSERT INTO audit_log (actor, action, resource_type, detail)
             VALUES ('optimization_worker', 'tune_cache_threshold', 'org_settings',
                     $1)
-        """, json.dumps({"new_threshold": new_threshold, "reason": reason[:300]}))
+        """,
+            json.dumps({"new_threshold": new_threshold, "reason": reason[:300]}),
+        )
     return {"applied": True, "new_threshold": new_threshold, "reason": reason}
 
 
@@ -464,27 +477,46 @@ async def _tool_tune_cache_threshold(pool, new_threshold: float, reason: str) ->
 # Tool dispatch
 # ---------------------------------------------------------------------------
 
+
 async def _dispatch(name: str, args: dict, pool, pending_insights: list) -> Any:
     t0 = time.monotonic()
     try:
         if name == "check_service_health":
             result = await asyncio.wait_for(_tool_check_service_health(pool), _TOOL_TIMEOUT)
         elif name == "get_gateway_metrics":
-            result = await asyncio.wait_for(_tool_get_gateway_metrics(pool, args.get("period", "24h")), _TOOL_TIMEOUT)
+            result = await asyncio.wait_for(
+                _tool_get_gateway_metrics(pool, args.get("period", "24h")), _TOOL_TIMEOUT
+            )
         elif name == "get_recent_errors":
-            result = await asyncio.wait_for(_tool_get_recent_errors(pool, args.get("limit", 20)), _TOOL_TIMEOUT)
+            result = await asyncio.wait_for(
+                _tool_get_recent_errors(pool, args.get("limit", 20)), _TOOL_TIMEOUT
+            )
         elif name == "get_budget_status":
             result = await asyncio.wait_for(_tool_get_budget_status(pool), _TOOL_TIMEOUT)
         elif name == "get_model_usage":
-            result = await asyncio.wait_for(_tool_get_model_usage(pool, args.get("period", "7d")), _TOOL_TIMEOUT)
+            result = await asyncio.wait_for(
+                _tool_get_model_usage(pool, args.get("period", "7d")), _TOOL_TIMEOUT
+            )
         elif name == "get_top_teams_by_spend":
-            result = await asyncio.wait_for(_tool_get_top_teams(pool, args.get("period", "mtd"), args.get("limit", 10)), _TOOL_TIMEOUT)
+            result = await asyncio.wait_for(
+                _tool_get_top_teams(pool, args.get("period", "mtd"), args.get("limit", 10)),
+                _TOOL_TIMEOUT,
+            )
         elif name == "get_model_rightsizing_data":
-            result = await asyncio.wait_for(_tool_get_model_rightsizing(pool, args.get("period", "7d")), _TOOL_TIMEOUT)
+            result = await asyncio.wait_for(
+                _tool_get_model_rightsizing(pool, args.get("period", "7d")), _TOOL_TIMEOUT
+            )
         elif name == "record_insight":
-            result = await asyncio.wait_for(_tool_record_insight(pool, pending_insights, args), _TOOL_TIMEOUT)
+            result = await asyncio.wait_for(
+                _tool_record_insight(pool, pending_insights, args), _TOOL_TIMEOUT
+            )
         elif name == "tune_cache_threshold":
-            result = await asyncio.wait_for(_tool_tune_cache_threshold(pool, args.get("new_threshold", 0.85), args.get("reason", "")), _TOOL_TIMEOUT)
+            result = await asyncio.wait_for(
+                _tool_tune_cache_threshold(
+                    pool, args.get("new_threshold", 0.85), args.get("reason", "")
+                ),
+                _TOOL_TIMEOUT,
+            )
         else:
             result = {"error": f"Unknown tool: {name}"}
     except asyncio.TimeoutError:
@@ -499,6 +531,7 @@ async def _dispatch(name: str, args: dict, pool, pending_insights: list) -> Any:
 # ---------------------------------------------------------------------------
 # Agent loop
 # ---------------------------------------------------------------------------
+
 
 async def _run_optimization_agent(pool) -> list[dict]:
     """Run the optimization agent and return buffered insights."""
@@ -540,22 +573,26 @@ async def _run_optimization_agent(pool) -> list[dict]:
             if not tool_calls or choice.get("finish_reason") == "stop":
                 break
 
-            results = await asyncio.gather(*[
-                _dispatch(
-                    tc["function"]["name"],
-                    json.loads(tc["function"]["arguments"] or "{}"),
-                    pool,
-                    pending_insights,
-                )
-                for tc in tool_calls
-            ])
+            results = await asyncio.gather(
+                *[
+                    _dispatch(
+                        tc["function"]["name"],
+                        json.loads(tc["function"]["arguments"] or "{}"),
+                        pool,
+                        pending_insights,
+                    )
+                    for tc in tool_calls
+                ]
+            )
 
             for tc, result in zip(tool_calls, results):
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": tc["id"],
-                    "content": json.dumps(result),
-                })
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tc["id"],
+                        "content": json.dumps(result),
+                    }
+                )
 
     return pending_insights
 
@@ -563,6 +600,7 @@ async def _run_optimization_agent(pool) -> list[dict]:
 # ---------------------------------------------------------------------------
 # Insight persistence
 # ---------------------------------------------------------------------------
+
 
 async def _flush_insights(pool, insights: list[dict]) -> int:
     if not insights:
@@ -591,14 +629,22 @@ async def _flush_insights(pool, insights: list[dict]) -> int:
                 )
                 developer_id = row["id"] if row else None
 
-            await conn.execute("""
+            await conn.execute(
+                """
                 INSERT INTO ai_insights
                     (category, severity, title, description, action,
                      team_id, team_name, developer_id, source)
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'optimization_worker')
-            """, ins["category"], ins["severity"], ins["title"],
-                ins["description"], ins.get("action"),
-                team_id, ins.get("team_name"), developer_id)
+            """,
+                ins["category"],
+                ins["severity"],
+                ins["title"],
+                ins["description"],
+                ins.get("action"),
+                team_id,
+                ins.get("team_name"),
+                developer_id,
+            )
             count += 1
 
     return count
@@ -607,6 +653,7 @@ async def _flush_insights(pool, insights: list[dict]) -> int:
 # ---------------------------------------------------------------------------
 # Main loop
 # ---------------------------------------------------------------------------
+
 
 async def optimization_loop(pool):
     """Background task — waits for startup, then runs every _INTERVAL seconds."""
@@ -619,9 +666,7 @@ async def optimization_loop(pool):
             insights = await _run_optimization_agent(pool)
             stored = await _flush_insights(pool, insights)
             elapsed = round(time.monotonic() - t0, 1)
-            _log.info(
-                "Optimization worker: stored %d insights in %.1fs", stored, elapsed
-            )
+            _log.info("Optimization worker: stored %d insights in %.1fs", stored, elapsed)
         except asyncio.CancelledError:
             _log.info("Optimization worker: cancelled")
             return

@@ -40,6 +40,7 @@ def _end_of_month() -> int:
 def _current_month() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m")
 
+
 router = APIRouter(tags=["budget"])
 
 _BUDGET_REDIS_TTL = 300  # seconds
@@ -52,6 +53,7 @@ _BUDGET_REDIS_TTL = 300  # seconds
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _safe_pct(spend: float, limit: float | None) -> float | None:
     """Return spend / limit as a fraction, or None if limit is None/zero."""
@@ -101,7 +103,9 @@ async def _redis_set_key_budget(request: Request, key_id: UUID, limit: float | N
         await redis.set(key, payload, ex=_BUDGET_REDIS_TTL)
 
 
-async def _redis_set_org_budget(request: Request, limit: float | None, action: str, alert_pct: float) -> None:
+async def _redis_set_org_budget(
+    request: Request, limit: float | None, action: str, alert_pct: float
+) -> None:
     redis = request.app.state.redis
     key = "budget_limit:org"
     if limit is None:
@@ -114,6 +118,7 @@ async def _redis_set_org_budget(request: Request, limit: float | None, action: s
 # ---------------------------------------------------------------------------
 # Pydantic schemas
 # ---------------------------------------------------------------------------
+
 
 class KeyBudgetBody(BaseModel):
     monthly_budget_usd: float | None = Field(default=None, ge=0)
@@ -135,6 +140,7 @@ class OrgBudgetBody(BaseModel):
 # ---------------------------------------------------------------------------
 # API key budget
 # ---------------------------------------------------------------------------
+
 
 @router.get("/keys/{key_id}/budget")
 async def get_key_budget(
@@ -168,10 +174,16 @@ async def set_key_budget(
     if not key or key.revoked_at is not None:
         raise HTTPException(status_code=404, detail="API key not found")
 
-    key.monthly_budget_usd = Decimal(str(body.monthly_budget_usd)) if body.monthly_budget_usd is not None else None
+    key.monthly_budget_usd = (
+        Decimal(str(body.monthly_budget_usd)) if body.monthly_budget_usd is not None else None
+    )
 
     await audit.record(
-        session, request, "set_key_budget", "api_key", resource_id=key_id,
+        session,
+        request,
+        "set_key_budget",
+        "api_key",
+        resource_id=key_id,
         details={"monthly_budget_usd": body.monthly_budget_usd},
     )
     await session.commit()
@@ -199,6 +211,7 @@ async def set_key_budget(
 # ---------------------------------------------------------------------------
 # Org budget
 # ---------------------------------------------------------------------------
+
 
 async def _read_org_settings(session: AsyncSession) -> dict[str, str]:
     rows = await session.execute(text("SELECT key, value FROM org_settings"))
@@ -257,7 +270,11 @@ async def set_org_budget(
     )
 
     await audit.record(
-        session, request, "set_org_budget", "org_settings", resource_id=None,
+        session,
+        request,
+        "set_org_budget",
+        "org_settings",
+        resource_id=None,
         details={
             "monthly_budget_usd": body.monthly_budget_usd,
             "budget_alert_pct": body.budget_alert_pct,
@@ -266,7 +283,9 @@ async def set_org_budget(
     )
     await session.commit()
 
-    await _redis_set_org_budget(request, body.monthly_budget_usd, body.budget_action, body.budget_alert_pct)
+    await _redis_set_org_budget(
+        request, body.monthly_budget_usd, body.budget_action, body.budget_alert_pct
+    )
 
     spend = await _org_monthly_spend(session)
 
@@ -288,6 +307,7 @@ async def set_org_budget(
 # ---------------------------------------------------------------------------
 # Budget status — combined dashboard view
 # ---------------------------------------------------------------------------
+
 
 @router.get("/budget/status")
 async def budget_status(session: AsyncSession = Depends(get_session)) -> dict[str, Any]:
@@ -322,7 +342,9 @@ async def budget_status(session: AsyncSession = Depends(get_session)) -> dict[st
 
     teams_summary = []
     for row in teams_rows:
-        t_limit = float(row["monthly_budget_usd"]) if row["monthly_budget_usd"] is not None else None
+        t_limit = (
+            float(row["monthly_budget_usd"]) if row["monthly_budget_usd"] is not None else None
+        )
         t_spend = float(row["spend"])
         t_alert_pct = float(row["budget_alert_pct"]) if row["budget_alert_pct"] is not None else 0.8
         teams_summary.append(
@@ -362,8 +384,11 @@ async def budget_status(session: AsyncSession = Depends(get_session)) -> dict[st
 # Budget alert notification webhook
 # ---------------------------------------------------------------------------
 
+
 class NotificationWebhookBody(BaseModel):
-    webhook_url: str = Field(default="", description="Slack-compatible webhook URL; empty string to disable")
+    webhook_url: str = Field(
+        default="", description="Slack-compatible webhook URL; empty string to disable"
+    )
 
 
 @router.get("/org/notifications")
@@ -389,7 +414,11 @@ async def set_notification_webhook(
         {"key": "notification_webhook_url", "value": body.webhook_url},
     )
     await audit.record(
-        session, request, "set_notification_webhook", "org_settings", resource_id=None,
+        session,
+        request,
+        "set_notification_webhook",
+        "org_settings",
+        resource_id=None,
         details={"webhook_url": body.webhook_url[:80] if body.webhook_url else ""},
     )
     await session.commit()
@@ -417,7 +446,9 @@ async def test_notification_webhook(
     if not url:
         raise HTTPException(status_code=400, detail="No webhook URL configured")
 
-    test_payload = {"text": ":white_check_mark: *Budget Alert Test* — AI Gateway notifications are working."}
+    test_payload = {
+        "text": ":white_check_mark: *Budget Alert Test* — AI Gateway notifications are working."
+    }
     try:
         async with _httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.post(url, json=test_payload)
@@ -432,6 +463,7 @@ async def test_notification_webhook(
 # ---------------------------------------------------------------------------
 # Cost forecasting — project end-of-month spend from current burn rate
 # ---------------------------------------------------------------------------
+
 
 @router.get("/budget/forecast")
 async def budget_forecast(session: AsyncSession = Depends(get_session)) -> dict:
@@ -450,10 +482,14 @@ async def budget_forecast(session: AsyncSession = Depends(get_session)) -> dict:
     burn_factor = days_in_month / max(1, days_elapsed)
 
     # Org MTD spend
-    org_mtd = (await session.execute(text(
-        "SELECT COALESCE(SUM(cost_usd), 0) AS spend FROM cost_records "
-        "WHERE created_at >= date_trunc('month', NOW())"
-    ))).scalar()
+    org_mtd = (
+        await session.execute(
+            text(
+                "SELECT COALESCE(SUM(cost_usd), 0) AS spend FROM cost_records "
+                "WHERE created_at >= date_trunc('month', NOW())"
+            )
+        )
+    ).scalar()
     org_mtd = float(org_mtd or 0)
     org_projected = round(org_mtd * burn_factor, 4)
 
@@ -462,7 +498,10 @@ async def budget_forecast(session: AsyncSession = Depends(get_session)) -> dict:
     org_limit: float | None = raw_org_limit if raw_org_limit > 0.0 else None
 
     # Team MTD spend + budget
-    team_rows = (await session.execute(text("""
+    team_rows = (
+        (
+            await session.execute(
+                text("""
         SELECT t.id, t.name, t.slug, t.monthly_budget_usd,
                COALESCE(SUM(cr.cost_usd), 0) AS mtd_spend
         FROM organization_nodes t
@@ -471,7 +510,12 @@ async def budget_forecast(session: AsyncSession = Depends(get_session)) -> dict:
         WHERE t.type = 'team'
         GROUP BY t.id, t.name, t.slug, t.monthly_budget_usd
         ORDER BY mtd_spend DESC
-    """))).mappings().all()
+    """)
+            )
+        )
+        .mappings()
+        .all()
+    )
 
     teams_forecast = []
     for row in team_rows:
@@ -481,16 +525,20 @@ async def budget_forecast(session: AsyncSession = Depends(get_session)) -> dict:
         on_track = None
         if limit is not None and limit > 0:
             on_track = projected <= limit
-        teams_forecast.append({
-            "team_id": str(row["id"]),
-            "name": row["name"],
-            "slug": row["slug"],
-            "mtd_spend_usd": mtd,
-            "projected_month_end_usd": projected,
-            "monthly_budget_usd": limit,
-            "on_track": on_track,
-            "overage_usd": round(projected - limit, 4) if limit is not None and projected > limit else None,
-        })
+        teams_forecast.append(
+            {
+                "team_id": str(row["id"]),
+                "name": row["name"],
+                "slug": row["slug"],
+                "mtd_spend_usd": mtd,
+                "projected_month_end_usd": projected,
+                "monthly_budget_usd": limit,
+                "on_track": on_track,
+                "overage_usd": round(projected - limit, 4)
+                if limit is not None and projected > limit
+                else None,
+            }
+        )
 
     return {
         "as_of_date": today.isoformat(),
@@ -502,7 +550,9 @@ async def budget_forecast(session: AsyncSession = Depends(get_session)) -> dict:
             "projected_month_end_usd": org_projected,
             "monthly_budget_usd": org_limit,
             "on_track": (org_projected <= org_limit) if org_limit else None,
-            "overage_usd": round(org_projected - org_limit, 4) if org_limit and org_projected > org_limit else None,
+            "overage_usd": round(org_projected - org_limit, 4)
+            if org_limit and org_projected > org_limit
+            else None,
         },
         "teams": teams_forecast,
     }

@@ -60,8 +60,10 @@ async def test_high_similarity_returns_text_with_cited_sources(portal_client):
 
 @pytest.mark.asyncio
 async def test_no_chunks_returns_ask_cta_and_skips_llm(portal_client):
-    with patch("app.routers.ai_help.retrieve_champion_chunks", AsyncMock(return_value=[])), \
-         patch("app.routers.ai_help._call_llm", AsyncMock()) as llm:
+    with (
+        patch("app.routers.ai_help.retrieve_champion_chunks", AsyncMock(return_value=[])),
+        patch("app.routers.ai_help._call_llm", AsyncMock()) as llm,
+    ):
         resp = await portal_client.post(
             "/ai-help/chat/portal",
             json={"messages": [{"role": "user", "content": "what is the meaning of life?"}]},
@@ -81,8 +83,10 @@ async def test_no_chunks_returns_ask_cta_and_skips_llm(portal_client):
 async def test_all_below_threshold_returns_ask_cta(portal_client):
     """Chunks present but all below similarity threshold → fallback CTA."""
     chunks = [{"id": "x", "title": "Off-topic", "content": "Nope.", "score": 0.10}]
-    with patch("app.routers.ai_help.retrieve_champion_chunks", AsyncMock(return_value=chunks)), \
-         patch("app.routers.ai_help._call_llm", AsyncMock()) as llm:
+    with (
+        patch("app.routers.ai_help.retrieve_champion_chunks", AsyncMock(return_value=chunks)),
+        patch("app.routers.ai_help._call_llm", AsyncMock()) as llm,
+    ):
         resp = await portal_client.post(
             "/ai-help/chat/portal",
             json={"messages": [{"role": "user", "content": "irrelevant question"}]},

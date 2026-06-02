@@ -4,6 +4,7 @@ Alerts fire when a team's daily spend exceeds threshold × rolling average.
 Alert config is persisted in org_settings (same pattern as budget.py).
 Alert history is read from audit_log rows with action='budget_spike_alert'.
 """
+
 from __future__ import annotations
 
 import json
@@ -21,17 +22,19 @@ _CONFIG_KEY = "budget_alert_config"
 
 
 class AlertConfig(BaseModel):
-    spike_multiplier: float = 3.0   # fire when daily > avg * this
+    spike_multiplier: float = 3.0  # fire when daily > avg * this
     webhook_url: str | None = None
     email_enabled: bool = True
 
 
 async def _read_alert_config(session: AsyncSession) -> dict:
     try:
-        row = (await session.execute(
-            text("SELECT value FROM org_settings WHERE key = :k"),
-            {"k": _CONFIG_KEY},
-        )).first()
+        row = (
+            await session.execute(
+                text("SELECT value FROM org_settings WHERE key = :k"),
+                {"k": _CONFIG_KEY},
+            )
+        ).first()
         if row:
             return json.loads(row[0])
     except Exception:
@@ -78,11 +81,20 @@ async def list_alerts(
         if team_id:
             where += " AND resource_id = :team_id"
             params["team_id"] = team_id
-        rows = (await session.execute(text(f"""
+        rows = (
+            (
+                await session.execute(
+                    text(f"""
             SELECT id, timestamp, actor, resource_id, details
             FROM audit_log WHERE {where}
             ORDER BY timestamp DESC LIMIT :limit
-        """), params)).mappings().all()
+        """),
+                    params,
+                )
+            )
+            .mappings()
+            .all()
+        )
         return [dict(r) for r in rows]
     except Exception:
         return []

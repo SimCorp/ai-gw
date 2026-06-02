@@ -7,6 +7,7 @@ Revision ID: 0010
 Revises: 0009
 Create Date: 2026-05-13
 """
+
 from __future__ import annotations
 
 from typing import Sequence, Union

@@ -9,13 +9,21 @@ from app.llm.champion_metadata import classify_content
 @pytest.mark.asyncio
 async def test_classify_returns_structured_dict():
     fake_llm_response = {
-        "choices": [{"message": {"content": json.dumps({
-            "title": "Building an agentic RAG",
-            "summary": "Walkthrough of agentic RAG with tool-use",
-            "focus_areas": ["agentic", "rag"],
-            "tags": ["python", "anthropic"],
-            "difficulty": "intermediate",
-        })}}]
+        "choices": [
+            {
+                "message": {
+                    "content": json.dumps(
+                        {
+                            "title": "Building an agentic RAG",
+                            "summary": "Walkthrough of agentic RAG with tool-use",
+                            "focus_areas": ["agentic", "rag"],
+                            "tags": ["python", "anthropic"],
+                            "difficulty": "intermediate",
+                        }
+                    )
+                }
+            }
+        ]
     }
     with patch("app.llm.champion_metadata.httpx.AsyncClient") as mock_client_cls:
         instance = AsyncMock()
@@ -55,13 +63,21 @@ async def test_classify_handles_malformed_json():
 async def test_classify_truncates_summary_over_200_chars():
     long_summary = "x" * 500
     fake_llm_response = {
-        "choices": [{"message": {"content": json.dumps({
-            "title": "T",
-            "summary": long_summary,
-            "focus_areas": [],
-            "tags": [],
-            "difficulty": "beginner",
-        })}}]
+        "choices": [
+            {
+                "message": {
+                    "content": json.dumps(
+                        {
+                            "title": "T",
+                            "summary": long_summary,
+                            "focus_areas": [],
+                            "tags": [],
+                            "difficulty": "beginner",
+                        }
+                    )
+                }
+            }
+        ]
     }
     with patch("app.llm.champion_metadata.httpx.AsyncClient") as mock_client_cls:
         instance = AsyncMock()
@@ -83,6 +99,7 @@ async def test_classify_raises_on_litellm_5xx():
         mock_client_cls.return_value = instance
 
         from fastapi import HTTPException
+
         with pytest.raises(HTTPException) as exc:
             await classify_content(text="anything")
         assert exc.value.status_code == 502

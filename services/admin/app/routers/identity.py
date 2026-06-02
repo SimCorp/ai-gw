@@ -4,6 +4,7 @@ Routers:
     router        — authenticated endpoints (POST /identity/tokens, POST /identity/verify)
     public_router — unauthenticated GET /identity/jwks
 """
+
 from __future__ import annotations
 
 import logging
@@ -34,15 +35,15 @@ public_router = APIRouter(prefix="/identity", tags=["identity"])
 
 class IssueTokenRequest(BaseModel):
     slug: str
-    name: str | None = None          # defaults to slug when omitted
+    name: str | None = None  # defaults to slug when omitted
     team_id: str | None = None
-    scopes: list[str] = []            # treated as capabilities
-    ttl_seconds: int = 86400 * 30    # 30-day default
+    scopes: list[str] = []  # treated as capabilities
+    ttl_seconds: int = 86400 * 30  # 30-day default
 
 
 class IssueTokenResponse(BaseModel):
     token: str
-    expires_at: str                   # ISO-8601 UTC timestamp
+    expires_at: str  # ISO-8601 UTC timestamp
 
 
 class VerifyTokenRequest(BaseModel):

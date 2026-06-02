@@ -10,7 +10,11 @@ GARAK_SAMPLE = """
 NUCLEI_SAMPLE = [
     {
         "template-id": "CVE-2021-41773",
-        "info": {"name": "Path Traversal", "severity": "critical", "description": "Apache path traversal"},
+        "info": {
+            "name": "Path Traversal",
+            "severity": "critical",
+            "description": "Apache path traversal",
+        },
         "host": "http://myapp.simcorp.internal",
         "matched-at": "http://myapp.simcorp.internal/cgi-bin/.%2e/%2e%2e/etc/passwd",
         "type": "http",

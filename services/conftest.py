@@ -8,6 +8,7 @@ services, so fixtures doing lazy `from app.xxx import ...` always get the
 right one without breaking tests that captured module-level references at
 import time.
 """
+
 import sys
 from pathlib import Path
 

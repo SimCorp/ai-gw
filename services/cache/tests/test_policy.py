@@ -1,4 +1,5 @@
 """Tests for app.policy.get_policy."""
+
 from unittest.mock import AsyncMock
 
 import pytest
@@ -8,6 +9,7 @@ from app.policy import CachePolicy, get_policy
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _redis_with(data: dict) -> AsyncMock:
     """Return a Redis mock whose hgetall always yields `data`."""
@@ -20,14 +22,17 @@ def _redis_with(data: dict) -> AsyncMock:
 # Tests
 # ---------------------------------------------------------------------------
 
+
 class TestGetPolicy:
     async def test_redis_has_policy_for_team_returns_correct_values(self):
-        redis = _redis_with({
-            "ttl_seconds": "7200",
-            "similarity_threshold": "0.85",
-            "opt_out": "false",
-            "embedding_model": "text-embedding-ada-002",
-        })
+        redis = _redis_with(
+            {
+                "ttl_seconds": "7200",
+                "similarity_threshold": "0.85",
+                "opt_out": "false",
+                "embedding_model": "text-embedding-ada-002",
+            }
+        )
 
         policy = await get_policy("team-42", None, redis)
 

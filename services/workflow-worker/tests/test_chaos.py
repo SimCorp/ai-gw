@@ -7,6 +7,7 @@ Prerequisites (same as test_acceptance.py):
 Run:
   pytest services/workflow-worker/tests/test_chaos.py -v --timeout=300
 """
+
 from __future__ import annotations
 
 import concurrent.futures
@@ -28,6 +29,7 @@ _redis = redis_mod.Redis(host="localhost", port=6379, decode_responses=True)
 # Helpers (mirrors test_acceptance.py)
 # ---------------------------------------------------------------------------
 
+
 def _get(path: str) -> dict:
     r = httpx.get(f"{ADMIN}{path}", headers=HEADERS, timeout=10)
     r.raise_for_status()
@@ -46,25 +48,39 @@ def _team_id() -> str:
 
 
 def _register_agent(slug: str, image: str) -> str:
-    r = httpx.post(f"{ADMIN}/agents", headers=HEADERS, timeout=10, json={
-        "slug": slug, "name": slug, "image": image, "category": "test",
-    })
+    r = httpx.post(
+        f"{ADMIN}/agents",
+        headers=HEADERS,
+        timeout=10,
+        json={
+            "slug": slug,
+            "name": slug,
+            "image": image,
+            "category": "test",
+        },
+    )
     r.raise_for_status()
     return r.json()["id"]
 
 
 def _make_workflow(team_id: str, nodes: list[dict], edges: list[dict]) -> tuple[str, str]:
     """Create a workflow + version. Returns (workflow_id, first_node_id)."""
-    wf = _post("/workflows", {
-        "slug": f"test-{uuid.uuid4().hex[:6]}",
-        "name": "Test Workflow",
-        "team_id": team_id,
-    })
+    wf = _post(
+        "/workflows",
+        {
+            "slug": f"test-{uuid.uuid4().hex[:6]}",
+            "name": "Test Workflow",
+            "team_id": team_id,
+        },
+    )
     entry = nodes[0]["id"]
-    _post(f"/workflows/{wf['id']}/versions", {
-        "dag": {"entry_node": entry, "nodes": nodes, "edges": edges},
-        "created_by": str(uuid.uuid4()),
-    })
+    _post(
+        f"/workflows/{wf['id']}/versions",
+        {
+            "dag": {"entry_node": entry, "nodes": nodes, "edges": edges},
+            "created_by": str(uuid.uuid4()),
+        },
+    )
     return wf["id"], entry
 
 
@@ -75,13 +91,16 @@ def _submit_run(
     triggered_by_kind: str = "user",
     inputs: dict | None = None,
 ) -> dict:
-    return _post("/runs", {
-        "workflow_id": workflow_id,
-        "inputs": inputs or {},
-        "team_id": team_id,
-        "triggered_by": str(uuid.uuid4()),
-        "triggered_by_kind": triggered_by_kind,
-    })
+    return _post(
+        "/runs",
+        {
+            "workflow_id": workflow_id,
+            "inputs": inputs or {},
+            "team_id": team_id,
+            "triggered_by": str(uuid.uuid4()),
+            "triggered_by_kind": triggered_by_kind,
+        },
+    )
 
 
 def _wait_run(run_id: str, timeout: float = 120) -> dict:
@@ -101,6 +120,7 @@ def _wait_run(run_id: str, timeout: float = 120) -> dict:
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(scope="session")
 def team_id() -> str:
@@ -124,10 +144,11 @@ def echo_agent_id() -> str:
 # Chaos test 1: Postgres restart mid-run
 # ---------------------------------------------------------------------------
 
+
 def test_db_restart_mid_run(team_id, echo_agent_id):
     """Restart postgres after first node completes; workflow should still finish."""
     nodes = [{"id": f"n{i}", "agent_slug": "echo-agent"} for i in range(1, 6)]
-    edges = [{"from": f"n{i}", "to": f"n{i+1}"} for i in range(1, 5)]
+    edges = [{"from": f"n{i}", "to": f"n{i + 1}"} for i in range(1, 5)]
     wf_id, _ = _make_workflow(team_id, nodes=nodes, edges=edges)
     run = _submit_run(wf_id, team_id)
     run_id = run["id"]
@@ -157,7 +178,8 @@ def test_db_restart_mid_run(team_id, echo_agent_id):
     # Restart postgres container
     subprocess.run(
         ["docker", "restart", "ai-gateway-postgres-1"],
-        check=True, capture_output=True,
+        check=True,
+        capture_output=True,
     )
 
     # Wait for postgres to come back up (admin health depends on it)
@@ -173,10 +195,10 @@ def test_db_restart_mid_run(team_id, echo_agent_id):
 # Chaos test 2: Redis restart mid-run
 # ---------------------------------------------------------------------------
 
+
 def test_redis_restart_mid_run(team_id, echo_agent_id):
     """Restart Redis mid-run; run should complete (fails open on Redis outage)."""
-    nodes = [{"id": "n1", "agent_slug": "echo-agent"},
-             {"id": "n2", "agent_slug": "echo-agent"}]
+    nodes = [{"id": "n1", "agent_slug": "echo-agent"}, {"id": "n2", "agent_slug": "echo-agent"}]
     edges = [{"from": "n1", "to": "n2"}]
     wf_id, _ = _make_workflow(team_id, nodes=nodes, edges=edges)
     run = _submit_run(wf_id, team_id)
@@ -199,7 +221,8 @@ def test_redis_restart_mid_run(team_id, echo_agent_id):
     # Restart Redis
     subprocess.run(
         ["docker", "restart", "ai-gateway-redis-1"],
-        check=True, capture_output=True,
+        check=True,
+        capture_output=True,
     )
 
     # Reinitialise the module-level redis client after the restart
@@ -217,10 +240,10 @@ def test_redis_restart_mid_run(team_id, echo_agent_id):
 # Chaos test 3: Admin restart mid-run
 # ---------------------------------------------------------------------------
 
+
 def test_admin_restart_mid_run(team_id, echo_agent_id):
     """Restart admin service mid-run; worker uses Postgres directly so run completes."""
-    nodes = [{"id": "n1", "agent_slug": "echo-agent"},
-             {"id": "n2", "agent_slug": "echo-agent"}]
+    nodes = [{"id": "n1", "agent_slug": "echo-agent"}, {"id": "n2", "agent_slug": "echo-agent"}]
     edges = [{"from": "n1", "to": "n2"}]
     wf_id, _ = _make_workflow(team_id, nodes=nodes, edges=edges)
     run = _submit_run(wf_id, team_id)
@@ -240,7 +263,8 @@ def test_admin_restart_mid_run(team_id, echo_agent_id):
     # Restart admin service
     subprocess.run(
         ["docker", "compose", "-f", "infra/docker-compose.yml", "restart", "admin"],
-        check=True, capture_output=True,
+        check=True,
+        capture_output=True,
     )
 
     # Wait for admin to come back up before polling (use /teams — known good route)
@@ -262,6 +286,7 @@ def test_admin_restart_mid_run(team_id, echo_agent_id):
 # Chaos test 4: Rate-limit key lifecycle (reset via Redis delete)
 # ---------------------------------------------------------------------------
 
+
 def test_rate_limit_resets_after_window(team_id, echo_agent_id):
     """Exhaust rate limit using the real team, delete the Redis key to simulate
     TTL expiry, then verify subsequent runs succeed.
@@ -279,13 +304,18 @@ def test_rate_limit_resets_after_window(team_id, echo_agent_id):
     # Exhaust the rate limit using the real team
     hit_429 = False
     for _ in range(101):
-        r = httpx.post(f"{ADMIN}/runs", headers=HEADERS, timeout=10, json={
-            "workflow_id": wf_id,
-            "inputs": {},
-            "team_id": team_id,
-            "triggered_by": str(uuid.uuid4()),
-            "triggered_by_kind": "user",
-        })
+        r = httpx.post(
+            f"{ADMIN}/runs",
+            headers=HEADERS,
+            timeout=10,
+            json={
+                "workflow_id": wf_id,
+                "inputs": {},
+                "team_id": team_id,
+                "triggered_by": str(uuid.uuid4()),
+                "triggered_by_kind": "user",
+            },
+        )
         if r.status_code == 429:
             hit_429 = True
             break
@@ -306,10 +336,10 @@ def test_rate_limit_resets_after_window(team_id, echo_agent_id):
 # Load test 5: 10 concurrent runs — no deadlock
 # ---------------------------------------------------------------------------
 
+
 def test_concurrent_runs_dont_deadlock(team_id, echo_agent_id):
     """Submit 10 runs simultaneously; all must complete within 120s with no deadlocks."""
-    nodes = [{"id": "n1", "agent_slug": "echo-agent"},
-             {"id": "n2", "agent_slug": "echo-agent"}]
+    nodes = [{"id": "n1", "agent_slug": "echo-agent"}, {"id": "n2", "agent_slug": "echo-agent"}]
     edges = [{"from": "n1", "to": "n2"}]
     wf_id, _ = _make_workflow(team_id, nodes=nodes, edges=edges)
 
@@ -326,9 +356,8 @@ def test_concurrent_runs_dont_deadlock(team_id, echo_agent_id):
     assert len(results) == NUM_RUNS, f"Expected {NUM_RUNS} results, got {len(results)}"
 
     failed = [r for r in results if r["run"]["status"] != "succeeded"]
-    assert not failed, (
-        f"{len(failed)} of {NUM_RUNS} runs did not succeed: "
-        + ", ".join(r["run"]["status"] for r in failed)
+    assert not failed, f"{len(failed)} of {NUM_RUNS} runs did not succeed: " + ", ".join(
+        r["run"]["status"] for r in failed
     )
 
     # Verify each node ran exactly once per run (no duplicate processing)
@@ -339,8 +368,7 @@ def test_concurrent_runs_dont_deadlock(team_id, echo_agent_id):
         )
         succeeded_nodes = [n for n in result["nodes"] if n["status"] == "succeeded"]
         assert len(succeeded_nodes) == 2, (
-            f"Expected 2 succeeded nodes, got {len(succeeded_nodes)} "
-            f"in run {result['run']['id']}"
+            f"Expected 2 succeeded nodes, got {len(succeeded_nodes)} in run {result['run']['id']}"
         )
 
 
@@ -348,11 +376,12 @@ def test_concurrent_runs_dont_deadlock(team_id, echo_agent_id):
 # Load test 6: 10-node linear DAG completes in order
 # ---------------------------------------------------------------------------
 
+
 def test_large_dag_completes(team_id, echo_agent_id):
     """10-node linear chain completes; all nodes execute in topological order."""
     num_nodes = 10
     nodes = [{"id": f"n{i}", "agent_slug": "echo-agent"} for i in range(1, num_nodes + 1)]
-    edges = [{"from": f"n{i}", "to": f"n{i+1}"} for i in range(1, num_nodes)]
+    edges = [{"from": f"n{i}", "to": f"n{i + 1}"} for i in range(1, num_nodes)]
     wf_id, _ = _make_workflow(team_id, nodes=nodes, edges=edges)
 
     run = _submit_run(wf_id, team_id, inputs={"value": "large-dag"})
@@ -361,15 +390,13 @@ def test_large_dag_completes(team_id, echo_agent_id):
     assert result["run"]["status"] == "succeeded", f"Got: {result['run']['status']}"
 
     finished = [n for n in result["nodes"] if n["status"] == "succeeded"]
-    assert len(finished) == num_nodes, (
-        f"Expected {num_nodes} succeeded nodes, got {len(finished)}"
-    )
+    assert len(finished) == num_nodes, f"Expected {num_nodes} succeeded nodes, got {len(finished)}"
 
     # Verify topological execution order via started_at timestamps
     node_map = {n["node_id"]: n for n in result["nodes"]}
     for i in range(1, num_nodes):
         parent_id = f"n{i}"
-        child_id = f"n{i+1}"
+        child_id = f"n{i + 1}"
         parent_node = node_map.get(parent_id)
         child_node = node_map.get(child_id)
         if (

@@ -118,9 +118,7 @@ def _build_champion_context(chunks: list[dict]) -> tuple[str, list[dict]]:
     return block, cited
 
 
-async def _handle_show_champions(
-    query: str, session: AsyncSession
-) -> dict:
+async def _handle_show_champions(query: str, session: AsyncSession) -> dict:
     """Run SQL for active champions, optionally filtered by focus_area overlap with query."""
     params: dict = {}
     where = "WHERE active = TRUE"

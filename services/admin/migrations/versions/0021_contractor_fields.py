@@ -1,4 +1,5 @@
 """Contractor access isolation: is_contractor, access_expires_at, allowed_models"""
+
 from typing import Sequence, Union
 
 import sqlalchemy as sa

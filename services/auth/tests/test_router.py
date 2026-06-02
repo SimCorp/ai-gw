@@ -360,9 +360,7 @@ async def test_validate_key_budget_exhausted_returns_429(client):
         patch("app.router.check_rate_limit", new=AsyncMock()),
         patch(
             "app.router.check_budget",
-            new=AsyncMock(
-                return_value=(False, "API key monthly budget of $10 exhausted")
-            ),
+            new=AsyncMock(return_value=(False, "API key monthly budget of $10 exhausted")),
         ),
     ):
         resp = await client.post("/validate", json={"token": f"sk-{_KEY_ID}", "model": ""})
@@ -382,9 +380,7 @@ async def test_validate_team_budget_block_returns_429(client):
         patch("app.router.check_rate_limit", new=AsyncMock()),
         patch(
             "app.router.check_budget",
-            new=AsyncMock(
-                return_value=(False, "Team monthly budget of $500 exhausted")
-            ),
+            new=AsyncMock(return_value=(False, "Team monthly budget of $500 exhausted")),
         ),
     ):
         resp = await client.post("/validate", json={"token": f"sk-{_KEY_ID}", "model": ""})

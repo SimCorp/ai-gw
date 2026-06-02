@@ -51,9 +51,7 @@ async def ready(request: Request):
 
     # Check auth service reachability (soft — agents can survive brief auth outages via identity cache)
     try:
-        resp = await request.app.state.http.get(
-            f"{settings.auth_url}/health", timeout=2
-        )
+        resp = await request.app.state.http.get(f"{settings.auth_url}/health", timeout=2)
         if resp.status_code != 200:
             errors["auth"] = f"HTTP {resp.status_code}"
     except Exception as exc:

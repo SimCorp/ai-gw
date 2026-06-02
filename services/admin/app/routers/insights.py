@@ -35,6 +35,7 @@ def _fmt_insight(r: dict) -> dict:
 # Admin endpoints (require admin session)
 # ---------------------------------------------------------------------------
 
+
 @router.get("")
 async def list_insights(
     category: str | None = None,
@@ -53,7 +54,10 @@ async def list_insights(
         filters.append(f"severity = '{severity.replace(chr(39), '')}'")
 
     where = " AND ".join(filters)
-    rows = (await session.execute(text(f"""
+    rows = (
+        (
+            await session.execute(
+                text(f"""
         SELECT id, generated_at, category, severity, title, description, action,
                team_name, dismissed, auto_applied, source
         FROM ai_insights
@@ -61,7 +65,12 @@ async def list_insights(
         ORDER BY
             CASE severity WHEN 'critical' THEN 0 WHEN 'warning' THEN 1 ELSE 2 END,
             generated_at DESC
-    """))).mappings().all()
+    """)
+            )
+        )
+        .mappings()
+        .all()
+    )
     return [_fmt_insight(dict(r)) for r in rows]
 
 
@@ -110,7 +119,10 @@ async def insights_summary(
     _auth: dict = Depends(require_admin_auth),
 ):
     """Counts of current insights by severity for the dashboard badge."""
-    row = (await session.execute(text("""
+    row = (
+        (
+            await session.execute(
+                text("""
         SELECT
             COUNT(*) FILTER (WHERE severity = 'critical' AND NOT dismissed) AS critical,
             COUNT(*) FILTER (WHERE severity = 'warning'  AND NOT dismissed) AS warning,
@@ -118,7 +130,12 @@ async def insights_summary(
             MAX(generated_at) AS last_run
         FROM ai_insights
         WHERE generated_at >= NOW() - INTERVAL '25 hours'
-    """))).mappings().one()
+    """)
+            )
+        )
+        .mappings()
+        .one()
+    )
     return {
         "critical": int(row["critical"] or 0),
         "warning": int(row["warning"] or 0),
@@ -130,6 +147,7 @@ async def insights_summary(
 # ---------------------------------------------------------------------------
 # Developer portal endpoint (dev session auth, team-scoped)
 # ---------------------------------------------------------------------------
+
 
 @router.get("/developer/me")
 async def developer_insights(
@@ -151,8 +169,10 @@ async def developer_insights(
     conditions.append(f"({' OR '.join(scope)})")
     where = " AND ".join(conditions)
 
-    rows = (await session.execute(
-        text(f"""
+    rows = (
+        (
+            await session.execute(
+                text(f"""
             SELECT id, generated_at, category, severity, title, description, action,
                    team_name, dismissed, auto_applied, source
             FROM ai_insights
@@ -162,7 +182,11 @@ async def developer_insights(
                 generated_at DESC
             LIMIT 10
         """),
-        {"team_id": team_id, "developer_id": developer_id},
-    )).mappings().all()
+                {"team_id": team_id, "developer_id": developer_id},
+            )
+        )
+        .mappings()
+        .all()
+    )
 
     return [_fmt_insight(dict(r)) for r in rows]

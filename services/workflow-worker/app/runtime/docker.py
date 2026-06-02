@@ -5,6 +5,7 @@ container. The host path is HOST_RUNS_PATH/{run_id}/{node_id}/ and is also
 visible inside the worker (mounted at /worker-runs/{run_id}/{node_id}/) so we
 can write inputs.json before launching, and read outputs.json after exit.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -49,7 +50,9 @@ class DockerRuntime:
         if allowed_hosts:
             _log.info(
                 "run=%s node=%s allowed_hosts=%s (enforcement pending; v1.0)",
-                run_id, node_id, allowed_hosts,
+                run_id,
+                node_id,
+                allowed_hosts,
             )
 
         # Prepare the per-invocation directory (visible at both worker and agent paths)
@@ -83,15 +86,11 @@ class DockerRuntime:
                         "SecurityOpt": ["no-new-privileges:true"],
                         "AutoRemove": False,
                     },
-                    "NetworkingConfig": {
-                        "EndpointsConfig": {
-                            self._network: {}
-                        }
-                    },
+                    "NetworkingConfig": {"EndpointsConfig": {self._network: {}}},
                     "AttachStdout": True,
                     "AttachStderr": True,
                 },
-                name=f"aigw-run-{run_id[:8]}-{node_id}-{int(asyncio.get_event_loop().time()*1000)}",
+                name=f"aigw-run-{run_id[:8]}-{node_id}-{int(asyncio.get_event_loop().time() * 1000)}",
             )
         except aiodocker.exceptions.DockerError as exc:
             _log.error("docker run failed for %s: %s", image, exc)
@@ -142,7 +141,9 @@ class DockerRuntime:
             except Exception:
                 pass
 
-    async def _stream_logs(self, container, stdout_lines: list[str], on_log: callable | None) -> None:
+    async def _stream_logs(
+        self, container, stdout_lines: list[str], on_log: callable | None
+    ) -> None:
         try:
             async for line in container.log(stdout=True, stderr=True, follow=True):
                 # aiodocker yields strings already
