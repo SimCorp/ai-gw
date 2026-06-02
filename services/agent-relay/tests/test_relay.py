@@ -139,3 +139,39 @@ async def test_list_agents_only_returns_connected(client):
     assert slugs == {"online-agent"}
     # relay_token must never be exposed.
     assert all("relay_token" not in a for a in agents)
+
+
+def test_ws_unknown_token_is_rejected():
+    import pytest
+    from app.main import app
+    from starlette.testclient import TestClient
+
+    with TestClient(app) as tc:
+        with pytest.raises(Exception):
+            # Server closes with code 4004 before accepting; the context
+            # manager surfaces the rejection as an exception on enter.
+            with tc.websocket_connect("/connect/does-not-exist"):
+                pass
+
+
+def test_ws_connect_then_disconnect_cleans_up_state():
+    from app import main
+    from app.main import app
+    from starlette.testclient import TestClient
+
+    token = "tok-ws"
+    main._registered_agents[token] = {
+        "slug": "ws-agent",
+        "name": "WS",
+        "capabilities": [],
+    }
+    main._slug_to_token["ws-agent"] = token
+
+    with TestClient(app) as tc:
+        with tc.websocket_connect(f"/connect/{token}"):
+            # While connected, the agent shows up in /agents.
+            listed = tc.get("/agents").json()
+            assert any(a["slug"] == "ws-agent" for a in listed)
+        # After the WS context exits (disconnect), state is cleaned up.
+        assert token not in main._connections
+        assert main._slug_to_token.get("ws-agent") is None
