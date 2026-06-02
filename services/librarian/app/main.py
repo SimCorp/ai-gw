@@ -676,7 +676,8 @@ async def get_topic_items(topic: str, limit: int = Query(20, ge=1, le=200)):
 
 
 @app.delete("/items/{item_id}", status_code=204)
-async def delete_item(item_id: str):
+async def delete_item(item_id: str, request: Request):
+    await _require_caller(request)
     pool = await get_pool()
     redis = await get_redis()
     async with pool.acquire() as conn:
@@ -717,7 +718,8 @@ async def list_research_topics():
 
 
 @app.post("/research/topics", status_code=201)
-async def create_research_topic(body: ResearchTopicCreate):
+async def create_research_topic(body: ResearchTopicCreate, request: Request):
+    await _require_caller(request)
     pool = await get_pool()
     async with pool.acquire() as conn:
         try:
@@ -746,7 +748,8 @@ async def create_research_topic(body: ResearchTopicCreate):
 
 
 @app.post("/research/topics/{topic}/trigger")
-async def trigger_research(topic: str):
+async def trigger_research(topic: str, request: Request):
+    await _require_caller(request)
     pool = await get_pool()
     redis = await get_redis()
     async with pool.acquire() as conn:
@@ -763,7 +766,8 @@ async def trigger_research(topic: str):
 
 
 @app.delete("/research/topics/{topic}", status_code=204)
-async def delete_research_topic(topic: str):
+async def delete_research_topic(topic: str, request: Request):
+    await _require_caller(request)
     pool = await get_pool()
     async with pool.acquire() as conn:
         result = await conn.execute(
@@ -1038,20 +1042,28 @@ async def mcp_jsonrpc(body: dict, request: Request, session_id: str | None = Non
     def _err(code: int, message: str) -> dict:
         return {"jsonrpc": "2.0", "id": request_id, "error": {"code": code, "message": message}}
 
+    import hashlib as _hashlib
     import json as _json_m
 
+    # Hash the current caller's token once for session-binding verification.
+    _raw_token = request.headers.get("Authorization", "")[len("Bearer ") :]
+    _caller_hash = _hashlib.sha256(_raw_token.encode()).hexdigest()
+
     async def _relay_or_return(response: dict) -> Any:
-        """Push response to SSE queue if a session_id is bound, else return directly."""
+        """Push response to SSE queue if a valid session_id is bound, else return directly.
+
+        Verifies that the caller posting to this session is the same principal
+        that opened the SSE connection, preventing cross-session injection.
+        """
         if session_id is not None:
-            try:
-                sid = int(session_id)
-                _sessions = getattr(app.state, "_mcp_sse_sessions", {})
-                _q = _sessions.get(sid)
-                if _q is not None:
-                    await _q.put(_json_m.dumps(response))
-                    return _Response(status_code=202)
-            except (ValueError, TypeError):
-                pass
+            _sessions = getattr(app.state, "_mcp_sse_sessions", {})
+            _entry = _sessions.get(session_id)  # str key — no int() conversion
+            if _entry is not None:
+                if _entry["caller_hash"] != _caller_hash:
+                    # Different caller trying to inject into another session — reject.
+                    return _Response(status_code=403)
+                await _entry["queue"].put(_json_m.dumps(response))
+                return _Response(status_code=202)
         return response
 
     # Authenticate every JSON-RPC call (incl. initialize) — auth failures map to
@@ -1122,13 +1134,22 @@ async def mcp_sse(request: Request):
     """
     await _require_caller(request)
     import asyncio as _asyncio
+    import hashlib as _hashlib
+    import secrets as _secrets
 
     from fastapi.responses import StreamingResponse as _SSE
 
+    # Use a cryptographically random session token — NOT id(queue) which is a
+    # predictable memory address and can be enumerated by authenticated callers.
     queue: _asyncio.Queue[str | None] = _asyncio.Queue()
-    conn_id = id(queue)
+    conn_id = _secrets.token_urlsafe(32)
+
+    # Bind session to the caller's token so only the originating client can POST to it.
+    raw_token = request.headers.get("Authorization", "")[len("Bearer ") :]
+    caller_hash = _hashlib.sha256(raw_token.encode()).hexdigest()
+
     sessions = getattr(app.state, "_mcp_sse_sessions", {})
-    sessions[conn_id] = queue
+    sessions[conn_id] = {"queue": queue, "caller_hash": caller_hash}
     app.state._mcp_sse_sessions = sessions
 
     base = str(request.base_url).rstrip("/")
