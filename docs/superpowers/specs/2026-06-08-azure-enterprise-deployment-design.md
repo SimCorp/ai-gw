@@ -2,24 +2,33 @@
 
 **Date:** 2026-06-08
 **Status:** Draft — awaiting review
-**Scope:** Enterprise deployment of ai-gw to Azure using SC LZ PlatformAITooling Dev subscription
+**Scope:** Enterprise deployment of ai-gw to Azure using SC LZ PlatformAITooling Dev and Test subscriptions
 **Related:** [Original gateway design](2026-05-05-ai-gateway-design.md)
 
 ---
 
 ## Overview
 
-Deploy the AI Gateway stack to Azure, replacing the local Docker Compose setup with a production-grade AKS-hosted deployment. This spec covers the first environment (Dev) in a phased rollout toward Production.
+Deploy the AI Gateway stack to Azure, replacing the local Docker Compose setup with a production-grade AKS-hosted deployment. Two environments are in scope: **Dev** (first) and **Test** (same Bicep, different subscription). Production is a follow-on once Test is stable.
 
 The original design spec already names the required Azure services. This doc defines **how to get there**: IaC, networking, container pipeline, Kubernetes workloads, secrets management, deployment pipeline, and monitoring wiring.
 
-**Not in scope:** feature changes to the gateway services themselves; Production environment (a follow-on spec once Dev is stable); multi-region.
+### Environments
+
+| Environment | Subscription | Region | Purpose |
+|---|---|---|---|
+| Dev | SC LZ PlatformAITooling Dev | Sweden Central | Active development, inner-loop testing |
+| Test | SC LZ PlatformAITooling Test | Sweden Central | Integration testing, pre-production validation |
+
+Both environments use identical Bicep modules; the `main.bicepparam` file is the only thing that differs between them. Phase 1 targets Dev; Test is wired up in Phase 4 once the deploy pipeline is proven.
+
+**Not in scope:** feature changes to the gateway services themselves; Production environment; multi-region.
 
 ---
 
 ## Landing Zone Context
 
-`SC LZ PlatformAITooling Dev` is a SimCorp Azure Landing Zone subscription for the Platform AI Tooling workload in the Dev environment. Landing Zones typically provide subscription-level guardrails — policies, networking foundations, RBAC defaults, and naming standards.
+Two SimCorp Azure Landing Zone subscriptions cover this deployment: `PlatformAITooling Dev` and `PlatformAITooling Test`, both in the **Sweden Central** region. Landing Zones provide subscription-level guardrails — policies, networking foundations, RBAC defaults, and naming standards.
 
 **These are blocking inputs required before Phase 1 begins.** Most need a conversation with the SC Platform team.
 
@@ -60,18 +69,20 @@ The original design spec already names the required Azure services. This doc def
 ### Networking Design
 
 ```
-Hub VNet (managed by SC Platform team)
-  └── Spoke VNet: dev-vnet-weu  10.x.0.0/22
-        ├── aks-system-subnet    10.x.0.0/24   ← system node pool
-        ├── aks-user-subnet      10.x.1.0/24   ← user node pool
-        ├── aks-pods-subnet      10.x.2.0/23   ← Azure CNI Overlay pod CIDR
-        └── pe-subnet            10.x.4.0/27   ← Private Endpoints for all PaaS
+Hub VNet (managed by SC Platform team, Sweden Central)
+  ├── Spoke VNet: dev-vnet-sc   10.x.0.0/22   ← PlatformAITooling Dev subscription
+  │     ├── aks-system-subnet    10.x.0.0/24   ← system node pool
+  │     ├── aks-user-subnet      10.x.1.0/24   ← user node pool
+  │     ├── aks-pods-subnet      10.x.2.0/23   ← Azure CNI Overlay pod CIDR
+  │     └── pe-subnet            10.x.4.0/27   ← Private Endpoints for all PaaS
+  └── Spoke VNet: test-vnet-sc  10.y.0.0/22   ← PlatformAITooling Test subscription
+        └── (same subnet layout, different IPAM range)
 ```
 
 - **Pod networking:** Azure CNI Overlay — nodes and pods in separate CIDRs, no IP exhaustion risk
 - **PaaS access:** All Redis, PostgreSQL, Key Vault, Service Bus accessed via **Private Endpoints** in `pe-subnet`. No public access enabled on any PaaS service.
 - **Ingress:** NGINX Ingress Controller on AKS, backed by an Azure Load Balancer. Dev: public IP with TLS (Let's Encrypt via cert-manager). Prod: swap to Application Gateway + WAF.
-- **DNS:** Private DNS zones (`privatelink.postgres.database.azure.com`, etc.) are **almost certainly centrally managed** by the LZ via a `DeployIfNotExists` policy. We must reference these zones rather than create our own — creating duplicate zones in the subscription will cause resolution failures or policy denials. Verify with the platform team before writing any `azurerm_private_dns_zone` resources.
+- **DNS:** Private DNS zones (`privatelink.postgres.database.azure.com`, etc.) are centrally managed by the LZ (confirmed). We must reference these zones rather than create our own — do not write any `privateDnsZone` Bicep resources.
 
 ### AKS Cluster Design
 
@@ -106,9 +117,12 @@ Bicep is the chosen IaC tool for this deployment.
 ```
 infra/bicep/
 ├── environments/
-│   └── dev/
-│       ├── main.bicep         # orchestration — calls all modules
-│       └── main.bicepparam    # parameter file for dev (committed; no secrets)
+│   ├── dev/
+│   │   ├── main.bicep         # orchestration — calls all modules (symlink or copy from shared)
+│   │   └── main.bicepparam    # dev parameter values (committed; no secrets)
+│   └── test/
+│       ├── main.bicep         # identical to dev/
+│       └── main.bicepparam    # test parameter values
 └── modules/
     ├── networking.bicep       # subnets within LZ-vended VNet; private endpoints; references to central DNS zones
     ├── aks.bicep              # cluster, node pools, workload identity, add-ons
@@ -390,11 +404,11 @@ Deliverables:
 | 1 | ~~Spoke VNet — LZ-vended or we create?~~ | **Resolved: LZ provides it** | — | — |
 | 2 | ~~Private DNS zones (`privatelink.*`) centrally managed?~~ | **Resolved: Yes — must not create our own** | — | — |
 | 3 | ~~Log Analytics Workspace — shared or per-workload?~~ | **Resolved: LZ provides shared one** | — | — |
-| 4 ⭐ | Resource naming convention? | `dev-<component>-weu` | SC Platform team | Phase 1 |
-| 5 ⭐ | Allowed Azure regions? | `westeurope` | SC Platform team / Azure Policy | Phase 1 |
+| 4 ⭐ | Resource naming convention? | `dev-<component>-sc` | SC Platform team | Phase 1 |
+| 5 | ~~Allowed Azure regions?~~ | **Resolved: Sweden Central (`swedencentral`)** | — | — |
 | 6 ⭐ | Azure Policy list for this subscription? | No public IPs; required tags | SC Platform team | Phase 1 |
 | 7 | ~~IaC tool — Bicep mandated or Terraform OK?~~ | **Resolved: Bicep** | — | — |
-| 8 ⭐ | Subscription ID? | Unknown | Benjamin | Phase 1 |
+| 8 ⭐ | Subscription IDs for Dev and Test? | Unknown (two subscriptions confirmed) | Benjamin | Phase 1 |
 | 9 ⭐ | Shared ACR or per-workload? | Per-workload | SC Platform team | Phase 2 |
 | 10 | Target FQDN for Dev gateway? | `dev-aigw.simcorp.internal` | Benjamin | Phase 4 |
 | 11 | TLS strategy — Let's Encrypt or enterprise cert? | Let's Encrypt (cert-manager) | Benjamin | Phase 4 |
