@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const adminApi = process.env.NEXT_PUBLIC_ADMIN_API ?? 'http://localhost:8005';
+const scannerApi = process.env.NEXT_PUBLIC_SCANNER_API ?? 'http://localhost:8011';
 
 const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
@@ -14,7 +15,7 @@ const securityHeaders = [
       "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "img-src 'self' data: blob:",
-      `connect-src 'self' ${adminApi} http://localhost:8080`,
+      `connect-src 'self' ${adminApi} http://localhost:8080 ${scannerApi}`,
       "font-src 'self' https://fonts.gstatic.com",
       "frame-ancestors 'none'",
     ].join("; "),

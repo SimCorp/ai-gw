@@ -22,6 +22,8 @@ interface RegisterForm {
   label: string;
   openapi_spec_url: string;
   scan_types: string[];
+  node_id: string;
+  created_by: string;
 }
 
 export default function TargetsPage() {
@@ -34,12 +36,14 @@ export default function TargetsPage() {
     label: '',
     openapi_spec_url: '',
     scan_types: ['ai', 'api', 'network'],
+    node_id: '',
+    created_by: '',
   });
 
   const { data: targets = [] } = useQuery<ScanTarget[]>({
     queryKey: ['portal-scanner-targets', teamId, token],
     queryFn: () =>
-      fetch(`${ADMIN_API}/scanner/targets?team_id=${teamId}`, {
+      fetch(`${ADMIN_API}/scanner/targets?node_id=${teamId}`, {
         headers: { Authorization: `Bearer ${token}` },
       }).then(r => r.json()),
     enabled: !!token && !!teamId,
@@ -47,7 +51,7 @@ export default function TargetsPage() {
   });
 
   const register = useMutation({
-    mutationFn: (body: RegisterForm & { team_id: string; created_by: string }) =>
+    mutationFn: (body: RegisterForm) =>
       fetch(`${ADMIN_API}/scanner/targets`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -56,14 +60,14 @@ export default function TargetsPage() {
           label: body.label,
           openapi_spec_url: body.openapi_spec_url || null,
           requested_scan_types: body.scan_types,
-          team_id: body.team_id,
+          node_id: body.node_id,
           created_by: body.created_by,
         }),
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['portal-scanner-targets'] });
       setShowForm(false);
-      setForm({ url: '', label: '', openapi_spec_url: '', scan_types: ['ai', 'api', 'network'] });
+      setForm({ url: '', label: '', openapi_spec_url: '', scan_types: ['ai', 'api', 'network'], node_id: '', created_by: '' });
     },
   });
 
@@ -127,7 +131,7 @@ export default function TargetsPage() {
           </div>
           <div className="flex gap-2 mt-3">
             <button
-              onClick={() => register.mutate({ ...form, team_id: teamId ?? '', created_by: developer?.developer_id ?? '' })}
+              onClick={() => register.mutate({ ...form, node_id: teamId ?? '', created_by: developer?.developer_id ?? '' })}
               disabled={!form.url || !form.label}
               className="px-4 py-2 bg-blue-600 text-white rounded text-sm disabled:opacity-50"
             >
