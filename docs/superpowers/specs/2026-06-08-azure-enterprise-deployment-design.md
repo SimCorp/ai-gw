@@ -313,7 +313,7 @@ jobs:
 - Python services: `azure-monitor-opentelemetry` auto-instrumentation via `configure_azure_monitor()` at startup
 - The existing observability service's Postgres cost tables feed the admin portal dashboards (unchanged)
 
-### Alerts (defined in Terraform `monitoring` module)
+### Alerts (defined in `monitoring.bicep`)
 
 | Alert | Threshold | Action |
 |---|---|---|
@@ -329,13 +329,13 @@ jobs:
 
 ### Phase 1 — IaC Foundation
 
-Provision all Azure resources with Terraform. No app deployed yet. All PaaS is private-endpoint-only.
+Provision all Azure resources via Bicep. No app deployed yet. All PaaS is private-endpoint-only.
 
 Deliverables:
-- `infra/terraform/` module structure
-- `environments/dev/terraform.tfvars` with non-secret values
-- Terraform plan reviewed by platform team before `apply`
-- All secrets written to Key Vault by `terraform apply`
+- `infra/bicep/` module structure
+- `environments/dev/main.bicepparam` with non-secret values
+- `az deployment group what-if` reviewed before `create`
+- All secrets written to Key Vault by the Bicep deployment
 - Verification: `az aks get-credentials` works; `kubectl get nodes` returns healthy nodes
 
 ### Phase 2 — Container Pipeline
@@ -387,9 +387,9 @@ Deliverables:
 
 | # | Question | Default in this spec | Who resolves | Blocks |
 |---|---|---|---|---|
-| 1 ⭐ | Spoke VNet — LZ-vended or we create? | LZ provides it | SC Platform team | Phase 1 |
-| 2 ⭐ | Are private DNS zones (`privatelink.*`) centrally managed by LZ policy? | Yes — must not create our own | SC Platform team | Phase 1 |
-| 3 ⭐ | Log Analytics Workspace — shared or per-workload? | LZ provides shared one | SC Platform team | Phase 1 |
+| 1 | ~~Spoke VNet — LZ-vended or we create?~~ | **Resolved: LZ provides it** | — | — |
+| 2 | ~~Private DNS zones (`privatelink.*`) centrally managed?~~ | **Resolved: Yes — must not create our own** | — | — |
+| 3 | ~~Log Analytics Workspace — shared or per-workload?~~ | **Resolved: LZ provides shared one** | — | — |
 | 4 ⭐ | Resource naming convention? | `dev-<component>-weu` | SC Platform team | Phase 1 |
 | 5 ⭐ | Allowed Azure regions? | `westeurope` | SC Platform team / Azure Policy | Phase 1 |
 | 6 ⭐ | Azure Policy list for this subscription? | No public IPs; required tags | SC Platform team | Phase 1 |
