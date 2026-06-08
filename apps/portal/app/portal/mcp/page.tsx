@@ -155,10 +155,10 @@ const GATEWAY_MANAGED_SERVERS = [
   {
     id: '__memory_palace__',
     name: 'Memory',
-    description: 'Per-developer persistent memory — store anything, search semantically, connect related ideas. Pre-authorized with your API key.',
+    description: 'Per-developer persistent memory — store anything, search semantically, and build/query a source knowledge graph. Pre-authorized with your API key.',
     url: MEMORY_MCP_URL,
     auth_type: 'bearer' as const,
-    tool_count: 30,
+    tool_count: 33,
   },
   {
     id: '__librarian__',
