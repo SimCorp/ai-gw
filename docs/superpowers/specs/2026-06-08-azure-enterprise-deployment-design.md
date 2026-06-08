@@ -1,24 +1,26 @@
 # AI Gateway — Azure Enterprise Deployment Design
 
 **Date:** 2026-06-08
-**Status:** Draft — awaiting review
+**Status:** Draft — DECISION REQUIRED (see §3)
 **Scope:** Enterprise deployment of ai-gw to Azure using SC LZ PlatformAITooling Dev and Test subscriptions
 **Related:** [Original gateway design](2026-05-05-ai-gateway-design.md)
 
 ---
 
-## Overview
+## 1. Overview
 
-Deploy the AI Gateway stack to Azure, replacing the local Docker Compose setup with a production-grade AKS-hosted deployment. Two environments are in scope: **Dev** (first) and **Test** (same Bicep, different subscription). Production is a follow-on once Test is stable.
+Deploy the AI Gateway stack to Azure, replacing the local Docker Compose setup with a production-grade deployment in the SimCorp Landing Zone. Two environments are in scope: **Dev** (first) and **Test** (same Bicep, different subscription). Production is a follow-on once Test is stable.
 
-The original design spec already names the required Azure services. This doc defines **how to get there**: IaC, networking, container pipeline, Kubernetes workloads, secrets management, deployment pipeline, and monitoring wiring.
+The original design spec names the required Azure services. This doc defines **how to get there**: IaC, networking, container workloads, secrets management, deployment pipeline, and monitoring wiring.
 
 ### Environments
 
-| Environment | Subscription | Region | Purpose |
-|---|---|---|---|
-| Dev | SC LZ PlatformAITooling Dev | Sweden Central | Active development, inner-loop testing |
-| Test | SC LZ PlatformAITooling Test | Sweden Central | Integration testing, pre-production validation |
+| Environment | Subscription | Subscription ID | Region | Purpose |
+|---|---|---|---|---|
+| Dev | SC LZ PlatformAITooling Dev | `8fc66d8e-c80e-454e-9248-b67af047c2c2` | Sweden Central | Active development, inner-loop testing |
+| Test | SC LZ PlatformAITooling Test | `7ecf4a3e-d200-47ea-aadd-441607e6c642` | Sweden Central | Integration testing, pre-production validation |
+
+**Tenant ID:** `aa81b43f-3969-4fd4-80c9-84c411508d82`
 
 Both environments use identical Bicep modules; the `main.bicepparam` file is the only thing that differs between them. Phase 1 targets Dev; Test is wired up in Phase 4 once the deploy pipeline is proven.
 
@@ -26,91 +28,177 @@ Both environments use identical Bicep modules; the `main.bicepparam` file is the
 
 ---
 
-## Landing Zone Context
+## 2. Landing Zone Context
 
-Two SimCorp Azure Landing Zone subscriptions cover this deployment: `PlatformAITooling Dev` and `PlatformAITooling Test`, both in the **Sweden Central** region. Landing Zones provide subscription-level guardrails — policies, networking foundations, RBAC defaults, and naming standards.
+### What the LZ provides (confirmed via Azure CLI)
 
-**These are blocking inputs required before Phase 1 begins.** Most need a conversation with the SC Platform team.
+| Resource | What exists | Notes |
+|---|---|---|
+| Spoke VNet (Dev) | `vnet-spoke-platformaitooling-dev-sdc-001` — `10.179.231.0/25` | VNet-peered to hub; total 128 usable IPs |
+| Spoke VNet (Test) | Exists at `10.179.230.128/25` | No subnets yet — infrastructure subnet needed |
+| ACA Environment (Dev) | `ca-env-dev-sdc` — Consumption profile, `internal: true` | Already provisioned; VNet-only endpoint |
+| Log Analytics Workspace | `law-aca-dev-sdc` | LZ-provided; connect App Insights here |
+| Private DNS (centrally managed) | `privatelink.*` zones managed by LZ DeployIfNotExists policy | **Do not create these zones** |
+| Private DNS (own zone) | `platformaitooling.local` already exists | Internal service discovery DNS |
+| Naming convention | `<type>-<descriptor>-<env>-sdc[-001]` | Examples: `law-aca-dev-sdc`, `ca-env-dev-sdc`, `vnet-spoke-platformaitooling-dev-sdc-001` |
+| Azure Policy | AMBA (Azure Monitor Baseline Alerts) deployed in both subscriptions | No blocking compute/networking policies found |
 
-> **ALZ pattern note:** Enterprise Azure Landing Zones are a *vending* pattern — the platform team typically provides the subscription with networking, DNS, Log Analytics, and Azure Policy already in place and locked. The defaults below assume the LZ provides these foundations; we build application-layer resources on top. This is the opposite of a greenfield deployment.
+> **ALZ pattern note:** Enterprise Landing Zones are a *vending* pattern — the platform team provides subscription networking, DNS, Log Analytics, and Azure Policy. We build application-layer resources on top. This is the opposite of a greenfield deployment.
 
-| Question | **Likely LZ provides** | What we add | Verify with |
-|---|---|---|---|
-| Spoke VNet | **Yes** — LZ vends spoke VNet with assigned IPAM range | Subnets within the vended VNet | SC Platform team |
-| Private DNS zones (`privatelink.*`) | **Yes** — centrally managed via DeployIfNotExists policy. Creating our own will conflict. | Nothing — reference the central zones | SC Platform team ⚠️ |
-| Log Analytics Workspace | **Likely yes** — centralized per LZ tier | App Insights only (references existing workspace) | SC Platform team |
-| Naming convention | **Yes** — LZ enforces via policy | Apply convention to all resources | SC Platform team |
-| Azure Policy list | **Yes** — subscription has guardrails | Validate all resources against policy before `apply` | SC Platform team |
-| Shared ACR | **Maybe** — depends on LZ tier | If not shared, we create one | SC Platform team |
-| Allowed Azure regions | **Yes** — policy-enforced | Use the allowed region(s) only | SC Platform team / Azure Policy |
-| Bicep vs Terraform | **Unclear** — ALZ ships Bicep; SimCorp may mandate it | IaC module decomposition is tool-agnostic (see below) | SC Platform team |
-| GitHub Actions OIDC federated credential | **Not yet** — we register it | New Entra ID App Registration | Benjamin / Entra ID admin |
-| Subscription ID | **Unknown** | Required for Terraform backend + provider | Benjamin |
-| Target FQDN for Dev gateway | **Unknown** | Required for ingress + TLS | Benjamin |
+### Dev VNet subnet layout (current)
+
+```
+vnet-spoke-platformaitooling-dev-sdc-001   10.179.231.0/25   (128 IPs total)
+  ├── [ACA infrastructure subnet]   10.179.231.0/26    delegated → Microsoft.App/environments
+  └── [free / available]            10.179.231.64/26   64 IPs — available for Private Endpoints
+```
+
+**Key constraint:** Both existing subnets are delegated to `Microsoft.App/environments`. AKS cannot use delegated subnets. Application Gateway v2 requires a /24 (256 IPs) — impossible in a /25 VNet.
 
 ---
 
-## Target Architecture
+## 3. ⚠️ DECISION REQUIRED: Compute Platform
+
+**Azure CLI inspection revealed the Dev LZ is purpose-built for Azure Container Apps, not AKS.** This changes the architecture significantly. Two paths forward:
+
+---
+
+### Path A — Azure Container Apps (Recommended)
+
+**Use the LZ as designed.** The ACA environment `ca-env-dev-sdc` is already provisioned. All gateway services become Container Apps inside this environment.
+
+| Aspect | Under ACA |
+|---|---|
+| Cluster management | None — Consumption profile, fully managed |
+| Workload definition | One Bicep `containerApp` resource per service (replaces Helm) |
+| Secrets | ACA native secret refs to Key Vault (replaces CSI driver + SecretProviderClass) |
+| Service-to-service routing | ACA internal ingress (no NGINX, no ingress controller) |
+| Scaling | Built-in KEDA-based scale rules per app |
+| Networking | Fits current VNet; PE subnet in the free /26 |
+| Dev readiness | Start deploying within days — LZ networking already done |
+
+**One open question under Path A:**
+
+The ACA environment is `internal: true` — it has no public endpoint. All ingress is VNet-only. For engineers to reach the Dev gateway they need to be on the VNet (VPN or ExpressRoute). 
+
+> **Question for Benjamin:** Is VNet-only access acceptable for Dev? (Engineers on corp VPN can reach internal LZ services — is that the case here, or do you need a public endpoint for Dev?)
+
+If VNet-only is not acceptable, options are:
+- **Azure Front Door + Private Link origin** — possible, adds complexity and Front Door cost
+- **Azure API Management (internal mode)** fronted by Front Door — heavier but LZ-aligned
+- Ask platform team to set ACA env to `external: true` if their LZ version supports it
+
+---
+
+### Path B — Azure Kubernetes Service (Requires platform team)
+
+Keep the original AKS design but the current VNet cannot support it. AKS requires:
+- Non-delegated subnets for node pools
+- A much larger CIDR (at minimum /22 for node + pod CIDRs under Azure CNI Overlay)
+- A separate /27 for Private Endpoints
+
+This would require the SC Platform team to either re-vend a larger VNet for this subscription or carve out a new AKS-specific spoke VNet. **Expect weeks of platform team coordination before Phase 1 can start.**
+
+---
+
+**The rest of this spec is written for Path A (ACA).** If you choose Path B, the AKS architecture sections from the previous draft remain valid but the networking section must be replaced pending platform team input.
+
+---
+
+## 4. Target Architecture (Path A — Azure Container Apps)
 
 ### Azure Resources
 
 | Resource | Azure Service | Dev SKU | Notes |
 |---|---|---|---|
-| Kubernetes cluster | Azure Kubernetes Service | Standard tier | System pool × 3, user pool × 2–5 (autoscale) |
+| Container compute | Azure Container Apps (existing `ca-env-dev-sdc`) | Consumption | One Container App per service |
 | Database | Azure Database for PostgreSQL Flexible Server | Burstable B2ms | Two databases: `aigateway` + `litellm` |
 | Cache | Azure Cache for Redis | Premium P1 | RediSearch module required for semantic cache |
-| Container registry | Azure Container Registry | Standard | `acrpush` role for GitHub Actions SP |
-| Secrets | Azure Key Vault | Standard | CSI driver mounts secrets as env vars |
+| Container registry | Azure Container Registry | Standard | `acrpush` role for GitHub Actions |
+| Secrets | Azure Key Vault | Standard | ACA native secret refs — no CSI driver needed |
 | Message bus | Azure Service Bus | Standard namespace | One queue: `observability-events` |
-| Observability | Azure Monitor + Application Insights | Workspace-based | One App Insights per environment |
-| Networking | Azure Virtual Network | /22 address space | Four subnets (below) |
-| Identity | Azure Entra ID (existing) | — | Existing tenant; new app registrations per service where needed |
+| Observability | Azure Monitor + Application Insights | Workspace-based | References `law-aca-dev-sdc` |
+| Networking | Existing LZ VNet + free /26 for PEs | — | No new VNet resources |
+| Identity | Azure Entra ID (existing tenant) | — | Managed Identity per Container App |
 
-### Networking Design
+### Networking
 
 ```
-Hub VNet (managed by SC Platform team, Sweden Central)
-  ├── Spoke VNet: dev-vnet-sc   10.x.0.0/22   ← PlatformAITooling Dev subscription
-  │     ├── aks-system-subnet    10.x.0.0/24   ← system node pool
-  │     ├── aks-user-subnet      10.x.1.0/24   ← user node pool
-  │     ├── aks-pods-subnet      10.x.2.0/23   ← Azure CNI Overlay pod CIDR
-  │     └── pe-subnet            10.x.4.0/27   ← Private Endpoints for all PaaS
-  └── Spoke VNet: test-vnet-sc  10.y.0.0/22   ← PlatformAITooling Test subscription
-        └── (same subnet layout, different IPAM range)
+Hub VNet (SC Platform team, Sweden Central)
+  └── Spoke VNet: vnet-spoke-platformaitooling-dev-sdc-001   10.179.231.0/25
+        ├── [ACA infra subnet]   10.179.231.0/26    delegated → Microsoft.App/environments  [existing]
+        └── snet-pe-aigw-dev-sdc 10.179.231.64/26   Private Endpoints for all PaaS          [new - Bicep]
 ```
 
-- **Pod networking:** Azure CNI Overlay — nodes and pods in separate CIDRs, no IP exhaustion risk
-- **PaaS access:** All Redis, PostgreSQL, Key Vault, Service Bus accessed via **Private Endpoints** in `pe-subnet`. No public access enabled on any PaaS service.
-- **Ingress:** NGINX Ingress Controller on AKS, backed by an Azure Load Balancer. Dev: public IP with TLS (Let's Encrypt via cert-manager). Prod: swap to Application Gateway + WAF.
-- **DNS:** Private DNS zones (`privatelink.postgres.database.azure.com`, etc.) are centrally managed by the LZ (confirmed). We must reference these zones rather than create our own — do not write any `privateDnsZone` Bicep resources.
+- **PaaS access:** Redis, PostgreSQL, Key Vault, Service Bus all accessed via Private Endpoints in `snet-pe-aigw-dev-sdc`. No public access on any PaaS service.
+- **Private DNS zones (`privatelink.*`):** centrally managed by the LZ — reference only, do not create.
+- **Internal DNS:** `platformaitooling.local` zone already exists — register gateway service names here if needed.
+- **Ingress (Dev):** ACA environment is `internal: true` — VNet-only. Engineers reach it via corp VPN to the hub. *(See Path A note above if public access is required.)*
 
-### AKS Cluster Design
+### Container Apps Service Layout
 
-- **Kubernetes version:** 1.30 (latest stable)
-- **Node pools:**
-  - `system`: 3 × Standard_D4s_v5, `CriticalAddonsOnly=true:NoSchedule` taint
-  - `user`: 2–5 × Standard_D8s_v5, autoscale enabled, spot instances optional for Dev cost savings
-- **Identity:** System-assigned Managed Identity for the cluster; **Workload Identity** enabled for per-pod Key Vault access (replaces pod-identity v1)
-- **Add-ons:** NGINX ingress (Helm), cert-manager (Helm), Azure Key Vault CSI Driver (add-on), Container Insights (add-on), Entra ID RBAC
-- **Container Insights:** sends logs + metrics to the Log Analytics Workspace
+Each gateway service becomes one Container App with these properties:
+
+| App name | Internal ingress port | External ingress? | Min replicas |
+|---|---|---|---|
+| `ca-auth-dev-sdc` | 8001 | No (internal only) | 1 |
+| `ca-cache-dev-sdc` | 8002 | No | 1 |
+| `ca-litellm-dev-sdc` | 8003 | No | 1 |
+| `ca-observability-dev-sdc` | 8004 | No | 1 |
+| `ca-admin-api-dev-sdc` | 8005 | No | 1 |
+| `ca-identity-dev-sdc` | 8006 | No | 1 |
+| `ca-agent-relay-dev-sdc` | 8007 | Yes (VNet-internal; WebSocket) | 1 |
+| `ca-librarian-dev-sdc` | 8008 | No | 1 |
+| `ca-memory-dev-sdc` | 8009 | No | 1 |
+| `ca-league-dev-sdc` | 8010 | No | 1 |
+| `ca-scanner-dev-sdc` | — | No (background worker) | 1 |
+| `ca-workflow-worker-dev-sdc` | — | No (background worker) | 0 (scale-to-zero) |
+| `ca-admin-portal-dev-sdc` | 3001 | Yes (VNet-internal) | 1 |
+| `ca-portal-dev-sdc` | 3002 | Yes (VNet-internal) | 1 |
+
+The `auth` service is the request-path gateway entry point. With `internal: true` ACA env, its "external" ingress is still VNet-scoped — no public IP is assigned.
+
+### Secrets Management — ACA Native Key Vault References
+
+ACA supports direct Key Vault secret references without the CSI driver. Each Container App declares its secrets as KV references; ACA resolves them at deploy time using the app's Managed Identity.
+
+```bicep
+// Example in containerApp.bicep for auth service
+secrets: [
+  {
+    name: 'database-url'
+    keyVaultUrl: 'https://kv-aigw-dev-sdc.vault.azure.net/secrets/postgres-url'
+    identity: authManagedIdentity.id
+  }
+  {
+    name: 'app-insights-conn'
+    keyVaultUrl: 'https://kv-aigw-dev-sdc.vault.azure.net/secrets/app-insights-conn'
+    identity: authManagedIdentity.id
+  }
+]
+env: [
+  { name: 'DATABASE_URL', secretRef: 'database-url' }
+  { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', secretRef: 'app-insights-conn' }
+]
+```
+
+Each service gets its own Managed Identity with Key Vault `get`+`list` on its secrets only (least privilege).
 
 ---
 
-## IaC Strategy
+## 5. IaC Strategy
 
-### Tool Choice — **Bicep**
+### Tool Choice — Bicep
 
 Bicep is the chosen IaC tool for this deployment.
 
 | | Why Bicep fits here |
 |---|---|
-| ALZ alignment | The SC Landing Zone ships Bicep modules; using Bicep means we compose with the same toolchain the platform team uses |
+| ALZ alignment | The SC Landing Zone ships Bicep modules; we compose with the same toolchain the platform team uses |
 | No state file | Bicep deploys via ARM; no state backend to provision or secure |
 | Native Azure | First-class Azure resource support; no provider version lag |
 
-**Deployment mode:** `az deployment group create` (resource group scope) for application resources; `az deployment sub create` for subscription-scope resources if needed. CI/CD calls `az deployment` via the OIDC-authenticated service principal.
-
-**No state backend needed.** ARM tracks deployment state; `az deployment group show` gives current status. Idempotent re-runs are safe.
+**Deployment mode:** `az deployment group create` (resource group scope). CI/CD calls `az deployment` via the OIDC-authenticated service principal.
 
 ### Module Structure
 
@@ -118,20 +206,20 @@ Bicep is the chosen IaC tool for this deployment.
 infra/bicep/
 ├── environments/
 │   ├── dev/
-│   │   ├── main.bicep         # orchestration — calls all modules (symlink or copy from shared)
-│   │   └── main.bicepparam    # dev parameter values (committed; no secrets)
+│   │   ├── main.bicep           # orchestration module
+│   │   └── main.bicepparam      # dev parameter values (committed; no secrets)
 │   └── test/
-│       ├── main.bicep         # identical to dev/
-│       └── main.bicepparam    # test parameter values
+│       ├── main.bicep           # identical to dev/
+│       └── main.bicepparam      # test parameter values
 └── modules/
-    ├── networking.bicep       # subnets within LZ-vended VNet; private endpoints; references to central DNS zones
-    ├── aks.bicep              # cluster, node pools, workload identity, add-ons
-    ├── postgres.bicep         # Flexible Server, databases, private endpoint
-    ├── redis.bicep            # Premium P1, RediSearch, private endpoint
-    ├── keyVault.bicep         # vault, access policies, initial secrets
-    ├── acr.bicep              # registry, role assignments (skip if LZ provides shared ACR)
-    ├── serviceBus.bicep       # namespace, queue
-    └── monitoring.bicep       # App Insights (references LZ Log Analytics workspace ID as param)
+    ├── networking.bicep         # PE subnet; private endpoints; references to LZ DNS zones
+    ├── containerApps.bicep      # all Container App definitions + managed identities
+    ├── postgres.bicep           # Flexible Server, databases, private endpoint
+    ├── redis.bicep              # Premium P1, RediSearch, private endpoint
+    ├── keyVault.bicep           # vault, access policies, secrets
+    ├── acr.bicep                # registry, role assignments
+    ├── serviceBus.bicep         # namespace, queue
+    └── monitoring.bicep         # App Insights referencing law-aca-dev-sdc
 ```
 
 **Secrets written by IaC, not echoed as outputs.** The `key-vault` module accepts a `secrets` map and writes each as a Key Vault secret. Connection strings never appear in IaC output or CI logs.
@@ -154,11 +242,11 @@ infra/bicep/
 
 ---
 
-## Container Pipeline
+## 6. Container Pipeline
 
 ### Current State
 
-CI builds four services (`auth`, `cache`, `admin-api`, `observability`) and pushes to GHCR. Eight services are missing from the matrix, and the registry is wrong for AKS.
+CI builds four services (`auth`, `cache`, `admin-api`, `observability`) and pushes to GHCR. Eight services are missing from the matrix, and the registry is wrong for Azure.
 
 ### Required Changes
 
@@ -170,7 +258,7 @@ identity, agent-relay, librarian, memory,
 league, scanner, workflow-worker, litellm
 ```
 
-(Frontend apps `admin-portal` and `portal` are excluded — the existing CLAUDE.md comment explains why: pnpm monorepo Dockerfiles need a separate containerisation effort.)
+(Frontend apps `admin-portal` and `portal` are excluded — pnpm monorepo Dockerfiles need a separate containerisation effort.)
 
 **Add `acr-push` job** to `ci.yml`:
 
@@ -178,8 +266,6 @@ league, scanner, workflow-worker, litellm
 2. Tags images: `<acr>.azurecr.io/<name>:sha-<sha>` and `<acr>.azurecr.io/<name>:dev-latest`
 3. Pushes to ACR using `docker buildx`
 4. Runs only on `push` events to `master`, after all test jobs pass
-
-The existing GHCR push job can remain in parallel — useful for open-source visibility and as a fallback.
 
 ### OIDC Federated Credential Setup
 
@@ -189,104 +275,11 @@ One Entra ID App Registration (`ai-gw-github-actions`) with a Federated Credenti
 
 Role assignments:
 - `AcrPush` on the ACR resource (for image push)
-- `Azure Kubernetes Service Cluster User` + namespace `edit` on AKS (for deploy job)
+- `Contributor` on the `rg-aigw-dev-sdc` resource group (for `az deployment group create`)
 
 ---
 
-## Kubernetes Workload Design
-
-### Helm Chart Structure
-
-```
-infra/helm/
-└── ai-gateway/
-    ├── Chart.yaml
-    ├── values.yaml           # defaults (image registry, replicas, resource limits)
-    ├── values.dev.yaml       # dev overrides (smaller replicas, relaxed limits)
-    └── templates/
-        ├── _helpers.tpl      # name helpers, labels
-        ├── configmap.yaml    # shared non-secret config (e.g. LOG_LEVEL, ENV)
-        ├── ingress.yaml      # NGINX ingress rules for all services
-        ├── auth/             # Deployment, Service, HPA, SecretProviderClass
-        ├── cache/
-        ├── litellm/
-        ├── observability/
-        ├── admin/
-        ├── identity/
-        ├── agent-relay/
-        ├── librarian/
-        ├── memory/
-        ├── league/
-        ├── scanner/
-        ├── workflow-worker/
-        ├── admin-portal/
-        └── portal/
-```
-
-Every service template includes:
-- `Deployment` with rolling update, `readinessProbe` (HTTP `/health`), `livenessProbe`
-- `Service` (ClusterIP — internal only; ingress-exposed services also get an `Ingress` rule)
-- `HorizontalPodAutoscaler`: min 1, max 3 (Dev); min 2, max 10 (Prod)
-- Resource requests/limits sized for Dev (e.g. `requests: cpu: 100m, memory: 256Mi`)
-- `ServiceAccount` annotated with Workload Identity client ID
-
-### Secrets Management — Key Vault CSI Driver
-
-All secrets originate from Key Vault via the CSI driver. No human or CI process writes `Secret` objects directly.
-
-Each service has a `SecretProviderClass` that references the Key Vault and lists its secrets. The `secretObjects` stanza in the class causes the CSI driver to sync the values into a K8s `Secret` — this synced Secret exists in-cluster, but it is created and owned by the CSI driver (deleted automatically when no pods reference it). The pod consumes it via `envFrom`. This is the standard pattern for surfacing Key Vault secrets as environment variables on AKS with Workload Identity.
-
-```yaml
-# Example for auth service
-apiVersion: secrets-store.csi.x-k8s.io/v1
-kind: SecretProviderClass
-metadata:
-  name: auth-secrets
-spec:
-  provider: azure
-  parameters:
-    usePodIdentity: "false"
-    clientID: "<auth-workload-identity-client-id>"
-    keyvaultName: dev-kv-weu
-    objects: |
-      - objectName: postgres-url
-        objectType: secret
-      - objectName: app-insights-conn
-        objectType: secret
-  secretObjects:
-    - secretName: auth-secrets
-      type: Opaque
-      data:
-        - objectName: postgres-url
-          key: DATABASE_URL
-        - objectName: app-insights-conn
-          key: APPLICATIONINSIGHTS_CONNECTION_STRING
-```
-
-### Ingress Routing
-
-Mirrors the local nginx config exactly, preserving existing URL paths:
-
-```
-/auth/*           → auth:8001
-/cache/*          → cache:8002
-/litellm/*        → litellm:8003
-/observability/*  → observability:8004
-/admin/*          → admin:8005
-/identity/*       → identity:8006
-/agent-relay/*    → agent-relay:8007
-/librarian/*      → librarian:8008
-/memory/*         → memory:8009
-/league/*         → league:8010
-/admin-portal/*   → admin-portal:3001
-/portal/*         → portal:3002
-```
-
-TLS: cert-manager `ClusterIssuer` with Let's Encrypt (HTTP-01 challenge). Target FQDN: `dev-aigw.simcorp.internal` or similar — **to be confirmed with the platform team** (see Open Questions).
-
----
-
-## CI/CD Deployment Pipeline
+## 7. CI/CD Deployment Pipeline
 
 ### New Workflow: `deploy.yml`
 
@@ -297,33 +290,33 @@ jobs:
   push-to-acr          # build + tag + push all 12 services to ACR
     needs: (ci.yml passed)
 
-  deploy-dev           # helm upgrade --install on AKS dev namespace
+  deploy-dev           # az deployment group create (Bicep containerApps module)
     needs: push-to-acr
     steps:
       - azure/login (OIDC)
-      - azure/aks-set-context
-      - helm upgrade --install ai-gateway infra/helm/ai-gateway \
-          -f values.dev.yaml \
-          --set image.tag=sha-${{ github.sha }} \
-          --namespace ai-gateway \
-          --create-namespace \
-          --wait
+      - az deployment group create \
+          --resource-group rg-aigw-dev-sdc \
+          --template-file infra/bicep/modules/containerApps.bicep \
+          --parameters infra/bicep/environments/dev/main.bicepparam \
+          --parameters imageTag=sha-${{ github.sha }}
 
-  smoke-test           # HTTP health checks against ingress
+  smoke-test           # HTTP health checks via internal DNS or VNet runner
     needs: deploy-dev
     steps:
-      - curl /auth/health, /cache/health, /admin/health, ... (all 12)
+      - curl /auth/health, /cache/health, /admin/health, ... (all active services)
       - fail loudly if any 5xx
 ```
 
-**Rollback:** `helm rollback ai-gateway` — instant, no re-deploy needed.
+> Note: smoke tests require the GitHub Actions runner to be VNet-connected (self-hosted runner in the LZ, or Azure Container Apps Job with VNet integration) because the ACA environment is `internal: true`.
+
+**Rollback:** Re-run the deploy job with the previous `imageTag` value — ACA updates are atomic per revision.
 
 ---
 
-## Monitoring
+## 8. Monitoring
 
-- **Application Insights** (workspace-based, connected to the Log Analytics Workspace)
-- Each service gets `APPLICATIONINSIGHTS_CONNECTION_STRING` via Key Vault CSI
+- **Application Insights** (workspace-based, connected to `law-aca-dev-sdc`)
+- Each service gets `APPLICATIONINSIGHTS_CONNECTION_STRING` via ACA secret ref
 - Python services: `azure-monitor-opentelemetry` auto-instrumentation via `configure_azure_monitor()` at startup
 - The existing observability service's Postgres cost tables feed the admin portal dashboards (unchanged)
 
@@ -335,11 +328,11 @@ jobs:
 | Error rate | > 5% of requests over 5 min | Teams webhook notification |
 | Redis eviction | Any evictions | Warning notification |
 | PostgreSQL CPU | > 80% for 5 min | Warning notification |
-| Pod restart loop | CrashLoopBackOff > 3 restarts | Alert |
+| Container App restart | > 3 restarts in 5 min | Alert |
 
 ---
 
-## Implementation Phases
+## 9. Implementation Phases
 
 ### Phase 1 — IaC Foundation
 
@@ -350,7 +343,7 @@ Deliverables:
 - `environments/dev/main.bicepparam` with non-secret values
 - `az deployment group what-if` reviewed before `create`
 - All secrets written to Key Vault by the Bicep deployment
-- Verification: `az aks get-credentials` works; `kubectl get nodes` returns healthy nodes
+- Verification: ACA environment accessible; PostgreSQL and Redis reachable from within VNet
 
 ### Phase 2 — Container Pipeline
 
@@ -359,28 +352,28 @@ Expand CI matrix and add ACR push.
 Deliverables:
 - All 12 services in `ci.yml` matrix
 - `acr-push` job with OIDC auth
-- Entra ID App Registration + Federated Credential documented in ops runbook
+- Entra ID App Registration + Federated Credential registered
 - Verification: all 12 images appear in ACR after a `master` push
 
-### Phase 3 — Helm Charts
+### Phase 3 — Container App Definitions
 
-Write all Helm templates, test locally.
+Write all Container App Bicep definitions, wire Key Vault secret refs.
 
 Deliverables:
-- `infra/helm/ai-gateway/` with all service templates
-- `SecretProviderClass` per service
-- `helm lint` passes; `helm template` renders without errors
-- Dry-run against Dev AKS: `helm upgrade --dry-run`
+- `infra/bicep/modules/containerApps.bicep` — all 14 apps defined
+- Managed Identity per app with scoped KV access
+- `az deployment group what-if` passes clean
+- First deploy: all Container Apps running and `/health` endpoints return 200
 
-### Phase 4 — Deployment Pipeline
+### Phase 4 — Deployment Pipeline + Test Environment
 
-Wire `deploy.yml` and validate end-to-end.
+Wire `deploy.yml` and replicate IaC to Test subscription.
 
 Deliverables:
 - `deploy.yml` workflow
-- First successful deploy to Dev AKS
-- All `/health` endpoints return 200 through the ingress
-- TLS certificate issued by cert-manager
+- `environments/test/main.bicepparam`
+- First successful automated deploy to Dev triggered by `master` push
+- Test environment provisioned in `PlatformAITooling Test` subscription
 
 ### Phase 5 — Smoke Test and Handoff
 
@@ -391,30 +384,28 @@ Deliverables:
 - Issue an API key
 - Make a chat completion call through the gateway (pointing at a test/mock provider)
 - Verify: cache hit on second identical call, observability event recorded, cost row in Postgres
-- Ops runbook updated with AKS-specific runbook entries
+- Ops runbook with ACA-specific entries (revision management, log streaming, scaling)
 
 ---
 
-## Open Questions
+## 10. Open Questions
 
-**Phase 1 planning is blocked until the starred (⭐) questions are answered.** The non-starred items can be deferred to their respective phases.
-
-| # | Question | Default in this spec | Who resolves | Blocks |
-|---|---|---|---|---|
-| 1 | ~~Spoke VNet — LZ-vended or we create?~~ | **Resolved: LZ provides it** | — | — |
-| 2 | ~~Private DNS zones (`privatelink.*`) centrally managed?~~ | **Resolved: Yes — must not create our own** | — | — |
-| 3 | ~~Log Analytics Workspace — shared or per-workload?~~ | **Resolved: LZ provides shared one** | — | — |
-| 4 ⭐ | Resource naming convention? | `dev-<component>-sc` | SC Platform team | Phase 1 |
-| 5 | ~~Allowed Azure regions?~~ | **Resolved: Sweden Central (`swedencentral`)** | — | — |
-| 6 ⭐ | Azure Policy list for this subscription? | No public IPs; required tags | SC Platform team | Phase 1 |
-| 7 | ~~IaC tool — Bicep mandated or Terraform OK?~~ | **Resolved: Bicep** | — | — |
-| 8 ⭐ | Subscription IDs for Dev and Test? | Unknown (two subscriptions confirmed) | Benjamin | Phase 1 |
-| 9 ⭐ | Shared ACR or per-workload? | Per-workload | SC Platform team | Phase 2 |
-| 10 | Target FQDN for Dev gateway? | `dev-aigw.simcorp.internal` | Benjamin | Phase 4 |
-| 11 | TLS strategy — Let's Encrypt or enterprise cert? | Let's Encrypt (cert-manager) | Benjamin | Phase 4 |
-| 12 | GitHub Actions OIDC Federated Credential already registered? | Not yet | Benjamin / Entra ID admin | Phase 2 |
-| 13 | AKS node VM size / spot instances for Dev cost savings? | Standard_D8s_v5, no spot | Benjamin | Phase 1 |
+| # | Question | Status | Who resolves |
+|---|---|---|---|
+| 1 | Spoke VNet — LZ-vended or we create? | **Resolved: LZ provides it** | — |
+| 2 | Private DNS zones centrally managed? | **Resolved: Yes — must not create our own** | — |
+| 3 | Log Analytics Workspace — shared? | **Resolved: `law-aca-dev-sdc` provided by LZ** | — |
+| 4 | Resource naming convention? | **Resolved: `<type>-<descriptor>-<env>-sdc[-001]`** | — |
+| 5 | Allowed Azure regions? | **Resolved: Sweden Central (`swedencentral`)** | — |
+| 6 | Azure Policy blockers? | **Likely clear — AMBA only, no blocking policies found** | Verify with Platform team |
+| 7 | IaC tool? | **Resolved: Bicep** | — |
+| 8 | Subscription IDs? | **Resolved: see §1** | — |
+| 9 | **Compute platform: ACA or AKS?** | **⭐ REQUIRED — see §3** | Benjamin |
+| 10 | **External ingress for Dev?** (ACA env is `internal: true`) | **⭐ REQUIRED — see §3 Path A note** | Benjamin |
+| 11 | Shared ACR or per-workload? | Per-workload assumed; confirm with Platform team | SC Platform team |
+| 12 | GitHub Actions OIDC Federated Credential registered? | Not yet | Benjamin / Entra ID admin |
+| 13 | Self-hosted runner or Azure Container Apps Job for smoke tests? | Needed for VNet-internal smoke tests | Benjamin |
 
 ### Next step
 
-Once questions 1–8 are answered, scope and write an implementation plan for **Phase 1 only** (IaC foundation). Each phase is a separate plan → implement cycle.
+Answer questions 9 and 10, then scope and write an implementation plan for **Phase 1 only** (IaC foundation). Each phase is a separate plan → implement cycle.
