@@ -87,52 +87,56 @@ Hub VNet (managed by SC Platform team)
 
 ## IaC Strategy
 
-### Tool Choice — Pending Confirmation
+### Tool Choice — **Bicep**
 
-Two realistic options; the module decomposition is identical for both:
+Bicep is the chosen IaC tool for this deployment.
 
-| Option | Pros | Cons |
-|---|---|---|
-| **Terraform** (recommended) | Widest enterprise adoption, excellent `azurerm` provider, Azure Blob Storage state backend | Requires state management; may feel foreign to ALZ-native teams |
-| **Bicep** | Microsoft-native, no state file, best alignment with ALZ-vended templates — likely what the platform team uses | Azure-only; less portable |
+| | Why Bicep fits here |
+|---|---|
+| ALZ alignment | The SC Landing Zone ships Bicep modules; using Bicep means we compose with the same toolchain the platform team uses |
+| No state file | Bicep deploys via ARM; no state backend to provision or secure |
+| Native Azure | First-class Azure resource support; no provider version lag |
 
-**Recommendation: Terraform** — but this is a coin-flip until Open Question #7 (Bicep mandate?) is answered by the platform team. If Bicep is mandated, the module structure below translates directly.
+**Deployment mode:** `az deployment group create` (resource group scope) for application resources; `az deployment sub create` for subscription-scope resources if needed. CI/CD calls `az deployment` via the OIDC-authenticated service principal.
 
-> ⚠️ **Do not proceed to implementation on Phase 1 until the IaC tool is confirmed.** The internal details (state backend, provider config) differ, but the module decomposition stays the same regardless.
+**No state backend needed.** ARM tracks deployment state; `az deployment group show` gives current status. Idempotent re-runs are safe.
 
-### Module Decomposition (tool-agnostic)
+### Module Structure
 
 ```
-infra/iac/
+infra/bicep/
 ├── environments/
 │   └── dev/
-│       └── main.*            # provider config, module calls, variable values
+│       ├── main.bicep         # orchestration — calls all modules
+│       └── main.bicepparam    # parameter file for dev (committed; no secrets)
 └── modules/
-    ├── networking/           # subnets within LZ-vended VNet; private endpoints; references to central DNS zones
-    ├── aks/                  # cluster, node pools, workload identity, add-ons
-    ├── postgres/             # Flexible Server, databases, private endpoint
-    ├── redis/                # Premium P1, RediSearch, private endpoint
-    ├── key-vault/            # vault, access policies, initial secrets
-    ├── acr/                  # registry, role assignments (skip if LZ provides shared ACR)
-    ├── service-bus/          # namespace, queue
-    └── monitoring/           # App Insights (references LZ Log Analytics workspace if shared)
+    ├── networking.bicep       # subnets within LZ-vended VNet; private endpoints; references to central DNS zones
+    ├── aks.bicep              # cluster, node pools, workload identity, add-ons
+    ├── postgres.bicep         # Flexible Server, databases, private endpoint
+    ├── redis.bicep            # Premium P1, RediSearch, private endpoint
+    ├── keyVault.bicep         # vault, access policies, initial secrets
+    ├── acr.bicep              # registry, role assignments (skip if LZ provides shared ACR)
+    ├── serviceBus.bicep       # namespace, queue
+    └── monitoring.bicep       # App Insights (references LZ Log Analytics workspace ID as param)
 ```
 
 **Secrets written by IaC, not echoed as outputs.** The `key-vault` module accepts a `secrets` map and writes each as a Key Vault secret. Connection strings never appear in IaC output or CI logs.
 
-### Key Vault Secrets Provisioned by Terraform
+### Key Vault Secrets Provisioned by Bicep
 
 | Secret name | Value source | Consumer(s) |
 |---|---|---|
-| `postgres-url` | Terraform PostgreSQL resource | auth, admin, observability, identity, league, librarian, memory |
-| `redis-url` | Terraform Redis resource | auth, cache |
-| `service-bus-conn` | Terraform Service Bus resource | observability (producer), workflow-worker |
-| `app-insights-conn` | Terraform App Insights resource | all services |
-| `agent-relay-secret` | `random_password` resource | agent-relay, workflow-worker |
-| `admin-internal-token` | `random_password` resource | workflow-worker, admin |
-| `identity-key-secret` | `random_password` resource | identity |
-| `identity-service-token` | `random_password` resource | identity |
-| `librarian-service-token` | `random_password` resource | librarian |
+| `postgres-url` | PostgreSQL resource `listConnectionStrings()` | auth, admin, observability, identity, league, librarian, memory |
+| `redis-url` | Redis resource `listKeys()` | auth, cache |
+| `service-bus-conn` | Service Bus resource `listKeys()` | observability (producer), workflow-worker |
+| `app-insights-conn` | App Insights resource `connectionString` output | all services |
+| `agent-relay-secret` | `uniqueString()` seeded from resource group ID | agent-relay, workflow-worker |
+| `admin-internal-token` | `uniqueString()` seeded from resource group ID | workflow-worker, admin |
+| `identity-key-secret` | `uniqueString()` seeded from resource group ID | identity |
+| `identity-service-token` | `uniqueString()` seeded from resource group ID | identity |
+| `librarian-service-token` | `uniqueString()` seeded from resource group ID | librarian |
+
+> Note: `uniqueString()` produces deterministic values per deployment, which is desirable for idempotent re-runs. If stronger randomness is needed, generate secrets outside Bicep (e.g. in a pre-deploy CI step) and pass them as `@secure()` parameters.
 
 ---
 
@@ -389,7 +393,7 @@ Deliverables:
 | 4 ⭐ | Resource naming convention? | `dev-<component>-weu` | SC Platform team | Phase 1 |
 | 5 ⭐ | Allowed Azure regions? | `westeurope` | SC Platform team / Azure Policy | Phase 1 |
 | 6 ⭐ | Azure Policy list for this subscription? | No public IPs; required tags | SC Platform team | Phase 1 |
-| 7 ⭐ | IaC tool — Bicep mandated or Terraform OK? | Terraform (pending) | SC Platform team | Phase 1 |
+| 7 | ~~IaC tool — Bicep mandated or Terraform OK?~~ | **Resolved: Bicep** | — | — |
 | 8 ⭐ | Subscription ID? | Unknown | Benjamin | Phase 1 |
 | 9 ⭐ | Shared ACR or per-workload? | Per-workload | SC Platform team | Phase 2 |
 | 10 | Target FQDN for Dev gateway? | `dev-aigw.simcorp.internal` | Benjamin | Phase 4 |
