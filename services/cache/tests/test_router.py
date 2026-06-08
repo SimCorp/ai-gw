@@ -301,6 +301,132 @@ class TestChatCompletions:
         assert stored_body["choices"][0]["message"]["content"] == "stored!"
 
 
+class TestSecondaryGatewayShadowing:
+    async def test_sampled_request_is_shadowed_to_secondary_gateway(self, app_and_client):
+        """A sampled request should be mirrored to the configured secondary gateway."""
+        app, client = app_and_client
+        shadow_calls = []
+
+        async def _post_side_effect(url, **kwargs):
+            if "validate" in url:
+                return _auth_response_ok()
+            if url == "http://shadow-gateway/v1/chat/completions":
+                shadow_calls.append((url, kwargs))
+                return HttpxResponse(202, json={"status": "accepted"})
+            if "chat/completions" in url:
+                return _litellm_chat_response("shadowed")
+            if "/events" in url:
+                return HttpxResponse(200, json={})
+            raise AssertionError(f"Unexpected POST target: {url}")
+
+        app.state.http.post = AsyncMock(side_effect=_post_side_effect)
+
+        with (
+            patch("app.exact.get", new=AsyncMock(return_value=None)),
+            patch("app.exact.set", new=AsyncMock()),
+            patch("app.semantic.embed", new=AsyncMock(side_effect=Exception("skip"))),
+            patch("app.router.settings.secondary_gateway_url", "http://shadow-gateway"),
+            patch("app.router.settings.secondary_gateway_sample_rate", 1.0),
+        ):
+            resp = await client.post(
+                "/v1/chat/completions",
+                json=CHAT_BODY,
+                headers={"Authorization": "******", "x-request-id": "req-shadow"},
+            )
+
+        assert resp.status_code == 200
+        import asyncio
+
+        await asyncio.sleep(0)
+        assert len(shadow_calls) == 1
+        _url, kwargs = shadow_calls[0]
+        forwarded_headers = {k.lower(): v for k, v in kwargs["headers"].items()}
+        assert kwargs["json"] == CHAT_BODY
+        assert forwarded_headers["authorization"] == "******"
+        assert forwarded_headers["x-aigw-shadow-request"] == "1"
+        assert forwarded_headers["x-request-id"] == "req-shadow"
+
+    async def test_zero_sample_rate_skips_secondary_gateway(self, app_and_client):
+        """A zero sample rate must disable secondary gateway mirroring."""
+        app, client = app_and_client
+        shadow_calls = []
+
+        async def _post_side_effect(url, **kwargs):
+            if "validate" in url:
+                return _auth_response_ok()
+            if url == "http://shadow-gateway/v1/chat/completions":
+                shadow_calls.append((url, kwargs))
+                return HttpxResponse(202, json={"status": "accepted"})
+            if "chat/completions" in url:
+                return _litellm_chat_response("primary-only")
+            if "/events" in url:
+                return HttpxResponse(200, json={})
+            raise AssertionError(f"Unexpected POST target: {url}")
+
+        app.state.http.post = AsyncMock(side_effect=_post_side_effect)
+
+        with (
+            patch("app.exact.get", new=AsyncMock(return_value=None)),
+            patch("app.exact.set", new=AsyncMock()),
+            patch("app.semantic.embed", new=AsyncMock(side_effect=Exception("skip"))),
+            patch("app.router.settings.secondary_gateway_url", "http://shadow-gateway"),
+            patch("app.router.settings.secondary_gateway_sample_rate", 0.0),
+        ):
+            resp = await client.post(
+                "/v1/chat/completions",
+                json=CHAT_BODY,
+                headers={"Authorization": "******", "x-request-id": "req-primary-only"},
+            )
+
+        assert resp.status_code == 200
+        import asyncio
+
+        await asyncio.sleep(0)
+        assert shadow_calls == []
+
+    async def test_shadow_requests_do_not_recurse(self, app_and_client):
+        """A mirrored request must not mirror itself again on the secondary gateway."""
+        app, client = app_and_client
+        shadow_calls = []
+
+        async def _post_side_effect(url, **kwargs):
+            if "validate" in url:
+                return _auth_response_ok()
+            if url == "http://shadow-gateway/v1/chat/completions":
+                shadow_calls.append((url, kwargs))
+                return HttpxResponse(202, json={"status": "accepted"})
+            if "chat/completions" in url:
+                return _litellm_chat_response("secondary-header")
+            if "/events" in url:
+                return HttpxResponse(200, json={})
+            raise AssertionError(f"Unexpected POST target: {url}")
+
+        app.state.http.post = AsyncMock(side_effect=_post_side_effect)
+
+        with (
+            patch("app.exact.get", new=AsyncMock(return_value=None)),
+            patch("app.exact.set", new=AsyncMock()),
+            patch("app.semantic.embed", new=AsyncMock(side_effect=Exception("skip"))),
+            patch("app.router.settings.secondary_gateway_url", "http://shadow-gateway"),
+            patch("app.router.settings.secondary_gateway_sample_rate", 1.0),
+        ):
+            resp = await client.post(
+                "/v1/chat/completions",
+                json=CHAT_BODY,
+                headers={
+                    "Authorization": "******",
+                    "x-request-id": "req-no-recurse",
+                    "x-aigw-shadow-request": "1",
+                },
+            )
+
+        assert resp.status_code == 200
+        import asyncio
+
+        await asyncio.sleep(0)
+        assert shadow_calls == []
+
+
 # ---------------------------------------------------------------------------
 # Input guardrails
 # ---------------------------------------------------------------------------

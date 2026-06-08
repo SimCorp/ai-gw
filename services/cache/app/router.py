@@ -139,6 +139,7 @@ def _classify_intent(prompt_text: str) -> str:
 
 
 _log = logging.getLogger(__name__)
+_SECONDARY_SHADOW_HEADER = "x-aigw-shadow-request"
 
 
 async def _replay_as_sse(cached: dict):
@@ -416,6 +417,39 @@ async def _check_budget(redis, team_id: str, key_id: str | None, cap: float) -> 
         return True  # fail open — never block agents due to Redis failure
 
 
+def _should_shadow_to_secondary(request: Request, request_id: str) -> bool:
+    if request.headers.get(_SECONDARY_SHADOW_HEADER) == "1":
+        return False
+    if not settings.secondary_gateway_url:
+        return False
+    sample_rate = min(max(settings.secondary_gateway_sample_rate, 0.0), 1.0)
+    if sample_rate <= 0.0:
+        return False
+    if sample_rate >= 1.0:
+        return True
+    bucket = int.from_bytes(hashlib.sha256(request_id.encode()).digest()[:8], "big") / 2**64
+    return bucket < sample_rate
+
+
+async def _shadow_to_secondary(
+    http: httpx.AsyncClient, request: Request, body: dict, request_id: str
+) -> None:
+    shadow_headers = {
+        k: v for k, v in request.headers.items() if k.lower() not in ("host", "content-length")
+    }
+    shadow_headers["x-request-id"] = request_id
+    shadow_headers[_SECONDARY_SHADOW_HEADER] = "1"
+    try:
+        await http.post(
+            f"{settings.secondary_gateway_url.rstrip('/')}/v1/chat/completions",
+            json=body,
+            headers=shadow_headers,
+            timeout=30,
+        )
+    except Exception as exc:
+        _log.warning("Secondary gateway shadow request failed: %s", exc)
+
+
 @router.get("/v1/models")
 async def list_models(request: Request):
     http = request.app.state.http
@@ -569,6 +603,9 @@ async def _handle_chat_completions(request: Request, body: dict):
         return JSONResponse(
             {"error": "Budget cap exceeded"}, status_code=429, headers={"x-request-id": request_id}
         )
+
+    if _should_shadow_to_secondary(request, request_id):
+        asyncio.create_task(_shadow_to_secondary(http, request, body, request_id))
 
     start = time.monotonic()
 
