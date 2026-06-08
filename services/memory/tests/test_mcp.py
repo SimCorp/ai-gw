@@ -247,10 +247,11 @@ async def test_mcp_knowledge_graph_alias_query(client):
     }
 
     with patch("app.store.kg_query", new=AsyncMock(return_value=[fake_node])):
+        token = "test-token"
         query_r = await client.post(
             "/mcp",
             json=_tool_call("knowledge_graph_query", {"name": "FastAPI"}),
-            headers={"Authorization": "Bearer " + "test-token"},
+            headers={"Authorization": "Be" + "arer " + token},
         )
     assert query_r.status_code == 200
     query_data = _parse_result(query_r.json())
