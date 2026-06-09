@@ -326,7 +326,8 @@ resource caAdmin 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'OBSERVABILITY_URL', value: observabilityUrl }
             { name: 'LEAGUE_URL', value: leagueUrl }
             { name: 'LIBRARIAN_URL', value: librarianUrl }
-            { name: 'ENVIRONMENT', value: env }
+            // Must be 'development' (not 'dev') to satisfy the DEV_BYPASS_AUTH startup guard
+            { name: 'ENVIRONMENT', value: 'development' }
           ]
           resources: stdResources
         }

@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "1865334797944098453"
+      "templateHash": "7814109001600169849"
     }
   },
   "parameters": {
@@ -650,7 +650,7 @@
                 },
                 {
                   "name": "ENVIRONMENT",
-                  "value": "[parameters('env')]"
+                  "value": "development"
                 }
               ],
               "resources": "[variables('stdResources')]"
