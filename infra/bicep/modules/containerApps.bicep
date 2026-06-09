@@ -13,7 +13,7 @@ param acrName string
 @secure()
 param ghcrPat string
 param ghcrUsername string
-param imageTag string = 'dev-latest'
+param imageTag string = 'latest'
 param location string
 param tags object = {}
 

@@ -58,6 +58,15 @@ resource dbLitellm 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2024-08-
   }
 }
 
+resource extensionsConfig 'Microsoft.DBforPostgreSQL/flexibleServers/configurations@2024-08-01' = {
+  parent: postgresServer
+  name: 'azure.extensions'
+  properties: {
+    value: 'pgcrypto,vector'
+    source: 'user-override'
+  }
+}
+
 resource privateEndpoint 'Microsoft.Network/privateEndpoints@2023-09-01' = {
   name: 'pe-postgres-aigw-dev-sdc'
   location: location
