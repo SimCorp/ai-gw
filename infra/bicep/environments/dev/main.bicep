@@ -41,7 +41,18 @@ module networking '../../modules/networking.bicep' = {
   }
 }
 
-// ── Key Vault (inter-service secrets) ─────────────────────────────────────────
+// ── User-assigned managed identity for Service Bus CMK ────────────────────────
+module cmkIdentity '../../modules/cmkIdentity.bicep' = {
+  name: 'cmkIdentity'
+  scope: rg
+  params: {
+    name: 'id-sb-cmk-${env}-sdc'
+    location: location
+    tags: tags
+  }
+}
+
+// ── Key Vault (inter-service secrets + SB CMK key) ────────────────────────────
 module keyVault '../../modules/keyVault.bicep' = {
   name: 'keyVault'
   scope: rg
@@ -51,6 +62,7 @@ module keyVault '../../modules/keyVault.bicep' = {
     tags: tags
     peSubnetId: networking.outputs.peSubnetId
     deployingPrincipalId: deployingPrincipalId
+    sbEncryptionPrincipalId: cmkIdentity.outputs.principalId
     agentRelaySecret: agentRelaySecret
     adminInternalToken: adminInternalToken
     identityKeySecret: identityKeySecret
@@ -96,14 +108,20 @@ module acr '../../modules/acr.bicep' = {
 }
 
 // ── Service Bus ───────────────────────────────────────────────────────────────
+// dependsOn keyVault: ensures the CMK role assignment for the UAI is in place
+// before the SB namespace attempts to use it for encryption.
 module serviceBus '../../modules/serviceBus.bicep' = {
   name: 'serviceBus'
   scope: rg
+  dependsOn: [keyVault]
   params: {
     name: 'sb-aigw-${env}-sdc'
     location: location
     tags: tags
     peSubnetId: networking.outputs.peSubnetId
+    encryptionIdentityId: cmkIdentity.outputs.identityId
+    kvUri: keyVault.outputs.kvUri
+    sbKeyName: keyVault.outputs.sbKeyName
   }
 }
 
@@ -136,8 +154,6 @@ module containerEnv '../../modules/containerEnv.bicep' = {
 }
 
 // ── Write PaaS connection strings to Key Vault ────────────────────────────────
-// listKeys() and URL construction are done inside kvPaasSecrets.bicep
-// so secrets never flow through main.bicep variables or ARM deployment outputs.
 module kvPaasSecrets '../../modules/kvPaasSecrets.bicep' = {
   name: 'kvPaasSecrets'
   scope: rg

@@ -3,6 +3,9 @@
 param name string
 param location string
 param peSubnetId string
+param encryptionIdentityId string
+param kvUri string
+param sbKeyName string
 param tags object = {}
 
 resource sbNamespace 'Microsoft.ServiceBus/namespaces@2022-10-01-preview' = {
@@ -13,9 +16,26 @@ resource sbNamespace 'Microsoft.ServiceBus/namespaces@2022-10-01-preview' = {
     name: 'Premium'
     tier: 'Premium'
   }
+  identity: {
+    type: 'UserAssigned'
+    userAssignedIdentities: {
+      '${encryptionIdentityId}': {}
+    }
+  }
   properties: {
     publicNetworkAccess: 'Disabled'
     encryption: {
+      keySource: 'Microsoft.KeyVault'
+      keyVaultProperties: [
+        {
+          keyName: sbKeyName
+          keyVaultUri: kvUri
+          keyVersion: ''
+          identity: {
+            userAssignedIdentity: encryptionIdentityId
+          }
+        }
+      ]
       requireInfrastructureEncryption: true
     }
   }
