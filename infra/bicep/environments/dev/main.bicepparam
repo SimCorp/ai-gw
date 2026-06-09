@@ -19,5 +19,8 @@ param deployingPrincipalId = '45674099-3cd8-404c-a6ad-871027c8a585'
 // tlsCertId:         .../managedEnvironments/cae-aigw-dev-sdc/certificates/tls-wildcard-lab
 //
 // Pending SC Platform team:
-//   DNS A record:  aigw-dev.lab.cloud.scdom.net → 10.179.231.6
 //   Hub firewall:  allow ACA egress from 10.179.231.0/24 to internet (provider APIs)
+//
+// DNS: reusing *.lab.cloud.scdom.net → 10.179.231.36 (docker-host-dev NGINX, snet-aca-workload)
+//   aigw-dev.lab.cloud.scdom.net resolves via wildcard; NGINX proxies to 10.179.231.6 (ACA)
+//   No new DNS record needed.
