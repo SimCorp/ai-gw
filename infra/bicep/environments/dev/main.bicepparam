@@ -18,8 +18,7 @@ param deployingPrincipalId = '45674099-3cd8-404c-a6ad-871027c8a585'
 // acrLoginServer:    acraigwdevsdc.azurecr.io
 // tlsCertId:         .../managedEnvironments/cae-aigw-dev-sdc/certificates/tls-wildcard-lab
 //
-// Pending SC Platform team:
-//   Hub firewall:  allow ACA egress from 10.179.231.0/24 to internet (provider APIs)
-//
 // DNS: private zone aigw-dev.lab.cloud.scdom.net → 10.179.231.6 created in
-//   rg-spoke-platformaitooling-dev-sdc-001, linked to spoke VNet. No platform team needed.
+//   rg-spoke-platformaitooling-dev-sdc-001, linked to spoke VNet.
+// Egress: snet-aca-infra has no UDR/NAT GW — Azure default SNAT provides outbound internet.
+// No pending platform team requests.
