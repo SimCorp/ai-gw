@@ -272,7 +272,23 @@ jobs:
             context: services/admin
           - name: observability
             context: services/observability
-          # admin-frontend / portal-frontend are intentionally omitted:
+          - name: identity
+            context: services/identity
+          - name: agent-relay
+            context: services/agent-relay
+          - name: librarian
+            context: services/librarian
+          - name: memory
+            context: services/memory
+          - name: league
+            context: services/league
+          - name: scanner
+            context: services/scanner
+          - name: workflow-worker
+            context: services/workflow-worker
+          - name: litellm
+            context: services/litellm
+          # admin-portal / portal are intentionally omitted:
           # this is a pnpm monorepo with workspace:* deps, and their
           # Dockerfiles (npm ci, single-app context) cannot build. Nothing
           # consumes the images today — compose runs the apps via
@@ -316,3 +332,58 @@ jobs:
             --cache-from type=gha,scope=${{ matrix.component.name }} \
             --cache-to type=gha,mode=max,scope=${{ matrix.component.name }} \
             ${{ matrix.component.context }}
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Import GHCR images into the private ACR (acraigwdevsdc.azurecr.io).
+  #
+  # ACR has publicNetworkAccess=Disabled (SimCorp policy). GitHub-hosted runners
+  # cannot push via docker directly. `az acr import` is a server-side ARM
+  # operation — Azure's ACR service fetches layers from GHCR; the runner only
+  # makes an ARM API call, so no VNet runner is needed.
+  #
+  # Prerequisites (platform-team one-time setup):
+  #   1. Create Entra App Registration "ai-gw-github-actions" with a Federated
+  #      Credential: subject=repo:SimCorp/ai-gw:ref:refs/heads/master
+  #   2. Assign AcrPush on acraigwdevsdc
+  #   3. Assign Contributor on rg-aigw-dev-sdc (for deploy.yml phase 4)
+  #   4. Add repo secrets: AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID
+  # ────────────────────────────────────────────────────────────────────────────
+  acr-import:
+    name: Import to ACR
+    runs-on: ubuntu-latest
+    needs: [build-push]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
+    permissions:
+      id-token: write
+      contents: read
+      packages: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Import all images to ACR
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          SHA=$(git rev-parse --short HEAD)
+          REPO="ghcr.io/${{ github.repository }}"
+          REPO="${REPO,,}"
+          SERVICES=(auth cache admin-api observability identity agent-relay librarian memory league scanner workflow-worker litellm)
+          for svc in "${SERVICES[@]}"; do
+            echo "Importing ${svc}:sha-${SHA} → acraigwdevsdc"
+            az acr import \
+              --name acraigwdevsdc \
+              --source "${REPO}/${svc}:sha-${SHA}" \
+              --image "${svc}:sha-${SHA}" \
+              --image "${svc}:dev-latest" \
+              --username "${{ github.actor }}" \
+              --password "${GITHUB_TOKEN}" \
+              --force
+          done
