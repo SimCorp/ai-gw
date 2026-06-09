@@ -35,12 +35,29 @@ var redisUrl = 'rediss://:${redisKey}@${redisName}.redis.cache.windows.net:6380/
 
 var sbConnStr = sbAuthRule.listKeys('2022-10-01-preview').primaryConnectionString
 
-var postgresUrl = 'postgresql://${postgresAdminLogin}:${postgresAdminPassword}@${postgresFqdn}:5432/aigateway?sslmode=require'
+// SQLAlchemy+asyncpg format for most services; port omitted (default 5432)
+var postgresUrl = 'postgresql+asyncpg://${postgresAdminLogin}:${postgresAdminPassword}@${postgresFqdn}/aigateway?sslmode=require'
+// Raw asyncpg format for memory service (asyncpg.create_pool rejects the +asyncpg prefix)
+var postgresUrlRaw = 'postgresql://${postgresAdminLogin}:${postgresAdminPassword}@${postgresFqdn}/aigateway?sslmode=require'
+// Separate database for litellm spend logs
+var postgresUrlLitellm = 'postgresql+asyncpg://${postgresAdminLogin}:${postgresAdminPassword}@${postgresFqdn}/litellm?sslmode=require'
 
 resource secretPostgres 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
   parent: kv
   name: 'postgres-url'
   properties: { value: postgresUrl }
+}
+
+resource secretPostgresRaw 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+  parent: kv
+  name: 'postgres-url-raw'
+  properties: { value: postgresUrlRaw }
+}
+
+resource secretPostgresLitellm 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+  parent: kv
+  name: 'postgres-url-litellm'
+  properties: { value: postgresUrlLitellm }
 }
 
 resource secretRedis 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {

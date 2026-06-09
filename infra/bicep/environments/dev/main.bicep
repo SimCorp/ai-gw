@@ -6,6 +6,7 @@ param vnetResourceGroup string
 param vnetName string
 param acaInfraSubnetId string
 param deployingPrincipalId string
+param imageTag string = 'dev-latest'
 
 @secure()
 param postgresAdminPassword string
@@ -24,6 +25,10 @@ var adminInternalToken = uniqueString(subscription().id, env, 'admin-token')
 var identityKeySecret = uniqueString(subscription().id, env, 'identity-key')
 var identityServiceToken = uniqueString(subscription().id, env, 'identity-svc')
 var librarianServiceToken = uniqueString(subscription().id, env, 'librarian-svc')
+var litellmMasterKey = 'sk-${uniqueString(subscription().id, env, 'litellm-master')}'
+var adminSecretKey = uniqueString(subscription().id, env, 'admin-secret')
+var internalApiKey = uniqueString(subscription().id, env, 'internal-api')
+var scannerWorkerSecret = uniqueString(subscription().id, env, 'scanner-worker')
 
 // ── Resource group ────────────────────────────────────────────────────────────
 resource rg 'Microsoft.Resources/resourceGroups@2023-07-01' = {
@@ -68,6 +73,10 @@ module keyVault '../../modules/keyVault.bicep' = {
     identityKeySecret: identityKeySecret
     identityServiceToken: identityServiceToken
     librarianServiceToken: librarianServiceToken
+    litellmMasterKey: litellmMasterKey
+    adminSecretKey: adminSecretKey
+    internalApiKey: internalApiKey
+    scannerWorkerSecret: scannerWorkerSecret
   }
 }
 
@@ -104,16 +113,16 @@ module acr '../../modules/acr.bicep' = {
     name: 'acraigw${env}sdc'
     location: location
     tags: tags
+    peSubnetId: networking.outputs.peSubnetId
   }
 }
 
 // ── Service Bus ───────────────────────────────────────────────────────────────
-// dependsOn keyVault: ensures the CMK role assignment for the UAI is in place
-// before the SB namespace attempts to use it for encryption.
+// Implicit dependency on keyVault via kvUri/sbKeyName params ensures the CMK
+// role assignment for the UAI is in place before SB namespace encryption starts.
 module serviceBus '../../modules/serviceBus.bicep' = {
   name: 'serviceBus'
   scope: rg
-  dependsOn: [keyVault]
   params: {
     name: 'sb-aigw-${env}-sdc'
     location: location
@@ -165,6 +174,24 @@ module kvPaasSecrets '../../modules/kvPaasSecrets.bicep' = {
     postgresFqdn: postgres.outputs.postgresFqdn
     postgresAdminPassword: postgresAdminPassword
     appInsightsConn: monitoring.outputs.appiConnectionString
+  }
+}
+
+// ── Container Apps ────────────────────────────────────────────────────────────
+module containerApps '../../modules/containerApps.bicep' = {
+  name: 'containerApps'
+  scope: rg
+  dependsOn: [kvPaasSecrets]
+  params: {
+    env: env
+    acaEnvId: containerEnv.outputs.acaEnvId
+    kvUri: keyVault.outputs.kvUri
+    kvName: kvName
+    acrName: 'acraigw${env}sdc'
+    acrLoginServer: acr.outputs.acrLoginServer
+    imageTag: imageTag
+    location: location
+    tags: tags
   }
 }
 

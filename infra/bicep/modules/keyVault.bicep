@@ -15,6 +15,14 @@ param identityKeySecret string
 param identityServiceToken string
 @secure()
 param librarianServiceToken string
+@secure()
+param litellmMasterKey string
+@secure()
+param adminSecretKey string
+@secure()
+param internalApiKey string
+@secure()
+param scannerWorkerSecret string
 param tags object = {}
 
 // Key Vault Administrator — full data-plane access, required by Enforce-GR-KeyVault
@@ -131,6 +139,34 @@ resource secretLibrarianToken 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
   name: 'librarian-service-token'
   dependsOn: [kvAdminRole]
   properties: { value: librarianServiceToken }
+}
+
+resource secretLitellmMasterKey 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+  parent: kv
+  name: 'litellm-master-key'
+  dependsOn: [kvAdminRole]
+  properties: { value: litellmMasterKey }
+}
+
+resource secretAdminSecretKey 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+  parent: kv
+  name: 'admin-secret-key'
+  dependsOn: [kvAdminRole]
+  properties: { value: adminSecretKey }
+}
+
+resource secretInternalApiKey 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+  parent: kv
+  name: 'internal-api-key'
+  dependsOn: [kvAdminRole]
+  properties: { value: internalApiKey }
+}
+
+resource secretScannerWorkerSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+  parent: kv
+  name: 'scanner-worker-secret'
+  dependsOn: [kvAdminRole]
+  properties: { value: scannerWorkerSecret }
 }
 
 output kvName string = kv.name
