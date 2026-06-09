@@ -12,6 +12,7 @@ from sqlalchemy import text
 import app.models  # noqa: F401 — registers all ORM models with Base.metadata
 from app.config import settings
 from app.db import async_session_maker, engine
+from app.redis_utils import make_redis
 from app.routers import challenges as challenges_router
 from app.routers import internal_points as internal_points_router
 from app.routers import leaderboard as leaderboard_router
@@ -149,7 +150,7 @@ async def _seed_demo_content() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    app.state.redis = aioredis.from_url(settings.redis_url, decode_responses=True)
+    app.state.redis = make_redis(settings.redis_url)
     async with async_session_maker() as session:
         await session.execute(text("ALTER TABLE league_purchases ADD COLUMN IF NOT EXISTS equipped BOOLEAN NOT NULL DEFAULT FALSE"))
         await session.commit()

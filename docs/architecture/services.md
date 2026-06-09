@@ -404,13 +404,26 @@ docker compose -f infra/docker-compose.yml up --build
 
 ## Deployment Topology
 
-**Production Topology (not yet deployed):**
-- Services run in Kubernetes (GKE or similar)
-- PostgreSQL: managed database (CloudSQL)
-- Redis: managed cache (Memorystore with Sentinel for HA)
-- Load Balancer: ingress controller distributing to service replicas
-- Observability: Prometheus, Grafana, Loki (optional)
+**Production Topology (Azure Container Apps):**
+- Services run as Container Apps in an Azure Container Apps environment (VNet-integrated, internal ingress)
+- PostgreSQL: Azure Database for PostgreSQL Flexible Server (private endpoint)
+- Redis: Azure Cache for Redis Premium P1 with zone-redundant replication and RediSearch module
+- Load Balancing: ACA built-in HTTP ingress with automatic rolling-revision traffic shifting
+- Observability: Azure Monitor + Application Insights
+
+**High Availability:**
+- Critical-path services (auth, cache, litellm, admin) run with a minimum of 2 replicas
+- All services are stateless — shared state lives in Redis and PostgreSQL only
+- Redis Sentinel is available for non-Azure deployments (`docker compose --profile sentinel up`)
+- All services expose `/health` (liveness) and `/ready` (readiness) probes
+- Database migrations (Alembic) use backward-compatible patterns to allow rolling upgrades
+
+See [High Availability Guide](../high-availability.md) for detailed configuration and rolling upgrade procedures.
+
+**Local Development (Docker Compose):**
+- Single-instance services with `restart: unless-stopped`
+- Redis Sentinel profile available (`--profile sentinel`) for HA testing locally
 
 **Authentication:**
-- Entra ID (Azure AD) replaces Dex
+- Entra ID (Azure AD) replaces Dex in production
 - OIDC groups are source of truth for role assignments

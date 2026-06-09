@@ -27,6 +27,7 @@ from app.config import Settings
 from app.dag import is_terminal, ready_successors, should_loop
 from app.dag import node as dag_node
 from app.events import node_finished, node_log, node_started, run_finished
+from app.redis_utils import make_redis
 from app.runtime import RunResult
 from app.runtime.docker import DockerRuntime
 from app.runtime.relay import RelayRuntime
@@ -582,7 +583,7 @@ async def _main() -> None:
     )
 
     pool = await asyncpg.create_pool(cfg.database_url, min_size=2, max_size=10)
-    redis = Redis.from_url(cfg.redis_url, decode_responses=True)
+    redis = make_redis(cfg.redis_url)
     runtime = DockerRuntime(
         host_runs_path=cfg.host_runs_path,
         worker_runs_path="/worker-runs",  # bind-mounted to host_runs_path
