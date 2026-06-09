@@ -7,6 +7,9 @@ param vnetName string
 param acaInfraSubnetId string
 param deployingPrincipalId string
 param imageTag string = 'dev-latest'
+@secure()
+param ghcrPat string
+param ghcrUsername string
 
 @secure()
 param postgresAdminPassword string
@@ -188,7 +191,8 @@ module containerApps '../../modules/containerApps.bicep' = {
     kvUri: keyVault.outputs.kvUri
     kvName: kvName
     acrName: 'acraigw${env}sdc'
-    acrLoginServer: acr.outputs.acrLoginServer
+    ghcrPat: ghcrPat
+    ghcrUsername: ghcrUsername
     imageTag: imageTag
     location: location
     tags: tags

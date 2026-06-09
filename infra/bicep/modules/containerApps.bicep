@@ -1,14 +1,18 @@
 // infra/bicep/modules/containerApps.bicep
 // Defines all 12 Container Apps + 1 db-migrate Job.
 // Apps use a shared UAMI with AcrPull on ACR and Key Vault Secrets User on KV.
-// KV secret refs use the UAMI; plain env vars are inlined.
+// Images pulled from GHCR (private PAT auth) while ACR PE DNS is pending platform team.
+// To switch back to ACR: remove ghcrPat/ghcrUsername params, restore acrLoginServer,
+// replace ghcrBase references, and remove registries blocks from each app.
 
 param env string
 param acaEnvId string
 param kvUri string
 param kvName string
 param acrName string
-param acrLoginServer string
+@secure()
+param ghcrPat string
+param ghcrUsername string
 param imageTag string = 'dev-latest'
 param location string
 param tags object = {}
@@ -53,9 +57,12 @@ resource kvSecretsUserAssignment 'Microsoft.Authorization/roleAssignments@2022-0
   }
 }
 
-// ── Helper: KV secret URL builder ─────────────────────────────────────────────
-// kvUri already ends with '/', e.g. 'https://kv-aigw-dev-sdc.vault.azure.net/'
 var uamiId = appIdentity.id
+
+// ── GHCR registry pull credentials ───────────────────────────────────────────
+var ghcrBase = 'ghcr.io/simcorp/ai-gw'
+var ghcrSecret = [{ name: 'ghcr-pat', value: ghcrPat }]
+var ghcrRegistries = [{ server: 'ghcr.io', username: ghcrUsername, passwordSecretRef: 'ghcr-pat' }]
 
 // ── Inter-service base URLs (short ACA env DNS — works within same environment)
 var authUrl = 'http://ca-auth-${env}-sdc'
@@ -97,15 +104,16 @@ resource dbMigrateJob 'Microsoft.App/jobs@2024-03-01' = {
         parallelism: 1
         replicaCompletionCount: 1
       }
-      secrets: [
+      registries: ghcrRegistries
+      secrets: concat(ghcrSecret, [
         { name: 'postgres-url', keyVaultUrl: '${kvUri}secrets/postgres-url', identity: uamiId }
-      ]
+      ])
     }
     template: {
       containers: [
         {
           name: 'db-migrate'
-          image: '${acrLoginServer}/admin-api:${imageTag}'
+          image: '${ghcrBase}/admin-api:${imageTag}'
           command: ['alembic', '-c', '/app/alembic.ini', 'upgrade', 'head']
           env: [
             { name: 'DATABASE_URL', secretRef: 'postgres-url' }
@@ -129,16 +137,17 @@ resource caAuth 'Microsoft.App/containerApps@2024-03-01' = {
     workloadProfileName: 'Consumption'
     configuration: {
       ingress: { external: false, targetPort: 8001, transport: 'Http' }
-      secrets: [
+      registries: ghcrRegistries
+      secrets: concat(ghcrSecret, [
         { name: 'postgres-url', keyVaultUrl: '${kvUri}secrets/postgres-url', identity: uamiId }
         { name: 'redis-url', keyVaultUrl: '${kvUri}secrets/redis-url', identity: uamiId }
-      ]
+      ])
     }
     template: {
       containers: [
         {
           name: 'auth'
-          image: '${acrLoginServer}/auth:${imageTag}'
+          image: '${ghcrBase}/auth:${imageTag}'
           env: [
             { name: 'DATABASE_URL', secretRef: 'postgres-url' }
             { name: 'REDIS_URL', secretRef: 'redis-url' }
@@ -170,17 +179,18 @@ resource caCache 'Microsoft.App/containerApps@2024-03-01' = {
     workloadProfileName: 'Consumption'
     configuration: {
       ingress: { external: false, targetPort: 8002, transport: 'Http' }
-      secrets: [
+      registries: ghcrRegistries
+      secrets: concat(ghcrSecret, [
         { name: 'redis-url', keyVaultUrl: '${kvUri}secrets/redis-url', identity: uamiId }
         { name: 'litellm-master-key', keyVaultUrl: '${kvUri}secrets/litellm-master-key', identity: uamiId }
         { name: 'internal-api-key', keyVaultUrl: '${kvUri}secrets/internal-api-key', identity: uamiId }
-      ]
+      ])
     }
     template: {
       containers: [
         {
           name: 'cache'
-          image: '${acrLoginServer}/cache:${imageTag}'
+          image: '${ghcrBase}/cache:${imageTag}'
           env: [
             { name: 'REDIS_URL', secretRef: 'redis-url' }
             { name: 'LITELLM_MASTER_KEY', secretRef: 'litellm-master-key' }
@@ -213,16 +223,17 @@ resource caLitellm 'Microsoft.App/containerApps@2024-03-01' = {
     workloadProfileName: 'Consumption'
     configuration: {
       ingress: { external: false, targetPort: 8003, transport: 'Http' }
-      secrets: [
+      registries: ghcrRegistries
+      secrets: concat(ghcrSecret, [
         { name: 'litellm-master-key', keyVaultUrl: '${kvUri}secrets/litellm-master-key', identity: uamiId }
         { name: 'postgres-url-litellm', keyVaultUrl: '${kvUri}secrets/postgres-url-litellm', identity: uamiId }
-      ]
+      ])
     }
     template: {
       containers: [
         {
           name: 'litellm'
-          image: '${acrLoginServer}/litellm:${imageTag}'
+          image: '${ghcrBase}/litellm:${imageTag}'
           env: [
             { name: 'LITELLM_MASTER_KEY', secretRef: 'litellm-master-key' }
             { name: 'DATABASE_URL', secretRef: 'postgres-url-litellm' }
@@ -254,19 +265,20 @@ resource caObservability 'Microsoft.App/containerApps@2024-03-01' = {
     workloadProfileName: 'Consumption'
     configuration: {
       ingress: { external: false, targetPort: 8004, transport: 'Http' }
-      secrets: [
+      registries: ghcrRegistries
+      secrets: concat(ghcrSecret, [
         { name: 'postgres-url', keyVaultUrl: '${kvUri}secrets/postgres-url', identity: uamiId }
         { name: 'redis-url', keyVaultUrl: '${kvUri}secrets/redis-url', identity: uamiId }
         { name: 'service-bus-conn', keyVaultUrl: '${kvUri}secrets/service-bus-conn', identity: uamiId }
         { name: 'app-insights-conn', keyVaultUrl: '${kvUri}secrets/app-insights-conn', identity: uamiId }
         { name: 'internal-api-key', keyVaultUrl: '${kvUri}secrets/internal-api-key', identity: uamiId }
-      ]
+      ])
     }
     template: {
       containers: [
         {
           name: 'observability'
-          image: '${acrLoginServer}/observability:${imageTag}'
+          image: '${ghcrBase}/observability:${imageTag}'
           env: [
             { name: 'DATABASE_URL', secretRef: 'postgres-url' }
             { name: 'REDIS_URL', secretRef: 'redis-url' }
@@ -296,7 +308,8 @@ resource caAdmin 'Microsoft.App/containerApps@2024-03-01' = {
     workloadProfileName: 'Consumption'
     configuration: {
       ingress: { external: false, targetPort: 8005, transport: 'Http' }
-      secrets: [
+      registries: ghcrRegistries
+      secrets: concat(ghcrSecret, [
         { name: 'postgres-url', keyVaultUrl: '${kvUri}secrets/postgres-url', identity: uamiId }
         { name: 'redis-url', keyVaultUrl: '${kvUri}secrets/redis-url', identity: uamiId }
         { name: 'admin-secret-key', keyVaultUrl: '${kvUri}secrets/admin-secret-key', identity: uamiId }
@@ -304,13 +317,13 @@ resource caAdmin 'Microsoft.App/containerApps@2024-03-01' = {
         { name: 'litellm-master-key', keyVaultUrl: '${kvUri}secrets/litellm-master-key', identity: uamiId }
         { name: 'identity-key-secret', keyVaultUrl: '${kvUri}secrets/identity-key-secret', identity: uamiId }
         { name: 'librarian-service-token', keyVaultUrl: '${kvUri}secrets/librarian-service-token', identity: uamiId }
-      ]
+      ])
     }
     template: {
       containers: [
         {
           name: 'admin'
-          image: '${acrLoginServer}/admin-api:${imageTag}'
+          image: '${ghcrBase}/admin-api:${imageTag}'
           env: [
             { name: 'DATABASE_URL', secretRef: 'postgres-url' }
             { name: 'REDIS_URL', secretRef: 'redis-url' }
@@ -349,17 +362,18 @@ resource caIdentity 'Microsoft.App/containerApps@2024-03-01' = {
     workloadProfileName: 'Consumption'
     configuration: {
       ingress: { external: false, targetPort: 8006, transport: 'Http' }
-      secrets: [
+      registries: ghcrRegistries
+      secrets: concat(ghcrSecret, [
         { name: 'postgres-url', keyVaultUrl: '${kvUri}secrets/postgres-url', identity: uamiId }
         { name: 'redis-url', keyVaultUrl: '${kvUri}secrets/redis-url', identity: uamiId }
         { name: 'identity-service-token', keyVaultUrl: '${kvUri}secrets/identity-service-token', identity: uamiId }
-      ]
+      ])
     }
     template: {
       containers: [
         {
           name: 'identity'
-          image: '${acrLoginServer}/identity:${imageTag}'
+          image: '${ghcrBase}/identity:${imageTag}'
           env: [
             { name: 'DATABASE_URL', secretRef: 'postgres-url' }
             { name: 'REDIS_URL', secretRef: 'redis-url' }
@@ -387,16 +401,17 @@ resource caAgentRelay 'Microsoft.App/containerApps@2024-03-01' = {
     workloadProfileName: 'Consumption'
     configuration: {
       ingress: { external: false, targetPort: 8007, transport: 'Http' }
-      secrets: [
+      registries: ghcrRegistries
+      secrets: concat(ghcrSecret, [
         { name: 'redis-url', keyVaultUrl: '${kvUri}secrets/redis-url', identity: uamiId }
         { name: 'agent-relay-secret', keyVaultUrl: '${kvUri}secrets/agent-relay-secret', identity: uamiId }
-      ]
+      ])
     }
     template: {
       containers: [
         {
           name: 'agent-relay'
-          image: '${acrLoginServer}/agent-relay:${imageTag}'
+          image: '${ghcrBase}/agent-relay:${imageTag}'
           env: [
             { name: 'REDIS_URL', secretRef: 'redis-url' }
             { name: 'RELAY_SECRET', secretRef: 'agent-relay-secret' }
@@ -422,18 +437,19 @@ resource caLibrarian 'Microsoft.App/containerApps@2024-03-01' = {
     workloadProfileName: 'Consumption'
     configuration: {
       ingress: { external: false, targetPort: 8008, transport: 'Http' }
-      secrets: [
+      registries: ghcrRegistries
+      secrets: concat(ghcrSecret, [
         { name: 'postgres-url', keyVaultUrl: '${kvUri}secrets/postgres-url', identity: uamiId }
         { name: 'redis-url', keyVaultUrl: '${kvUri}secrets/redis-url', identity: uamiId }
         { name: 'litellm-master-key', keyVaultUrl: '${kvUri}secrets/litellm-master-key', identity: uamiId }
         { name: 'librarian-service-token', keyVaultUrl: '${kvUri}secrets/librarian-service-token', identity: uamiId }
-      ]
+      ])
     }
     template: {
       containers: [
         {
           name: 'librarian'
-          image: '${acrLoginServer}/librarian:${imageTag}'
+          image: '${ghcrBase}/librarian:${imageTag}'
           env: [
             { name: 'DATABASE_URL', secretRef: 'postgres-url' }
             { name: 'REDIS_URL', secretRef: 'redis-url' }
@@ -465,17 +481,18 @@ resource caMemory 'Microsoft.App/containerApps@2024-03-01' = {
     workloadProfileName: 'Consumption'
     configuration: {
       ingress: { external: false, targetPort: 8009, transport: 'Http' }
-      secrets: [
+      registries: ghcrRegistries
+      secrets: concat(ghcrSecret, [
         // memory uses raw asyncpg (no SQLAlchemy), requires postgresql:// scheme
         { name: 'postgres-url-raw', keyVaultUrl: '${kvUri}secrets/postgres-url-raw', identity: uamiId }
         { name: 'litellm-master-key', keyVaultUrl: '${kvUri}secrets/litellm-master-key', identity: uamiId }
-      ]
+      ])
     }
     template: {
       containers: [
         {
           name: 'memory'
-          image: '${acrLoginServer}/memory:${imageTag}'
+          image: '${ghcrBase}/memory:${imageTag}'
           env: [
             { name: 'DATABASE_URL', secretRef: 'postgres-url-raw' }
             { name: 'AUTH_URL', value: authUrl }
@@ -505,18 +522,19 @@ resource caLeague 'Microsoft.App/containerApps@2024-03-01' = {
     workloadProfileName: 'Consumption'
     configuration: {
       ingress: { external: false, targetPort: 8010, transport: 'Http' }
-      secrets: [
+      registries: ghcrRegistries
+      secrets: concat(ghcrSecret, [
         { name: 'postgres-url', keyVaultUrl: '${kvUri}secrets/postgres-url', identity: uamiId }
         { name: 'redis-url', keyVaultUrl: '${kvUri}secrets/redis-url', identity: uamiId }
         { name: 'litellm-master-key', keyVaultUrl: '${kvUri}secrets/litellm-master-key', identity: uamiId }
         { name: 'admin-internal-token', keyVaultUrl: '${kvUri}secrets/admin-internal-token', identity: uamiId }
-      ]
+      ])
     }
     template: {
       containers: [
         {
           name: 'league'
-          image: '${acrLoginServer}/league:${imageTag}'
+          image: '${ghcrBase}/league:${imageTag}'
           env: [
             { name: 'DATABASE_URL', secretRef: 'postgres-url' }
             { name: 'REDIS_URL', secretRef: 'redis-url' }
@@ -545,18 +563,19 @@ resource caScanner 'Microsoft.App/containerApps@2024-03-01' = {
     workloadProfileName: 'Consumption'
     configuration: {
       ingress: { external: false, targetPort: 8011, transport: 'Http' }
-      secrets: [
+      registries: ghcrRegistries
+      secrets: concat(ghcrSecret, [
         { name: 'postgres-url', keyVaultUrl: '${kvUri}secrets/postgres-url', identity: uamiId }
         { name: 'redis-url', keyVaultUrl: '${kvUri}secrets/redis-url', identity: uamiId }
         { name: 'internal-api-key', keyVaultUrl: '${kvUri}secrets/internal-api-key', identity: uamiId }
         { name: 'scanner-worker-secret', keyVaultUrl: '${kvUri}secrets/scanner-worker-secret', identity: uamiId }
-      ]
+      ])
     }
     template: {
       containers: [
         {
           name: 'scanner'
-          image: '${acrLoginServer}/scanner:${imageTag}'
+          image: '${ghcrBase}/scanner:${imageTag}'
           env: [
             { name: 'DATABASE_URL', secretRef: 'postgres-url' }
             { name: 'REDIS_URL', secretRef: 'redis-url' }
@@ -585,19 +604,19 @@ resource caWorkflowWorker 'Microsoft.App/containerApps@2024-03-01' = {
     managedEnvironmentId: acaEnvId
     workloadProfileName: 'Consumption'
     configuration: {
-      // No ingress — this is a background worker.
-      secrets: [
+      registries: ghcrRegistries
+      secrets: concat(ghcrSecret, [
         { name: 'postgres-url', keyVaultUrl: '${kvUri}secrets/postgres-url', identity: uamiId }
         { name: 'redis-url', keyVaultUrl: '${kvUri}secrets/redis-url', identity: uamiId }
         { name: 'agent-relay-secret', keyVaultUrl: '${kvUri}secrets/agent-relay-secret', identity: uamiId }
         { name: 'admin-internal-token', keyVaultUrl: '${kvUri}secrets/admin-internal-token', identity: uamiId }
-      ]
+      ])
     }
     template: {
       containers: [
         {
           name: 'workflow-worker'
-          image: '${acrLoginServer}/workflow-worker:${imageTag}'
+          image: '${ghcrBase}/workflow-worker:${imageTag}'
           env: [
             { name: 'DATABASE_URL', secretRef: 'postgres-url' }
             { name: 'REDIS_URL', secretRef: 'redis-url' }

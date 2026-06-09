@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "7814109001600169849"
+      "templateHash": "6463623711806757617"
     }
   },
   "parameters": {
@@ -24,7 +24,10 @@
     "acrName": {
       "type": "string"
     },
-    "acrLoginServer": {
+    "ghcrPat": {
+      "type": "securestring"
+    },
+    "ghcrUsername": {
       "type": "string"
     },
     "imageTag": {
@@ -43,6 +46,20 @@
     "acrPullRoleId": "7f951dda-4ed3-4680-a7ca-43fe172d538d",
     "kvSecretsUserRoleId": "4633458b-17de-408a-b874-0445c86b69e6",
     "uamiId": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-aca-apps-{0}-sdc', parameters('env')))]",
+    "ghcrBase": "ghcr.io/simcorp/ai-gw",
+    "ghcrSecret": [
+      {
+        "name": "ghcr-pat",
+        "value": "[parameters('ghcrPat')]"
+      }
+    ],
+    "ghcrRegistries": [
+      {
+        "server": "ghcr.io",
+        "username": "[parameters('ghcrUsername')]",
+        "passwordSecretRef": "ghcr-pat"
+      }
+    ],
     "authUrl": "[format('http://ca-auth-{0}-sdc', parameters('env'))]",
     "cacheUrl": "[format('http://ca-cache-{0}-sdc', parameters('env'))]",
     "litellmUrl": "[format('http://ca-litellm-{0}-sdc', parameters('env'))]",
@@ -118,19 +135,14 @@
             "parallelism": 1,
             "replicaCompletionCount": 1
           },
-          "secrets": [
-            {
-              "name": "postgres-url",
-              "keyVaultUrl": "[format('{0}secrets/postgres-url', parameters('kvUri'))]",
-              "identity": "[variables('uamiId')]"
-            }
-          ]
+          "registries": "[variables('ghcrRegistries')]",
+          "secrets": "[concat(variables('ghcrSecret'), createArray(createObject('name', 'postgres-url', 'keyVaultUrl', format('{0}secrets/postgres-url', parameters('kvUri')), 'identity', variables('uamiId'))))]"
         },
         "template": {
           "containers": [
             {
               "name": "db-migrate",
-              "image": "[format('{0}/admin-api:{1}', parameters('acrLoginServer'), parameters('imageTag'))]",
+              "image": "[format('{0}/admin-api:{1}', variables('ghcrBase'), parameters('imageTag'))]",
               "command": [
                 "alembic",
                 "-c",
@@ -176,24 +188,14 @@
             "targetPort": 8001,
             "transport": "Http"
           },
-          "secrets": [
-            {
-              "name": "postgres-url",
-              "keyVaultUrl": "[format('{0}secrets/postgres-url', parameters('kvUri'))]",
-              "identity": "[variables('uamiId')]"
-            },
-            {
-              "name": "redis-url",
-              "keyVaultUrl": "[format('{0}secrets/redis-url', parameters('kvUri'))]",
-              "identity": "[variables('uamiId')]"
-            }
-          ]
+          "registries": "[variables('ghcrRegistries')]",
+          "secrets": "[concat(variables('ghcrSecret'), createArray(createObject('name', 'postgres-url', 'keyVaultUrl', format('{0}secrets/postgres-url', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'redis-url', 'keyVaultUrl', format('{0}secrets/redis-url', parameters('kvUri')), 'identity', variables('uamiId'))))]"
         },
         "template": {
           "containers": [
             {
               "name": "auth",
-              "image": "[format('{0}/auth:{1}', parameters('acrLoginServer'), parameters('imageTag'))]",
+              "image": "[format('{0}/auth:{1}', variables('ghcrBase'), parameters('imageTag'))]",
               "env": [
                 {
                   "name": "DATABASE_URL",
@@ -260,29 +262,14 @@
             "targetPort": 8002,
             "transport": "Http"
           },
-          "secrets": [
-            {
-              "name": "redis-url",
-              "keyVaultUrl": "[format('{0}secrets/redis-url', parameters('kvUri'))]",
-              "identity": "[variables('uamiId')]"
-            },
-            {
-              "name": "litellm-master-key",
-              "keyVaultUrl": "[format('{0}secrets/litellm-master-key', parameters('kvUri'))]",
-              "identity": "[variables('uamiId')]"
-            },
-            {
-              "name": "internal-api-key",
-              "keyVaultUrl": "[format('{0}secrets/internal-api-key', parameters('kvUri'))]",
-              "identity": "[variables('uamiId')]"
-            }
-          ]
+          "registries": "[variables('ghcrRegistries')]",
+          "secrets": "[concat(variables('ghcrSecret'), createArray(createObject('name', 'redis-url', 'keyVaultUrl', format('{0}secrets/redis-url', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'litellm-master-key', 'keyVaultUrl', format('{0}secrets/litellm-master-key', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'internal-api-key', 'keyVaultUrl', format('{0}secrets/internal-api-key', parameters('kvUri')), 'identity', variables('uamiId'))))]"
         },
         "template": {
           "containers": [
             {
               "name": "cache",
-              "image": "[format('{0}/cache:{1}', parameters('acrLoginServer'), parameters('imageTag'))]",
+              "image": "[format('{0}/cache:{1}', variables('ghcrBase'), parameters('imageTag'))]",
               "env": [
                 {
                   "name": "REDIS_URL",
@@ -361,24 +348,14 @@
             "targetPort": 8003,
             "transport": "Http"
           },
-          "secrets": [
-            {
-              "name": "litellm-master-key",
-              "keyVaultUrl": "[format('{0}secrets/litellm-master-key', parameters('kvUri'))]",
-              "identity": "[variables('uamiId')]"
-            },
-            {
-              "name": "postgres-url-litellm",
-              "keyVaultUrl": "[format('{0}secrets/postgres-url-litellm', parameters('kvUri'))]",
-              "identity": "[variables('uamiId')]"
-            }
-          ]
+          "registries": "[variables('ghcrRegistries')]",
+          "secrets": "[concat(variables('ghcrSecret'), createArray(createObject('name', 'litellm-master-key', 'keyVaultUrl', format('{0}secrets/litellm-master-key', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'postgres-url-litellm', 'keyVaultUrl', format('{0}secrets/postgres-url-litellm', parameters('kvUri')), 'identity', variables('uamiId'))))]"
         },
         "template": {
           "containers": [
             {
               "name": "litellm",
-              "image": "[format('{0}/litellm:{1}', parameters('acrLoginServer'), parameters('imageTag'))]",
+              "image": "[format('{0}/litellm:{1}', variables('ghcrBase'), parameters('imageTag'))]",
               "env": [
                 {
                   "name": "LITELLM_MASTER_KEY",
@@ -449,39 +426,14 @@
             "targetPort": 8004,
             "transport": "Http"
           },
-          "secrets": [
-            {
-              "name": "postgres-url",
-              "keyVaultUrl": "[format('{0}secrets/postgres-url', parameters('kvUri'))]",
-              "identity": "[variables('uamiId')]"
-            },
-            {
-              "name": "redis-url",
-              "keyVaultUrl": "[format('{0}secrets/redis-url', parameters('kvUri'))]",
-              "identity": "[variables('uamiId')]"
-            },
-            {
-              "name": "service-bus-conn",
-              "keyVaultUrl": "[format('{0}secrets/service-bus-conn', parameters('kvUri'))]",
-              "identity": "[variables('uamiId')]"
-            },
-            {
-              "name": "app-insights-conn",
-              "keyVaultUrl": "[format('{0}secrets/app-insights-conn', parameters('kvUri'))]",
-              "identity": "[variables('uamiId')]"
-            },
-            {
-              "name": "internal-api-key",
-              "keyVaultUrl": "[format('{0}secrets/internal-api-key', parameters('kvUri'))]",
-              "identity": "[variables('uamiId')]"
-            }
-          ]
+          "registries": "[variables('ghcrRegistries')]",
+          "secrets": "[concat(variables('ghcrSecret'), createArray(createObject('name', 'postgres-url', 'keyVaultUrl', format('{0}secrets/postgres-url', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'redis-url', 'keyVaultUrl', format('{0}secrets/redis-url', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'service-bus-conn', 'keyVaultUrl', format('{0}secrets/service-bus-conn', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'app-insights-conn', 'keyVaultUrl', format('{0}secrets/app-insights-conn', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'internal-api-key', 'keyVaultUrl', format('{0}secrets/internal-api-key', parameters('kvUri')), 'identity', variables('uamiId'))))]"
         },
         "template": {
           "containers": [
             {
               "name": "observability",
-              "image": "[format('{0}/observability:{1}', parameters('acrLoginServer'), parameters('imageTag'))]",
+              "image": "[format('{0}/observability:{1}', variables('ghcrBase'), parameters('imageTag'))]",
               "env": [
                 {
                   "name": "DATABASE_URL",
@@ -548,49 +500,14 @@
             "targetPort": 8005,
             "transport": "Http"
           },
-          "secrets": [
-            {
-              "name": "postgres-url",
-              "keyVaultUrl": "[format('{0}secrets/postgres-url', parameters('kvUri'))]",
-              "identity": "[variables('uamiId')]"
-            },
-            {
-              "name": "redis-url",
-              "keyVaultUrl": "[format('{0}secrets/redis-url', parameters('kvUri'))]",
-              "identity": "[variables('uamiId')]"
-            },
-            {
-              "name": "admin-secret-key",
-              "keyVaultUrl": "[format('{0}secrets/admin-secret-key', parameters('kvUri'))]",
-              "identity": "[variables('uamiId')]"
-            },
-            {
-              "name": "admin-internal-token",
-              "keyVaultUrl": "[format('{0}secrets/admin-internal-token', parameters('kvUri'))]",
-              "identity": "[variables('uamiId')]"
-            },
-            {
-              "name": "litellm-master-key",
-              "keyVaultUrl": "[format('{0}secrets/litellm-master-key', parameters('kvUri'))]",
-              "identity": "[variables('uamiId')]"
-            },
-            {
-              "name": "identity-key-secret",
-              "keyVaultUrl": "[format('{0}secrets/identity-key-secret', parameters('kvUri'))]",
-              "identity": "[variables('uamiId')]"
-            },
-            {
-              "name": "librarian-service-token",
-              "keyVaultUrl": "[format('{0}secrets/librarian-service-token', parameters('kvUri'))]",
-              "identity": "[variables('uamiId')]"
-            }
-          ]
+          "registries": "[variables('ghcrRegistries')]",
+          "secrets": "[concat(variables('ghcrSecret'), createArray(createObject('name', 'postgres-url', 'keyVaultUrl', format('{0}secrets/postgres-url', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'redis-url', 'keyVaultUrl', format('{0}secrets/redis-url', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'admin-secret-key', 'keyVaultUrl', format('{0}secrets/admin-secret-key', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'admin-internal-token', 'keyVaultUrl', format('{0}secrets/admin-internal-token', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'litellm-master-key', 'keyVaultUrl', format('{0}secrets/litellm-master-key', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'identity-key-secret', 'keyVaultUrl', format('{0}secrets/identity-key-secret', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'librarian-service-token', 'keyVaultUrl', format('{0}secrets/librarian-service-token', parameters('kvUri')), 'identity', variables('uamiId'))))]"
         },
         "template": {
           "containers": [
             {
               "name": "admin",
-              "image": "[format('{0}/admin-api:{1}', parameters('acrLoginServer'), parameters('imageTag'))]",
+              "image": "[format('{0}/admin-api:{1}', variables('ghcrBase'), parameters('imageTag'))]",
               "env": [
                 {
                   "name": "DATABASE_URL",
@@ -689,29 +606,14 @@
             "targetPort": 8006,
             "transport": "Http"
           },
-          "secrets": [
-            {
-              "name": "postgres-url",
-              "keyVaultUrl": "[format('{0}secrets/postgres-url', parameters('kvUri'))]",
-              "identity": "[variables('uamiId')]"
-            },
-            {
-              "name": "redis-url",
-              "keyVaultUrl": "[format('{0}secrets/redis-url', parameters('kvUri'))]",
-              "identity": "[variables('uamiId')]"
-            },
-            {
-              "name": "identity-service-token",
-              "keyVaultUrl": "[format('{0}secrets/identity-service-token', parameters('kvUri'))]",
-              "identity": "[variables('uamiId')]"
-            }
-          ]
+          "registries": "[variables('ghcrRegistries')]",
+          "secrets": "[concat(variables('ghcrSecret'), createArray(createObject('name', 'postgres-url', 'keyVaultUrl', format('{0}secrets/postgres-url', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'redis-url', 'keyVaultUrl', format('{0}secrets/redis-url', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'identity-service-token', 'keyVaultUrl', format('{0}secrets/identity-service-token', parameters('kvUri')), 'identity', variables('uamiId'))))]"
         },
         "template": {
           "containers": [
             {
               "name": "identity",
-              "image": "[format('{0}/identity:{1}', parameters('acrLoginServer'), parameters('imageTag'))]",
+              "image": "[format('{0}/identity:{1}', variables('ghcrBase'), parameters('imageTag'))]",
               "env": [
                 {
                   "name": "DATABASE_URL",
@@ -770,24 +672,14 @@
             "targetPort": 8007,
             "transport": "Http"
           },
-          "secrets": [
-            {
-              "name": "redis-url",
-              "keyVaultUrl": "[format('{0}secrets/redis-url', parameters('kvUri'))]",
-              "identity": "[variables('uamiId')]"
-            },
-            {
-              "name": "agent-relay-secret",
-              "keyVaultUrl": "[format('{0}secrets/agent-relay-secret', parameters('kvUri'))]",
-              "identity": "[variables('uamiId')]"
-            }
-          ]
+          "registries": "[variables('ghcrRegistries')]",
+          "secrets": "[concat(variables('ghcrSecret'), createArray(createObject('name', 'redis-url', 'keyVaultUrl', format('{0}secrets/redis-url', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'agent-relay-secret', 'keyVaultUrl', format('{0}secrets/agent-relay-secret', parameters('kvUri')), 'identity', variables('uamiId'))))]"
         },
         "template": {
           "containers": [
             {
               "name": "agent-relay",
-              "image": "[format('{0}/agent-relay:{1}', parameters('acrLoginServer'), parameters('imageTag'))]",
+              "image": "[format('{0}/agent-relay:{1}', variables('ghcrBase'), parameters('imageTag'))]",
               "env": [
                 {
                   "name": "REDIS_URL",
@@ -838,34 +730,14 @@
             "targetPort": 8008,
             "transport": "Http"
           },
-          "secrets": [
-            {
-              "name": "postgres-url",
-              "keyVaultUrl": "[format('{0}secrets/postgres-url', parameters('kvUri'))]",
-              "identity": "[variables('uamiId')]"
-            },
-            {
-              "name": "redis-url",
-              "keyVaultUrl": "[format('{0}secrets/redis-url', parameters('kvUri'))]",
-              "identity": "[variables('uamiId')]"
-            },
-            {
-              "name": "litellm-master-key",
-              "keyVaultUrl": "[format('{0}secrets/litellm-master-key', parameters('kvUri'))]",
-              "identity": "[variables('uamiId')]"
-            },
-            {
-              "name": "librarian-service-token",
-              "keyVaultUrl": "[format('{0}secrets/librarian-service-token', parameters('kvUri'))]",
-              "identity": "[variables('uamiId')]"
-            }
-          ]
+          "registries": "[variables('ghcrRegistries')]",
+          "secrets": "[concat(variables('ghcrSecret'), createArray(createObject('name', 'postgres-url', 'keyVaultUrl', format('{0}secrets/postgres-url', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'redis-url', 'keyVaultUrl', format('{0}secrets/redis-url', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'litellm-master-key', 'keyVaultUrl', format('{0}secrets/litellm-master-key', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'librarian-service-token', 'keyVaultUrl', format('{0}secrets/librarian-service-token', parameters('kvUri')), 'identity', variables('uamiId'))))]"
         },
         "template": {
           "containers": [
             {
               "name": "librarian",
-              "image": "[format('{0}/librarian:{1}', parameters('acrLoginServer'), parameters('imageTag'))]",
+              "image": "[format('{0}/librarian:{1}', variables('ghcrBase'), parameters('imageTag'))]",
               "env": [
                 {
                   "name": "DATABASE_URL",
@@ -940,24 +812,14 @@
             "targetPort": 8009,
             "transport": "Http"
           },
-          "secrets": [
-            {
-              "name": "postgres-url-raw",
-              "keyVaultUrl": "[format('{0}secrets/postgres-url-raw', parameters('kvUri'))]",
-              "identity": "[variables('uamiId')]"
-            },
-            {
-              "name": "litellm-master-key",
-              "keyVaultUrl": "[format('{0}secrets/litellm-master-key', parameters('kvUri'))]",
-              "identity": "[variables('uamiId')]"
-            }
-          ]
+          "registries": "[variables('ghcrRegistries')]",
+          "secrets": "[concat(variables('ghcrSecret'), createArray(createObject('name', 'postgres-url-raw', 'keyVaultUrl', format('{0}secrets/postgres-url-raw', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'litellm-master-key', 'keyVaultUrl', format('{0}secrets/litellm-master-key', parameters('kvUri')), 'identity', variables('uamiId'))))]"
         },
         "template": {
           "containers": [
             {
               "name": "memory",
-              "image": "[format('{0}/memory:{1}', parameters('acrLoginServer'), parameters('imageTag'))]",
+              "image": "[format('{0}/memory:{1}', variables('ghcrBase'), parameters('imageTag'))]",
               "env": [
                 {
                   "name": "DATABASE_URL",
@@ -1024,34 +886,14 @@
             "targetPort": 8010,
             "transport": "Http"
           },
-          "secrets": [
-            {
-              "name": "postgres-url",
-              "keyVaultUrl": "[format('{0}secrets/postgres-url', parameters('kvUri'))]",
-              "identity": "[variables('uamiId')]"
-            },
-            {
-              "name": "redis-url",
-              "keyVaultUrl": "[format('{0}secrets/redis-url', parameters('kvUri'))]",
-              "identity": "[variables('uamiId')]"
-            },
-            {
-              "name": "litellm-master-key",
-              "keyVaultUrl": "[format('{0}secrets/litellm-master-key', parameters('kvUri'))]",
-              "identity": "[variables('uamiId')]"
-            },
-            {
-              "name": "admin-internal-token",
-              "keyVaultUrl": "[format('{0}secrets/admin-internal-token', parameters('kvUri'))]",
-              "identity": "[variables('uamiId')]"
-            }
-          ]
+          "registries": "[variables('ghcrRegistries')]",
+          "secrets": "[concat(variables('ghcrSecret'), createArray(createObject('name', 'postgres-url', 'keyVaultUrl', format('{0}secrets/postgres-url', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'redis-url', 'keyVaultUrl', format('{0}secrets/redis-url', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'litellm-master-key', 'keyVaultUrl', format('{0}secrets/litellm-master-key', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'admin-internal-token', 'keyVaultUrl', format('{0}secrets/admin-internal-token', parameters('kvUri')), 'identity', variables('uamiId'))))]"
         },
         "template": {
           "containers": [
             {
               "name": "league",
-              "image": "[format('{0}/league:{1}', parameters('acrLoginServer'), parameters('imageTag'))]",
+              "image": "[format('{0}/league:{1}', variables('ghcrBase'), parameters('imageTag'))]",
               "env": [
                 {
                   "name": "DATABASE_URL",
@@ -1114,34 +956,14 @@
             "targetPort": 8011,
             "transport": "Http"
           },
-          "secrets": [
-            {
-              "name": "postgres-url",
-              "keyVaultUrl": "[format('{0}secrets/postgres-url', parameters('kvUri'))]",
-              "identity": "[variables('uamiId')]"
-            },
-            {
-              "name": "redis-url",
-              "keyVaultUrl": "[format('{0}secrets/redis-url', parameters('kvUri'))]",
-              "identity": "[variables('uamiId')]"
-            },
-            {
-              "name": "internal-api-key",
-              "keyVaultUrl": "[format('{0}secrets/internal-api-key', parameters('kvUri'))]",
-              "identity": "[variables('uamiId')]"
-            },
-            {
-              "name": "scanner-worker-secret",
-              "keyVaultUrl": "[format('{0}secrets/scanner-worker-secret', parameters('kvUri'))]",
-              "identity": "[variables('uamiId')]"
-            }
-          ]
+          "registries": "[variables('ghcrRegistries')]",
+          "secrets": "[concat(variables('ghcrSecret'), createArray(createObject('name', 'postgres-url', 'keyVaultUrl', format('{0}secrets/postgres-url', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'redis-url', 'keyVaultUrl', format('{0}secrets/redis-url', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'internal-api-key', 'keyVaultUrl', format('{0}secrets/internal-api-key', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'scanner-worker-secret', 'keyVaultUrl', format('{0}secrets/scanner-worker-secret', parameters('kvUri')), 'identity', variables('uamiId'))))]"
         },
         "template": {
           "containers": [
             {
               "name": "scanner",
-              "image": "[format('{0}/scanner:{1}', parameters('acrLoginServer'), parameters('imageTag'))]",
+              "image": "[format('{0}/scanner:{1}', variables('ghcrBase'), parameters('imageTag'))]",
               "env": [
                 {
                   "name": "DATABASE_URL",
@@ -1199,34 +1021,14 @@
         "managedEnvironmentId": "[parameters('acaEnvId')]",
         "workloadProfileName": "Consumption",
         "configuration": {
-          "secrets": [
-            {
-              "name": "postgres-url",
-              "keyVaultUrl": "[format('{0}secrets/postgres-url', parameters('kvUri'))]",
-              "identity": "[variables('uamiId')]"
-            },
-            {
-              "name": "redis-url",
-              "keyVaultUrl": "[format('{0}secrets/redis-url', parameters('kvUri'))]",
-              "identity": "[variables('uamiId')]"
-            },
-            {
-              "name": "agent-relay-secret",
-              "keyVaultUrl": "[format('{0}secrets/agent-relay-secret', parameters('kvUri'))]",
-              "identity": "[variables('uamiId')]"
-            },
-            {
-              "name": "admin-internal-token",
-              "keyVaultUrl": "[format('{0}secrets/admin-internal-token', parameters('kvUri'))]",
-              "identity": "[variables('uamiId')]"
-            }
-          ]
+          "registries": "[variables('ghcrRegistries')]",
+          "secrets": "[concat(variables('ghcrSecret'), createArray(createObject('name', 'postgres-url', 'keyVaultUrl', format('{0}secrets/postgres-url', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'redis-url', 'keyVaultUrl', format('{0}secrets/redis-url', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'agent-relay-secret', 'keyVaultUrl', format('{0}secrets/agent-relay-secret', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'admin-internal-token', 'keyVaultUrl', format('{0}secrets/admin-internal-token', parameters('kvUri')), 'identity', variables('uamiId'))))]"
         },
         "template": {
           "containers": [
             {
               "name": "workflow-worker",
-              "image": "[format('{0}/workflow-worker:{1}', parameters('acrLoginServer'), parameters('imageTag'))]",
+              "image": "[format('{0}/workflow-worker:{1}', variables('ghcrBase'), parameters('imageTag'))]",
               "env": [
                 {
                   "name": "DATABASE_URL",
