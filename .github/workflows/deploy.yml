@@ -1,0 +1,95 @@
+name: deploy
+
+on:
+  workflow_run:
+    workflows: ["ci"]
+    branches: [master, main]
+    types: [completed]
+
+# Prevent concurrent deploys to dev
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: false
+
+jobs:
+  deploy-dev:
+    name: Deploy to Dev
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success'
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Azure login (OIDC)
+        # azure/login action is blocked by SimCorp org policy (only actions/* allowed).
+        # Replicate OIDC login inline: exchange GitHub OIDC token for Azure access.
+        run: |
+          OIDC_TOKEN=$(curl -sSfL \
+            -H "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=api://AzureADTokenExchange" \
+            | python3 -c "import sys,json; print(json.load(sys.stdin)['value'])")
+          az login --service-principal \
+            --username "${{ secrets.AZURE_CLIENT_ID }}" \
+            --tenant "${{ secrets.AZURE_TENANT_ID }}" \
+            --federated-token "${OIDC_TOKEN}"
+          az account set --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+
+      - name: Resolve runtime values
+        id: resolve
+        run: |
+          SHA=$(echo "${{ github.event.workflow_run.head_sha }}" | cut -c1-7)
+          ACA_ENV_ID=$(az containerapp env show \
+            --name cae-aigw-dev-sdc \
+            --resource-group rg-aigw-dev-sdc \
+            --query id -o tsv | tr -d '\r')
+          KV_URI=$(az keyvault show \
+            --name kv-aigw-dev-sdc \
+            --resource-group rg-aigw-dev-sdc \
+            --query properties.vaultUri -o tsv | tr -d '\r')
+          echo "sha=${SHA}" >> "${GITHUB_OUTPUT}"
+          echo "acaEnvId=${ACA_ENV_ID}" >> "${GITHUB_OUTPUT}"
+          echo "kvUri=${KV_URI}" >> "${GITHUB_OUTPUT}"
+
+      - name: Deploy container apps
+        run: |
+          az deployment group create \
+            --resource-group rg-aigw-dev-sdc \
+            --template-file infra/bicep/modules/containerApps.bicep \
+            --parameters \
+                env=dev \
+                "acaEnvId=${{ steps.resolve.outputs.acaEnvId }}" \
+                "kvUri=${{ steps.resolve.outputs.kvUri }}" \
+                kvName=kv-aigw-dev-sdc \
+                acrName=acraigwdevsdc \
+                acrLoginServer=acraigwdevsdc.azurecr.io \
+                "imageTag=sha-${{ steps.resolve.outputs.sha }}" \
+                location=swedencentral \
+            --name "container-apps-$(date +%Y%m%d%H%M)"
+
+      - name: Run DB migrations
+        run: |
+          EXEC_NAME=$(az containerapp job start \
+            --name job-db-migrate-dev-sdc \
+            --resource-group rg-aigw-dev-sdc \
+            --query name -o tsv | tr -d '\r')
+          echo "Started migration job execution: ${EXEC_NAME}"
+
+          # Poll until Succeeded or Failed (max 5 min)
+          for i in $(seq 1 30); do
+            STATUS=$(az containerapp job execution show \
+              --name job-db-migrate-dev-sdc \
+              --resource-group rg-aigw-dev-sdc \
+              --job-execution-name "${EXEC_NAME}" \
+              --query properties.status -o tsv 2>/dev/null | tr -d '\r')
+            echo "Migration status (${i}/30): ${STATUS}"
+            [[ "${STATUS}" == "Succeeded" ]] && { echo "Migrations complete"; exit 0; }
+            [[ "${STATUS}" == "Failed" ]] && { echo "ERROR: Migrations failed"; exit 1; }
+            sleep 10
+          done
+          echo "ERROR: Migration timed out after 5 minutes"
+          exit 1
