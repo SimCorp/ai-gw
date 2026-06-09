@@ -8,7 +8,7 @@ param administratorPassword string
 param administratorLogin string = 'aigwadmin'
 param tags object = {}
 
-resource postgresServer 'Microsoft.DBforPostgreSQL/flexibleServers@2023-12-01' = {
+resource postgresServer 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01' = {
   name: name
   location: location
   tags: tags
@@ -40,7 +40,7 @@ resource postgresServer 'Microsoft.DBforPostgreSQL/flexibleServers@2023-12-01' =
   }
 }
 
-resource dbAigateway 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2023-12-01' = {
+resource dbAigateway 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2024-08-01' = {
   parent: postgresServer
   name: 'aigateway'
   properties: {
@@ -49,7 +49,7 @@ resource dbAigateway 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2023-1
   }
 }
 
-resource dbLitellm 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2023-12-01' = {
+resource dbLitellm 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2024-08-01' = {
   parent: postgresServer
   name: 'litellm'
   properties: {

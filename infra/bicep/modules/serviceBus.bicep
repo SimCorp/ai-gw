@@ -10,10 +10,15 @@ resource sbNamespace 'Microsoft.ServiceBus/namespaces@2022-10-01-preview' = {
   location: location
   tags: tags
   sku: {
-    name: 'Standard'
-    tier: 'Standard'
+    name: 'Premium'
+    tier: 'Premium'
   }
-  properties: {}
+  properties: {
+    publicNetworkAccess: 'Disabled'
+    encryption: {
+      requireInfrastructureEncryption: true
+    }
+  }
 }
 
 resource observabilityQueue 'Microsoft.ServiceBus/namespaces/queues@2022-10-01-preview' = {

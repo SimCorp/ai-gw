@@ -49,6 +49,7 @@ module keyVault '../../modules/keyVault.bicep' = {
     name: kvName
     location: location
     tags: tags
+    peSubnetId: networking.outputs.peSubnetId
     deployingPrincipalId: deployingPrincipalId
     agentRelaySecret: agentRelaySecret
     adminInternalToken: adminInternalToken
