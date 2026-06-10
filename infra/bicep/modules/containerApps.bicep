@@ -317,10 +317,9 @@ resource caAdmin 'Microsoft.App/containerApps@2024-03-01' = {
         { name: 'litellm-master-key', keyVaultUrl: '${kvUri}secrets/litellm-master-key', identity: uamiId }
         { name: 'identity-key-secret', keyVaultUrl: '${kvUri}secrets/identity-key-secret', identity: uamiId }
         { name: 'librarian-service-token', keyVaultUrl: '${kvUri}secrets/librarian-service-token', identity: uamiId }
-        // OIDC client secret for Entra ID admin-portal login. The KV secret
-        // 'oidc-client-secret' must be created as part of the Entra app-registration
-        // (pending — see plan Workstream H.2) before this app can deploy.
-        { name: 'oidc-client-secret', keyVaultUrl: '${kvUri}secrets/oidc-client-secret', identity: uamiId }
+        // TODO(Workstream H.2): once the Entra app-registration creates the
+        // 'oidc-client-secret' Key Vault secret, add it here and switch the
+        // OIDC_CLIENT_SECRET env below from '' to secretRef: 'oidc-client-secret'.
       ])
     }
     template: {
@@ -336,7 +335,9 @@ resource caAdmin 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'LITELLM_MASTER_KEY', secretRef: 'litellm-master-key' }
             { name: 'IDENTITY_KEY_SECRET', secretRef: 'identity-key-secret' }
             { name: 'LIBRARIAN_SERVICE_TOKEN', secretRef: 'librarian-service-token' }
-            { name: 'OIDC_CLIENT_SECRET', secretRef: 'oidc-client-secret' }
+            // Empty until Entra app-registration (H.2) — admin-portal OIDC login is
+            // disabled until then; switch to secretRef: 'oidc-client-secret' once it exists.
+            { name: 'OIDC_CLIENT_SECRET', value: '' }
             // Entra ID OIDC issuer for SimCorp tenant (admin-portal SSO login)
             #disable-next-line no-hardcoded-env-urls
             { name: 'OIDC_ISSUER', value: 'https://login.microsoftonline.com/aa81b43f-3969-4fd4-80c9-84c411508d82/v2.0' }
