@@ -51,6 +51,7 @@ services:
       retries: 10
     volumes:
       - redis_master_data:/data
+    restart: unless-stopped
 
   redis-replica:
     image: redis:7.2-alpine
@@ -64,6 +65,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    restart: unless-stopped
 
   redis-sentinel-1:
     image: redis:7.2-alpine
@@ -79,6 +81,12 @@ services:
     depends_on:
       redis-master:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "26379", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
 
   redis-sentinel-2:
     image: redis:7.2-alpine
@@ -94,6 +102,12 @@ services:
     depends_on:
       redis-master:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "26379", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
 
   redis-sentinel-3:
     image: redis:7.2-alpine
@@ -109,6 +123,12 @@ services:
     depends_on:
       redis-master:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "26379", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
 
   dex:
     image: dexidp/dex:v2.40.0

@@ -39,6 +39,7 @@ from pydantic import BaseModel
 from redis.asyncio import Redis
 
 from app.config import get_settings
+from app.redis_utils import make_redis
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 _log = logging.getLogger("agent-relay")
@@ -70,7 +71,7 @@ _redis: Redis | None = None
 async def lifespan(app: FastAPI):
     global _redis
     cfg = get_settings()
-    _redis = Redis.from_url(cfg.redis_url, decode_responses=True)
+    _redis = make_redis(cfg.redis_url)
     _log.info("agent-relay started, redis=%s", cfg.redis_url)
     yield
     if _redis:

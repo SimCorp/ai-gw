@@ -29,6 +29,7 @@ from redis.asyncio import Redis
 
 from app.auth import AuthError, resolve_caller
 from app.config import settings
+from app.redis_utils import make_redis
 
 _log = logging.getLogger(__name__)
 
@@ -496,7 +497,7 @@ async def lifespan(app: FastAPI):
     # Strip asyncpg scheme qualifier for asyncpg (it wants postgresql:// not postgresql+asyncpg://)
     db_url = settings.database_url.replace("postgresql+asyncpg://", "postgresql://")
     _pool = await asyncpg.create_pool(db_url, min_size=2, max_size=10)
-    _redis = Redis.from_url(settings.redis_url, decode_responses=True)
+    _redis = make_redis(settings.redis_url)
 
     await _bootstrap_schema(_pool)
 

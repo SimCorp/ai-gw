@@ -24,6 +24,7 @@ from pydantic import BaseModel, Field
 from redis.asyncio import Redis
 
 from app.config import settings
+from app.redis_utils import make_redis
 
 log = logging.getLogger("identity")
 
@@ -234,7 +235,7 @@ async def lifespan(app: FastAPI):
     # Strip +asyncpg prefix that asyncpg itself doesn't understand
     db_url = settings.database_url.replace("postgresql+asyncpg://", "postgresql://")
     pool: asyncpg.Pool = await asyncpg.create_pool(db_url, min_size=2, max_size=10)
-    redis: Redis = Redis.from_url(settings.redis_url, decode_responses=True)
+    redis: Redis = make_redis(settings.redis_url)
 
     async with pool.acquire() as conn:
         await conn.execute(_CREATE_TABLE)
