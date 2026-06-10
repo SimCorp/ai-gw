@@ -1,11 +1,399 @@
 /* ============================================================
    ai-gw design system — AI-League game sub-theme
    Scoped to [data-zone="league"] (portal league pages only).
-   Filled out in the league rework phase.
+   Playful, arcade-leaning, but still inside the brand: same
+   neutrals + fonts; gradient and gold allowed more generously.
    ============================================================ */
 [data-zone="league"] {
-  --league-gold: #F59E0B;
+  --league-gold: #D97706;
+  --league-gold-bright: #F59E0B;
   --league-gold-soft: rgba(245,158,11,0.14);
+  --league-silver: #94A3B8;
+  --league-bronze: #B45309;
   --league-xp-from: var(--trace-from);
   --league-xp-to: var(--trace-to);
 }
+[data-theme="dark"] [data-zone="league"] {
+  --league-gold: #FBBF24;
+  --league-gold-bright: #FCD34D;
+  --league-gold-soft: rgba(251,191,36,0.14);
+}
+
+/* ── Hero banner ── */
+.lg-hero {
+  position: relative;
+  border-radius: 10px;
+  padding: 26px 28px 22px;
+  margin-bottom: 22px;
+  overflow: hidden;
+  border: 1px solid transparent;
+  background-image:
+    linear-gradient(var(--surface), var(--surface)),
+    linear-gradient(120deg, var(--trace-from), var(--trace-to), var(--league-gold-bright), var(--trace-from));
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+  background-size: auto, 300% 300%;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .lg-hero { animation: lg-border-drift 8s linear infinite; }
+}
+@keyframes lg-border-drift {
+  from { background-position: 0 0, 0% 50%; }
+  to { background-position: 0 0, 300% 50%; }
+}
+.lg-hero__kicker {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  background: linear-gradient(90deg, var(--trace-from), var(--trace-to));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  margin-bottom: 8px;
+}
+.lg-hero h1 { margin: 0 0 6px; font-size: 25px; font-weight: 700; letter-spacing: -0.02em; color: var(--fg-1); }
+.lg-hero p { margin: 0; font-size: 13.5px; color: var(--fg-2); max-width: 56ch; }
+.lg-hero__actions { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+.lg-hero__glyph {
+  position: absolute;
+  right: 18px;
+  top: 50%;
+  transform: translateY(-50%) rotate(45deg);
+  width: 110px;
+  height: 110px;
+  border: 2px solid var(--rule);
+  border-radius: 18px;
+  opacity: 0.5;
+  pointer-events: none;
+}
+.lg-hero__glyph::after {
+  content: "";
+  position: absolute;
+  inset: 18px;
+  border-radius: 10px;
+  border: 2px solid var(--accent-soft);
+}
+
+/* ── Level badge ── */
+.lg-level {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.lg-level__shape {
+  position: absolute;
+  inset: 4px;
+  transform: rotate(45deg);
+  border-radius: 8px;
+  border: 2px solid var(--league-gold);
+  background: var(--league-gold-soft);
+}
+.lg-level__num {
+  position: relative;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--league-gold);
+}
+.lg-level--sm { width: 32px; height: 32px; }
+.lg-level--sm .lg-level__num { font-size: 12px; }
+
+/* ── XP bar ── */
+.lg-xp { display: flex; flex-direction: column; gap: 4px; min-width: 180px; }
+.lg-xp__meta {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--fg-3);
+  text-transform: uppercase;
+}
+.lg-xp__track {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--surface-soft);
+  border: 1px solid var(--rule);
+  overflow: hidden;
+}
+.lg-xp__fill {
+  height: 100%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--league-xp-from), var(--league-xp-to));
+  position: relative;
+  transition: width 0.6s var(--ease-1);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .lg-xp__fill::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent);
+    background-size: 200% 100%;
+    animation: lg-xp-shine 2.4s ease infinite;
+  }
+}
+@keyframes lg-xp-shine {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+/* ── Quest cards ── */
+.lg-questboard {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 14px;
+}
+.lg-quest {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  transition: transform var(--speed-2) var(--ease-1), box-shadow var(--speed-2), border-color var(--speed-2);
+}
+.lg-quest--active {
+  border: 1px solid transparent;
+  background-image:
+    linear-gradient(var(--surface), var(--surface)),
+    linear-gradient(135deg, var(--trace-from), var(--trace-to));
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+}
+.lg-quest--active:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 28px var(--accent-soft);
+}
+.lg-quest--closed { opacity: 0.65; }
+.lg-quest--closed:hover { opacity: 0.9; }
+.lg-quest__title { font-weight: 650; font-size: 14px; line-height: 1.3; letter-spacing: -0.01em; }
+.lg-quest__goal { font-size: 12.5px; color: var(--fg-2); line-height: 1.5; flex: 1; }
+.lg-quest__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 10px;
+  border-top: 1px dashed var(--rule);
+}
+.lg-quest__attempts {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--fg-3);
+  text-transform: uppercase;
+}
+.lg-quest__ribbon {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: var(--r-pill);
+}
+.lg-quest__ribbon--active { background: var(--good-soft); color: var(--good); }
+.lg-quest__ribbon--closed { background: var(--surface-soft); color: var(--fg-3); }
+.lg-quest__ribbon--draft { background: var(--warn-soft); color: var(--warn); }
+
+/* ── Buttons ── */
+.lg-btn-gold {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: var(--r-2);
+  font-size: 12.5px;
+  font-weight: 600;
+  font-family: inherit;
+  border: 1px solid var(--league-gold);
+  background: var(--league-gold);
+  color: #1A1200;
+  cursor: pointer;
+  transition: filter var(--speed-1), transform var(--speed-1);
+}
+.lg-btn-gold:hover { filter: brightness(1.08); transform: translateY(-1px); }
+.lg-btn-gold:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+/* ── Podium ── */
+.lg-podium {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 14px;
+  align-items: end;
+  margin-bottom: 26px;
+}
+.lg-podium__slot {
+  text-align: center;
+  padding: 18px 14px 14px;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  position: relative;
+}
+.lg-podium__slot--1 {
+  order: 2;
+  padding-top: 26px;
+  padding-bottom: 22px;
+  border: 1px solid transparent;
+  background-image:
+    linear-gradient(var(--surface), var(--surface)),
+    linear-gradient(135deg, var(--league-gold-bright), var(--league-gold));
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+}
+.lg-podium__slot--2 { order: 1; border-color: var(--league-silver); }
+.lg-podium__slot--3 { order: 3; border-color: var(--league-bronze); }
+.lg-podium__medal { font-size: 26px; line-height: 1; margin-bottom: 8px; }
+.lg-podium__slot--1 .lg-podium__medal { font-size: 34px; }
+.lg-podium__name { font-weight: 650; font-size: 13px; margin-bottom: 4px; }
+.lg-podium__score {
+  font-family: var(--font-mono);
+  font-size: 22px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  background: linear-gradient(90deg, var(--trace-from), var(--trace-to));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.lg-podium__slot--1 .lg-podium__score { font-size: 28px; }
+.lg-podium__pts {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--league-gold);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Rank badge ── */
+.lg-rank {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--surface-soft);
+  color: var(--fg-3);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Wallet (store) ── */
+.lg-wallet {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
+  padding: 20px 24px;
+  margin-bottom: 22px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background-image:
+    linear-gradient(var(--surface), var(--surface)),
+    linear-gradient(135deg, var(--league-gold-bright), var(--trace-to));
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+}
+.lg-wallet__balance {
+  font-family: var(--font-mono);
+  font-size: 34px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--league-gold);
+  line-height: 1.1;
+}
+.lg-wallet__stat { border-left: 1px solid var(--rule); padding-left: 20px; }
+.lg-wallet__stat .v {
+  font-family: var(--font-mono);
+  font-size: 17px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Reward cards (store) ── */
+.lg-rewards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 14px;
+}
+.lg-reward {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: center;
+  padding: 18px 14px 14px;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  overflow: hidden;
+  transition: transform var(--speed-2) var(--ease-1), box-shadow var(--speed-2), border-color var(--speed-2);
+}
+.lg-reward:hover { transform: translateY(-3px); box-shadow: 0 10px 24px var(--league-gold-soft); border-color: var(--league-gold); }
+.lg-reward--owned { border-color: var(--good); }
+.lg-reward__icon { font-size: 38px; line-height: 1; }
+.lg-reward__name { font-weight: 650; font-size: 13px; }
+.lg-reward__type {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--fg-3);
+}
+.lg-reward__price {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--league-gold);
+  font-variant-numeric: tabular-nums;
+}
+.lg-reward__flag {
+  position: absolute;
+  top: 8px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.lg-reward__flag--owned { right: 8px; background: var(--good-soft); color: var(--good); }
+.lg-reward__flag--exclusive { left: 8px; background: var(--league-gold-soft); color: var(--league-gold); }
+
+/* ── Score reveal (results) ── */
+.lg-scorebar { margin-bottom: 10px; }
+.lg-scorebar__head { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 12.5px; }
+.lg-scorebar__val { font-family: var(--font-mono); font-weight: 650; font-variant-numeric: tabular-nums; }
+.lg-scorebar__track { height: 6px; background: var(--surface-soft); border-radius: 3px; overflow: hidden; }
+.lg-scorebar__fill { height: 100%; border-radius: 3px; transform-origin: left; }
+@media (prefers-reduced-motion: no-preference) {
+  .lg-scorebar__fill { animation: lg-score-grow 0.7s var(--ease-1) backwards; }
+  .lg-result { animation: lg-pop-in 0.3s var(--ease-1) backwards; }
+}
+@keyframes lg-score-grow { from { transform: scaleX(0); } }
+@keyframes lg-pop-in { from { opacity: 0; transform: translateY(6px) scale(0.99); } }
+
+/* Season pills */
+.lg-seasons { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+.lg-season {
+  padding: 6px 14px;
+  border-radius: var(--r-pill);
+  font-size: 12.5px;
+  font-weight: 500;
+  font-family: inherit;
+  border: 1px solid var(--rule);
+  background: transparent;
+  color: var(--fg-2);
+  cursor: pointer;
+}
+.lg-season.is-active { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }

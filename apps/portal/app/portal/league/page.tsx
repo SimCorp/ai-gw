@@ -3,9 +3,11 @@
 import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
+import LevelBadge from "./_components/LevelBadge";
+import XPBar from "./_components/XPBar";
+import { levelFor } from "./_components/level";
 
 const LEAGUE = process.env.NEXT_PUBLIC_LEAGUE_API ?? "http://localhost:8080/league";
-const ADMIN_API = process.env.NEXT_PUBLIC_ADMIN_BASE_URL ?? "http://localhost:8005";
 
 type ChallengeStatus = "draft" | "active" | "closed";
 
@@ -26,21 +28,10 @@ interface Season {
   ends_at: string;
 }
 
-const STATUS_STYLES: Record<ChallengeStatus, { bg: string; color: string; label: string }> = {
-  draft: { bg: "rgba(153,153,153,0.12)", color: "var(--fg-3)", label: "Draft" },
-  active: { bg: "rgba(31,138,91,0.12)", color: "var(--good, #1F8A5B)", label: "Active" },
-  closed: { bg: "rgba(180,83,9,0.12)", color: "var(--warn, #B45309)", label: "Closed" },
-};
-
-function StatusPill({ status }: { status: ChallengeStatus }) {
-  const s = STATUS_STYLES[status];
-  return (
-    <span style={{
-      display: "inline-block", padding: "2px 10px", borderRadius: 20,
-      fontSize: 11.5, fontWeight: 600,
-      background: s.bg, color: s.color,
-    }}>{s.label}</span>
-  );
+interface PointBalance {
+  balance: number;
+  lifetime_earned: number;
+  lifetime_spent: number;
 }
 
 export default function LeaguePage() {
@@ -64,89 +55,74 @@ export default function LeaguePage() {
     queryFn: () => fetch(`${LEAGUE}/seasons/${selectedSeasonId}/challenges`).then(r => r.json()),
   });
 
+  // Same endpoint the store uses — powers the level/XP header.
+  const { data: balanceData } = useQuery<PointBalance>({
+    queryKey: ["portal-balance"],
+    queryFn: () => fetch(`${LEAGUE}/store/balance`).then(r => r.json()),
+  });
+
   const challenges = Array.isArray(challengesData)
     ? challengesData
     : challengesData?.challenges ?? [];
 
   const activeChallenges = challenges.filter(c => c.status === "active");
   const closedChallenges = challenges.filter(c => c.status === "closed");
+  const level = levelFor(balanceData?.lifetime_earned ?? 0);
 
   return (
     <div className="page">
-      {/* Hero banner */}
-      <div style={{
-        background: "linear-gradient(135deg, rgba(8,62,167,0.25) 0%, rgba(124,58,237,0.15) 100%)",
-        border: "1px solid rgba(8,62,167,0.3)",
-        borderRadius: 12, padding: "28px 28px 24px",
-        marginBottom: 24,
-        position: "relative", overflow: "hidden",
-      }}>
-        <div style={{
-          position: "absolute", right: 24, top: 0, bottom: 0,
-          display: "flex", alignItems: "center", fontSize: 80, opacity: 0.12,
-          pointerEvents: "none",
-        }}>⚔️</div>
-        <div style={{ fontSize: 12.5, fontWeight: 600, color: "rgba(147,197,253,0.8)", marginBottom: 8, letterSpacing: "0.06em", textTransform: "uppercase" }}>
-          AI-League
-        </div>
-        <h1 style={{ margin: "0 0 8px", fontSize: 26, fontWeight: 700, color: "#fff" }}>
-          Challenges
-        </h1>
-        <p style={{ margin: 0, fontSize: 13.5, color: "rgba(200,205,220,0.8)", maxWidth: 500 }}>
-          Design agent configurations to solve curated challenges. Earn points, climb the leaderboard, and unlock cosmetics.
+      {/* Hero */}
+      <div className="lg-hero">
+        <div className="lg-hero__glyph" />
+        <div className="lg-hero__kicker">AI-League · Season {currentSeason?.name ?? "—"}</div>
+        <h1>Quest board</h1>
+        <p>
+          Take on curated AI challenges, earn XP, climb the leaderboard, and spend your
+          points in the reward shop.
         </p>
-        <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
-          <Link href="/portal/league/leaderboard" style={{
-            display: "inline-flex", alignItems: "center", gap: 6,
-            padding: "8px 16px", borderRadius: 8, fontSize: 13, fontWeight: 600,
-            background: "rgba(255,255,255,0.1)", color: "#fff", textDecoration: "none",
-            border: "1px solid rgba(255,255,255,0.15)",
-          }}>🏆 Leaderboard</Link>
-          <Link href="/portal/league/results" style={{
-            display: "inline-flex", alignItems: "center", gap: 6,
-            padding: "8px 16px", borderRadius: 8, fontSize: 13, fontWeight: 600,
-            background: "rgba(255,255,255,0.06)", color: "rgba(200,205,220,0.9)", textDecoration: "none",
-            border: "1px solid rgba(255,255,255,0.1)",
-          }}>📊 My Results</Link>
-          <Link href="/portal/league/store" style={{
-            display: "inline-flex", alignItems: "center", gap: 6,
-            padding: "8px 16px", borderRadius: 8, fontSize: 13, fontWeight: 600,
-            background: "rgba(255,255,255,0.06)", color: "rgba(200,205,220,0.9)", textDecoration: "none",
-            border: "1px solid rgba(255,255,255,0.1)",
-          }}>🛒 Store</Link>
+        <div className="lg-hero__actions">
+          <Link href="/portal/league/leaderboard" className="btn">🏆 Leaderboard</Link>
+          <Link href="/portal/league/results" className="btn">📊 My results</Link>
+          <Link href="/portal/league/store" className="btn">🛒 Reward shop</Link>
+          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
+            <LevelBadge level={level.level} />
+            <XPBar info={level} />
+          </div>
         </div>
       </div>
 
       {/* Season selector */}
       {seasons.length > 1 && (
-        <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+        <div className="lg-seasons">
           {seasons.map(s => (
             <button
               key={s.id}
+              type="button"
+              className={`lg-season${(activeSeason ?? currentSeason?.id) === s.id ? " is-active" : ""}`}
               onClick={() => setActiveSeason(s.id)}
-              style={{
-                padding: "6px 14px", borderRadius: 20, fontSize: 12.5, fontWeight: 500,
-                border: "1px solid var(--rule)", cursor: "pointer",
-                background: (activeSeason ?? currentSeason?.id) === s.id ? "var(--sc-blue, #083EA7)" : "transparent",
-                color: (activeSeason ?? currentSeason?.id) === s.id ? "#fff" : "var(--fg-2)",
-              }}
             >
-              {s.name} {s.status === "active" && <span style={{ marginLeft: 4, color: "var(--good, #1F8A5B)" }}>●</span>}
+              {s.name}
+              {s.status === "active" && <span style={{ marginLeft: 5, color: "var(--good)" }}>●</span>}
             </button>
           ))}
         </div>
       )}
 
-      {/* Active challenges */}
+      {/* Quests */}
       {challengesLoading ? (
-        <div style={{ textAlign: "center", padding: "40px", color: "var(--fg-3)" }}>Loading challenges…</div>
+        <div style={{ textAlign: "center", padding: 40, color: "var(--fg-3)" }}>Loading quests…</div>
       ) : activeChallenges.length === 0 && closedChallenges.length === 0 ? (
-        <div style={{
-          textAlign: "center", padding: "60px 20px",
-          border: "1px dashed var(--rule)", borderRadius: 10, color: "var(--fg-3)",
-        }}>
+        <div
+          style={{
+            textAlign: "center",
+            padding: "60px 20px",
+            border: "1px dashed var(--rule)",
+            borderRadius: 10,
+            color: "var(--fg-3)",
+          }}
+        >
           <div style={{ fontSize: 36, marginBottom: 12 }}>⚔️</div>
-          <div style={{ fontWeight: 600, marginBottom: 6 }}>No challenges yet</div>
+          <div style={{ fontWeight: 600, marginBottom: 6, color: "var(--fg-1)" }}>No quests yet</div>
           <div style={{ fontSize: 13 }}>
             {seasonsLoading ? "Loading…" : "Check back when the next challenge is published"}
           </div>
@@ -155,21 +131,25 @@ export default function LeaguePage() {
         <>
           {activeChallenges.length > 0 && (
             <section style={{ marginBottom: 28 }}>
-              <h2 style={{ margin: "0 0 12px", fontSize: 14, fontWeight: 600, color: "var(--fg-2)" }}>
-                Active challenges
-              </h2>
-              <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))" }}>
-                {activeChallenges.map(c => <ChallengeCard key={c.id} challenge={c} />)}
+              <div className="microlabel" style={{ marginBottom: 12 }}>
+                ACTIVE_QUESTS ({activeChallenges.length})
+              </div>
+              <div className="lg-questboard">
+                {activeChallenges.map(c => (
+                  <QuestCard key={c.id} challenge={c} />
+                ))}
               </div>
             </section>
           )}
           {closedChallenges.length > 0 && (
             <section>
-              <h2 style={{ margin: "0 0 12px", fontSize: 14, fontWeight: 600, color: "var(--fg-2)" }}>
-                Past challenges
-              </h2>
-              <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))" }}>
-                {closedChallenges.map(c => <ChallengeCard key={c.id} challenge={c} />)}
+              <div className="microlabel" style={{ marginBottom: 12 }}>
+                COMPLETED ({closedChallenges.length})
+              </div>
+              <div className="lg-questboard">
+                {closedChallenges.map(c => (
+                  <QuestCard key={c.id} challenge={c} />
+                ))}
               </div>
             </section>
           )}
@@ -179,44 +159,24 @@ export default function LeaguePage() {
   );
 }
 
-function ChallengeCard({ challenge }: { challenge: Challenge }) {
+function QuestCard({ challenge }: { challenge: Challenge }) {
+  const mod =
+    challenge.status === "active" ? "lg-quest--active" : challenge.status === "closed" ? "lg-quest--closed" : "";
   return (
-    <div style={{
-      background: "var(--surface)", border: "1px solid var(--rule)",
-      borderRadius: 10, padding: "18px",
-      display: "flex", flexDirection: "column", gap: 12,
-      opacity: challenge.status === "closed" ? 0.75 : 1,
-    }}>
+    <div className={`lg-quest ${mod}`}>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
-        <div style={{ fontWeight: 600, fontSize: 14, lineHeight: 1.3 }}>{challenge.title}</div>
-        <StatusPill status={challenge.status} />
+        <div className="lg-quest__title">{challenge.title}</div>
+        <span className={`lg-quest__ribbon lg-quest__ribbon--${challenge.status}`}>{challenge.status}</span>
       </div>
-      <div style={{ fontSize: 12.5, color: "var(--fg-3)", lineHeight: 1.5, flex: 1 }}>{challenge.goal}</div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: 10, borderTop: "1px solid var(--rule)" }}>
-        <span style={{ fontSize: 11.5, color: "var(--fg-3)" }}>
-          {challenge.max_league_attempts} attempts
-        </span>
+      <div className="lg-quest__goal">{challenge.goal}</div>
+      <div className="lg-quest__meta">
+        <span className="lg-quest__attempts">ATTEMPTS ×{challenge.max_league_attempts}</span>
         {challenge.status === "active" ? (
-          <Link
-            href={`/portal/playground?challenge=${challenge.id}`}
-            style={{
-              display: "inline-flex", alignItems: "center", gap: 5,
-              padding: "6px 14px", borderRadius: 6, fontSize: 12.5, fontWeight: 600,
-              background: "var(--sc-blue, #083EA7)", color: "#fff", textDecoration: "none",
-            }}
-          >
-            ▶ Attempt
+          <Link href={`/portal/playground?challenge=${challenge.id}`} className="lg-btn-gold">
+            ▶ Start quest
           </Link>
         ) : (
-          <Link
-            href={`/portal/league/results?challenge=${challenge.id}`}
-            style={{
-              display: "inline-flex", alignItems: "center", gap: 5,
-              padding: "6px 14px", borderRadius: 6, fontSize: 12.5, fontWeight: 500,
-              background: "transparent", color: "var(--fg-2)", textDecoration: "none",
-              border: "1px solid var(--rule)",
-            }}
-          >
+          <Link href={`/portal/league/results?challenge=${challenge.id}`} className="btn btn--sm">
             View results
           </Link>
         )}
