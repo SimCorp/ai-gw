@@ -66,6 +66,25 @@ export function activeDomainFor(domains: NavDomain[], path: string): NavDomain |
   return best;
 }
 
+/** Resolve the active domain and page for a path (for breadcrumbs). */
+export function activePageFor(
+  domains: NavDomain[],
+  path: string,
+): { domain?: NavDomain; page?: NavPage } {
+  const domain = activeDomainFor(domains, path);
+  if (!domain) return {};
+  let page: NavPage | undefined;
+  let best = -1;
+  for (const p of domain.pages) {
+    const s = matchScore(path, p.href);
+    if (s > best) {
+      best = s;
+      page = p;
+    }
+  }
+  return { domain, page: best >= 0 ? page : undefined };
+}
+
 const DefaultLink: LinkLike = ({ href, ...rest }) => <a href={href} {...rest} />;
 
 export function RailShell({

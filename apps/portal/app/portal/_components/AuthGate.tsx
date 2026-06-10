@@ -1,7 +1,22 @@
 "use client";
 
 import React, { useState } from "react";
+import { BrandMark } from "@aigw/ui";
 import { useAuth } from "../_lib/authContext";
+
+function Brand() {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 32 }}>
+      <BrandMark size={38} />
+      <div>
+        <div style={{ fontWeight: 650, fontSize: 18, color: "var(--fg-1)", letterSpacing: "-0.02em" }}>
+          ai-gw <span className="mono" style={{ fontSize: 12, color: "var(--fg-3)" }}>/dev</span>
+        </div>
+        <div style={{ fontSize: 12, color: "var(--fg-3)" }}>Developer Portal</div>
+      </div>
+    </div>
+  );
+}
 
 export default function AuthGate({ children }: { children: React.ReactNode }) {
   const { developer, loading, mustChangePassword } = useAuth();
@@ -60,33 +75,21 @@ function ChangePasswordPage() {
       background: "var(--bg)",
       padding: "24px 16px",
     }}>
-      {/* Brand */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 36 }}>
-        <div style={{
-          width: 40, height: 40, borderRadius: 10,
-          background: "linear-gradient(135deg, var(--sc-blue), var(--sc-purple))",
-          display: "grid", placeItems: "center",
-          fontWeight: 800, fontSize: 16, color: "#fff",
-        }}>AI</div>
-        <div>
-          <div style={{ fontWeight: 700, fontSize: 18, color: "var(--fg-1)" }}>AI Gateway</div>
-          <div style={{ fontSize: 12, color: "var(--fg-3)" }}>Developer Portal</div>
-        </div>
-      </div>
+      <Brand />
 
-      <div style={{
-        width: "100%", maxWidth: 400,
-        background: "var(--surface)",
-        border: "1px solid var(--rule)",
-        borderRadius: 12,
-        overflow: "hidden",
-      }}>
+      <div
+        className="card card--trace"
+        style={{
+          width: "100%", maxWidth: 400,
+          overflow: "hidden",
+        }}
+      >
         <div style={{ padding: "20px 24px 0" }}>
           <div style={{
-            background: "rgba(8, 62, 167, 0.12)",
-            border: "1px solid rgba(8, 62, 167, 0.35)",
-            borderRadius: 6, padding: "10px 12px",
-            fontSize: 13, color: "var(--sc-link, #60A5FA)", lineHeight: 1.5,
+            background: "var(--accent-soft)",
+            border: "1px solid var(--accent)",
+            borderRadius: "var(--r-2)", padding: "10px 12px",
+            fontSize: 13, color: "var(--accent-text)", lineHeight: 1.5,
           }}>
             Your account requires a password change before you can continue.
             Choose a password that is at least 12 characters and includes uppercase,
@@ -199,28 +202,16 @@ function LoginPage() {
       background: "var(--bg)",
       padding: "24px 16px",
     }}>
-      {/* Brand */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 36 }}>
-        <div style={{
-          width: 40, height: 40, borderRadius: 10,
-          background: "linear-gradient(135deg, var(--sc-blue), var(--sc-purple))",
-          display: "grid", placeItems: "center",
-          fontWeight: 800, fontSize: 16, color: "#fff",
-        }}>AI</div>
-        <div>
-          <div style={{ fontWeight: 700, fontSize: 18, color: "var(--fg-1)" }}>AI Gateway</div>
-          <div style={{ fontSize: 12, color: "var(--fg-3)" }}>Developer Portal</div>
-        </div>
-      </div>
+      <Brand />
 
       {/* Card */}
-      <div style={{
-        width: "100%", maxWidth: 400,
-        background: "var(--surface)",
-        border: "1px solid var(--rule)",
-        borderRadius: 12,
-        overflow: "hidden",
-      }}>
+      <div
+        className="card card--trace"
+        style={{
+          width: "100%", maxWidth: 400,
+          overflow: "hidden",
+        }}
+      >
         {/* Tabs */}
         <div style={{ display: "flex", borderBottom: "1px solid var(--rule)" }}>
           {(["login", "register"] as const).map(t => (
@@ -369,8 +360,8 @@ function LoginPage() {
         )}
       </div>
 
-      <div style={{ marginTop: 24, fontSize: 12, color: "var(--fg-3)", textAlign: "center" }}>
-        AI Gateway · SimCorp developer platform
+      <div className="microlabel" style={{ marginTop: 24, textAlign: "center" }}>
+        ai-gw · SimCorp developer platform
       </div>
     </div>
   );

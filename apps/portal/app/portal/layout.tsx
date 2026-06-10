@@ -2,8 +2,8 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider } from "./_lib/authContext";
-import PortalShell from "./_components/PortalShell";
 import AuthGate from "./_components/AuthGate";
+import AppShell from "./_components/AppShell";
 import AiHelpWidget from "./_components/AiHelpWidget";
 import MockBoot from "./_components/MockBoot";
 
@@ -15,15 +15,14 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
   return (
     <QueryClientProvider client={queryClient}>
       <MockBoot>
-      <AuthProvider>
-        <AuthGate>
-          <div className="papp">
-            <PortalShell />
-            {children}
-            <AiHelpWidget />
-          </div>
-        </AuthGate>
-      </AuthProvider>
+        <AuthProvider>
+          <AuthGate>
+            <AppShell>
+              {children}
+              <AiHelpWidget />
+            </AppShell>
+          </AuthGate>
+        </AuthProvider>
       </MockBoot>
     </QueryClientProvider>
   );
