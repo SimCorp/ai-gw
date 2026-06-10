@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -63,14 +63,6 @@ function SignOutButton() {
 }
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  // Apply dark theme before first paint
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', 'dark');
-    return () => {
-      document.documentElement.removeAttribute('data-theme');
-    };
-  }, []);
-
   return (
     <QueryClientProvider client={queryClient}>
       <AuthGuard>

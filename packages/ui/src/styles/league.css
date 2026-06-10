@@ -1,0 +1,11 @@
+/* ============================================================
+   ai-gw design system — AI-League game sub-theme
+   Scoped to [data-zone="league"] (portal league pages only).
+   Filled out in the league rework phase.
+   ============================================================ */
+[data-zone="league"] {
+  --league-gold: #F59E0B;
+  --league-gold-soft: rgba(245,158,11,0.14);
+  --league-xp-from: var(--trace-from);
+  --league-xp-to: var(--trace-to);
+}

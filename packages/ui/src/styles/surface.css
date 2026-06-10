@@ -1,0 +1,33 @@
+/* ============================================================
+   ai-gw design system — per-app accent mapping
+   One brand, two accents: admin = indigo end, portal = fuchsia end
+   of the shared trace gradient. Accent ONLY — nothing else forks.
+   ============================================================ */
+
+/* Admin — indigo (matches the :root defaults; declared for clarity) */
+[data-surface="admin"] {
+  --accent:       var(--indigo-600);
+  --accent-hover: var(--indigo-700);
+  --accent-soft:  #EEF0FE;
+  --accent-text:  var(--indigo-600);
+}
+[data-theme="dark"][data-surface="admin"] {
+  --accent:       var(--indigo-400);
+  --accent-hover: var(--indigo-300);
+  --accent-soft:  rgba(99,102,241,0.16);
+  --accent-text:  var(--indigo-300);
+}
+
+/* Portal — fuchsia */
+[data-surface="portal"] {
+  --accent:       var(--fuchsia-600);
+  --accent-hover: var(--fuchsia-700);
+  --accent-soft:  #FBEAFE;
+  --accent-text:  var(--fuchsia-600);
+}
+[data-theme="dark"][data-surface="portal"] {
+  --accent:       var(--fuchsia-400);
+  --accent-hover: var(--fuchsia-300);
+  --accent-soft:  rgba(217,70,239,0.15);
+  --accent-text:  var(--fuchsia-300);
+}

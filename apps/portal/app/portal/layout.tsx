@@ -1,6 +1,5 @@
 "use client";
 
-import "./_styles/portal.css";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider } from "./_lib/authContext";
 import PortalShell from "./_components/PortalShell";

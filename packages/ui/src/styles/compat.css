@@ -1,0 +1,31 @@
+/* ============================================================
+   ai-gw design system — legacy alias layer
+   Existing pages reference the old SimCorp token names in
+   thousands of inline style={{}} objects. These aliases route
+   them onto the new semantic tokens so every page picks up
+   light/dark + the new accents without edits.
+   Prune entries once greps show zero remaining usage (Phase 5).
+   ============================================================ */
+:root,
+[data-theme="dark"] {
+  --sc-blue:       var(--accent);
+  --sc-blue-hover: var(--accent-hover);
+  --sc-blue-soft:  var(--accent-soft);
+  --sc-link:       var(--accent-text);
+  --sc-ink:        var(--fg-1);
+
+  --sc-coral:   var(--cat-coral);
+  --sc-orange:  var(--cat-orange);
+  --sc-yellow:  var(--cat-yellow);
+  --sc-teal:    var(--cat-teal);
+  --sc-purple:  var(--cat-purple);
+  --sc-magenta: var(--cat-magenta);
+
+  /* Old dark sidebar tokens → theme-aware panel tokens */
+  --side-bg:      var(--panel-bg);
+  --side-bg-2:    var(--panel-bg-2);
+  --side-fg:      var(--panel-fg);
+  --side-fg-mute: var(--panel-fg-mute);
+  --side-active:  var(--panel-active);
+  --side-rule:    var(--panel-rule);
+}
