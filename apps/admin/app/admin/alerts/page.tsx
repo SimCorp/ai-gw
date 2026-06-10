@@ -282,7 +282,7 @@ export default function AlertsPage() {
                 <tr key={a.id}>
                   <td style={{ color: 'var(--fg-3)', fontSize: 12.5 }}>{new Date(a.timestamp).toLocaleString()}</td>
                   <td style={{ fontWeight: 500 }}>{a.details?.team_name || a.resource_id}</td>
-                  <td style={{ color: '#EF3E4A', fontWeight: 600 }}>${a.details?.daily_spend?.toFixed(2) ?? '—'}</td>
+                  <td className="num" style={{ color: 'var(--bad)', fontWeight: 600 }}>${a.details?.daily_spend?.toFixed(2) ?? '—'}</td>
                   <td style={{ color: 'var(--fg-3)', fontSize: 12.5 }}>
                     {a.details?.rolling_avg
                       ? `${((a.details.daily_spend ?? 0) / a.details.rolling_avg).toFixed(1)}× avg ($${a.details.rolling_avg.toFixed(2)}/day)`

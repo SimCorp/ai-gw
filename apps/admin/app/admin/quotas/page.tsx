@@ -39,14 +39,14 @@ function fmtUsd(v: number | null | undefined) {
 
 function pctBar(pct: number, warn: boolean) {
   return (
-    <div style={{ height: 8, background: 'rgba(255,255,255,0.06)', borderRadius: 4, overflow: 'hidden' }}>
+    <div style={{ height: 8, background: 'var(--surface-soft)', borderRadius: 4, overflow: 'hidden' }}>
       <div style={{
         height: '100%',
         width: `${Math.min(100, pct)}%`,
         borderRadius: 4,
         background: warn
-          ? 'linear-gradient(90deg,#f59e0b,#dc2626)'
-          : 'linear-gradient(90deg,#5eead4,#2dd4bf)',
+          ? 'var(--warn)'
+          : 'var(--cat-teal)',
       }} />
     </div>
   );
@@ -94,7 +94,7 @@ function OrgBudgetEditor({ budget, onSaved }: { budget: OrgBudget; onSaved: () =
       </div>
       <div className="card__body" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
         <div>
-          <label style={{ display: 'block', fontSize: 11, color: 'var(--fg-2)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Monthly budget (USD)</label>
+          <label className="microlabel" style={{ display: 'block', marginBottom: 4 }}>Monthly budget (USD)</label>
           <input
             type="number"
             className="search"
@@ -105,7 +105,7 @@ function OrgBudgetEditor({ budget, onSaved }: { budget: OrgBudget; onSaved: () =
           />
         </div>
         <div>
-          <label style={{ display: 'block', fontSize: 11, color: 'var(--fg-2)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Alert threshold (%)</label>
+          <label className="microlabel" style={{ display: 'block', marginBottom: 4 }}>Alert threshold (%)</label>
           <input
             type="number"
             className="search"
@@ -116,7 +116,7 @@ function OrgBudgetEditor({ budget, onSaved }: { budget: OrgBudget; onSaved: () =
           />
         </div>
         <div>
-          <label style={{ display: 'block', fontSize: 11, color: 'var(--fg-2)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Enforcement action</label>
+          <label className="microlabel" style={{ display: 'block', marginBottom: 4 }}>Enforcement action</label>
           <select
             value={action}
             onChange={e => setAction(e.target.value as 'alert' | 'block')}
@@ -239,8 +239,8 @@ export default function QuotasPage() {
                         {q.member_count != null && <span className="lo">{q.member_count} members</span>}
                       </div>
                     </td>
-                    <td className="mono">{fmtUsd(cap)}</td>
-                    <td className="mono">{fmtUsd(spent)}</td>
+                    <td className="mono num">{fmtUsd(cap)}</td>
+                    <td className="mono num">{fmtUsd(spent)}</td>
                     <td>
                       {cap != null ? (
                         <>
@@ -270,16 +270,16 @@ export default function QuotasPage() {
             <svg viewBox="0 0 320 110" width="100%" height="110" preserveAspectRatio="none" style={{ display: 'block' }}>
               <defs>
                 <linearGradient id="grQ" x1="0" x2="0" y1="0" y2="1">
-                  <stop offset="0" stopColor="#2dd4bf" stopOpacity="0.55"/>
-                  <stop offset="1" stopColor="#2dd4bf" stopOpacity="0"/>
+                  <stop offset="0" stopColor="var(--cat-teal)" stopOpacity="0.55"/>
+                  <stop offset="1" stopColor="var(--cat-teal)" stopOpacity="0"/>
                 </linearGradient>
               </defs>
-              <line x1="0" x2="320" y1="20" y2="20" stroke="#dc2626" strokeDasharray="4 4" strokeWidth="1"/>
-              <text x="316" y="16" fontSize="9" fill="#dc2626" textAnchor="end">cap {fmtUsd(orgCap)}</text>
+              <line x1="0" x2="320" y1="20" y2="20" stroke="var(--bad)" strokeDasharray="4 4" strokeWidth="1"/>
+              <text x="316" y="16" fontSize="9" fill="var(--bad)" textAnchor="end">cap {fmtUsd(orgCap)}</text>
               <path d="M0,95 L52,80 L104,68 L156,56 L208,46 L260,38 L320,28 L320,110 L0,110 Z" fill="url(#grQ)"/>
-              <path d="M0,95 L52,80 L104,68 L156,56 L208,46 L260,38 L320,28" fill="none" stroke="#5eead4" strokeWidth="1.6"/>
-              <circle cx="104" cy="68" r="3" fill="#5eead4"/>
-              <text x="108" y="65" fontSize="9" fill="#94a3b8">today {fmtUsd(spentMtd)}</text>
+              <path d="M0,95 L52,80 L104,68 L156,56 L208,46 L260,38 L320,28" fill="none" stroke="var(--cat-teal)" strokeWidth="1.6"/>
+              <circle cx="104" cy="68" r="3" fill="var(--cat-teal)"/>
+              <text x="108" y="65" fontSize="9" fill="var(--fg-3)">today {fmtUsd(spentMtd)}</text>
             </svg>
             <div className="muted" style={{ fontSize: 12, marginTop: 6, display: 'flex', justifyContent: 'space-between' }}>
               <span>1 May</span><span>16 May</span><span>31 May</span>

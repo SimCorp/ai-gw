@@ -78,11 +78,11 @@ const FORM_DEFAULTS: PluginForm = {
 
 function categoryBadge(cat: Category) {
   const styles: Record<Category, { bg: string; color: string }> = {
-    tool: { bg: '#dbeafe', color: '#1d4ed8' },
-    integration: { bg: '#ede9fe', color: '#6d28d9' },
-    data: { bg: '#ffedd5', color: '#c2410c' },
-    security: { bg: '#fee2e2', color: '#b91c1c' },
-    workflow: { bg: '#dcfce7', color: '#15803d' },
+    tool: { bg: 'var(--accent-soft)', color: 'var(--accent)' },
+    integration: { bg: 'color-mix(in srgb, var(--cat-purple) 15%, transparent)', color: 'var(--cat-purple)' },
+    data: { bg: 'color-mix(in srgb, var(--cat-orange) 15%, transparent)', color: 'var(--cat-orange)' },
+    security: { bg: 'var(--bad-soft)', color: 'var(--bad)' },
+    workflow: { bg: 'var(--good-soft)', color: 'var(--good)' },
   };
   const s = styles[cat] ?? styles.tool;
   return (
@@ -396,7 +396,7 @@ function ExpandedRow({
           {detail && (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
               <div>
-                <div style={{ fontWeight: 600, fontSize: 12, color: 'var(--fg-2)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                <div className="microlabel" style={{ marginBottom: 8 }}>
                   Team overrides ({detail.overrides.length})
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -431,7 +431,7 @@ function ExpandedRow({
               </div>
 
               <div>
-                <div style={{ fontWeight: 600, fontSize: 12, color: 'var(--fg-2)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                <div className="microlabel" style={{ marginBottom: 8 }}>
                   Add team override
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

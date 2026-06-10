@@ -88,7 +88,7 @@ export function PolicyPanel({ nodeId, nodeName }: PolicyPanelProps) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       {/* Inherited rules */}
       <section>
-        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg-1)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
           <span>Inherited (read-only)</span>
           <span style={{ fontSize: 11, color: 'var(--fg-3)', fontWeight: 400 }}>{inherited.length} rules</span>
         </div>
@@ -104,8 +104,8 @@ export function PolicyPanel({ nodeId, nodeName }: PolicyPanelProps) {
                 background: 'var(--surface-2)',
               }}>
                 <span style={{ fontSize: 13, color: 'var(--fg-3)', flexShrink: 0 }}>&#x1F512;</span>
-                <span style={{ fontSize: 12, fontFamily: 'monospace', color: 'var(--fg)', flex: 1 }}>
-                  {rule.key} = <span style={{ color: 'var(--sc-blue)' }}>{rule.value}</span>
+                <span style={{ fontSize: 12, fontFamily: 'monospace', color: 'var(--fg-1)', flex: 1 }}>
+                  {rule.key} = <span style={{ color: 'var(--accent)' }}>{rule.value}</span>
                 </span>
                 <span style={{ fontSize: 11, color: 'var(--fg-3)', flexShrink: 0 }}>
                   from {rule.source_name}
@@ -118,13 +118,13 @@ export function PolicyPanel({ nodeId, nodeName }: PolicyPanelProps) {
 
       {/* Explicit overrides */}
       <section>
-        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)', marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg-1)', marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span>Overrides on <em style={{ fontStyle: 'italic', fontWeight: 500 }}>{nodeName}</em></span>
           <button
             onClick={() => setShowAddForm(v => !v)}
             style={{
               padding: '5px 12px', fontSize: 12,
-              background: 'var(--sc-blue)', color: '#fff',
+              background: 'var(--accent)', color: '#fff',
               border: 'none', borderRadius: 5, cursor: 'pointer',
             }}
           >
@@ -143,18 +143,18 @@ export function PolicyPanel({ nodeId, nodeName }: PolicyPanelProps) {
               placeholder="key"
               value={addKey}
               onChange={e => setAddKey(e.target.value)}
-              style={{ flex: '1 1 140px', padding: '6px 10px', fontSize: 12, background: 'var(--surface)', border: '1px solid var(--rule)', borderRadius: 5, color: 'var(--fg)', fontFamily: 'monospace' }}
+              style={{ flex: '1 1 140px', padding: '6px 10px', fontSize: 12, background: 'var(--surface)', border: '1px solid var(--rule)', borderRadius: 5, color: 'var(--fg-1)', fontFamily: 'monospace' }}
             />
             <input
               placeholder="value"
               value={addValue}
               onChange={e => setAddValue(e.target.value)}
-              style={{ flex: '2 1 200px', padding: '6px 10px', fontSize: 12, background: 'var(--surface)', border: '1px solid var(--rule)', borderRadius: 5, color: 'var(--fg)', fontFamily: 'monospace' }}
+              style={{ flex: '2 1 200px', padding: '6px 10px', fontSize: 12, background: 'var(--surface)', border: '1px solid var(--rule)', borderRadius: 5, color: 'var(--fg-1)', fontFamily: 'monospace' }}
             />
             <button
               onClick={handleAdd}
               disabled={saveMutation.isPending}
-              style={{ padding: '6px 12px', fontSize: 12, background: 'var(--sc-blue)', color: '#fff', border: 'none', borderRadius: 5, cursor: 'pointer' }}
+              style={{ padding: '6px 12px', fontSize: 12, background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 5, cursor: 'pointer' }}
             >
               Save
             </button>
@@ -179,16 +179,16 @@ export function PolicyPanel({ nodeId, nodeName }: PolicyPanelProps) {
               }}>
                 {editingKey === key ? (
                   <>
-                    <span style={{ fontSize: 12, fontFamily: 'monospace', color: 'var(--fg)', width: 160 }}>{key} =</span>
+                    <span style={{ fontSize: 12, fontFamily: 'monospace', color: 'var(--fg-1)', width: 160 }}>{key} =</span>
                     <input
                       value={editValue}
                       onChange={e => setEditValue(e.target.value)}
-                      style={{ flex: 1, padding: '4px 8px', fontSize: 12, background: 'var(--surface-2)', border: '1px solid var(--rule)', borderRadius: 5, color: 'var(--fg)', fontFamily: 'monospace' }}
+                      style={{ flex: 1, padding: '4px 8px', fontSize: 12, background: 'var(--surface-2)', border: '1px solid var(--rule)', borderRadius: 5, color: 'var(--fg-1)', fontFamily: 'monospace' }}
                     />
                     <button
                       onClick={() => handleSaveEdit(key)}
                       disabled={saveMutation.isPending}
-                      style={{ padding: '4px 10px', fontSize: 11, background: 'var(--sc-blue)', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer' }}
+                      style={{ padding: '4px 10px', fontSize: 11, background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer' }}
                     >
                       Save
                     </button>
@@ -201,19 +201,19 @@ export function PolicyPanel({ nodeId, nodeName }: PolicyPanelProps) {
                   </>
                 ) : (
                   <>
-                    <span style={{ fontSize: 12, fontFamily: 'monospace', color: 'var(--fg)', flex: 1 }}>
-                      {key} = <span style={{ color: 'var(--sc-blue)' }}>{value}</span>
+                    <span style={{ fontSize: 12, fontFamily: 'monospace', color: 'var(--fg-1)', flex: 1 }}>
+                      {key} = <span style={{ color: 'var(--accent)' }}>{value}</span>
                     </span>
                     <button
                       onClick={() => { setEditingKey(key); setEditValue(value); }}
-                      style={{ padding: '3px 9px', fontSize: 11, background: 'var(--surface-2)', border: '1px solid var(--rule)', borderRadius: 4, color: 'var(--fg)', cursor: 'pointer' }}
+                      style={{ padding: '3px 9px', fontSize: 11, background: 'var(--surface-2)', border: '1px solid var(--rule)', borderRadius: 4, color: 'var(--fg-1)', cursor: 'pointer' }}
                     >
                       Edit
                     </button>
                     <button
                       onClick={() => handleRemove(key)}
                       disabled={saveMutation.isPending}
-                      style={{ padding: '3px 9px', fontSize: 11, background: 'transparent', border: '1px solid var(--rule)', borderRadius: 4, color: 'var(--bad, #EF3E4A)', cursor: 'pointer' }}
+                      style={{ padding: '3px 9px', fontSize: 11, background: 'transparent', border: '1px solid var(--rule)', borderRadius: 4, color: 'var(--bad)', cursor: 'pointer' }}
                     >
                       Remove
                     </button>

@@ -33,7 +33,7 @@ export default function SessionsPage() {
   return (
     <div>
       <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--fg)', margin: 0 }}>
+        <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--fg-1)', margin: 0 }}>
           Active Sessions
         </h1>
         <p style={{ fontSize: 13, color: 'var(--fg-3)', margin: '4px 0 0' }}>
@@ -47,8 +47,8 @@ export default function SessionsPage() {
           disabled={revokeAll.isPending}
           style={{
             padding: '8px 16px', fontSize: 13, fontWeight: 600,
-            background: '#EF3E4A22', color: '#EF3E4A',
-            border: '1px solid #EF3E4A44', borderRadius: 6, cursor: 'pointer',
+            background: 'var(--bad-soft)', color: 'var(--bad)',
+            border: '1px solid color-mix(in srgb, var(--bad) 27%, transparent)', borderRadius: 6, cursor: 'pointer',
           }}
         >
           Sign out all other sessions
@@ -78,7 +78,7 @@ export default function SessionsPage() {
                   <button
                     onClick={() => revoke.mutate(s.session_id)}
                     disabled={revoke.isPending}
-                    style={{ padding: '4px 10px', fontSize: 12, background: 'transparent', border: '1px solid var(--rule)', borderRadius: 4, color: '#EF3E4A', cursor: 'pointer' }}
+                    style={{ padding: '4px 10px', fontSize: 12, background: 'transparent', border: '1px solid var(--rule)', borderRadius: 4, color: 'var(--bad)', cursor: 'pointer' }}
                   >
                     Revoke
                   </button>

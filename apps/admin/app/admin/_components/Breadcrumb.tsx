@@ -43,7 +43,7 @@ export function Breadcrumb({ nodeId }: BreadcrumbProps) {
           <Link
             href={`/admin/nodes/${node.id}`}
             style={{
-              color: 'var(--sc-blue)',
+              color: 'var(--accent-text)',
               textDecoration: 'none',
               fontWeight: 500,
             }}
