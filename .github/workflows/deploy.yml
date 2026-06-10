@@ -36,10 +36,8 @@ jobs:
           az login --service-principal \
             --username "${{ secrets.AZURE_CLIENT_ID }}" \
             --tenant "${{ secrets.AZURE_TENANT_ID }}" \
-            --federated-token "${OIDC_TOKEN}" \
-            --allow-no-subscriptions
-          az config set defaults.subscription="${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
-                      defaults.group=rg-aigw-dev-sdc
+            --federated-token "${OIDC_TOKEN}"
+          az account set --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
 
       - name: Resolve runtime values
         id: resolve
