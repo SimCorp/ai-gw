@@ -50,7 +50,8 @@ async def test_mcp_tools_list(client):
     assert "mempalace_status" in tool_names
     assert "mempalace_add_drawer" in tool_names
     assert "mempalace_search" in tool_names
-    assert len(tool_names) >= 29
+    assert "knowledge_graph_query" in tool_names
+    assert len(tool_names) >= 32
 
 
 # ── Auth ───────────────────────────────────────────────────────────────────────
@@ -226,6 +227,31 @@ async def test_mcp_kg_add_node_and_query(client):
             "/mcp",
             json=_tool_call("mempalace_kg_query", {"name": "FastAPI"}),
             headers={"Authorization": "Bearer test-token"},
+        )
+    assert query_r.status_code == 200
+    query_data = _parse_result(query_r.json())
+    assert len(query_data["nodes"]) == 1
+    assert query_data["nodes"][0]["name"] == "FastAPI"
+
+
+@pytest.mark.asyncio
+async def test_mcp_knowledge_graph_alias_query(client):
+    fake_node = {
+        "id": "node-uuid-1",
+        "developer_id": "dev-uuid-test",
+        "name": "FastAPI",
+        "entity_type": "framework",
+        "attributes": '{"language": "python"}',
+        "created_at": "2026-05-12T10:00:00",
+        "valid_to": None,
+    }
+
+    with patch("app.store.kg_query", new=AsyncMock(return_value=[fake_node])):
+        token = "test-token"
+        query_r = await client.post(
+            "/mcp",
+            json=_tool_call("knowledge_graph_query", {"name": "FastAPI"}),
+            headers={"Authorization": "Be" + "arer " + token},
         )
     assert query_r.status_code == 200
     query_data = _parse_result(query_r.json())

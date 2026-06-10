@@ -740,8 +740,41 @@ mcp_server.add_tool(
 )
 
 mcp_server.add_tool(
+    "knowledge_graph_add",
+    "Add a knowledge graph node or edge",
+    {
+        "type": "object",
+        "properties": {
+            "type": {"type": "string", "enum": ["node", "edge"]},
+            "name": {"type": "string"},
+            "entity_type": {"type": "string"},
+            "attributes": {"type": "object"},
+            "from_id": {"type": "string"},
+            "to_id": {"type": "string"},
+            "relation": {"type": "string"},
+        },
+        "required": ["type"],
+    },
+    _kg_add,
+)
+
+mcp_server.add_tool(
     "mempalace_kg_query",
     "Search KG nodes",
+    {
+        "type": "object",
+        "properties": {
+            "name": {"type": "string"},
+            "entity_type": {"type": "string"},
+            "limit": {"type": "integer", "default": 20},
+        },
+    },
+    _kg_query,
+)
+
+mcp_server.add_tool(
+    "knowledge_graph_query",
+    "Search knowledge graph nodes",
     {
         "type": "object",
         "properties": {
@@ -765,6 +798,10 @@ mcp_server.add_tool(
 )
 
 mcp_server.add_tool("mempalace_kg_stats", "KG node/edge counts by type", {}, _kg_stats)
+
+mcp_server.add_tool(
+    "knowledge_graph_stats", "Knowledge graph node/edge counts by type", {}, _kg_stats
+)
 
 mcp_server.add_tool(
     "mempalace_kg_timeline",
