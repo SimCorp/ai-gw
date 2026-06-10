@@ -23,16 +23,16 @@ async def get_leaderboard(
             lb.engineer_id,
             u.email,
             u.display_name,
-            t.name AS team_name,
-            a.name AS area_name,
+            n_team.name AS team_name,
+            n_area.name AS area_name,
             lb.composite_score,
             lb.rank,
             lb.points_earned,
             lb.updated_at
         FROM league_leaderboard lb
         JOIN users u ON u.id = lb.engineer_id
-        LEFT JOIN teams t ON t.id = u.primary_team_id
-        LEFT JOIN areas a ON a.id = t.area_id
+        LEFT JOIN organization_nodes n_team ON n_team.id = u.primary_node_id
+        LEFT JOIN organization_nodes n_area ON n_area.id = n_team.parent_id
         WHERE lb.season_id = :sid
         ORDER BY lb.composite_score DESC
     """),

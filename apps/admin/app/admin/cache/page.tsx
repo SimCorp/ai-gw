@@ -79,7 +79,7 @@ export default function CachePage() {
 
   const snapshotsQuery = useQuery<Array<{ts: string; hit_rate: number | null; requests_60s: number | null}>>({
     queryKey: ['cache-snapshots'],
-    queryFn: () => fetch(`${ADMIN_BASE}/cache/snapshots?range=7d`).then(r => r.ok ? r.json() : []),
+    queryFn: () => fetch(`${ADMIN_BASE}/system/cache/snapshots?range=7d`).then(r => r.ok ? r.json() : []),
     staleTime: 60_000,
   });
   const snapshots = snapshotsQuery.data ?? [];

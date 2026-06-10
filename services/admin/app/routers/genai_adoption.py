@@ -821,22 +821,22 @@ async def adoption_heatmap(
         ),
         team_licensed AS (
             SELECT n.id AS team_id, n.name AS team_name,
-                   COUNT(d.developer_id) AS licensed_count
+                   COUNT(d.id) AS licensed_count
             FROM organization_nodes n
-            LEFT JOIN developers d ON d.node_id = n.id
+            LEFT JOIN developers d ON d.team_id = n.id
             WHERE n.type = 'team'
             GROUP BY n.id, n.name
-            HAVING COUNT(d.developer_id) > 0
+            HAVING COUNT(d.id) > 0
         ),
         activity AS (
-            SELECT d.node_id AS team_id,
+            SELECT d.team_id AS team_id,
                    date_trunc('week', dal.date::timestamptz) AS week_start,
                    COUNT(DISTINCT dal.developer_id) AS active_users
             FROM developer_activity_log dal
-            JOIN developers d ON d.developer_id = dal.developer_id
+            JOIN developers d ON d.id = dal.developer_id
             WHERE dal.date >= NOW() - (:period_weeks || ' weeks')::INTERVAL
-              AND d.node_id IS NOT NULL
-            GROUP BY d.node_id, week_start
+              AND d.team_id IS NOT NULL
+            GROUP BY d.team_id, week_start
         )
         SELECT
             tl.team_id::text,
@@ -853,7 +853,7 @@ async def adoption_heatmap(
         LEFT JOIN activity a ON a.team_id = tl.team_id AND a.week_start = w.week_start
         ORDER BY tl.team_name, w.week_start
     """),
-                {"period_weeks": period_weeks},
+                {"period_weeks": str(period_weeks)},
             )
         )
         .mappings()

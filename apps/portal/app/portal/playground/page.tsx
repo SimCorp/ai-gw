@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { Suspense, useState, useRef, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "../_lib/authContext";
 import RelatedChampionContent from "../_components/RelatedChampionContent";
@@ -34,7 +34,7 @@ interface LiteLLMModel {
   id: string;
 }
 
-export default function PlaygroundPage() {
+function PlaygroundPageInner() {
   const { token, developer } = useAuth();
 
   const searchParams = useSearchParams();
@@ -496,5 +496,13 @@ export default function PlaygroundPage() {
       </div>
       <RelatedChampionContent tags={["playground", "prompts"]} />
     </main>
+  );
+}
+
+export default function PlaygroundPage() {
+  return (
+    <Suspense>
+      <PlaygroundPageInner />
+    </Suspense>
   );
 }
