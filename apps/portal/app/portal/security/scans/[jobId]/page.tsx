@@ -24,11 +24,11 @@ interface ResultsResponse {
 }
 
 const SEVERITY_COLOR: Record<string, string> = {
-  critical: 'bg-red-100 text-red-900 border-red-300',
-  high: 'bg-orange-100 text-orange-900 border-orange-300',
-  medium: 'bg-yellow-100 text-yellow-900 border-yellow-300',
-  low: 'bg-blue-100 text-blue-900 border-blue-300',
-  info: 'bg-gray-100 text-gray-700 border-gray-200',
+  critical: 'bg-[var(--bad-soft)] text-[var(--bad)] border-[var(--bad)]',
+  high: 'bg-[var(--warn-soft)] text-[var(--cat-orange)] border-[var(--cat-orange)]',
+  medium: 'bg-[var(--warn-soft)] text-[var(--warn)] border-[var(--warn)]',
+  low: 'bg-[var(--accent-soft)] text-[var(--accent-text)] border-[var(--accent)]',
+  info: 'bg-[var(--surface-soft)] text-[var(--fg-3)] border-[var(--rule)]',
 };
 
 const SEVERITY_ORDER = ['critical', 'high', 'medium', 'low', 'info'];
@@ -94,16 +94,16 @@ export default function ResultsPage() {
         <button
           onClick={downloadSarif}
           disabled={!token || downloading}
-          className="px-4 py-2 bg-gray-800 text-white rounded text-sm disabled:opacity-50"
+          className="px-4 py-2 bg-[var(--fg-1)] text-[var(--fg-inv)] rounded text-sm disabled:opacity-50"
         >
           {downloading ? 'Downloading…' : 'Download SARIF'}
         </button>
       </div>
       {downloadError && (
-        <p className="text-sm text-red-600 mb-2">{downloadError}</p>
+        <p className="text-sm text-[var(--bad)] mb-2">{downloadError}</p>
       )}
 
-      {isLoading && <p className="text-gray-500">Loading…</p>}
+      {isLoading && <p className="text-[var(--fg-3)]">Loading…</p>}
 
       <div className="flex gap-3 mb-6 flex-wrap">
         {SEVERITY_ORDER.map(sev => counts[sev] > 0 && (
@@ -112,7 +112,7 @@ export default function ResultsPage() {
           </span>
         ))}
         {findings.length === 0 && !isLoading && (
-          <span className="text-green-700 bg-green-50 px-3 py-1 rounded border border-green-200 text-sm font-medium">
+          <span className="text-[var(--good)] bg-[var(--good-soft)] px-3 py-1 rounded border border-[var(--good)] text-sm font-medium">
             No findings
           </span>
         )}
@@ -120,7 +120,7 @@ export default function ResultsPage() {
 
       {grouped.map(({ severity, items }) => (
         <div key={severity} className="mb-6">
-          <h2 className="font-semibold text-sm uppercase tracking-wide text-gray-500 mb-2">
+          <h2 className="font-semibold text-sm uppercase tracking-wide text-[var(--fg-3)] mb-2">
             {severity} ({items.length})
           </h2>
           <div className="grid gap-3">

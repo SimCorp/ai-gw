@@ -39,7 +39,7 @@ function ScoreRing({ score }: { score: number }) {
   const r = 44;
   const circ = 2 * Math.PI * r;
   const filled = (score / 100) * circ;
-  const color = score >= 70 ? "var(--sc-blue)" : score >= 40 ? "#A855F7" : "var(--fg-3)";
+  const color = score >= 70 ? "var(--accent)" : score >= 40 ? "var(--cat-purple)" : "var(--fg-3)";
   return (
     <svg width={112} height={112} viewBox="0 0 112 112">
       <circle cx={56} cy={56} r={r} fill="none" stroke="var(--rule)" strokeWidth={10} />
@@ -129,7 +129,7 @@ function ChampionsGapPanel({ score, agenticPct }: { score: number; agenticPct: n
                 {c.focus_areas.slice(0, 4).map((f) => (
                   <span key={f} style={{
                     fontSize: 10.5, padding: "1px 6px", borderRadius: 999,
-                    background: "rgba(8,62,167,0.08)", color: "var(--sc-blue)",
+                    background: "var(--accent-soft)", color: "var(--accent)",
                   }}>{f}</span>
                 ))}
               </div>
@@ -166,7 +166,7 @@ function WeeklyChart({ data }: { data: TransformationData["weekly"] }) {
               <div style={{
                 position: "absolute", bottom: 0, left: 0, right: 0,
                 height: `${w.agentic_pct}%`,
-                background: "var(--sc-blue)",
+                background: "var(--accent)",
                 transition: "height 0.4s ease",
               }} />
             </div>
@@ -241,7 +241,7 @@ export default function TransformationPage() {
             padding: "10px 20px", fontSize: 13.5, fontWeight: 500,
             border: 0, background: "none", cursor: "pointer", fontFamily: "inherit",
             color: tab === t ? "var(--fg-1)" : "var(--fg-3)",
-            borderBottom: tab === t ? "2px solid var(--sc-blue)" : "2px solid transparent",
+            borderBottom: tab === t ? "2px solid var(--accent)" : "2px solid transparent",
             marginBottom: -1,
           }}>
             {t === "journey" ? "My Journey" : "Setup & Instructions"}
@@ -315,8 +315,8 @@ export default function TransformationPage() {
                       <div key={key} style={{
                         padding: "14px 16px",
                         borderRadius: 8,
-                        border: `1px solid ${earned ? "var(--sc-blue)" : "var(--rule)"}`,
-                        background: earned ? "rgba(8,62,167,0.06)" : "var(--surface-soft, rgba(0,0,0,0.02))",
+                        border: `1px solid ${earned ? "var(--accent)" : "var(--rule)"}`,
+                        background: earned ? "var(--accent-soft)" : "var(--surface-soft)",
                         opacity: earned ? 1 : 0.5,
                         transition: "all 0.2s",
                       }}>
@@ -324,7 +324,7 @@ export default function TransformationPage() {
                         <div style={{ fontSize: 13, fontWeight: 600, color: "var(--fg-1)" }}>{meta.label}</div>
                         <div style={{ fontSize: 11, color: "var(--fg-3)", marginTop: 3 }}>{meta.desc}</div>
                         {earned && earnedAt && (
-                          <div style={{ fontSize: 10, color: "var(--sc-blue)", marginTop: 6 }}>
+                          <div style={{ fontSize: 10, color: "var(--accent)", marginTop: 6 }}>
                             Earned {new Date(earnedAt).toLocaleDateString()}
                           </div>
                         )}
@@ -347,8 +347,8 @@ export default function TransformationPage() {
                     return (
                       <div key={scope} style={{
                         padding: "14px 18px", borderRadius: 8, minWidth: 180,
-                        border: `1px solid ${optedIn ? "var(--sc-blue)" : "var(--rule)"}`,
-                        background: optedIn ? "rgba(8,62,167,0.06)" : "transparent",
+                        border: `1px solid ${optedIn ? "var(--accent)" : "var(--rule)"}`,
+                        background: optedIn ? "var(--accent-soft)" : "transparent",
                       }}>
                         <div style={{ fontSize: 12, color: "var(--fg-3)", marginBottom: 8, textTransform: "capitalize" }}>
                           {scope} leaderboard
@@ -418,7 +418,7 @@ export default function TransformationPage() {
 }`}</pre>
             <div style={{ fontSize: 12, color: "var(--fg-3)", marginTop: 12 }}>
               Replace <code style={{ background: "var(--bg)", padding: "1px 5px", borderRadius: 3 }}>YOUR_API_KEY</code> with one of your API keys from the{" "}
-              <a href="/portal/keys" style={{ color: "var(--sc-link, var(--sc-blue))" }}>Keys page</a>.
+              <a href="/portal/keys" style={{ color: "var(--accent-text)" }}>Keys page</a>.
             </div>
           </div>
 
@@ -430,8 +430,8 @@ export default function TransformationPage() {
               <p style={{ margin: "0 0 10px" }}>Sessions are automatically classified based on your request patterns:</p>
               <ul style={{ margin: 0, paddingLeft: 20, display: "flex", flexDirection: "column", gap: 6 }}>
                 <li><strong style={{ color: "var(--fg-2)" }}>Interactive</strong> — Single-turn or conversational usage, longer pauses between turns</li>
-                <li><strong style={{ color: "var(--sc-blue)" }}>Agentic</strong> — Tool-heavy sessions or sustained multi-turn work with quick cadence</li>
-                <li><strong style={{ color: "#A855F7" }}>Autonomous</strong> — Long-running agent loops with high tool density and minimal human input</li>
+                <li><strong style={{ color: "var(--accent)" }}>Agentic</strong> — Tool-heavy sessions or sustained multi-turn work with quick cadence</li>
+                <li><strong style={{ color: "var(--cat-purple)" }}>Autonomous</strong> — Long-running agent loops with high tool density and minimal human input</li>
               </ul>
               <p style={{ margin: "12px 0 0" }}>The classifier runs nightly on completed sessions. Your score updates each morning.</p>
             </div>

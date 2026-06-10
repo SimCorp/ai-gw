@@ -145,9 +145,9 @@ export default function UsagePage() {
           <h3 className="card__title">Spend over time</h3>
           <span className="card__sub">stacked by model · illustrative</span>
           <div className="card__actions">
-            <span className="pill"><span className="dot" style={{ background: "#D97757" }} />Sonnet</span>
-            <span className="pill"><span className="dot" style={{ background: "#FB9B2A" }} />Haiku</span>
-            <span className="pill"><span className="dot" style={{ background: "#4285F4" }} />Gemini</span>
+            <span className="pill"><span className="dot" style={{ background: "var(--cat-coral)" }} />Sonnet</span>
+            <span className="pill"><span className="dot" style={{ background: "var(--cat-orange)" }} />Haiku</span>
+            <span className="pill"><span className="dot" style={{ background: "var(--cat-teal)" }} />Gemini</span>
           </div>
         </div>
         <div className="card__body">
@@ -174,9 +174,9 @@ export default function UsagePage() {
                 const y1 = 170 - sonnet;
                 return (
                   <g key={i}>
-                    <rect x={x} y={y1} width={12} height={sonnet} fill="#D97757" rx={1}/>
-                    <rect x={x} y={y2} width={12} height={haiku} fill="#FB9B2A" rx={1}/>
-                    <rect x={x} y={y3} width={12} height={gemini} fill="#4285F4" rx={1}/>
+                    <rect x={x} y={y1} width={12} height={sonnet} fill="var(--cat-coral)" rx={1}/>
+                    <rect x={x} y={y2} width={12} height={haiku} fill="var(--cat-orange)" rx={1}/>
+                    <rect x={x} y={y3} width={12} height={gemini} fill="var(--cat-teal)" rx={1}/>
                   </g>
                 );
               })}

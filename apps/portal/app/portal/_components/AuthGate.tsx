@@ -134,7 +134,7 @@ function ChangePasswordPage() {
           {error && (
             <div style={{
               padding: "10px 12px", borderRadius: 6,
-              background: "rgba(239,62,74,0.1)", border: "1px solid var(--bad)",
+              background: "var(--bad-soft)", border: "1px solid var(--bad)",
               color: "var(--bad)", fontSize: 13,
             }}>
               {error}
@@ -223,7 +223,7 @@ function LoginPage() {
                 border: 0, background: tab === t ? "var(--surface)" : "var(--surface-soft, rgba(0,0,0,0.03))",
                 color: tab === t ? "var(--fg-1)" : "var(--fg-3)",
                 cursor: "pointer", fontFamily: "inherit",
-                borderBottom: tab === t ? "2px solid var(--sc-blue)" : "2px solid transparent",
+                borderBottom: tab === t ? "2px solid var(--accent)" : "2px solid transparent",
               }}
             >
               {t === "login" ? "Sign in" : "Create account"}
@@ -290,7 +290,7 @@ function LoginPage() {
                 type="checkbox"
                 checked={rememberMe}
                 onChange={e => setRememberMe(e.target.checked)}
-                style={{ cursor: "pointer", accentColor: "var(--sc-blue)" }}
+                style={{ cursor: "pointer", accentColor: "var(--accent)" }}
               />
               <label htmlFor="dev-remember" style={{ fontSize: 12.5, color: "var(--fg-3)", cursor: "pointer" }}>
                 Stay signed in for 30 days
@@ -301,7 +301,7 @@ function LoginPage() {
           {error && (
             <div style={{
               padding: "10px 12px", borderRadius: 6,
-              background: "rgba(239,62,74,0.1)", border: "1px solid var(--bad)",
+              background: "var(--bad-soft)", border: "1px solid var(--bad)",
               color: "var(--bad)", fontSize: 13,
             }}>
               {error}
@@ -323,9 +323,9 @@ function LoginPage() {
         {tab === "login" && (
           <>
             <div style={{ padding: "12px 24px 0", display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ flex: 1, height: 1, background: "var(--rule, #232950)" }} />
+              <div style={{ flex: 1, height: 1, background: "var(--rule)" }} />
               <span style={{ fontSize: 11, color: "var(--fg-3)", whiteSpace: "nowrap" }}>or</span>
-              <div style={{ flex: 1, height: 1, background: "var(--rule, #232950)" }} />
+              <div style={{ flex: 1, height: 1, background: "var(--rule)" }} />
             </div>
             <div style={{ padding: "12px 24px 0" }}>
               <a
@@ -334,7 +334,7 @@ function LoginPage() {
                   display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
                   width: "100%", padding: "9px 16px", fontSize: 13, fontWeight: 600,
                   background: "transparent", color: "var(--fg-1)",
-                  border: "1px solid var(--rule, #232950)", borderRadius: 8,
+                  border: "1px solid var(--rule)", borderRadius: 8,
                   cursor: "pointer", textDecoration: "none",
                 }}
               >
@@ -348,7 +348,7 @@ function LoginPage() {
               No account?{" "}
               <button
                 onClick={() => setTab("register")}
-                style={{ background: "none", border: 0, color: "var(--sc-link, var(--sc-blue))", cursor: "pointer", fontSize: 12, fontFamily: "inherit", padding: 0 }}
+                style={{ background: "none", border: 0, color: "var(--accent-text)", cursor: "pointer", fontSize: 12, fontFamily: "inherit", padding: 0 }}
               >
                 Create one →
               </button>

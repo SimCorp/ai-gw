@@ -134,7 +134,7 @@ export default function LibraryPage() {
       {/* Topic browser */}
       <div style={{ display: "grid", gridTemplateColumns: "200px 1fr", gap: 16 }}>
         <div>
-          <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--fg-3)", marginBottom: 8 }}>Topics</div>
+          <div className="microlabel" style={{ marginBottom: 8 }}>Topics</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             {topics.map(t => (
               <button
@@ -143,8 +143,8 @@ export default function LibraryPage() {
                 style={{
                   display: "flex", alignItems: "center", justifyContent: "space-between",
                   padding: "7px 10px", borderRadius: 6, border: "1px solid var(--rule)",
-                  background: selectedTopic === t.topic ? "var(--sc-blue, #0A7BD7)" : "var(--surface)",
-                  color: selectedTopic === t.topic ? "#fff" : "var(--fg-1)",
+                  background: selectedTopic === t.topic ? "var(--accent)" : "var(--surface)",
+                  color: selectedTopic === t.topic ? "var(--accent-fg)" : "var(--fg-1)",
                   cursor: "pointer", fontSize: 13, textAlign: "left", fontFamily: "inherit",
                 }}
               >
@@ -199,7 +199,7 @@ function ItemCard({ item }: { item: KnowledgeItem }) {
         <div style={{ fontWeight: 500, fontSize: 13, color: "var(--fg-1)" }}>{item.title}</div>
         <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
           {item.score != null && (
-            <span style={{ fontSize: 10.5, padding: "2px 6px", borderRadius: 4, background: "var(--sc-blue-soft, rgba(10,123,215,0.08))", color: "var(--sc-blue, #0A7BD7)" }}>
+            <span style={{ fontSize: 10.5, padding: "2px 6px", borderRadius: 4, background: "var(--accent-soft)", color: "var(--accent)" }}>
               {(item.score * 100).toFixed(0)}% match
             </span>
           )}
@@ -215,7 +215,7 @@ function ItemCard({ item }: { item: KnowledgeItem }) {
         {item.content.length > 200 && (
           <button
             onClick={() => setExpanded(e => !e)}
-            style={{ fontSize: 12, color: "var(--sc-blue, #0A7BD7)", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+            style={{ fontSize: 12, color: "var(--accent-text)", background: "none", border: "none", cursor: "pointer", padding: 0 }}
           >
             {expanded ? "Show less" : "Show more"}
           </button>
