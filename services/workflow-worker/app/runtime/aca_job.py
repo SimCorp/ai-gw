@@ -25,6 +25,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 from typing import Any
 
 from azure.identity import DefaultAzureCredential
@@ -35,6 +36,10 @@ from azure.storage.fileshare import ShareServiceClient
 from app.runtime import RunResult
 
 _log = logging.getLogger(__name__)
+
+# run_id / node_id become path segments on the shared run share — restrict to a
+# safe charset so neither can traverse outside its own directory.
+_SAFE_SEGMENT_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 
 # Execution states that mean the job is no longer running.
 _TERMINAL_STATES = {"Succeeded", "Failed", "Degraded", "Stopped"}
@@ -98,6 +103,12 @@ class ACAJobRuntime:
                 node_id,
                 allowed_hosts,
             )
+
+        # Defense-in-depth: run_id is a trusted DB UUID but node_id originates from
+        # a user-authored DAG. Reject path separators / traversal so a run can only
+        # ever touch its own directory on the shared aigw-runs file share.
+        if not _SAFE_SEGMENT_RE.match(str(run_id)) or not _SAFE_SEGMENT_RE.match(str(node_id)):
+            raise ValueError(f"unsafe run/node id: run={run_id!r} node={node_id!r}")
 
         run_dir = f"{run_id}/{node_id}"
         # The job container sees the share mounted at /run, so it reads

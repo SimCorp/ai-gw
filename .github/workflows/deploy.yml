@@ -181,10 +181,12 @@ jobs:
 
       - name: Seed local platform_admin (unmanaged identity)
         # Runs the bootstrap script inside the admin container (it has DB access +
-        # the script). Idempotent — safe to re-run each deploy.
+        # the script). The password is piped via stdin (--password-stdin) so it
+        # never appears in the command argv / exec logs. Idempotent.
         run: |
-          az containerapp exec -n ca-admin-dev-sdc -g "$RG" --command \
-            "python scripts/create_local_account.py --email '${E2E_ADMIN_EMAIL}' --password '${{ secrets.AIGW_E2E_ADMIN_PASSWORD }}' --role platform_admin"
+          printf '%s' "${{ secrets.AIGW_E2E_ADMIN_PASSWORD }}" | az containerapp exec \
+            -n ca-admin-dev-sdc -g "$RG" --command \
+            "python scripts/create_local_account.py --email '${E2E_ADMIN_EMAIL}' --role platform_admin --password-stdin"
 
       - name: Run E2E smoke
         env:

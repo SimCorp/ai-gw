@@ -22,6 +22,7 @@ Or from the jumpbox:
 
 import argparse
 import asyncio
+import os
 import sys
 import uuid
 from pathlib import Path
@@ -54,7 +55,17 @@ async def _resolve_node_id(session, node_path: str) -> str:
     return str(row[0])
 
 
-async def run(email: str, password: str, name: str, role: str, group: str, node_path: str) -> None:
+async def run(
+    email: str,
+    password: str,
+    name: str,
+    role: str,
+    group: str,
+    node_path: str,
+    *,
+    reactivate: bool = False,
+    force: bool = False,
+) -> None:
     email = email.lower().strip()
     group_id = _local_group_id(group)
 
@@ -62,22 +73,47 @@ async def run(email: str, password: str, name: str, role: str, group: str, node_
         # 1. ensure user (bcrypt, active)
         existing = (
             await session.execute(
-                text("SELECT id FROM users WHERE email = :email"),
+                text("SELECT id, status FROM users WHERE email = :email"),
                 {"email": email},
             )
         ).first()
         if existing:
             user_id = str(existing[0])
+            cur_status = existing[1]
+            # Guard against account takeover: an existing account with no local-group
+            # membership is likely SSO/Entra-managed — refuse to overwrite its
+            # password unless explicitly forced.
+            is_local = (
+                await session.execute(
+                    text(
+                        "SELECT 1 FROM local_group_members WHERE user_id = CAST(:id AS uuid) LIMIT 1"
+                    ),
+                    {"id": user_id},
+                )
+            ).first() is not None
+            if not is_local and not force:
+                raise SystemExit(
+                    f"Refusing to overwrite existing non-local account {email!r} "
+                    "(no local-group membership — likely SSO-managed). Re-run with "
+                    "--force to take it over as a local account."
+                )
+            # Don't silently reactivate a suspended/offboarded account.
+            if cur_status != "active" and not reactivate:
+                raise SystemExit(
+                    f"Account {email!r} has status {cur_status!r}; re-run with "
+                    "--reactivate to set it active."
+                )
+            new_status = "active" if (reactivate or cur_status == "active") else cur_status
             await session.execute(
                 text("""
                     UPDATE users
-                    SET password_hash = :h, hash_type = 'bcrypt', status = 'active',
+                    SET password_hash = :h, hash_type = 'bcrypt', status = :st,
                         display_name = COALESCE(NULLIF(:dn, ''), display_name), updated_at = NOW()
                     WHERE id = CAST(:id AS uuid)
                 """),
-                {"h": _hash_bcrypt(password), "dn": name, "id": user_id},
+                {"h": _hash_bcrypt(password), "dn": name, "id": user_id, "st": new_status},
             )
-            print(f"  user exists, updated: {email} ({user_id})")
+            print(f"  user exists, updated: {email} ({user_id}) status={new_status}")
         else:
             user_id = str(uuid.uuid4())
             await session.execute(
@@ -129,13 +165,38 @@ async def run(email: str, password: str, name: str, role: str, group: str, node_
 def main() -> None:
     p = argparse.ArgumentParser(description="Create/ensure a local account with roles.")
     p.add_argument("--email", required=True)
-    p.add_argument("--password", required=True)
+    # Avoid passing the password in argv (visible in ps/exec logs). Prefer the
+    # LOCAL_ACCOUNT_PASSWORD env var or --password-stdin.
+    p.add_argument("--password", default=None)
+    p.add_argument("--password-stdin", action="store_true", help="read the password from stdin")
     p.add_argument("--name", default="")
     p.add_argument("--role", default="platform_admin")
     p.add_argument("--group", default="platform-admins")
     p.add_argument("--node-path", default="/")
+    p.add_argument(
+        "--reactivate", action="store_true", help="allow activating a non-active account"
+    )
+    p.add_argument("--force", action="store_true", help="allow taking over a non-local account")
     args = p.parse_args()
-    asyncio.run(run(args.email, args.password, args.name, args.role, args.group, args.node_path))
+
+    password = args.password or os.environ.get("LOCAL_ACCOUNT_PASSWORD")
+    if args.password_stdin:
+        password = sys.stdin.readline().rstrip("\n")
+    if not password:
+        p.error("provide a password via LOCAL_ACCOUNT_PASSWORD, --password-stdin, or --password")
+
+    asyncio.run(
+        run(
+            args.email,
+            password,
+            args.name,
+            args.role,
+            args.group,
+            args.node_path,
+            reactivate=args.reactivate,
+            force=args.force,
+        )
+    )
 
 
 if __name__ == "__main__":

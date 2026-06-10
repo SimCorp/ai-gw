@@ -22,10 +22,10 @@ var acrPullRoleId = '7f951dda-4ed3-4680-a7ca-43fe172d538d'
 var kvSecretsUserRoleId = '4633458b-17de-408a-b874-0445c86b69e6'
 // Storage File Data SMB Share Contributor — read/write the aigw-runs file share.
 var storageFileShareContributorRoleId = '0c867c2a-1d8c-454a-a3db-ab2ea1bdc8bb'
-// Contributor — broad; granted at RG scope so the worker/scanner MI can start
-// ACA Job executions (Microsoft.App/jobs/start/action). There is no narrow built-in
-// "jobs operator" role; a custom role limited to jobs/start/action + read would
-// tighten this. Tracked as a follow-up.
+// Contributor — granted scoped to the two runner Jobs (NOT the resource group) so
+// the worker/scanner MI can start ACA Job executions (Microsoft.App/jobs/start/action).
+// There is no narrow built-in "jobs operator" role; a custom role limited to
+// jobs/start/action + read would tighten this further. Tracked as a follow-up.
 var contributorRoleId = 'b24988ac-6180-42a0-ab88-20f7382dd24c'
 
 // ── Existing resources (for role assignment scopes) ───────────────────────────
@@ -79,6 +79,18 @@ resource kvSecretsUserAssignment 'Microsoft.Authorization/roleAssignments@2022-0
 
 var uamiId = appIdentity.id
 
+// Dedicated ZERO-PRIVILEGE identity for spawned job executions (agent images from
+// the agents table + third-party scanner images) and the jumpbox. It has NO Key
+// Vault / RG role assignments, so a compromised agent/scanner image cannot read
+// secrets or act on Azure. The aigw-runs share is mounted via the env storage
+// (storage account key), not this identity, so job containers need no Azure role.
+resource jobsIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
+  name: 'id-aca-jobs-${env}-sdc'
+  location: location
+  tags: tags
+}
+var jobsUamiId = jobsIdentity.id
+
 // ── Spawn-runtime role assignments (Component 2) ──────────────────────────────
 // (i) SMB Share Contributor on the runs storage account — worker/scanner MI
 //     reads/writes the aigw-runs file share mounted at /run in job executions.
@@ -92,12 +104,22 @@ resource storageShareContributorAssignment 'Microsoft.Authorization/roleAssignme
   }
 }
 
-// (ii) Contributor at resource-group scope — lets the worker/scanner MI start
-//      ACA Job executions. BROAD: a custom role scoped to
-//      Microsoft.App/jobs/start/action + read would narrow it (follow-up).
-resource jobsStartContributorAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(resourceGroup().id, appIdentity.id, contributorRoleId)
-  // No explicit scope: defaults to this module's resource-group scope.
+// (ii) Contributor scoped to the two runner Jobs ONLY — lets the worker/scanner
+//      app MI start + read those job executions without resource-group-wide power.
+//      (A custom role limited to Microsoft.App/jobs/start/action + read could
+//      narrow it further; job-scoped Contributor already bounds the blast radius.)
+resource agentJobStartAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(agentRunnerJob.id, appIdentity.id, contributorRoleId)
+  scope: agentRunnerJob
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', contributorRoleId)
+    principalId: appIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+resource scannerJobStartAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(scannerRunnerJob.id, appIdentity.id, contributorRoleId)
+  scope: scannerRunnerJob
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', contributorRoleId)
     principalId: appIdentity.properties.principalId
@@ -198,7 +220,7 @@ resource agentRunnerJob 'Microsoft.App/jobs@2024-03-01' = {
   tags: tags
   identity: {
     type: 'UserAssigned'
-    userAssignedIdentities: { '${uamiId}': {} }
+    userAssignedIdentities: { '${jobsUamiId}': {} }
   }
   properties: {
     environmentId: acaEnvId
@@ -242,7 +264,7 @@ resource scannerRunnerJob 'Microsoft.App/jobs@2024-03-01' = {
   tags: tags
   identity: {
     type: 'UserAssigned'
-    userAssignedIdentities: { '${uamiId}': {} }
+    userAssignedIdentities: { '${jobsUamiId}': {} }
   }
   properties: {
     environmentId: acaEnvId
@@ -877,7 +899,9 @@ resource caToolbox 'Microsoft.App/containerApps@2024-03-01' = {
   name: 'ca-toolbox-${env}-sdc'
   location: location
   tags: tags
-  identity: { type: 'UserAssigned', userAssignedIdentities: { '${uamiId}': {} } }
+  // Zero-privilege identity: the jumpbox runs E2E over HTTP (no Azure calls) and
+  // must not be a standing RG/Key-Vault foothold.
+  identity: { type: 'UserAssigned', userAssignedIdentities: { '${jobsUamiId}': {} } }
   properties: {
     managedEnvironmentId: acaEnvId
     workloadProfileName: 'Consumption'
