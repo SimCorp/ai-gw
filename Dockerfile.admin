@@ -1,0 +1,46 @@
+# syntax=docker/dockerfile:1
+# Build context = repo root (pnpm monorepo). Build: docker build -f Dockerfile.admin .
+
+FROM node:20-alpine AS deps
+WORKDIR /app
+RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
+# Workspace manifests only, for a cacheable install layer.
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml .npmrc ./
+COPY apps/admin/package.json apps/admin/package.json
+COPY apps/portal/package.json apps/portal/package.json
+COPY packages/ui/package.json packages/ui/package.json
+COPY packages/charts/package.json packages/charts/package.json
+COPY packages/hooks/package.json packages/hooks/package.json
+COPY packages/contracts/package.json packages/contracts/package.json
+RUN pnpm install --frozen-lockfile
+
+FROM node:20-alpine AS builder
+WORKDIR /app
+RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
+COPY --from=deps /app ./
+COPY . .
+
+# NEXT_PUBLIC_* are baked at build time and must be set before `pnpm build`.
+ARG NEXT_PUBLIC_ADMIN_API=https://aigw-dev.lab.cloud.scdom.net/admin
+ENV NEXT_PUBLIC_ADMIN_API=$NEXT_PUBLIC_ADMIN_API
+ENV NEXT_TELEMETRY_DISABLED=1
+
+RUN pnpm --filter @aigw/admin build
+
+FROM node:20-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
+
+# Monorepo standalone layout: server.js lives under apps/admin/, with a
+# top-level node_modules at the standalone root.
+COPY --from=builder --chown=nextjs:nodejs /app/apps/admin/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/apps/admin/.next/static ./apps/admin/.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/apps/admin/public ./apps/admin/public
+
+USER nextjs
+EXPOSE 3001
+ENV PORT=3001
+ENV HOSTNAME=0.0.0.0
+CMD ["node", "apps/admin/server.js"]

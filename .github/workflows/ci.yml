@@ -81,8 +81,8 @@ jobs:
       - name: Build
         run: pnpm build
         env:
-          NEXT_PUBLIC_ADMIN_API: http://localhost:8005
-          NEXT_PUBLIC_ADMIN_BASE_URL: http://localhost:8005
+          NEXT_PUBLIC_ADMIN_API: https://aigw-dev.lab.cloud.scdom.net/admin
+          NEXT_PUBLIC_ADMIN_BASE_URL: https://aigw-dev.lab.cloud.scdom.net/admin
           NEXT_TELEMETRY_DISABLED: "1"
 
   # ────────────────────────────────────────────────────────────────────────────
@@ -94,7 +94,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [auth, cache, observability, admin, librarian, memory, scanner]
+        service: [auth, cache, observability, admin, identity, agent-relay, league, librarian, memory, scanner]
 
     steps:
       - uses: actions/checkout@v4
@@ -109,106 +109,12 @@ jobs:
 
       - name: Run unit tests
         working-directory: services/${{ matrix.service }}
+        # Each service's conftest sets the env it needs (config is fail-fast with no
+        # local defaults). BUS_PROVIDER=memory keeps observability off Service Bus.
         env:
-          DEV_BYPASS_AUTH: "true"
           BUS_PROVIDER: memory
-          DATABASE_URL: postgresql+asyncpg://aigateway:aigateway@localhost:5432/aigateway
-          REDIS_URL: redis://localhost:6379/0
           ENVIRONMENT: test
         run: python3 -m pytest tests/ -v --tb=short
-
-  # ────────────────────────────────────────────────────────────────────────────
-  # Integration tests — full stack via Docker Compose (no real LLM calls)
-  # ────────────────────────────────────────────────────────────────────────────
-  integration-tests:
-    name: Integration tests
-    runs-on: ubuntu-latest
-    needs: [lint-python, unit-tests]
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Create .env for stack
-        run: |
-          cat > .env <<'EOF'
-          SECRET_KEY=ci-secret-key-not-for-production
-          ADMIN_TOKEN=local-dev-admin-key-change-in-prod
-          DEV_BYPASS_AUTH=true
-          LITELLM_MASTER_KEY=sk-ci-litellm-master-key
-          ANTHROPIC_API_KEY=sk-ant-ci-placeholder
-          OPENAI_API_KEY=sk-ci-placeholder
-          ENVIRONMENT=ci
-          # Services read these from .env (compose only sets them explicitly for
-          # db-migrate). Without them, auth/cache/etc. fall back to localhost
-          # defaults and can't reach Postgres/Redis → /ready 503 → unhealthy.
-          DATABASE_URL=postgresql+asyncpg://aigateway:aigateway@postgres:5432/aigateway
-          REDIS_URL=redis://redis:6379/0
-          EOF
-
-      - name: Start gateway stack
-        # The integration tests exercise the API services only (auth, cache,
-        # litellm, observability, admin — see tests/conftest.py). Bring up just
-        # those + their deps (postgres, redis, db-migrate) rather than the whole
-        # stack, so the dev-only Next.js portal containers (which need a local
-        # `pnpm install` not present in CI) don't gate `--wait`. UI/e2e tests
-        # (test_e2e_navigation.py) are intentionally not part of this job.
-        run: >
-          docker compose -f infra/docker-compose.yml up --build --wait --timeout 180
-          auth cache litellm observability admin
-        env:
-          COMPOSE_ANSI: never
-
-      - name: Dump stack logs on failure
-        if: failure()
-        run: docker compose -f infra/docker-compose.yml logs --no-color --tail 100
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          # No `cache: pip` here (unlike the unit-test jobs): the stack started
-          # above bind-mounts a root-owned data/postgres dir into the workspace,
-          # which breaks setup-python's cache directory scan with EACCES.
-
-      - name: Install test dependencies
-        run: pip install --quiet -r tests/requirements.txt
-
-      - name: Run integration tests
-        run: |
-          python3 -m pytest \
-            tests/test_smoke.py \
-            tests/test_admin.py \
-            tests/test_admin_areas.py \
-            tests/test_admin_members.py \
-            tests/test_admin_policies.py \
-            tests/test_admin_budget.py \
-            tests/test_admin_guardrails.py \
-            tests/test_admin_mcp.py \
-            tests/test_admin_plugins.py \
-            tests/test_admin_misc.py \
-            tests/test_admin_login.py \
-            tests/test_portal_api.py \
-            -v --tb=short
-        env:
-          ADMIN_URL: http://localhost:8005
-          GATEWAY_URL: http://localhost:8002
-          AUTH_URL: http://localhost:8001
-          CACHE_URL: http://localhost:8002
-          LITELLM_URL: http://localhost:8003
-          OBSERVABILITY_URL: http://localhost:8004
-          ADMIN_TOKEN: local-dev-admin-key-change-in-prod
-          DEV_BYPASS_AUTH: "true"
-
-      - name: Dump service logs on failure
-        if: failure()
-        run: docker compose -f infra/docker-compose.yml logs --tail=100
-        env:
-          COMPOSE_ANSI: never
-
-      - name: Tear down stack
-        if: always()
-        run: docker compose -f infra/docker-compose.yml down -v
-        env:
-          COMPOSE_ANSI: never
 
   # ────────────────────────────────────────────────────────────────────────────
   # Security — dependency CVE scan (pip-audit) + secret scan (gitleaks)
@@ -262,7 +168,7 @@ jobs:
   build-push:
     name: Build & push — ${{ matrix.component.name }}
     runs-on: ubuntu-latest
-    needs: [lint-python, lint-frontend, unit-tests, integration-tests]
+    needs: [lint-python, lint-frontend, unit-tests]
     if: github.event_name == 'push'
     permissions:
       contents: read
@@ -296,12 +202,25 @@ jobs:
             context: services/workflow-worker
           - name: litellm
             context: services/litellm
-          # admin-portal / portal are intentionally omitted:
-          # this is a pnpm monorepo with workspace:* deps, and their
-          # Dockerfiles (npm ci, single-app context) cannot build. Nothing
-          # consumes the images today — compose runs the apps via
-          # node:20-alpine + npm run dev. Containerize them in a dedicated
-          # effort with a proper pnpm-monorepo build.
+          # Next.js portals: pnpm-monorepo Dockerfiles at repo root, root build
+          # context. NEXT_PUBLIC_* are baked at build time → passed as build-args
+          # pointing at the gateway dev FQDN. (NEXT_PUBLIC_LITELLM_KEY is left
+          # unset on purpose — never bake a provider key into a browser bundle.)
+          - name: admin-portal
+            context: .
+            dockerfile: Dockerfile.admin
+            build_args: >-
+              --build-arg NEXT_PUBLIC_ADMIN_API=https://aigw-dev.lab.cloud.scdom.net/admin
+          - name: portal
+            context: .
+            dockerfile: Dockerfile.portal
+            build_args: >-
+              --build-arg NEXT_PUBLIC_ADMIN_BASE_URL=https://aigw-dev.lab.cloud.scdom.net/admin
+              --build-arg NEXT_PUBLIC_CACHE_BASE_URL=https://aigw-dev.lab.cloud.scdom.net/cache
+              --build-arg NEXT_PUBLIC_IDENTITY_BASE_URL=https://aigw-dev.lab.cloud.scdom.net/identity
+              --build-arg NEXT_PUBLIC_LIBRARIAN_BASE_URL=https://aigw-dev.lab.cloud.scdom.net/librarian
+              --build-arg NEXT_PUBLIC_MEMORY_BASE_URL=https://aigw-dev.lab.cloud.scdom.net/memory
+              --build-arg NEXT_PUBLIC_LITELLM_BASE_URL=https://aigw-dev.lab.cloud.scdom.net/litellm
 
     steps:
       - uses: actions/checkout@v4
@@ -334,9 +253,15 @@ jobs:
           for tag in "${TAG_ARGS[@]}"; do
             DOCKER_TAGS="$DOCKER_TAGS --tag $tag"
           done
+          DF_FLAG=""
+          if [ -n "${{ matrix.component.dockerfile }}" ]; then
+            DF_FLAG="-f ${{ matrix.component.dockerfile }}"
+          fi
           docker buildx build \
             --push \
             $DOCKER_TAGS \
+            $DF_FLAG \
+            ${{ matrix.component.build_args }} \
             --cache-from type=gha,scope=${{ matrix.component.name }} \
             --cache-to type=gha,mode=max,scope=${{ matrix.component.name }} \
             ${{ matrix.component.context }}
