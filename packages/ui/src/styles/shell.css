@@ -243,6 +243,30 @@
   color: var(--fg-3);
 }
 
+/* ── Brand mark ── */
+.brandmark { display: inline-flex; align-items: center; gap: 8px; }
+.brandmark__word {
+  font-weight: 650;
+  font-size: 15px;
+  letter-spacing: -0.02em;
+  color: var(--fg-1);
+}
+.brandmark__suffix {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--fg-3);
+  margin-left: 3px;
+}
+
+/* ── Panel expand button (when collapsed) ── */
+.rail-app__expand {
+  position: fixed;
+  left: calc(var(--rail-w) + 8px);
+  bottom: 14px;
+  z-index: 15;
+}
+
 /* ── kbd helper ── */
 .kbd {
   font-family: var(--font-mono);
