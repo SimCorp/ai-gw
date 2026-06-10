@@ -9,6 +9,8 @@ class Settings(BaseSettings):
     litellm_master_key: str = "sk-litellm-local-dev"
     auth_url: str = "http://auth:8001"
     observability_url: str = "http://observability:8004"
+    secondary_gateway_url: str = ""
+    secondary_gateway_sample_rate: float = 0.0
     # Embeddings route through the gateway's litellm proxy (single model egress),
     # not a direct provider call. Defaults mirror litellm_url / litellm_master_key
     # above; switch embedding_model to any embedding model litellm exposes.

@@ -382,6 +382,8 @@ All services read from the `.env` file at repo root.
 | `OIDC_CLIENT_SECRET` | no | OIDC client secret |
 | `ALLOWED_EMAIL_DOMAINS` | no | Comma-separated list; restricts self-registration |
 | `REDIS_URL` | no | Default `redis://localhost:6379/0` |
+| `SECONDARY_GATEWAY_URL` | no | Optional shadow target for mirrored cache-service chat requests |
+| `SECONDARY_GATEWAY_SAMPLE_RATE` | no | Fraction from `0.0` to `1.0` of chat requests to mirror |
 | `DATABASE_URL` | no | Default `postgresql+asyncpg://aigateway:aigateway@localhost:5432/aigateway` |
 
 Minimum viable local `.env`:
