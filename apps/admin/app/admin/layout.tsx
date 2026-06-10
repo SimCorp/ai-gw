@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthGuard } from './_components/AuthGuard';
+import { MockBoot } from './_components/MockBoot';
 import { getAdminToken, clearAdminToken } from '../../lib/adminAuth';
 import AiHelpWidget from './_components/AiHelpWidget';
 
@@ -65,6 +66,7 @@ function SignOutButton() {
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
+      <MockBoot>
       <AuthGuard>
         <div className="app">
             <aside className="sidebar" style={{ display: 'flex', flexDirection: 'column' }}>
@@ -157,6 +159,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </div>
           <AiHelpWidget />
       </AuthGuard>
+      </MockBoot>
     </QueryClientProvider>
   );
 }
