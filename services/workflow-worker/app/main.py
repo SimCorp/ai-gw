@@ -27,7 +27,7 @@ from app.config import Settings
 from app.dag import is_terminal, ready_successors, should_loop
 from app.dag import node as dag_node
 from app.events import node_finished, node_log, node_started, run_finished
-from app.runtime import RunResult
+from app.runtime import ContainerRuntime, RunResult
 from app.runtime.docker import DockerRuntime
 from app.runtime.relay import RelayRuntime
 from app.sanitizer import sanitize_inputs as _sanitize_inputs
@@ -36,6 +36,36 @@ from app.threat_detection import scan_outputs as _scan_outputs
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 _log = logging.getLogger("workflow-worker")
+
+
+def make_runtime(cfg: Settings) -> ContainerRuntime:
+    """Select the agent container runtime from cfg.agent_runtime.
+
+    aca_job → ACAJobRuntime (Azure Container Apps Jobs)
+    relay   → RelayRuntime
+    docker  → DockerRuntime (default; local dev)
+
+    The per-image `relay://` override in _handle_job is orthogonal: it forces
+    relay dispatch for individual agents regardless of the instance picked here.
+    """
+    if cfg.agent_runtime == "aca_job":
+        from app.runtime.aca_job import ACAJobRuntime
+
+        return ACAJobRuntime(
+            job_name=cfg.agent_runner_job_name,
+            resource_group=cfg.azure_resource_group,
+            subscription_id=cfg.azure_subscription_id,
+            share_name=cfg.runs_share_name,
+            storage_account=cfg.runs_storage_account,
+            poll_interval_s=cfg.aca_poll_interval_s,
+        )
+    if cfg.agent_runtime == "relay":
+        return RelayRuntime(cfg.relay_url, relay_secret=cfg.relay_secret)
+    return DockerRuntime(
+        host_runs_path=cfg.host_runs_path,
+        worker_runs_path="/worker-runs",  # bind-mounted to host_runs_path
+        container_network=cfg.container_network,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -288,7 +318,7 @@ async def _handle_job(
     job: dict,
     pool: asyncpg.Pool,
     redis: Redis,
-    runtime: DockerRuntime,
+    runtime: ContainerRuntime,
     cache_base_url: str,
     relay_url: str,
     relay_secret: str,
@@ -396,9 +426,9 @@ async def _handle_job(
     await _mark_node_running(pool, run_id, node_id, iteration, agent["id"])
     await node_started(redis, run_id, node_id, iteration, agent["id"])
 
-    # Choose runtime: RelayRuntime for relay:// agents, DockerRuntime otherwise
+    # Choose runtime: RelayRuntime for relay:// agents, the configured runtime otherwise
     image: str = agent["image"]
-    active_runtime: DockerRuntime | RelayRuntime = (
+    active_runtime: ContainerRuntime = (
         RelayRuntime(relay_url, relay_secret=relay_secret)
         if image.startswith("relay://")
         else runtime
@@ -569,25 +599,16 @@ async def _forward_log(redis: Redis, run_id: uuid.UUID, node_id: str, line: str)
 
 async def _main() -> None:
     cfg = Settings.from_env()
-    _runtime_label = (
-        cfg.agent_runtime
-        if cfg.agent_runtime != "kubernetes"
-        else "kubernetes (not yet configured)"
-    )
     _log.info(
         "workflow-worker starting (id=%s concurrency=%d runtime=%s)",
         cfg.worker_id,
         cfg.concurrency,
-        _runtime_label,
+        cfg.agent_runtime,
     )
 
     pool = await asyncpg.create_pool(cfg.database_url, min_size=2, max_size=10)
     redis = Redis.from_url(cfg.redis_url, decode_responses=True)
-    runtime = DockerRuntime(
-        host_runs_path=cfg.host_runs_path,
-        worker_runs_path="/worker-runs",  # bind-mounted to host_runs_path
-        container_network=cfg.container_network,
-    )
+    runtime = make_runtime(cfg)
     cache_base_url = "http://cache:8002"
     relay_url = cfg.relay_url
     relay_secret = cfg.relay_secret

@@ -550,9 +550,19 @@ async def login(
         },
     )
 
-    # bcrypt users have no group membership — empty roles.
-    # Access is granted via OIDC + role_assignments.
-    roles = []
+    # Local accounts get roles via local-group membership: each local group is
+    # bound to a node through a role_assignments row (entra_group_id = the
+    # lcl-... group id). Entra users instead get groups from token claims.
+    group_ids = [
+        r[0]
+        for r in (
+            await session.execute(
+                text("SELECT group_id FROM local_group_members WHERE user_id = CAST(:uid AS uuid)"),
+                {"uid": str(row["id"])},
+            )
+        ).all()
+    ]
+    roles = await _load_role_assignments(session, group_ids)
 
     payload = await _build_session_payload(row, roles)
     payload["node_name"] = row["node_name"]

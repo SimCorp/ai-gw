@@ -142,37 +142,55 @@ jobs:
           exit $fail
 
   # ────────────────────────────────────────────────────────────────────────────
-  # E2E smoke (data plane) — real HTTP health + functional path against the
-  # gateway FQDN. The ACA environment is internal:true, so this MUST run from a
-  # VNet-connected self-hosted runner in the Landing Zone. Disabled (`if: false`)
-  # until that runner is registered — see plan Workstream H. Flip `if:` to
-  # `github.event.workflow_run.conclusion == 'success'` to enable.
+  # E2E smoke (data plane). The ACA environment is internal:true, so this runs
+  # from a VNet-connected self-hosted runner in the Landing Zone (label
+  # vnet-aigw-dev) — e.g. the ca-toolbox jumpbox registered as a runner, which
+  # resolves the ACA internal app DNS (ca-admin-dev-sdc, ca-cache-dev-sdc, …).
+  #
+  # ACTIVATION (one ops step): register that runner, then change `if: false` to
+  # `github.event.workflow_run.conclusion == 'success'`. The seed step uses
+  # local accounts (unmanaged identity) so NO Entra app-registration is needed.
+  # Secrets: AIGW_E2E_ADMIN_PASSWORD (required), AIGW_TEST_API_KEY (optional, to
+  # exercise inference). See services/admin/scripts/e2e_smoke.py.
   # ────────────────────────────────────────────────────────────────────────────
   e2e-test:
     name: E2E smoke (data plane)
     needs: smoke-test
-    if: false  # TODO(Workstream H): enable once a VNet-connected self-hosted runner exists
+    if: false  # TODO: enable once the VNet self-hosted runner (jumpbox) is registered
     runs-on: [self-hosted, vnet-aigw-dev]
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      RG: rg-aigw-dev-sdc
+      E2E_ADMIN_EMAIL: e2e-admin@simcorp.com
     steps:
       - uses: actions/checkout@v4
 
-      - name: Gateway health checks
+      - name: Azure login (OIDC)
         run: |
-          set -euo pipefail
-          BASE=https://aigw-dev.lab.cloud.scdom.net
-          for path in /auth/health /cache/health /admin/health; do
-            code=$(curl -fsS -o /dev/null -w '%{http_code}' "${BASE}${path}")
-            echo "${path}: ${code}"
-            [[ "$code" == "200" ]] || { echo "::error::${path} returned ${code}"; exit 1; }
-          done
+          OIDC_TOKEN=$(curl -sSfL \
+            -H "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=api://AzureADTokenExchange" \
+            | python3 -c "import sys,json; print(json.load(sys.stdin)['value'])")
+          az login --service-principal \
+            --username "${{ secrets.AZURE_CLIENT_ID }}" \
+            --tenant "${{ secrets.AZURE_TENANT_ID }}" \
+            --federated-token "${OIDC_TOKEN}"
+          az account set --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
 
-      - name: End-to-end inference path
-        env:
-          ADMIN_TOKEN: ${{ secrets.AIGW_ADMIN_TOKEN }}
+      - name: Seed local platform_admin (unmanaged identity)
+        # Runs the bootstrap script inside the admin container (it has DB access +
+        # the script). Idempotent — safe to re-run each deploy.
         run: |
-          # Full functional path (plan Workstream F / design §9 Phase 5):
-          # register a team -> issue an sk-* API key -> chat completion through the
-          # gateway -> assert a cache hit on the second identical call + a cost row
-          # recorded in Postgres. Implemented with the E2E rollout once the VNet
-          # runner is available; the health checks above already gate basic liveness.
-          echo "E2E functional flow runs here once the VNet runner is available."
+          az containerapp exec -n ca-admin-dev-sdc -g "$RG" --command \
+            "python scripts/create_local_account.py --email '${E2E_ADMIN_EMAIL}' --password '${{ secrets.AIGW_E2E_ADMIN_PASSWORD }}' --role platform_admin"
+
+      - name: Run E2E smoke
+        env:
+          AIGW_E2E_ADMIN_EMAIL: ${{ env.E2E_ADMIN_EMAIL }}
+          AIGW_E2E_ADMIN_PASSWORD: ${{ secrets.AIGW_E2E_ADMIN_PASSWORD }}
+          AIGW_TEST_API_KEY: ${{ secrets.AIGW_TEST_API_KEY }}
+        # Defaults target the ACA internal DNS (ca-admin-dev-sdc, ca-cache-dev-sdc,
+        # ca-auth-dev-sdc), which the VNet runner resolves.
+        run: python3 services/admin/scripts/e2e_smoke.py
