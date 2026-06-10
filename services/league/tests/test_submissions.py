@@ -10,6 +10,7 @@ os.environ.setdefault("DEV_BYPASS_AUTH", "true")
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
 
+import app.routers.submissions as _subs_mod
 from app.db import get_session
 from app.main import app
 
@@ -72,7 +73,7 @@ def test_training_submission_returns_scores_immediately():
     challenge = _mock_active_challenge()
     mock_session = AsyncMock()
 
-    # Sequence: challenge lookup, attempt count (scalar), prior best (one_or_none), attempt_num (scalar), INSERT sub (scalar), INSERT score, INSERT xp
+    # Sequence: challenge lookup, prior best (one_or_none), attempt_num (scalar), INSERT sub (scalar), INSERT score, INSERT xp
     challenge_result = MagicMock()
     challenge_result.mappings.return_value.one_or_none.return_value = challenge
 
@@ -106,7 +107,7 @@ def test_training_submission_returns_scores_immediately():
 
     app.dependency_overrides[get_session] = _make_session_override(mock_session)
     try:
-        with patch("app.main.aioredis.from_url", return_value=_mock_redis()), patch("app.routers.submissions._call_litellm", new_callable=AsyncMock, side_effect=litellm_responses):
+        with patch("app.main.aioredis.from_url", return_value=_mock_redis()), patch.object(_subs_mod, "_call_litellm", new_callable=AsyncMock, side_effect=litellm_responses):
             with TestClient(app) as client:
                 resp = client.post(
                     f"/challenges/{_CHALLENGE_ID}/submit",

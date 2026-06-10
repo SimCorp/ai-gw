@@ -8,6 +8,7 @@ os.environ.setdefault("DEV_BYPASS_AUTH", "true")
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
 
+import app.config as _cfg_mod
 from app.db import get_session
 from app.main import app
 
@@ -85,12 +86,8 @@ def test_challenge_detail_hides_hidden_test_suite():
 
 def test_create_challenge_requires_admin():
     """Without DEV_BYPASS_AUTH, creating a challenge should require admin."""
-    import app.config as cfg_mod
-
-    cfg_mod.settings.dev_bypass_auth = False
-
+    _cfg_mod.settings.dev_bypass_auth = False
     mock_session = AsyncMock()
-
     app.dependency_overrides[get_session] = _make_session_override(mock_session)
     try:
         with patch("app.main.aioredis.from_url", return_value=_mock_redis()):
@@ -101,6 +98,6 @@ def test_create_challenge_requires_admin():
                 )
     finally:
         app.dependency_overrides.pop(get_session, None)
-        cfg_mod.settings.dev_bypass_auth = True
+        _cfg_mod.settings.dev_bypass_auth = True
 
     assert resp.status_code == 403

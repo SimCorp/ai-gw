@@ -6,6 +6,7 @@ os.environ.setdefault("DEV_BYPASS_AUTH", "true")
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
 
+import app.auth as _auth_mod
 from app.db import get_session
 from app.main import app
 
@@ -57,19 +58,9 @@ def test_create_proposal_returns_201():
     assert body["status"] == "proposed"
 
 
-def test_list_proposals_requires_admin(monkeypatch):
+def test_list_proposals_requires_admin():
     """Without admin auth the endpoint should return 403."""
-    monkeypatch.setenv("DEV_BYPASS_AUTH", "false")
-    # Reload settings so auth picks up new value
-    import importlib
-
-    import app.config as cfg_mod
-
-    importlib.reload(cfg_mod)
-    import app.auth as auth_mod
-
-    importlib.reload(auth_mod)
-
+    _auth_mod.settings.dev_bypass_auth = False
     mock_session = AsyncMock()
     app.dependency_overrides[get_session] = _make_session_override(mock_session)
     try:
@@ -80,9 +71,7 @@ def test_list_proposals_requires_admin(monkeypatch):
                 resp = client.get("/proposals")
     finally:
         app.dependency_overrides.pop(get_session, None)
-        monkeypatch.setenv("DEV_BYPASS_AUTH", "true")
-        importlib.reload(cfg_mod)
-        importlib.reload(auth_mod)
+        _auth_mod.settings.dev_bypass_auth = True
 
     assert resp.status_code in (401, 403)
 

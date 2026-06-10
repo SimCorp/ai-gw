@@ -150,9 +150,12 @@ async def _seed_demo_content() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.redis = aioredis.from_url(settings.redis_url, decode_responses=True)
-    async with async_session_maker() as session:
-        await session.execute(text("ALTER TABLE league_purchases ADD COLUMN IF NOT EXISTS equipped BOOLEAN NOT NULL DEFAULT FALSE"))
-        await session.commit()
+    try:
+        async with async_session_maker() as session:
+            await session.execute(text("ALTER TABLE league_purchases ADD COLUMN IF NOT EXISTS equipped BOOLEAN NOT NULL DEFAULT FALSE"))
+            await session.commit()
+    except Exception as exc:
+        log.warning("league schema migration skipped: %s", exc)
     try:
         await _seed_demo_content()
     except Exception as exc:
