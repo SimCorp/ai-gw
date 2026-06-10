@@ -1,9 +1,7 @@
 """Tests for the unified /nodes organization-tree router.
 
-These endpoints authenticate via unified_auth.get_current_user (which does NOT
-honour DEV_BYPASS_AUTH — it requires a real session). The shared `client`
-fixture only overrides require_admin_auth (the router-level dependency), so we
-add a node_client fixture that ALSO overrides get_current_user with a fake
+These endpoints authenticate via unified_auth.get_current_user. We use a
+node_client fixture that overrides get_current_user with a fake
 platform_admin whose role is scoped to the root path "/". Because "/" is a
 prefix of every node path, can_access() passes for every permission tier.
 

@@ -1,13 +1,9 @@
 # services/league/tests/test_seasons.py
-import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi.testclient import TestClient
 
-os.environ.setdefault("DEV_BYPASS_AUTH", "true")
-os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
-os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
-
+from app.auth import require_admin_auth
 from app.db import get_session
 from app.main import app
 
@@ -17,6 +13,10 @@ def _make_session_override(mock_session):
         yield mock_session
 
     return _override
+
+
+async def _fake_admin_auth():
+    return {"user_id": "00000000-0000-0000-0000-000000000001", "role": "platform_admin"}
 
 
 def _mock_redis():
@@ -59,7 +59,7 @@ def test_list_seasons_returns_empty_when_no_seasons():
             with TestClient(app) as client:
                 resp = client.get("/seasons")
     finally:
-        app.dependency_overrides.pop(get_session, None)
+        app.dependency_overrides.clear()
 
     assert resp.status_code == 200
     assert resp.json() == []
@@ -74,6 +74,7 @@ def test_create_season_returns_201():
     mock_session.commit = AsyncMock()
 
     app.dependency_overrides[get_session] = _make_session_override(mock_session)
+    app.dependency_overrides[require_admin_auth] = _fake_admin_auth
     try:
         payload = {
             "name": "Q2 2026",
@@ -82,9 +83,9 @@ def test_create_season_returns_201():
         }
         with patch("app.main.aioredis.from_url", return_value=_mock_redis()):
             with TestClient(app) as client:
-                resp = client.post("/seasons", json=payload, headers={"X-Admin-Token": ""})
+                resp = client.post("/seasons", json=payload)
     finally:
-        app.dependency_overrides.pop(get_session, None)
+        app.dependency_overrides.clear()
 
     assert resp.status_code == 201
     assert resp.json()["name"] == "Q2 2026"
@@ -98,6 +99,7 @@ def test_update_weights_rejected_when_season_active():
     mock_session.execute = AsyncMock(return_value=mock_result)
 
     app.dependency_overrides[get_session] = _make_session_override(mock_session)
+    app.dependency_overrides[require_admin_auth] = _fake_admin_auth
     try:
         with patch("app.main.aioredis.from_url", return_value=_mock_redis()):
             with TestClient(app) as client:
@@ -112,10 +114,9 @@ def test_update_weights_rejected_when_season_active():
                         "improvement_rate": 0.05,
                         "creativity": 0.05,
                     },
-                    headers={"X-Admin-Token": ""},
                 )
     finally:
-        app.dependency_overrides.pop(get_session, None)
+        app.dependency_overrides.clear()
 
     assert resp.status_code == 409
 
@@ -128,6 +129,7 @@ def test_update_weights_rejected_when_weights_dont_sum_to_1():
     mock_session.execute = AsyncMock(return_value=mock_result)
 
     app.dependency_overrides[get_session] = _make_session_override(mock_session)
+    app.dependency_overrides[require_admin_auth] = _fake_admin_auth
     try:
         with patch("app.main.aioredis.from_url", return_value=_mock_redis()):
             with TestClient(app) as client:
@@ -143,9 +145,8 @@ def test_update_weights_rejected_when_weights_dont_sum_to_1():
                         "improvement_rate": 0.03,
                         "creativity": 0.02,
                     },  # sum = 0.80, fails validation
-                    headers={"X-Admin-Token": ""},
                 )
     finally:
-        app.dependency_overrides.pop(get_session, None)
+        app.dependency_overrides.clear()
 
     assert resp.status_code == 422
