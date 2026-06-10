@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState, useEffect } from "react";
+import { CodeBlock, EmptyState, Pill, Skeleton } from "@aigw/ui";
 import { useTeam } from "./_lib/teamContext";
 import { useAuth } from "./_lib/authContext";
 import type { TeamMembership } from "./_lib/authContext";
@@ -16,16 +17,18 @@ interface AiInsight {
   team_name: string | null;
 }
 
-const _INSIGHT_COLOR = {
-  critical: "var(--bad, #EF3E4A)",
-  warning: "var(--warn, #F59E0B)",
-  info: "var(--sc-link, #0A7BD7)",
-};
-const _INSIGHT_ICON: Record<string, string> = {
-  cache: "⚡", model: "🤖", budget: "💰", error: "🚨", health: "🩺", usage: "📊",
+const INSIGHT_PILL: Record<AiInsight["severity"], "bad" | "warn" | "info"> = {
+  critical: "bad",
+  warning: "warn",
+  info: "info",
 };
 
 const ADMIN_BASE = process.env.NEXT_PUBLIC_ADMIN_BASE_URL ?? "http://localhost:8005";
+
+const FIRST_CALL_SNIPPET = `curl https://aigw-dev.lab.cloud.scdom.net/v1/chat/completions \\
+  -H "authorization: Bearer sk-..." \\
+  -H "content-type: application/json" \\
+  -d '{"model": "claude-sonnet-4-6", "messages": [{"role": "user", "content": "Hello"}]}'`;
 
 interface TeamDetail {
   id: string;
@@ -117,31 +120,23 @@ export default function PortalHome() {
       .finally(() => setLoadingStats(false));
   }, [teamName]);
 
+  const firstName = developer?.display_name ? developer.display_name.split(" ")[0] : null;
+
   if (!teamId) {
     return (
       <main className="pmain">
         <div className="phero">
           <div>
-            <h1>Welcome{developer?.display_name ? `, ${developer.display_name.split(" ")[0]}` : ""}</h1>
+            <h1>Welcome{firstName ? `, ${firstName}` : ""}</h1>
             <p>Select a team in the sidebar to see your stats, keys, and activity.</p>
           </div>
         </div>
-        <div className="card" style={{ padding: 24, marginTop: 24 }}>
-          <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-            <div style={{
-              width: 10, height: 10, borderRadius: "50%",
-              background: "var(--fg-3)", flexShrink: 0, marginTop: 3,
-            }} />
-            <div>
-              <div style={{ fontWeight: 500, fontSize: 13 }}>No team assigned</div>
-              <div style={{ color: "var(--fg-2)", fontSize: 12.5, marginTop: 2 }}>
-                Contact your admin to be added to a team, or use the team picker in the sidebar.
-              </div>
-            </div>
-          </div>
-        </div>
-        <div style={{ textAlign: "center", marginTop: 16 }}>
-          <Link href="/portal/playground" className="btn btn--primary">Open Playground →</Link>
+        <div className="card">
+          <EmptyState
+            title="No team assigned"
+            description="Contact your admin to be added to a team, or use the team picker in the sidebar."
+            action={<Link href="/portal/playground" className="btn btn--primary">Open Playground →</Link>}
+          />
         </div>
       </main>
     );
@@ -164,15 +159,21 @@ export default function PortalHome() {
       : String(stats.total_tokens)
     : "—";
 
+  const firstRun = !loadingKeys && keys.length === 0;
+  const visibleInsights = insights.filter((i) => !dismissedInsights.has(i.id));
+  const activeKeys = keys.filter((k) => !k.revoked_at);
+
   return (
     <main className="pmain">
       {/* Hero */}
       <div className="phero">
         <div>
-          <h1>Welcome back{developer?.display_name ? `, ${developer.display_name.split(" ")[0]}` : ""}</h1>
+          <h1>Welcome back{firstName ? `, ${firstName}` : ""}</h1>
           <p>
-            You&apos;re on <strong>{teamName}</strong>. Build agents, ship to prod, watch the bill.
-            Same OpenAI SDK, internal models.
+            You&apos;re on <strong>{teamName}</strong>.
+            {firstRun
+              ? " Three steps stand between you and your first gateway request."
+              : " Same OpenAI SDK, internal models — build, ship, watch the bill."}
           </p>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
@@ -181,165 +182,166 @@ export default function PortalHome() {
         </div>
       </div>
 
+      {/* First-run: get to first request */}
+      {firstRun && (
+        <div className="card card--trace" style={{ marginBottom: 24 }}>
+          <div className="card__head">
+            <h3 className="card__title">Get to your first request</h3>
+            <span className="card__sub">no key yet — you&apos;re three steps away</span>
+          </div>
+          <div className="card__body" style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+            <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+              <span className="mono num" style={{ fontSize: 13, fontWeight: 600, color: "var(--accent-text)", paddingTop: 2 }}>01</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 600 }}>Create an API key</div>
+                <div className="muted" style={{ fontSize: 12.5, marginTop: 2 }}>
+                  Keys are scoped to {teamName} and authenticate every request.
+                </div>
+              </div>
+              <Link href="/portal/keys" className="btn btn--primary btn--sm" style={{ flexShrink: 0 }}>Create key →</Link>
+            </div>
+
+            <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+              <span className="mono num" style={{ fontSize: 13, fontWeight: 600, color: "var(--accent-text)", paddingTop: 2 }}>02</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 600 }}>Copy a snippet</div>
+                <div className="muted" style={{ fontSize: 12.5, margin: "2px 0 8px" }}>
+                  Drop-in OpenAI-compatible endpoint — swap in your key once you have it.
+                </div>
+                <CodeBlock code={FIRST_CALL_SNIPPET} language="bash" copyable />
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+              <span className="mono num" style={{ fontSize: 13, fontWeight: 600, color: "var(--accent-text)", paddingTop: 2 }}>03</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 600 }}>Watch your first request land</div>
+                <div className="muted" style={{ fontSize: 12.5, marginTop: 2 }}>
+                  Requests show up in the usage report within seconds.
+                </div>
+              </div>
+              <Link href="/portal/usage" className="btn btn--sm" style={{ flexShrink: 0 }}>Open usage →</Link>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Workspace context */}
       {(loadingTeamDetail || teamDetail) && (
-        <div className="card" style={{ padding: "14px 20px", marginBottom: 4 }}>
-          {loadingTeamDetail ? (
-            <div style={{ color: "var(--fg-3)", fontSize: 13 }}>Loading workspace…</div>
-          ) : teamDetail ? (
-            <div>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{
-                  width: 10, height: 10, borderRadius: "50%", flexShrink: 0,
-                  background: teamDetail.area_color ?? "var(--fg-3)",
-                }} />
-                <div style={{ display: "flex", alignItems: "baseline", gap: 6, flexWrap: "wrap" }}>
-                  {teamDetail.area_name && (
-                    <>
-                      <span style={{ fontSize: 13, color: "var(--fg-2)" }}>{teamDetail.area_name}</span>
-                      <span style={{ fontSize: 12, color: "var(--fg-3)" }}>/</span>
-                    </>
-                  )}
-                  <span style={{ fontSize: 13, fontWeight: 500 }}>{teamDetail.name}</span>
-                </div>
-                <div style={{ marginLeft: "auto", fontSize: 11.5, color: "var(--fg-3)" }}>Your workspace</div>
-              </div>
-              {/* Other team memberships */}
-              {memberships.filter((m: TeamMembership) => m.team_id !== teamId).length > 0 && (
-                <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--rule)" }}>
-                  <div style={{ fontSize: 11, color: "var(--fg-3)", fontWeight: 500, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                    Also a member of
+        <div className="card" style={{ marginBottom: 14 }}>
+          <div className="card__body" style={{ padding: "14px 20px" }}>
+            {loadingTeamDetail ? (
+              <Skeleton width={220} height={14} />
+            ) : teamDetail ? (
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{
+                    width: 10, height: 10, borderRadius: "50%", flexShrink: 0,
+                    background: teamDetail.area_color ?? "var(--fg-3)",
+                  }} />
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 6, flexWrap: "wrap" }}>
+                    {teamDetail.area_name && (
+                      <>
+                        <span className="muted" style={{ fontSize: 13 }}>{teamDetail.area_name}</span>
+                        <span style={{ fontSize: 12, color: "var(--fg-3)" }}>/</span>
+                      </>
+                    )}
+                    <span style={{ fontSize: 13, fontWeight: 500 }}>{teamDetail.name}</span>
                   </div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                    {memberships
-                      .filter((m: TeamMembership) => m.team_id !== teamId)
-                      .map((m: TeamMembership) => (
-                        <div key={m.membership_id} style={{
-                          display: "flex", alignItems: "center", gap: 5,
-                          padding: "3px 8px",
-                          border: "1px solid var(--rule)",
-                          borderRadius: 6,
-                          fontSize: 12,
-                        }}>
-                          <span style={{
-                            width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
-                            background: m.area_color ?? "var(--fg-3)",
-                          }} />
-                          <span style={{ fontWeight: 500 }}>{m.team_name}</span>
-                          {m.area_name && (
-                            <span style={{ color: "var(--fg-3)", fontSize: 11 }}>{m.area_name}</span>
-                          )}
-                          <span style={{
-                            fontSize: 10.5, padding: "1px 4px",
-                            borderRadius: 4,
-                            background: m.role === "admin" ? "var(--accent-soft, rgba(10,123,215,0.1))" : "var(--surface-soft, rgba(0,0,0,0.06))",
-                            color: m.role === "admin" ? "var(--sc-link, #0A7BD7)" : "var(--fg-3)",
-                            fontWeight: 500,
+                  <span className="microlabel" style={{ marginLeft: "auto" }}>Your workspace</span>
+                </div>
+                {/* Other team memberships */}
+                {memberships.filter((m: TeamMembership) => m.team_id !== teamId).length > 0 && (
+                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--rule)" }}>
+                    <div className="microlabel" style={{ marginBottom: 6 }}>Also a member of</div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                      {memberships
+                        .filter((m: TeamMembership) => m.team_id !== teamId)
+                        .map((m: TeamMembership) => (
+                          <span key={m.membership_id} style={{
+                            display: "inline-flex", alignItems: "center", gap: 6,
+                            padding: "3px 8px",
+                            border: "1px solid var(--rule)",
+                            borderRadius: "var(--r-2)",
+                            fontSize: 12,
                           }}>
-                            {m.role}
+                            <span style={{
+                              width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
+                              background: m.area_color ?? "var(--fg-3)",
+                            }} />
+                            <span style={{ fontWeight: 500 }}>{m.team_name}</span>
+                            {m.area_name && (
+                              <span style={{ color: "var(--fg-3)", fontSize: 11 }}>{m.area_name}</span>
+                            )}
+                            <Pill variant={m.role === "admin" ? "info" : "default"}>{m.role}</Pill>
                           </span>
-                        </div>
-                      ))}
+                        ))}
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
-          ) : null}
+                )}
+              </div>
+            ) : null}
+          </div>
         </div>
       )}
 
-      {/* Stat strip */}
-      <div className="stat-strip">
-        <div className="s">
-          <div className="l">Team spend MTD</div>
-          <div className="v">{loadingStats ? "…" : spendDisplay}</div>
+      {/* Stat strip — returning users */}
+      {!firstRun && (
+        <div className="stat-strip">
+          <div className="s">
+            <div className="l">Team spend MTD</div>
+            <div className="v">{loadingStats ? <Skeleton width={64} height={22} /> : spendDisplay}</div>
+          </div>
+          <div className="s">
+            <div className="l">Requests · all time</div>
+            <div className="v">{loadingStats ? <Skeleton width={64} height={22} /> : requestsDisplay}</div>
+          </div>
+          <div className="s">
+            <div className="l">Cache hit rate</div>
+            <div className="v good">{loadingStats ? <Skeleton width={64} height={22} /> : cacheHitDisplay}</div>
+            <div className="d">team avg</div>
+          </div>
+          <div className="s">
+            <div className="l">Tokens used</div>
+            <div className="v">{loadingStats ? <Skeleton width={64} height={22} /> : tokensDisplay}</div>
+          </div>
         </div>
-        <div className="s">
-          <div className="l">Requests · all time</div>
-          <div className="v">{loadingStats ? "…" : requestsDisplay}</div>
-        </div>
-        <div className="s">
-          <div className="l">Cache hit rate</div>
-          <div className="v good">{loadingStats ? "…" : cacheHitDisplay}</div>
-          <div className="d">team avg</div>
-        </div>
-        <div className="s">
-          <div className="l">Tokens used</div>
-          <div className="v">{loadingStats ? "…" : tokensDisplay}</div>
-        </div>
-      </div>
+      )}
 
       {/* AI Recommendations */}
-      {insights.filter(i => !dismissedInsights.has(i.id)).length > 0 && (
-        <div className="card" style={{ padding: "14px 16px", marginBottom: 4 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-            <span style={{ fontSize: 14 }}>✦</span>
-            <span style={{ fontWeight: 600, fontSize: 13 }}>AI Recommendations</span>
-            <span style={{ fontSize: 11.5, color: "var(--fg-3)" }}>for your team · refreshed every 6h</span>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {insights
-              .filter(i => !dismissedInsights.has(i.id))
-              .map(ins => {
-                const color = _INSIGHT_COLOR[ins.severity] ?? "var(--sc-link)";
-                const icon = _INSIGHT_ICON[ins.category] ?? "✦";
-                return (
-                  <div key={ins.id} style={{
-                    display: "flex", gap: 10, alignItems: "flex-start",
-                    padding: "10px 12px",
-                    background: "var(--surface-soft, rgba(0,0,0,0.03))",
-                    borderLeft: `3px solid ${color}`,
-                    borderRadius: "0 8px 8px 0",
-                  }}>
-                    <span style={{ fontSize: 16, flexShrink: 0 }}>{icon}</span>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 500, fontSize: 13, color: "var(--fg-1)" }}>{ins.title}</div>
-                      <div style={{ fontSize: 12.5, color: "var(--fg-2)", marginTop: 2, lineHeight: 1.5 }}>{ins.description}</div>
-                      {ins.action && (
-                        <div style={{ fontSize: 12, color: "var(--sc-link)", marginTop: 4, fontStyle: "italic" }}>
-                          → {ins.action}
-                        </div>
-                      )}
-                    </div>
-                    <button
-                      onClick={() => setDismissedInsights(prev => new Set([...prev, ins.id]))}
-                      style={{
-                        background: "none", border: "none", cursor: "pointer",
-                        color: "var(--fg-3)", fontSize: 16, padding: 2, flexShrink: 0,
-                      }}
-                      title="Dismiss"
-                    >
-                      ×
-                    </button>
-                  </div>
-                );
-              })}
-          </div>
-        </div>
-      )}
-
-      {/* Getting started checklist — shown until first key is created */}
-      {!loadingKeys && keys.length === 0 && (
-        <div className="card" style={{ marginBottom: 4, border: '1px solid var(--sc-blue, #0A7BD7)', background: 'linear-gradient(180deg,rgba(10,123,215,0.03),transparent 60%)' }}>
+      {visibleInsights.length > 0 && (
+        <div className="card" style={{ marginBottom: 14 }}>
           <div className="card__head">
-            <h3 className="card__title">Get started</h3>
-            <span className="card__sub">complete these steps to make your first API call</span>
+            <h3 className="card__title">AI Recommendations</h3>
+            <span className="card__sub">for your team · refreshed every 6h</span>
           </div>
-          <div className="card__body" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {[
-              { done: true,  label: `Joined team ${teamName}`, detail: 'You can make API calls on behalf of this team.' },
-              { done: false, label: 'Create an API key', detail: 'Keys authenticate your requests and track usage per service.', href: '/portal/keys' },
-              { done: false, label: 'Try the Playground', detail: 'Chat with Claude, Gemini, or GPT — no code needed.', href: '/portal/playground' },
-            ].map(({ done, label, detail, href }) => (
-              <div key={label} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '10px 14px', borderRadius: 8, background: 'var(--surface-soft)', border: '1px solid var(--rule)' }}>
-                <span style={{ fontSize: 16, flexShrink: 0, color: done ? 'var(--good)' : 'var(--fg-3)', marginTop: 1 }}>{done ? '✓' : '○'}</span>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 500, color: done ? 'var(--fg-2)' : 'var(--fg-1)', textDecoration: done ? 'line-through' : undefined }}>{label}</div>
-                  <div style={{ fontSize: 12.5, color: 'var(--fg-3)', marginTop: 2 }}>{detail}</div>
+          <div className="card__body" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {visibleInsights.map((ins) => (
+              <div key={ins.id} className="callout" style={{
+                display: "flex", gap: 12, alignItems: "flex-start",
+                padding: "10px 14px",
+                borderLeftColor: ins.severity === "critical" ? "var(--bad)" : ins.severity === "warning" ? "var(--warn)" : "var(--accent)",
+              }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <span style={{ fontWeight: 500, fontSize: 13 }}>{ins.title}</span>
+                    <Pill variant={INSIGHT_PILL[ins.severity] ?? "info"}>{ins.category}</Pill>
+                  </div>
+                  <div className="muted" style={{ fontSize: 12.5, marginTop: 2, lineHeight: 1.5 }}>{ins.description}</div>
+                  {ins.action && (
+                    <div style={{ fontSize: 12, color: "var(--accent-text)", marginTop: 4 }}>
+                      → {ins.action}
+                    </div>
+                  )}
                 </div>
-                {!done && href && (
-                  <Link href={href} className="btn btn--sm btn--primary" style={{ flexShrink: 0 }}>Go →</Link>
-                )}
+                <button
+                  onClick={() => setDismissedInsights(prev => new Set([...prev, ins.id]))}
+                  className="btn btn--ghost btn--sm"
+                  style={{ flexShrink: 0 }}
+                  title="Dismiss"
+                >
+                  ×
+                </button>
               </div>
             ))}
           </div>
@@ -379,75 +381,78 @@ export default function PortalHome() {
         </Link>
       </div>
 
-      {/* Quick links grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
-        <div className="card" style={{ padding: '18px 20px' }}>
-          <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: 'var(--fg-3)', marginBottom: 10 }}>Your API keys</div>
-          {loadingKeys ? (
-            <div style={{ fontSize: 13, color: 'var(--fg-3)' }}>Loading…</div>
-          ) : keys.length === 0 ? (
-            <div style={{ fontSize: 13, color: 'var(--fg-2)', marginBottom: 10 }}>No keys yet — create one to start making API calls.</div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginBottom: 10 }}>
-              {keys.filter(k => !k.revoked_at).slice(0, 4).map(key => (
-                <div key={key.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--good)', flexShrink: 0 }} />
-                  <span style={{ fontSize: 13, fontWeight: 500, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{key.name}</span>
-                  {(key.key_prefix ?? key.prefix) && (
-                    <span className="mono" style={{ fontSize: 11.5, color: 'var(--fg-3)' }}>{(key.key_prefix ?? key.prefix)?.slice(0, 8)}…</span>
-                  )}
+      {/* Detail grid — returning users */}
+      {!firstRun && (
+        <div className="split-3">
+          <div className="card">
+            <div className="card__body" style={{ padding: "16px 20px" }}>
+              <div className="microlabel" style={{ marginBottom: 10 }}>Your API keys</div>
+              {loadingKeys ? (
+                <Skeleton width="80%" height={13} style={{ marginBottom: 10 }} />
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 7, marginBottom: 12 }}>
+                  {activeKeys.slice(0, 4).map((key) => (
+                    <div key={key.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--good)", flexShrink: 0 }} />
+                      <span style={{ fontSize: 13, fontWeight: 500, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{key.name}</span>
+                      {(key.key_prefix ?? key.prefix) && (
+                        <span className="tag">{(key.key_prefix ?? key.prefix)?.slice(0, 8)}…</span>
+                      )}
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          )}
-          <Link href="/portal/keys" className="btn btn--sm" style={{ alignSelf: 'flex-start' as const }}>
-            {keys.filter(k => !k.revoked_at).length > 0 ? 'Manage keys →' : '+ Create key →'}
-          </Link>
-        </div>
-
-        <div className="card" style={{ padding: '18px 20px' }}>
-          <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: 'var(--fg-3)', marginBottom: 10 }}>Quick access</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {[
-              { href: '/portal/playground', label: 'Playground', sub: 'Try models interactively' },
-              { href: '/portal/library',    label: 'Knowledge library', sub: 'Search shared docs & patterns' },
-              { href: '/portal/skills',     label: 'Skills catalog', sub: 'Pre-built AI skill bundles' },
-              { href: '/portal/prompts',    label: 'Prompt library', sub: 'Reusable team prompts' },
-            ].map(l => (
-              <Link key={l.href} href={l.href} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', textDecoration: 'none', borderBottom: '1px solid var(--rule)' }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--fg-1)' }}>{l.label}</div>
-                  <div style={{ fontSize: 11.5, color: 'var(--fg-3)' }}>{l.sub}</div>
-                </div>
-                <span style={{ fontSize: 12, color: 'var(--fg-3)' }}>→</span>
+              )}
+              <Link href="/portal/keys" className="btn btn--sm">
+                {activeKeys.length > 0 ? "Manage keys →" : "+ Create key →"}
               </Link>
-            ))}
+            </div>
           </div>
-        </div>
 
-        <div className="card" style={{ padding: '18px 20px' }}>
-          <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: 'var(--fg-3)', marginBottom: 10 }}>Team usage</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: 12.5, color: 'var(--fg-2)' }}>Spend MTD</span>
-              <span style={{ fontSize: 13, fontWeight: 600 }}>{loadingStats ? '…' : spendDisplay}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: 12.5, color: 'var(--fg-2)' }}>Requests</span>
-              <span style={{ fontSize: 13, fontWeight: 600 }}>{loadingStats ? '…' : requestsDisplay}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: 12.5, color: 'var(--fg-2)' }}>Cache hit rate</span>
-              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--good)' }}>{loadingStats ? '…' : cacheHitDisplay}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: 12.5, color: 'var(--fg-2)' }}>Tokens used</span>
-              <span style={{ fontSize: 13, fontWeight: 600 }}>{loadingStats ? '…' : tokensDisplay}</span>
+          <div className="card">
+            <div className="card__body" style={{ padding: "16px 20px" }}>
+              <div className="microlabel" style={{ marginBottom: 10 }}>Quick access</div>
+              <div style={{ display: "flex", flexDirection: "column" }}>
+                {[
+                  { href: "/portal/playground", label: "Playground", sub: "Try models interactively" },
+                  { href: "/portal/library",    label: "Knowledge library", sub: "Search shared docs & patterns" },
+                  { href: "/portal/skills",     label: "Skills catalog", sub: "Pre-built AI skill bundles" },
+                  { href: "/portal/prompts",    label: "Prompt library", sub: "Reusable team prompts" },
+                ].map((l) => (
+                  <Link key={l.href} href={l.href} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", textDecoration: "none", borderBottom: "1px solid var(--rule)" }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13, fontWeight: 500, color: "var(--fg-1)" }}>{l.label}</div>
+                      <div style={{ fontSize: 11.5, color: "var(--fg-3)" }}>{l.sub}</div>
+                    </div>
+                    <span style={{ fontSize: 12, color: "var(--fg-3)" }}>→</span>
+                  </Link>
+                ))}
+              </div>
             </div>
           </div>
-          <Link href="/portal/usage" className="btn btn--sm">Full usage report →</Link>
+
+          <div className="card">
+            <div className="card__body" style={{ padding: "16px 20px" }}>
+              <div className="microlabel" style={{ marginBottom: 10 }}>Team usage</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
+                {[
+                  { label: "Spend MTD", value: spendDisplay },
+                  { label: "Requests", value: requestsDisplay },
+                  { label: "Cache hit rate", value: cacheHitDisplay, good: true },
+                  { label: "Tokens used", value: tokensDisplay },
+                ].map((row) => (
+                  <div key={row.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                    <span className="muted" style={{ fontSize: 12.5 }}>{row.label}</span>
+                    <span className="num" style={{ fontSize: 13, fontWeight: 600, color: row.good ? "var(--good)" : undefined }}>
+                      {loadingStats ? "…" : row.value}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <Link href="/portal/usage" className="btn btn--sm">Full usage report →</Link>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
     </main>
   );
 }
