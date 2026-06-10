@@ -127,7 +127,7 @@ export default function AiHelpWidget() {
         style={{
           position: "fixed", bottom: 24, right: 24, zIndex: 1000,
           width: 44, height: 44, borderRadius: "50%",
-          background: "var(--sc-blue, #0A7BD7)",
+          background: "var(--accent)",
           border: "none", cursor: "pointer",
           display: "flex", alignItems: "center", justifyContent: "center",
           boxShadow: "0 2px 12px rgba(0,0,0,0.18)",
@@ -204,7 +204,7 @@ export default function AiHelpWidget() {
                   padding: "8px 12px",
                   borderRadius: m.role === "user" ? "12px 12px 2px 12px" : "12px 12px 12px 2px",
                   background: m.role === "user"
-                    ? "var(--sc-blue, #0A7BD7)"
+                    ? "var(--accent)"
                     : "var(--surface-soft, rgba(0,0,0,0.06))",
                   color: m.role === "user" ? "#fff" : "var(--fg-1, #111)",
                   fontSize: 13,
@@ -226,7 +226,7 @@ export default function AiHelpWidget() {
                     style={{
                       marginTop: 6,
                       padding: "6px 12px",
-                      background: "var(--sc-blue, #0A7BD7)",
+                      background: "var(--accent)",
                       color: "#fff",
                       border: "none",
                       borderRadius: 8,
@@ -264,7 +264,7 @@ export default function AiHelpWidget() {
                               <span key={f} style={{
                                 fontSize: 10.5, padding: "1px 6px", borderRadius: 999,
                                 background: "rgba(10,123,215,0.10)",
-                                color: "var(--sc-blue, #0A7BD7)",
+                                color: "var(--accent)",
                               }}>{f}</span>
                             ))}
                           </div>
@@ -295,7 +295,7 @@ export default function AiHelpWidget() {
                             href={it.source_url}
                             target="_blank"
                             rel="noreferrer noopener"
-                            style={{ fontSize: 11, color: "var(--sc-blue, #0A7BD7)", marginTop: 4, display: "inline-block" }}
+                            style={{ fontSize: 11, color: "var(--accent)", marginTop: 4, display: "inline-block" }}
                           >
                             Open source →
                           </a>
@@ -314,7 +314,7 @@ export default function AiHelpWidget() {
                     style={{
                       marginTop: 6,
                       padding: "6px 12px",
-                      background: "var(--sc-blue, #0A7BD7)",
+                      background: "var(--accent)",
                       color: "#fff",
                       border: "none",
                       borderRadius: 8,
@@ -396,7 +396,7 @@ export default function AiHelpWidget() {
               disabled={loading || !input.trim()}
               style={{
                 padding: "7px 14px",
-                background: "var(--sc-blue, #0A7BD7)",
+                background: "var(--accent)",
                 color: "#fff", border: "none", borderRadius: 8,
                 cursor: loading || !input.trim() ? "not-allowed" : "pointer",
                 fontSize: 13, fontFamily: "inherit",

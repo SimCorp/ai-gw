@@ -13,7 +13,7 @@ function autoVariant(pct: number): "default" | "warn" | "bad" {
 }
 
 const FILL_COLORS: Record<string, string> = {
-  default: "var(--sc-blue)",
+  default: "var(--accent)",
   warn: "var(--warn)",
   bad: "var(--bad)",
 };
