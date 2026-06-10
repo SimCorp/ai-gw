@@ -12,35 +12,36 @@
 1. [5-minute quickstart](#1-5-minute-quickstart)
 2. [Choosing a model](#2-choosing-a-model)
 3. [Integration examples](#3-integration-examples)
-4. [Interactive sandbox (Claude Code via SSH)](#4-interactive-sandbox-claude-code-via-ssh)
-5. [Testing your integration](#5-testing-your-integration)
-5a. [Session context headers and self-service stats](#5a-session-context-headers-and-self-service-stats)
-6. [Streaming](#6-streaming)
-7. [Understanding the cache](#7-understanding-the-cache)
-8. [Rate limits](#8-rate-limits)
-9. [Common pitfalls](#9-common-pitfalls)
-10. [Getting help](#10-getting-help)
+4. [Testing your integration](#4-testing-your-integration)
+4a. [Session context headers and self-service stats](#4a-session-context-headers-and-self-service-stats)
+5. [Streaming](#5-streaming)
+6. [Understanding the cache](#6-understanding-the-cache)
+7. [Rate limits](#7-rate-limits)
+8. [Common pitfalls](#8-common-pitfalls)
+9. [Getting help](#9-getting-help)
 
 ---
 
 ## 1. 5-minute quickstart
 
+> **Access:** The gateway is deployed to Azure Container Apps (SimCorp Landing Zone, Sweden Central) with internal ingress only. You must be on the corporate VPN to reach it. The dev gateway FQDN is **https://aigw-dev.lab.cloud.scdom.net**. SSO uses Azure Entra ID.
+
 ### Step 1 — Get an API key
 
-Open the self-service portal: **http://localhost:3002/portal**
+Open the developer portal (reachable over the corporate VPN, sign in with Entra ID SSO).
 
-1. Sign up with your email and password — no admin approval required.
+1. Sign in with your SimCorp account.
 2. Go to **API keys** and click **Issue key**.
 3. Copy the key — it starts with `sk-` and is shown only once.
 
-No admin approval is needed. Keys are provisioned instantly.
+Keys are provisioned instantly.
 
 ### Step 2 — Make your first call
 
 Replace `sk-YOUR-KEY-HERE` with the key you just created.
 
 ```bash
-curl http://localhost:8002/v1/chat/completions \
+curl https://aigw-dev.lab.cloud.scdom.net/v1/chat/completions \
   -H "Authorization: Bearer sk-YOUR-KEY-HERE" \
   -H "Content-Type: application/json" \
   -d '{
@@ -68,19 +69,17 @@ Cache engine (:8002)   — checks Redis for cached responses (x-cache: HIT)
 LiteLLM proxy (:8003)  — routes to provider, injects provider API key
   |
   v
-Provider (Anthropic / Google / GitHub / Ollama)
+Provider (Anthropic / Google / GitHub / Azure)
 ```
+
+Each service runs as an internal Container App (`ca-<service>-dev-sdc`); callers only ever reach the gateway FQDN.
 
 ### Two endpoints
 
 | Endpoint | URL | Use with |
 |---|---|---|
-| OpenAI-compatible | `http://localhost:8002/v1` | All models, all frameworks with OpenAI support |
-| Anthropic-compatible | `http://localhost:8002/anthropic` | Claude models, Anthropic SDK, Claude Code CLI |
-
-From inside a Docker Compose network replace `localhost` with `gateway`:
-- `http://gateway:8002/v1`
-- `http://gateway:8002/anthropic`
+| OpenAI-compatible | `https://aigw-dev.lab.cloud.scdom.net/v1` | All models, all frameworks with OpenAI support |
+| Anthropic-compatible | `https://aigw-dev.lab.cloud.scdom.net/anthropic` | Claude models, Anthropic SDK, Claude Code CLI |
 
 ---
 
@@ -101,7 +100,6 @@ From inside a Docker Compose network replace `localhost` with `gateway`:
 | `azure-gpt-4o-mini` | Azure AI Foundry | 128k | Low | Low-cost Azure-hosted GPT-4o-mini |
 | `azure-o3-mini` | Azure AI Foundry | 128k | Medium | Azure-hosted o3-mini for reasoning workloads |
 | `azure-gpt-4.1` | Azure AI Foundry | 1M | Medium | Latest GPT-4.1 on Azure; 1M-token context for large document tasks |
-| `local` | Ollama (llama3.2) | varies | Free | Development and testing — data never leaves your machine |
 
 ### Decision guide
 
@@ -109,7 +107,6 @@ From inside a Docker Compose network replace `localhost` with `gateway`:
 - **High-request-volume pipeline or batch job?** Use `claude-haiku-4-5` to keep costs low.
 - **Need to reason over a 500-page PDF or an entire repo?** Use `gemini-1.5-pro` or `azure-gpt-4.1` for their 1M-token context windows.
 - **Hardest reasoning problem, cost is secondary?** Use `claude-opus-4-7`.
-- **Sensitive data or offline work?** Use `local` — no data leaves the machine.
 - **Data must stay in your Azure region?** Use any `azure-*` model — traffic routes through your own Azure subscription.
 - **Team has GitHub Copilot licences?** Use `copilot-*` models to stay within your existing Copilot spend.
 - **Existing codebase uses OpenAI function-calling JSON schema?** `github-gpt-4o`, `copilot-gpt-4o`, or `azure-gpt-4o` all drop in with no schema changes.
@@ -125,7 +122,7 @@ All examples below use the recommended `claude-sonnet-4-6`. Swap in any model ID
 ### curl
 
 ```bash
-curl http://localhost:8002/v1/chat/completions \
+curl https://aigw-dev.lab.cloud.scdom.net/v1/chat/completions \
   -H "Authorization: Bearer sk-YOUR-KEY-HERE" \
   -H "Content-Type: application/json" \
   -d '{
@@ -142,7 +139,7 @@ GitHub Copilot models use the same syntax — just swap the model ID:
 
 ```bash
 # GitHub Copilot via gateway
-curl http://localhost:8002/v1/chat/completions \
+curl https://aigw-dev.lab.cloud.scdom.net/v1/chat/completions \
   -H "Authorization: Bearer sk-YOUR-KEY-HERE" \
   -H "Content-Type: application/json" \
   -d '{"model": "copilot-gpt-4o", "messages": [{"role": "user", "content": "Hello"}]}'
@@ -152,7 +149,7 @@ Azure AI Foundry models work the same way:
 
 ```bash
 # Azure AI Foundry via gateway
-curl http://localhost:8002/v1/chat/completions \
+curl https://aigw-dev.lab.cloud.scdom.net/v1/chat/completions \
   -H "Authorization: Bearer sk-YOUR-KEY-HERE" \
   -H "Content-Type: application/json" \
   -d '{"model": "azure-gpt-4o", "messages": [{"role": "user", "content": "Hello"}]}'
@@ -167,7 +164,7 @@ from openai import OpenAI
 
 client = OpenAI(
     api_key="sk-YOUR-KEY-HERE",
-    base_url="http://localhost:8002/v1",
+    base_url="https://aigw-dev.lab.cloud.scdom.net/v1",
 )
 
 response = client.chat.completions.create(
@@ -190,7 +187,7 @@ from openai import OpenAI
 
 client = OpenAI(
     api_key=os.environ["SIMCORP_GATEWAY_KEY"],
-    base_url="http://localhost:8002/v1",
+    base_url="https://aigw-dev.lab.cloud.scdom.net/v1",
 )
 ```
 
@@ -203,7 +200,7 @@ import anthropic
 
 client = anthropic.Anthropic(
     api_key="sk-YOUR-KEY-HERE",
-    base_url="http://localhost:8002/anthropic",
+    base_url="https://aigw-dev.lab.cloud.scdom.net/anthropic",
 )
 
 message = client.messages.create(
@@ -228,7 +225,7 @@ npm install -g @anthropic-ai/claude-code
 
 # Add to ~/.bashrc or ~/.zshrc
 export ANTHROPIC_API_KEY=sk-YOUR-KEY-HERE
-export ANTHROPIC_BASE_URL=http://localhost:8002/anthropic
+export ANTHROPIC_BASE_URL=https://aigw-dev.lab.cloud.scdom.net/anthropic
 
 # Verify
 claude --version
@@ -239,7 +236,7 @@ Inline (no env var required):
 
 ```bash
 ANTHROPIC_API_KEY=sk-YOUR-KEY-HERE \
-ANTHROPIC_BASE_URL=http://localhost:8002/anthropic \
+ANTHROPIC_BASE_URL=https://aigw-dev.lab.cloud.scdom.net/anthropic \
 claude "Summarise the last 10 commits"
 ```
 
@@ -250,7 +247,7 @@ CI / GitHub Actions:
 - name: AI code review
   env:
     ANTHROPIC_API_KEY: ${{ secrets.SIMCORP_GATEWAY_KEY }}
-    ANTHROPIC_BASE_URL: http://gateway:8002/anthropic
+    ANTHROPIC_BASE_URL: https://aigw-dev.lab.cloud.scdom.net/anthropic
   run: |
     claude --output-format json \
       "Review the changes in this PR for security issues" \
@@ -263,8 +260,8 @@ Project-wide config — place a `CLAUDE.md` at your repo root and Claude Code re
 # CLAUDE.md
 
 This project uses the SimCorp AI Gateway.
-Set ANTHROPIC_BASE_URL=http://localhost:8002/anthropic in your environment.
-API keys: http://localhost:3002/portal/keys
+Set ANTHROPIC_BASE_URL=https://aigw-dev.lab.cloud.scdom.net/anthropic in your environment.
+API keys: developer portal (over the corporate VPN, Entra ID SSO)
 ```
 
 ### LangChain
@@ -277,7 +274,7 @@ from langchain_openai import ChatOpenAI
 llm = ChatOpenAI(
     model="claude-sonnet-4-6",
     openai_api_key="sk-YOUR-KEY-HERE",
-    openai_api_base="http://localhost:8002/v1",
+    openai_api_base="https://aigw-dev.lab.cloud.scdom.net/v1",
     temperature=0.2,
 )
 
@@ -293,7 +290,7 @@ from langchain_anthropic import ChatAnthropic
 llm = ChatAnthropic(
     model="claude-sonnet-4-6",
     anthropic_api_key="sk-YOUR-KEY-HERE",
-    anthropic_api_url="http://localhost:8002/anthropic",
+    anthropic_api_url="https://aigw-dev.lab.cloud.scdom.net/anthropic",
     max_tokens=4096,
 )
 ```
@@ -308,11 +305,11 @@ from langchain_community.vectorstores import FAISS
 llm = ChatOpenAI(
     model="claude-sonnet-4-6",
     openai_api_key="sk-YOUR-KEY-HERE",
-    openai_api_base="http://localhost:8002/v1",
+    openai_api_base="https://aigw-dev.lab.cloud.scdom.net/v1",
 )
 embeddings = OpenAIEmbeddings(
     openai_api_key="sk-YOUR-KEY-HERE",
-    openai_api_base="http://localhost:8002/v1",
+    openai_api_base="https://aigw-dev.lab.cloud.scdom.net/v1",
 )
 vectorstore = FAISS.load_local("my_index", embeddings)
 qa_chain = RetrievalQA.from_chain_type(
@@ -337,7 +334,7 @@ from llama_index.core import Settings
 llm = OpenAI(
     model="claude-sonnet-4-6",
     api_key="sk-YOUR-KEY-HERE",
-    api_base="http://localhost:8002/v1",
+    api_base="https://aigw-dev.lab.cloud.scdom.net/v1",
     temperature=0.1,
     max_tokens=4096,
 )
@@ -354,12 +351,12 @@ from llama_index.core import VectorStoreIndex, SimpleDirectoryReader, Settings
 Settings.llm = OpenAI(
     model="claude-sonnet-4-6",
     api_key="sk-YOUR-KEY-HERE",
-    api_base="http://localhost:8002/v1",
+    api_base="https://aigw-dev.lab.cloud.scdom.net/v1",
 )
 Settings.embed_model = OpenAIEmbedding(
     model="text-embedding-3-small",
     api_key="sk-YOUR-KEY-HERE",
-    api_base="http://localhost:8002/v1",
+    api_base="https://aigw-dev.lab.cloud.scdom.net/v1",
 )
 
 documents = SimpleDirectoryReader("./docs").load_data()
@@ -382,7 +379,7 @@ from openai import AsyncOpenAI
 
 gateway_client = AsyncOpenAI(
     api_key="sk-YOUR-KEY-HERE",
-    base_url="http://localhost:8002/v1",
+    base_url="https://aigw-dev.lab.cloud.scdom.net/v1",
 )
 model = OpenAIChatCompletionsModel(
     model="claude-sonnet-4-6",
@@ -403,7 +400,7 @@ Agent with tools:
 from agents import Agent, Runner, OpenAIChatCompletionsModel, function_tool
 from openai import AsyncOpenAI
 
-gateway_client = AsyncOpenAI(api_key="sk-YOUR-KEY-HERE", base_url="http://localhost:8002/v1")
+gateway_client = AsyncOpenAI(api_key="sk-YOUR-KEY-HERE", base_url="https://aigw-dev.lab.cloud.scdom.net/v1")
 model = OpenAIChatCompletionsModel(model="claude-sonnet-4-6", openai_client=gateway_client)
 
 @function_tool
@@ -428,7 +425,7 @@ Multi-agent handoff — route cheap model to expensive model only when needed:
 from agents import Agent, Runner, OpenAIChatCompletionsModel, handoff
 from openai import AsyncOpenAI
 
-client = AsyncOpenAI(api_key="sk-YOUR-KEY-HERE", base_url="http://localhost:8002/v1")
+client = AsyncOpenAI(api_key="sk-YOUR-KEY-HERE", base_url="https://aigw-dev.lab.cloud.scdom.net/v1")
 
 def make_model(m):
     return OpenAIChatCompletionsModel(model=m, openai_client=client)
@@ -453,53 +450,21 @@ print(result.final_output)
 
 ---
 
-## 4. Interactive sandbox (Claude Code via SSH)
+## 4. Testing your integration
 
-The easiest way to experiment with the gateway is the Claude sandbox container — it has Claude Code CLI pre-installed and pre-configured to route through the gateway.
+Run the service test suites locally:
 
 ```bash
-# Start the sandbox (runs until stopped)
-make sandbox
-
-# Connect via SSH
-ssh claude@localhost -p 2222
-# Password: gateway
-
-# Inside the container — run the interactive setup wizard
-go
+pytest services/ -v
 ```
 
-The `go` script will:
-1. Check the gateway is reachable
-2. Ask for an API key (paste an existing one, create a new one via the admin API, or open the portal)
-3. Optionally pick a model from the live model list
-4. Launch `claude` with everything configured
+The `identity` and `admin` suites use `testcontainers` and need a running Docker daemon; the rest run without it. End-to-end smoke tests run against the deployed environment.
 
-The sandbox is connected to the internal Docker network, so it uses the full gateway stack (auth, cache, observability).
-
-To stop: `make sandbox-stop`
+To point Claude Code at the gateway, set `ANTHROPIC_BASE_URL=https://aigw-dev.lab.cloud.scdom.net/anthropic` and `ANTHROPIC_API_KEY=sk-your-team-key` (see [Claude Code CLI](#claude-code-cli) above).
 
 ---
 
-## 5. Testing your integration
-
-The repo includes a full pytest integration suite that runs against the live stack:
-
-```bash
-DEV_BYPASS_AUTH=true make test
-```
-
-This runs 50 tests covering auth, caching, proxy, admin API, and the developer portal — all via real HTTP against real containers. Useful to confirm your changes haven't broken anything.
-
-For a quick smoke check only:
-
-```bash
-DEV_BYPASS_AUTH=true make test-smoke
-```
-
----
-
-## 5a. Session context headers and self-service stats
+## 4a. Session context headers and self-service stats
 
 ### Enriching your requests with session context
 
@@ -514,7 +479,7 @@ You can attach optional headers to any inference request to improve analytics at
 No prompt text is stored from these headers — they are used only for grouping and attribution in the analytics pipeline. Sessions are tracked per `X-Session-Trace-Id` and aggregated with a quality score (1–5) based on session signals.
 
 ```bash
-curl http://localhost:8002/v1/chat/completions \
+curl https://aigw-dev.lab.cloud.scdom.net/v1/chat/completions \
   -H "Authorization: Bearer sk-YOUR-KEY-HERE" \
   -H "X-Session-Trace-Id: my-session-abc123" \
   -H "X-Repo: simcorp/investment-engine" \
@@ -528,7 +493,7 @@ curl http://localhost:8002/v1/chat/completions \
 Developers can query their own usage and cost metrics without admin access:
 
 ```
-GET http://localhost:8005/dev-auth/me/stats
+GET https://aigw-dev.lab.cloud.scdom.net/admin/dev-auth/me/stats
 Authorization: Bearer <portal-session-token>
 ```
 
@@ -546,7 +511,7 @@ The response includes:
 
 ---
 
-## 6. Streaming
+## 5. Streaming
 
 All models support streaming via both endpoints. Tokens are flushed as they are generated.
 
@@ -557,7 +522,7 @@ from openai import OpenAI
 
 client = OpenAI(
     api_key="sk-YOUR-KEY-HERE",
-    base_url="http://localhost:8002/v1",
+    base_url="https://aigw-dev.lab.cloud.scdom.net/v1",
 )
 
 with client.chat.completions.stream(
@@ -576,7 +541,7 @@ import anthropic
 
 client = anthropic.Anthropic(
     api_key="sk-YOUR-KEY-HERE",
-    base_url="http://localhost:8002/anthropic",
+    base_url="https://aigw-dev.lab.cloud.scdom.net/anthropic",
 )
 
 with client.messages.stream(
@@ -593,7 +558,7 @@ print()
 
 ---
 
-## 7. Understanding the cache
+## 6. Understanding the cache
 
 The gateway runs a semantic cache in front of every model call. This has two effects:
 
@@ -627,14 +592,14 @@ The response will carry `x-cache: BYPASS` (instead of `MISS`) to confirm the byp
 
 ```bash
 # Option 1 — Cache-Control
-curl http://localhost:8002/v1/chat/completions \
+curl https://aigw-dev.lab.cloud.scdom.net/v1/chat/completions \
   -H "Authorization: Bearer sk-YOUR-KEY-HERE" \
   -H "Cache-Control: no-cache" \
   -H "Content-Type: application/json" \
   -d '{"model": "claude-sonnet-4-6", "messages": [{"role": "user", "content": "What is today'\''s date?"}]}'
 
 # Option 2 — x-cache: bypass
-curl http://localhost:8002/v1/chat/completions \
+curl https://aigw-dev.lab.cloud.scdom.net/v1/chat/completions \
   -H "Authorization: Bearer sk-YOUR-KEY-HERE" \
   -H "x-cache: bypass" \
   -H "Content-Type: application/json" \
@@ -648,7 +613,7 @@ import httpx
 # Using x-cache: bypass
 client = OpenAI(
     api_key="sk-YOUR-KEY-HERE",
-    base_url="http://localhost:8002/v1",
+    base_url="https://aigw-dev.lab.cloud.scdom.net/v1",
     http_client=httpx.Client(headers={"x-cache": "bypass"}),
 )
 ```
@@ -661,7 +626,7 @@ client = OpenAI(
 
 ---
 
-## 8. Rate limits
+## 7. Rate limits
 
 Rate limits are enforced per team. When you exceed your team's limit the gateway returns:
 
@@ -681,7 +646,7 @@ from openai import OpenAI, RateLimitError
 
 client = OpenAI(
     api_key="sk-YOUR-KEY-HERE",
-    base_url="http://localhost:8002/v1",
+    base_url="https://aigw-dev.lab.cloud.scdom.net/v1",
 )
 
 def call_with_backoff(messages, model="claude-sonnet-4-6", max_retries=5):
@@ -708,19 +673,15 @@ def call_with_backoff(messages, model="claude-sonnet-4-6", max_retries=5):
 - Create one API key per application or pipeline, not one shared key for everything. Limits are tracked per key.
 - For CI jobs that run in parallel, create a separate key per pipeline so they draw from separate buckets.
 - Use `claude-haiku-4-5` for high-volume batch work — it has a higher RPM allocation than Sonnet.
-- If your team genuinely needs a higher limit, contact Platform Engineering (see [Getting help](#10-getting-help)).
+- If your team genuinely needs a higher limit, contact Platform Engineering (see [Getting help](#9-getting-help)).
 
 ---
 
-## 9. Common pitfalls
+## 8. Common pitfalls
 
-### 1. Wrong port or hostname
+### 1. Wrong hostname or not on the VPN
 
-The gateway listens on port **8002**, not 8001, 8003, 8004, or 8005.
-
-- From your host machine: `http://localhost:8002`
-- From inside a Docker Compose network: `http://gateway:8002`
-- WSL users: use `http://gateway:8002` inside Docker, `http://localhost:8002` on the Windows host.
+The gateway is reachable only at `https://aigw-dev.lab.cloud.scdom.net`, and only from the corporate VPN. Connections from outside the VPN time out or are refused — confirm your VPN is up before debugging anything else.
 
 ### 2. Wrong base_url for the SDK
 
@@ -728,15 +689,15 @@ The two endpoints use different wire protocols. Using the wrong one gives 400 or
 
 | SDK | Correct base_url |
 |---|---|
-| `openai` Python SDK | `http://localhost:8002/v1` |
-| `anthropic` Python SDK | `http://localhost:8002/anthropic` |
-| Claude Code CLI (`ANTHROPIC_BASE_URL`) | `http://localhost:8002/anthropic` |
-| LangChain `ChatOpenAI` | `http://localhost:8002/v1` (via `openai_api_base=`) |
-| LangChain `ChatAnthropic` | `http://localhost:8002/anthropic` (via `anthropic_api_url=`) |
-| LlamaIndex `OpenAI` class | `http://localhost:8002/v1` (via `api_base=`) |
-| OpenAI Agents SDK | `http://localhost:8002/v1` (via `base_url=` on `AsyncOpenAI`) |
+| `openai` Python SDK | `https://aigw-dev.lab.cloud.scdom.net/v1` |
+| `anthropic` Python SDK | `https://aigw-dev.lab.cloud.scdom.net/anthropic` |
+| Claude Code CLI (`ANTHROPIC_BASE_URL`) | `https://aigw-dev.lab.cloud.scdom.net/anthropic` |
+| LangChain `ChatOpenAI` | `https://aigw-dev.lab.cloud.scdom.net/v1` (via `openai_api_base=`) |
+| LangChain `ChatAnthropic` | `https://aigw-dev.lab.cloud.scdom.net/anthropic` (via `anthropic_api_url=`) |
+| LlamaIndex `OpenAI` class | `https://aigw-dev.lab.cloud.scdom.net/v1` (via `api_base=`) |
+| OpenAI Agents SDK | `https://aigw-dev.lab.cloud.scdom.net/v1` (via `base_url=` on `AsyncOpenAI`) |
 
-Do not append `/v1` twice. `http://localhost:8002/v1/v1/chat/completions` is a 404.
+Do not append `/v1` twice. `https://aigw-dev.lab.cloud.scdom.net/v1/v1/chat/completions` is a 404.
 
 ### 3. Wrong model ID
 
@@ -756,7 +717,7 @@ A `400 model not found` error always means the model ID string is wrong.
 
 ### 4. API key not in the `sk-` format
 
-Gateway keys must start with `sk-` (lowercase). If you accidentally paste a raw Anthropic or OpenAI key, authentication will fail with `401`. Keys are created at http://localhost:3002/portal/keys.
+Gateway keys must start with `sk-` (lowercase). If you accidentally paste a raw Anthropic or OpenAI key, authentication will fail with `401`. Keys are created in the developer portal (over the corporate VPN, Entra ID SSO).
 
 ### 5. Forgetting to bypass the cache when data changes
 
@@ -764,16 +725,16 @@ If your prompt text stays the same but the underlying data changes (e.g. you upd
 
 ---
 
-## 10. Getting help
+## 9. Getting help
 
 ### Self-service
 
 | Resource | URL |
 |---|---|
-| Developer portal (keys, usage, docs) | http://localhost:3002/portal |
-| Admin portal (teams, guardrails, audit) | http://localhost:3001/admin/dashboard |
-| Gateway health status | http://localhost:8002/health |
-| Admin API health | http://localhost:8005/health |
+| Developer portal (keys, usage, docs) | Over the corporate VPN (Entra ID SSO) |
+| Admin portal (teams, guardrails, audit) | Over the corporate VPN (Entra ID SSO) |
+| Gateway health status | https://aigw-dev.lab.cloud.scdom.net/health |
+| Admin API health | https://aigw-dev.lab.cloud.scdom.net/admin/health |
 
 ### Quick health check
 
@@ -783,7 +744,7 @@ Run this before debugging any framework issue — it confirms your key and the g
 import httpx
 
 resp = httpx.post(
-    "http://localhost:8002/v1/chat/completions",
+    "https://aigw-dev.lab.cloud.scdom.net/v1/chat/completions",
     headers={"Authorization": "Bearer sk-YOUR-KEY-HERE"},
     json={
         "model": "claude-haiku-4-5",
@@ -795,7 +756,7 @@ resp = httpx.post(
 if resp.status_code == 200:
     print("Gateway OK:", resp.json()["choices"][0]["message"]["content"])
 elif resp.status_code == 401:
-    print("Auth failed — check your key at http://localhost:3002/portal/keys")
+    print("Auth failed — check your key in the developer portal")
 elif resp.status_code == 429:
     print("Rate limited — Retry-After:", resp.headers.get("Retry-After"))
 else:

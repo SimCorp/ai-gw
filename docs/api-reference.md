@@ -22,19 +22,19 @@ Enterprise AI gateway for the SimCorp Developer Platform. This reference covers 
 
 ## 1. Overview
 
+The gateway is deployed to Azure Container Apps (SimCorp Landing Zone, Sweden Central) with internal ingress only — reachable from the corporate VPN. SSO uses Azure Entra ID.
+
 ### Base URLs
 
-| Surface | Base URL (nginx) | Direct port | Notes |
+| Surface | Base URL | Internal port (reference only) | Notes |
 |---|---|---|---|
-| Inference (primary) | `http://localhost:8080/cache/` | `http://localhost:8002` | Cache service; proxies to LiteLLM after auth |
-| Auth service | `http://localhost:8080/auth/` | `http://localhost:8001` | Internal — not called directly by API clients |
-| LiteLLM | `http://localhost:8080/litellm/` | `http://localhost:8003` | Internal — not called directly by API clients |
-| Admin REST API | `http://localhost:8080/admin/` | `http://localhost:8005` | JSON endpoints for platform operators |
-| Developer portal | `http://localhost:8080/portal/portal` | `http://localhost:3002/portal/portal` | Browser UI; email+password auth |
-| Admin portal | `http://localhost:8080/admin-portal/admin/dashboard` | `http://localhost:3001/admin-portal/admin/dashboard` | Teams, guardrails, audit, quotas |
-| claude-sandbox (SSH) | `ssh claude@localhost -p 2222` | — | `make sandbox`; run `go` inside to configure and launch Claude |
+| Inference (OpenAI-compatible) | `https://aigw-dev.lab.cloud.scdom.net/v1` | `8002` (cache) | Cache service; proxies to LiteLLM after auth |
+| Inference (Anthropic-compatible) | `https://aigw-dev.lab.cloud.scdom.net/anthropic` | `8002` (cache) | Anthropic Messages wire protocol |
+| Admin REST API | `https://aigw-dev.lab.cloud.scdom.net/admin` | `8005` (admin) | JSON endpoints for platform operators |
+| Developer portal | Over the corporate VPN (Entra ID SSO) | `3002` | Browser UI |
+| Admin portal | Over the corporate VPN (Entra ID SSO) | `3001` | Teams, guardrails, audit, quotas |
 
-All inference requests go through the nginx hub at **localhost:8080/cache/**. The cache service validates the bearer token with the auth service, checks for a cached response, then forwards cache misses to LiteLLM. Direct port access (`localhost:8002`) is also supported.
+Each service runs as an internal Container App (`ca-<service>-dev-sdc`); callers only ever reach the gateway FQDN. The cache service validates the bearer token with the auth service, checks for a cached response, then forwards cache misses to LiteLLM.
 
 ### Authentication
 
@@ -48,7 +48,7 @@ API keys start with the prefix `sk-` and are 32 bytes of URL-safe random data ap
 
 **Obtaining a key**
 
-- **Developer portal** — Register with email and password at `http://localhost:8080/portal/portal` (self-service, no OIDC required). Once authenticated, visit `/portal/keys` to issue a key.
+- **Developer portal** — Reachable over the corporate VPN. Once authenticated, visit `/portal/keys` to issue a key.
 - **Admin REST API** — `POST /teams/{team_id}/keys` (requires `X-Admin-Token` header).
 
 ### Quick health check
@@ -59,7 +59,7 @@ Verify your key and the gateway are working end-to-end:
 import httpx
 
 resp = httpx.post(
-    "http://localhost:8080/cache/v1/chat/completions",
+    "https://aigw-dev.lab.cloud.scdom.net/v1/chat/completions",
     headers={"Authorization": "Bearer sk-YOUR-KEY-HERE"},
     json={"model": "claude-haiku-4-5",
           "messages": [{"role": "user", "content": "ping"}],
@@ -83,16 +83,16 @@ The gateway follows the OpenAI API versioning convention. The current version is
 ## 2. Chat Completions — OpenAI-compatible
 
 ```
-POST http://localhost:8080/cache/v1/chat/completions
+POST https://aigw-dev.lab.cloud.scdom.net/v1/chat/completions
 ```
 
-Fully OpenAI-compatible. Drop in any OpenAI SDK by pointing `base_url` at `http://localhost:8080/cache/`.
+Fully OpenAI-compatible. Drop in any OpenAI SDK by pointing `base_url` at `https://aigw-dev.lab.cloud.scdom.net/v1`.
 
 ### Request
 
 ```http
 POST /v1/chat/completions HTTP/1.1
-Host: localhost:8080
+Host: aigw-dev.lab.cloud.scdom.net
 Authorization: Bearer sk-<your-key>
 Content-Type: application/json
 
@@ -166,7 +166,7 @@ from openai import OpenAI
 
 client = OpenAI(
     api_key="sk-your-key-here",
-    base_url="http://localhost:8080/cache/",
+    base_url="https://aigw-dev.lab.cloud.scdom.net/v1",
 )
 
 response = client.chat.completions.create(
@@ -187,7 +187,7 @@ print(response.choices[0].message.content)
 ## 3. Chat Completions — Anthropic-compatible
 
 ```
-POST http://localhost:8080/cache/anthropic/v1/messages
+POST https://aigw-dev.lab.cloud.scdom.net/anthropic/v1/messages
 ```
 
 This endpoint is handled by LiteLLM's Anthropic-compatible proxy. The request and response shapes follow the [Anthropic Messages API](https://docs.anthropic.com/en/api/messages) exactly.
@@ -196,7 +196,7 @@ This endpoint is handled by LiteLLM's Anthropic-compatible proxy. The request an
 
 ```http
 POST /anthropic/v1/messages HTTP/1.1
-Host: localhost:8080
+Host: aigw-dev.lab.cloud.scdom.net
 Authorization: Bearer sk-<your-key>
 Content-Type: application/json
 anthropic-version: 2023-06-01
@@ -258,7 +258,7 @@ import anthropic
 
 client = anthropic.Anthropic(
     api_key="sk-your-key-here",
-    base_url="http://localhost:8080/cache/",
+    base_url="https://aigw-dev.lab.cloud.scdom.net/anthropic",
 )
 
 message = client.messages.create(
@@ -276,7 +276,7 @@ print(message.content[0].text)
 
 ## 3a. Developer Portal
 
-The self-service portal at `http://localhost:8080/portal/portal` provides browser-based access:
+The developer portal is reachable over the corporate VPN. It provides browser-based access:
 
 | Route | Method | Purpose |
 |---|---|---|
@@ -308,7 +308,7 @@ from openai import OpenAI
 
 client = OpenAI(
     api_key="sk-your-key-here",
-    base_url="http://localhost:8080/cache/",
+    base_url="https://aigw-dev.lab.cloud.scdom.net/v1",
 )
 
 with client.chat.completions.stream(
@@ -327,7 +327,7 @@ import anthropic
 
 client = anthropic.Anthropic(
     api_key="sk-your-key-here",
-    base_url="http://localhost:8080/cache/",
+    base_url="https://aigw-dev.lab.cloud.scdom.net/anthropic",
 )
 
 with client.messages.stream(
@@ -356,7 +356,7 @@ data: [DONE]
 ## 5. Models
 
 ```
-GET http://localhost:8080/cache/v1/models
+GET https://aigw-dev.lab.cloud.scdom.net/v1/models
 ```
 
 Returns the list of models configured in LiteLLM. Authentication is required.
@@ -365,7 +365,7 @@ Returns the list of models configured in LiteLLM. Authentication is required.
 
 ```http
 GET /v1/models HTTP/1.1
-Host: localhost:8080
+Host: aigw-dev.lab.cloud.scdom.net
 Authorization: Bearer sk-<your-key>
 ```
 
@@ -404,12 +404,6 @@ Authorization: Bearer sk-<your-key>
       "object": "model",
       "created": 1746518400,
       "owned_by": "openai"
-    },
-    {
-      "id": "local",
-      "object": "model",
-      "created": 1746518400,
-      "owned_by": "ollama"
     }
   ]
 }
@@ -436,7 +430,6 @@ These are the exact model IDs defined in `services/litellm/config.yaml`. Use the
 | `azure-gpt-4o-mini` | Azure AI Foundry | `openai/gpt-4o-mini` via Azure endpoint | Requires `AZURE_API_BASE` and `AZURE_API_KEY` |
 | `azure-o3-mini` | Azure AI Foundry | `openai/o3-mini` via Azure endpoint | Requires `AZURE_API_BASE` and `AZURE_API_KEY` |
 | `azure-gpt-4.1` | Azure AI Foundry | `openai/gpt-4.1` via Azure endpoint | Requires `AZURE_API_BASE` and `AZURE_API_KEY` |
-| `local` | Ollama (self-hosted) | `ollama/llama3.2` | Served at `http://ollama:11434`; available in Docker Compose only |
 
 **Fallback behaviour:** If a request to `gemini-1.5-pro` fails, the gateway automatically retries with `claude-sonnet-4-6`. LiteLLM is configured with `num_retries: 3` and `allowed_fails: 1` globally.
 
@@ -450,11 +443,11 @@ These are the exact model IDs defined in `services/litellm/config.yaml`. Use the
 
 Model IDs: `copilot-gpt-4o`, `copilot-gpt-4o-mini`, `copilot-o3-mini`, `copilot-claude-3.5-sonnet`
 
-**Obtaining a token:** Create a GitHub Personal Access Token (PAT) with the `copilot` scope at https://github.com/settings/tokens. Set `GITHUB_COPILOT_API_KEY` in your `.env` to this token value. An active GitHub Copilot subscription (individual or enterprise) is required.
+**Obtaining a token:** Create a GitHub Personal Access Token (PAT) with the `copilot` scope at https://github.com/settings/tokens. The gateway is configured with `GITHUB_COPILOT_API_KEY` set to this token value. An active GitHub Copilot subscription (individual or enterprise) is required.
 
 ```bash
 # GitHub Copilot via gateway
-curl http://localhost:8080/cache/v1/chat/completions \
+curl https://aigw-dev.lab.cloud.scdom.net/v1/chat/completions \
   -H "Authorization: Bearer sk-your-api-key" \
   -H "Content-Type: application/json" \
   -d '{"model": "copilot-gpt-4o", "messages": [{"role": "user", "content": "Hello"}]}'
@@ -466,7 +459,7 @@ curl http://localhost:8080/cache/v1/chat/completions \
 
 Model IDs: `azure-gpt-4o`, `azure-gpt-4o-mini`, `azure-o3-mini`, `azure-gpt-4.1`
 
-**Configuration:** Set the following in your `.env`:
+**Configuration:** The gateway is configured with the following environment variables:
 - `AZURE_API_BASE` — your Azure OpenAI resource endpoint
 - `AZURE_API_KEY` — your Azure API key from the Azure portal
 - `AZURE_API_VERSION` — API version string (e.g. `2024-02-15-preview`)
@@ -475,7 +468,7 @@ See https://portal.azure.com → Azure OpenAI → Keys and Endpoint.
 
 ```bash
 # Azure AI Foundry via gateway
-curl http://localhost:8080/cache/v1/chat/completions \
+curl https://aigw-dev.lab.cloud.scdom.net/v1/chat/completions \
   -H "Authorization: Bearer sk-your-api-key" \
   -H "Content-Type: application/json" \
   -d '{"model": "azure-gpt-4o", "messages": [{"role": "user", "content": "Hello"}]}'
@@ -593,7 +586,7 @@ import time
 import httpx
 
 def chat_with_retry(payload: dict, api_key: str, max_attempts: int = 3) -> dict:
-    url = "http://localhost:8080/cache/v1/chat/completions"
+    url = "https://aigw-dev.lab.cloud.scdom.net/v1/chat/completions"
     headers = {"Authorization": f"Bearer {api_key}"}
 
     for attempt in range(max_attempts):
@@ -645,7 +638,7 @@ When the cache is bypassed, the response header will be `x-cache: BYPASS` (not `
 
 ```bash
 # Using x-cache: bypass
-curl http://localhost:8080/cache/v1/chat/completions \
+curl https://aigw-dev.lab.cloud.scdom.net/v1/chat/completions \
   -H "Authorization: Bearer sk-YOUR-KEY-HERE" \
   -H "x-cache: bypass" \
   -H "Content-Type: application/json" \
@@ -699,7 +692,7 @@ For per-request bypass, use the `x-cache: bypass` or `Cache-Control: no-cache` h
 
 ## 10. Admin REST API
 
-The admin REST API is available at `http://localhost:8080/admin/` (also directly at `http://localhost:8005`). All endpoints require the `X-Admin-Token` header (value from the `ADMIN_TOKEN` environment variable). When `DEV_BYPASS_AUTH=true` (local development), the header is not checked.
+The admin REST API is available at `https://aigw-dev.lab.cloud.scdom.net/admin`. All endpoints require the `X-Admin-Token` header (value from the `ADMIN_TOKEN` environment variable).
 
 ```
 X-Admin-Token: <admin-token>
@@ -899,7 +892,7 @@ Budget alert webhooks send an HTTP POST to the configured URL when a team approa
 POST /webhooks/github
 ```
 
-Receives GitHub push and pull-request events and attributes commits to developer sessions. The request must include a valid `X-Hub-Signature-256` HMAC header (computed with the `GITHUB_WEBHOOK_SECRET` env var). Configure the webhook in your GitHub repository or organisation settings to point at `http://<gateway-host>:8005/webhooks/github`.
+Receives GitHub push and pull-request events and attributes commits to developer sessions. The request must include a valid `X-Hub-Signature-256` HMAC header (computed with the `GITHUB_WEBHOOK_SECRET` env var). Configure the webhook in your GitHub repository or organisation settings to point at `https://aigw-dev.lab.cloud.scdom.net/admin/webhooks/github`.
 
 ### Budget Forecast
 
@@ -921,7 +914,7 @@ The `require_admin_auth` dependency checks the `role` field on the authenticated
 | `admin` | Full read access including developer email lists, individual stats, and model calibration reports. Can manage teams, API keys, and policies. |
 | `superadmin` | All `admin` capabilities plus access to `/developers/at-risk` and `/reports/guardrails` (individually-identified behavioural data). Required for all destructive operations (team deletion, key revocation at scale). |
 
-Role is stored on the admin user record. In local development with `DEV_BYPASS_AUTH=true`, all requests are treated as `superadmin`.
+Role is stored on the admin user record.
 
 ---
 
@@ -1030,7 +1023,7 @@ Clears the current session on success. Re-login required.
 GET /auth/oidc/login
 ```
 
-Redirects to the configured OIDC provider (Dex locally, Entra ID in production). Sets a short-lived `oidc_state` cookie for CSRF protection.
+Redirects to the configured OIDC provider (Azure Entra ID). Sets a short-lived `oidc_state` cookie for CSRF protection.
 
 ```
 GET /auth/oidc/callback?code=...&state=...
@@ -1073,7 +1066,7 @@ Authorization: Bearer <token>    (platform_admin or team_admin)
   "email": "newdev@simcorp.com",
   "role": "developer",
   "expires_at": "2026-05-15T10:00:00+00:00",
-  "accept_url": "http://localhost:8005/auth/invitations/accept?token=...",
+  "accept_url": "https://aigw-dev.lab.cloud.scdom.net/admin/auth/invitations/accept?token=...",
   "token": "<raw-token>"
 }
 ```

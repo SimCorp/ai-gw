@@ -15,19 +15,14 @@ The IT Tools integration provides:
 
 ### Service Configuration
 
-IT Tools is deployed as a containerized service running `ghcr.io/corentinth/it-tools` behind the nginx gateway.
+IT Tools runs the upstream `ghcr.io/corentinth/it-tools` image as its own Container App (`ca-it-tools-dev-sdc`) behind the gateway in Azure Container Apps.
 
-**Docker Compose Entry:**
-```yaml
-it-tools:
-  image: ghcr.io/corentinth/it-tools@sha256:8b8128748339583ca951af03dfe02a9a4d7363f61a216226fc28030731a5a61f
-  restart: unless-stopped
-  # No published port — accessed only through nginx at /tools-app/
-```
+**Deployment:**
+The it-tools image (pinned to a specific SHA256 digest) and its version are managed through the Bicep Container App definition and deployed via the normal pipeline. The Container App is internal-only and exposes no public ingress — it is reachable solely through the gateway.
 
-**Nginx Routing:**
+**Gateway Routing:**
 ```
-GET /tools-app/* → http://it-tools:3000/*
+GET /tools-app/* → it-tools Container App
 ```
 
 The service runs in a WASM sandbox with no access to the host OS, file system, or network beyond the container environment.
@@ -190,13 +185,13 @@ An external tool could list all available tools:
 
 ```bash
 curl -H "Authorization: Bearer <token>" \
-  "http://localhost:8080/admin/tools?enabled_only=true"
+  "https://aigw-dev.lab.cloud.scdom.net/admin/tools?enabled_only=true"
 ```
 
 Then link engineers to specific tools:
 
 ```
-https://localhost:8080/portal/tools/base64-encode
+https://aigw-dev.lab.cloud.scdom.net/portal/tools/base64-encode
 ```
 
 ## Security
@@ -204,7 +199,7 @@ https://localhost:8080/portal/tools/base64-encode
 - **Iframe Sandbox**: Tools run in WASM containers with no OS or network access
 - **No File System**: Tools cannot read/write local files or access node filesystem
 - **No Network**: Tools cannot make outbound HTTP requests
-- **Authentication**: Portal auth required to view tool list (enforced by nginx + dev auth)
+- **Authentication**: Portal auth required to view tool list (enforced by the gateway via Entra ID SSO)
 - **Data Isolation**: Each tool session is sandboxed; no cross-tool data sharing
 
 ## Limitations
@@ -216,17 +211,16 @@ https://localhost:8080/portal/tools/base64-encode
 
 ## Migration & Uptime
 
-The it-tools service is configured with `restart: unless-stopped` to ensure automatic recovery on failure. The container image is pinned to a specific SHA256 digest for consistency:
+As a Container App, the it-tools service is automatically restarted and recovered by the Azure Container Apps platform on failure. The container image is pinned to a specific SHA256 digest for consistency:
 
 ```
 ghcr.io/corentinth/it-tools@sha256:8b8128748339583ca951af03dfe02a9a4d7363f61a216226fc28030731a5a61f
 ```
 
 To update to a newer version:
-1. Find new image SHA: `docker pull ghcr.io/corentinth/it-tools:latest`
-2. Get its digest: `docker inspect ghcr.io/corentinth/it-tools:latest | grep RepoDigests`
-3. Update `infra/docker-compose.yml`
-4. Restart: `docker compose up -d it-tools`
+1. Determine the digest of the desired upstream image tag
+2. Update the pinned image digest in the it-tools Bicep Container App definition
+3. Deploy through the normal pipeline; Azure Container Apps rolls out the new revision
 
 ## Error Handling
 
@@ -256,7 +250,7 @@ If iframe fails to load within timeout:
 New tools can be added by:
 1. Contributing to the upstream `it-tools` project (or forking)
 2. Rebuilding the container image
-3. Updating the SHA256 in docker-compose.yml
+3. Updating the pinned image digest in the it-tools Bicep Container App definition and deploying through the pipeline
 4. No code changes needed in the gateway or portal — tools are auto-discovered
 
 If custom tools are needed beyond the community catalog, consider:
@@ -267,10 +261,8 @@ If custom tools are needed beyond the community catalog, consider:
 
 ## Base URLs
 
-**Developer Portal:** `http://localhost:8080/portal/tools/`
+**Developer Portal:** `https://aigw-dev.lab.cloud.scdom.net/portal/tools/`
 
-**Direct Tool Access:** `http://localhost:8080/tools-app/#/{tool_id}`
+**Direct Tool Access:** `https://aigw-dev.lab.cloud.scdom.net/tools-app/#/{tool_id}`
 
-**API Endpoint:** `http://localhost:8080/admin/tools`
-
-(In local development without nginx, use direct service ports: 3002 for portal, admin base for API)
+**API Endpoint:** `https://aigw-dev.lab.cloud.scdom.net/admin/tools`

@@ -1,35 +1,51 @@
 # Services Architecture Overview
 
-The AI Gateway is a distributed, microservices-based platform serving ~2000 SimCorp engineers. All services are containerized and orchestrated via Docker Compose for local development.
+The AI Gateway is a distributed, microservices-based platform serving ~2000 SimCorp engineers. It is
+deployed to **Azure Container Apps** (ACA) in the SimCorp Landing Zone (resource group
+`rg-aigw-dev-sdc`, Sweden Central). Each service runs as a Container App named `ca-<service>-dev-sdc`
+in the ACA environment `cae-aigw-dev-sdc`. The environment is `internal: true` — VNet-only, reachable
+from the corporate VPN, with a static internal IP `10.179.231.6`.
 
 ## Service Map
 
+The developer-facing entry point is the gateway FQDN **https://aigw-dev.lab.cloud.scdom.net**. ACA
+ingress routes inbound requests by path to each Container App; services call each other over ACA
+internal DNS at `http://ca-<service>-dev-sdc`.
+
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    Nginx Hub (Port 8080)                        │
-│              Routes traffic by path to services                 │
+│        Gateway FQDN: https://aigw-dev.lab.cloud.scdom.net        │
+│              ACA ingress routes by path to services             │
 └─────────────────────────────────────────────────────────────────┘
          │
-         ├─ /admin → Admin Service (:8005)
-         ├─ /auth → Auth Service (:8001)
-         ├─ /cache → Cache Service (:8002)
-         ├─ /litellm → LiteLLM (:8003)
-         ├─ /observability → Observability (:8004)
-         ├─ /identity → Identity Service (:8006)
-         ├─ /agent-relay → Agent Relay (:8007)
-         ├─ /librarian → Librarian (:8008)
-         ├─ /memory → Memory Service (:8009)
-         ├─ /league → League Service (:8010)
-         ├─ /admin-portal → Admin Portal (:3001)
-         ├─ /portal → Developer Portal (:3002)
+         ├─ /admin → Admin Service (ca-admin-dev-sdc:8005)
+         ├─ /auth → Auth Service (ca-auth-dev-sdc:8001)
+         ├─ /cache → Cache Service (ca-cache-dev-sdc:8002)
+         ├─ /litellm → LiteLLM (ca-litellm-dev-sdc:8003)
+         ├─ /observability → Observability (ca-observability-dev-sdc:8004)
+         ├─ /identity → Identity Service (ca-identity-dev-sdc:8006)
+         ├─ /agent-relay → Agent Relay (ca-agent-relay-dev-sdc:8007)
+         ├─ /librarian → Librarian (ca-librarian-dev-sdc:8008)
+         ├─ /memory → Memory Service (ca-memory-dev-sdc:8009)
+         ├─ /league → League Service (ca-league-dev-sdc:8010)
+         ├─ /admin-portal → Admin Portal (ca-admin-portal-dev-sdc:3001)
+         ├─ /portal → Developer Portal (ca-portal-dev-sdc:3002)
          └─ /tools-app → IT Tools
 ```
 
+Background workers run as Container Apps with **no ingress**: `ca-scanner-dev-sdc` (security
+scanning) and `ca-workflow-worker-dev-sdc`.
+
 ## Core Infrastructure
 
-### PostgreSQL (Port 5432)
+All PaaS dependencies run as managed Azure services reached over **private endpoints** in
+`snet-pe-aigw-dev`. Their connection strings and secrets are stored in **Azure Key Vault** and
+injected into each Container App via the app's managed identity.
 
-Multi-tenant database. All services share one aigateway database.
+### PostgreSQL — Azure Database for PostgreSQL Flexible Server
+
+Multi-tenant database. Application services share the `aigateway` database; LiteLLM uses a separate
+`litellm` database on the same Flexible Server.
 
 **Key Tables:**
 - `organization_nodes` — hierarchical org structure (path-based)
@@ -43,9 +59,9 @@ Multi-tenant database. All services share one aigateway database.
 - `user_invitations` — pending invites
 - And service-specific tables (league, scanner, etc.)
 
-**Migrations:** Alembic (services/admin/migrations/) applied once at startup via db-migrate service.
+**Migrations:** Alembic (services/admin/migrations/) applied via the `job-db-migrate-dev-sdc` ACA job.
 
-### Redis (Port 6379)
+### Redis — Azure Cache for Redis Premium P1
 
 Cache and session store.
 
@@ -58,13 +74,16 @@ Cache and session store.
 - `user_node_changed:{user_id}`, `user_team_changed:{user_id}` — cache invalidation flags
 - Provider-specific caches (embeddings, completions, etc.)
 
-**Optional:** Redis Sentinel for HA (enable with `--profile sentinel`)
+### Additional PaaS
 
-### Dex (Port 5556)
+- **Azure Key Vault** — all service secrets and connection strings.
+- **Azure Service Bus** (queue `observability-events`) — async delivery of observability events.
+- **Application Insights + Log Analytics** workspace `law-aca-dev-sdc` — metrics, traces, and container logs.
 
-Local OIDC provider for development. Substitutes for Entra ID in non-production.
+### Identity provider — Entra ID
 
-**Config:** `infra/dex/config.yaml`
+Authentication uses **Entra ID** (Azure AD). OIDC groups are the source of truth for role
+assignments. OIDC client config is stored in Key Vault.
 
 ---
 
@@ -92,8 +111,8 @@ Local OIDC provider for development. Substitutes for Entra ID in non-production.
 - Redis (session storage, rate limiting, OIDC state)
 
 **Environment Variables:**
-- `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` — Dex/Entra credentials
-- `OIDC_ISSUER` — OIDC provider URL
+- `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` — Entra ID credentials (from Key Vault)
+- `OIDC_ISSUER` — Entra ID OIDC issuer URL
 - `ENVIRONMENT` — development (synthetic admin) or production
 
 ---
@@ -104,7 +123,7 @@ Local OIDC provider for development. Substitutes for Entra ID in non-production.
 
 **Request Path:**
 ```
-Client → Cache (:8002) → LiteLLM (:8003) → OpenAI/Anthropic
+Client → ca-cache-dev-sdc:8002 → ca-litellm-dev-sdc:8003 → OpenAI/Anthropic
 ```
 
 **Key Features:**
@@ -115,8 +134,8 @@ Client → Cache (:8002) → LiteLLM (:8003) → OpenAI/Anthropic
 
 **Dependencies:**
 - Redis (cache store)
-- LiteLLM (:8003) for cache misses
-- Observability (:8004) for cost recording
+- LiteLLM (`ca-litellm-dev-sdc:8003`) for cache misses
+- Observability (`ca-observability-dev-sdc:8004`) for cost recording
 
 ---
 
@@ -125,12 +144,12 @@ Client → Cache (:8002) → LiteLLM (:8003) → OpenAI/Anthropic
 **Role:** Model provider routing (OpenAI-compatible interface).
 
 **Features:**
-- Single endpoint for multi-provider access (OpenAI, Anthropic, Ollama, etc.)
+- Single endpoint for multi-provider access (OpenAI, Anthropic, Google, GitHub Models, etc.)
 - Model load balancing
 - Built-in rate limiting, cost tracking
-- Proxy for `/v1/chat/completions` and other endpoints
+- Proxy for `/v1/chat/completions` and other endpoints (including embeddings used by cache/librarian)
 
-**Configuration:** `.env` file with provider keys (OPENAI_API_KEY, etc.)
+**Configuration:** provider keys (`OPENAI_API_KEY`, etc.) injected from Key Vault; model routing in `services/litellm/config.yaml`. State persists in the `litellm` database on the Flexible Server.
 
 ---
 
@@ -211,7 +230,7 @@ Client → Cache (:8002) → LiteLLM (:8003) → OpenAI/Anthropic
 
 **Dependencies:**
 - PostgreSQL (pgvector for embeddings)
-- Embedding API (Ollama or OpenAI)
+- Embedding API via the gateway (`ca-litellm-dev-sdc:8003`)
 - Redis (job queue)
 
 ---
@@ -228,7 +247,7 @@ Client → Cache (:8002) → LiteLLM (:8003) → OpenAI/Anthropic
 
 **Dependencies:**
 - PostgreSQL
-- Librarian (:8008) for embeddings
+- Librarian (`ca-librarian-dev-sdc:8008`) for embeddings
 
 ---
 
@@ -249,9 +268,10 @@ Client → Cache (:8002) → LiteLLM (:8003) → OpenAI/Anthropic
 
 ---
 
-### Scanner Service (:8011)
+### Scanner Service (`ca-scanner-dev-sdc`, no ingress)
 
-**Role:** Security scanning (Garak, Nuclei, Nmap, ZAP).
+**Role:** Security scanning (Garak, Nuclei, Nmap, ZAP). Runs as a background worker Container App
+with no ingress; it pulls jobs from the queue rather than serving HTTP.
 
 **Features:**
 - Scan job submission
@@ -262,7 +282,6 @@ Client → Cache (:8002) → LiteLLM (:8003) → OpenAI/Anthropic
 **Dependencies:**
 - PostgreSQL (jobs, results, quotas)
 - Redis (job queue)
-- Docker socket (worker container lifecycle)
 
 ---
 
@@ -281,7 +300,7 @@ Client → Cache (:8002) → LiteLLM (:8003) → OpenAI/Anthropic
 
 **Technology:** Next.js 20 (Node.js), Server Components
 
-**API Base:** `http://localhost:8080/admin` (proxied via nginx)
+**API Base:** `https://aigw-dev.lab.cloud.scdom.net/admin` (via ACA ingress)
 
 ---
 
@@ -304,14 +323,14 @@ Client → Cache (:8002) → LiteLLM (:8003) → OpenAI/Anthropic
 
 **Technology:** Next.js 20 (Node.js), Shadcn UI
 
-**API Dependencies:**
-- Admin (:8005) — org/user context
-- Cache (:8002) — chat completions
-- Librarian (:8008) — documents/RAG
-- Memory (:8009) — conversation history
-- Identity (:8006) — agent discovery
-- Agent Relay (:8007) — real-time WebSocket
-- League (:8010) — challenges, leaderboard
+**API Dependencies (via ACA ingress at the gateway FQDN):**
+- Admin (`/admin`) — org/user context
+- Cache (`/cache`) — chat completions
+- Librarian (`/librarian`) — documents/RAG
+- Memory (`/memory`) — conversation history
+- Identity (`/identity`) — agent discovery
+- Agent Relay (`/agent-relay`) — real-time WebSocket
+- League (`/league`) — challenges, leaderboard
 
 ---
 
@@ -319,7 +338,7 @@ Client → Cache (:8002) → LiteLLM (:8003) → OpenAI/Anthropic
 
 **Role:** Developer toolbox (terminal, DB clients, etc.).
 
-**Deployment:** Pre-built Docker image, no published port (accessed via nginx at `/tools-app/`)
+**Deployment:** Pre-built container image, no ingress of its own (accessed via ACA ingress at `/tools-app/`)
 
 ---
 
@@ -328,10 +347,10 @@ Client → Cache (:8002) → LiteLLM (:8003) → OpenAI/Anthropic
 Standard flow for a user request to generate code:
 
 ```
-1. Browser: POST /cache/v1/chat/completions
+1. Browser: POST https://aigw-dev.lab.cloud.scdom.net/cache/v1/chat/completions
    └─ Body: {model, messages, temperature, ...}
 
-2. Nginx (port 8080) routes to Cache (:8002)
+2. ACA ingress routes to Cache (ca-cache-dev-sdc:8002)
 
 3. Cache Service
    ├─ Validate Authorization header (Bearer token)
@@ -347,7 +366,7 @@ Standard flow for a user request to generate code:
    │
    └─ Cache miss → Forward to LiteLLM
 
-4. LiteLLM (:8003)
+4. LiteLLM (ca-litellm-dev-sdc:8003)
    ├─ Route to provider (OpenAI, Anthropic, etc.)
    ├─ Handle rate limiting, retry logic
    └─ Return response
@@ -383,34 +402,37 @@ Standard flow for a user request to generate code:
    └─ If authorized, proceed; else 403 Forbidden
 ```
 
-## Development Workflow
+## Deploy and Access
 
-**Quick start:**
+**Deploy:** Bicep against the dev resource group (CI runs this via `deploy.yml`):
 ```bash
-cp .env.example .env
-docker compose -f infra/docker-compose.yml up --build
+az deployment group create \
+  --resource-group rg-aigw-dev-sdc \
+  --template-file infra/bicep/environments/dev/main.bicep \
+  --parameters infra/bicep/environments/dev/main.bicepparam \
+  --parameters imageTag=sha-<git-sha>
 ```
+Each deploy creates a fresh, atomic revision per Container App. Database migrations run as the
+`job-db-migrate-dev-sdc` ACA job. See the operations runbook for rollback and revision management.
 
-**Service Readiness:**
-- Postgres: healthcheck when container starts
-- Redis: healthcheck
-- Auth, Admin, Cache: healthcheck when deps are ready
-- Admin Portal, Developer Portal: healthcheck when backend services are healthy
+**Service Readiness:** ACA uses each service's `/health`, `/ready`, and `/liveliness` endpoints as
+its liveness/readiness probes; ingress only routes to a revision once it reports ready.
 
-**Access Points:**
-- Admin Portal: http://localhost:8080/admin-portal/ or :3001 directly
-- Developer Portal: http://localhost:8080/portal/ or :3002 directly
-- API: http://localhost:8080/{path}/ or service:{port} directly within Docker network
+**Access (over the corporate VPN):**
+- Admin Portal: https://aigw-dev.lab.cloud.scdom.net/admin-portal/
+- Developer Portal: https://aigw-dev.lab.cloud.scdom.net/portal/
+- API: https://aigw-dev.lab.cloud.scdom.net/{path}/ (internally, services call `http://ca-<service>-dev-sdc`)
 
 ## Deployment Topology
 
-**Production Topology (not yet deployed):**
-- Services run in Kubernetes (GKE or similar)
-- PostgreSQL: managed database (CloudSQL)
-- Redis: managed cache (Memorystore with Sentinel for HA)
-- Load Balancer: ingress controller distributing to service replicas
-- Observability: Prometheus, Grafana, Loki (optional)
+- **Compute:** Azure Container Apps in environment `cae-aigw-dev-sdc` (`internal: true`, static IP `10.179.231.6`, Sweden Central), resource group `rg-aigw-dev-sdc`.
+- **PostgreSQL:** Azure Database for PostgreSQL Flexible Server (databases `aigateway` + `litellm`).
+- **Redis:** Azure Cache for Redis Premium P1.
+- **Secrets:** Azure Key Vault, injected per app via managed identity.
+- **Event bus:** Azure Service Bus (queue `observability-events`).
+- **Telemetry:** Application Insights + Log Analytics workspace `law-aca-dev-sdc`.
+- **Networking:** all PaaS reached via private endpoints in `snet-pe-aigw-dev`; ingress is VNet-only behind the gateway FQDN.
 
 **Authentication:**
-- Entra ID (Azure AD) replaces Dex
-- OIDC groups are source of truth for role assignments
+- Entra ID (Azure AD) is the identity provider.
+- OIDC groups are source of truth for role assignments.

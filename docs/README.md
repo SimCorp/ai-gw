@@ -6,7 +6,7 @@ Complete developer documentation for the SimCorp AI Gateway platform serving ~20
 
 **New to the project?** Start here:
 
-1. [Getting Started Guide](guides/getting-started.md) — Local dev setup in 10 minutes
+1. [Getting Started Guide](guides/getting-started.md) — Access the deployed gateway, run tests, deploy
 2. [Permission Model Guide](guides/permission-model.md) — Understand path-based access control
 3. [Services Architecture](architecture/services.md) — Overview of all microservices
 
@@ -37,7 +37,7 @@ Complete developer documentation for the SimCorp AI Gateway platform serving ~20
   - Request path flow (Auth → Cache → LiteLLM → Provider)
   - Data flows and dependencies
   - Service port map
-  - Development topology
+  - Container Apps topology
 
 - **[Organization Model](architecture/org-model.md)** — Deep dive into the org hierarchy
   - Materialized path tree structure
@@ -51,10 +51,10 @@ Complete developer documentation for the SimCorp AI Gateway platform serving ~20
 ### Essential Guides
 
 - **[Getting Started](guides/getting-started.md)**
-  - Local setup with Docker Compose
-  - Accessing the platform
+  - Accessing the Azure-deployed platform (VPN + Entra ID SSO)
+  - Inference API endpoints and `sk-*` keys
   - Common tasks (create node, grant role, etc.)
-  - Debugging and troubleshooting
+  - Running tests locally and deploying
 
 - **[Permission Model](guides/permission-model.md)**
   - Path-based access control explained
@@ -130,29 +130,33 @@ All permission checks use path prefixes (memory, no DB).
 
 ## Services Map
 
-| Service | Port | Purpose |
-|---------|------|---------|
-| **Admin API** | 8005 | Org management backend |
-| **Auth** | 8001 | Authentication & sessions |
-| **Cache** | 8002 | Semantic + exact caching |
-| **LiteLLM** | 8003 | Model provider routing |
-| **Observability** | 8004 | Usage tracking & audit |
-| **Identity** | 8006 | Agent registry |
-| **Agent Relay** | 8007 | WebSocket relay bus |
-| **Librarian** | 8008 | Knowledge & embeddings |
-| **Memory** | 8009 | Agent memory service |
-| **League** | 8010 | Gamified challenges |
-| **Scanner** | 8011 | Security scanning |
-| **Admin Portal** | 3001 | Admin dashboard |
-| **Developer Portal** | 3002 | Main user interface |
+Each service is a Container App named `ca-<service>-dev-sdc` with internal ingress.
+Service-to-service traffic uses internal DNS (`http://ca-<service>-dev-sdc`).
 
-Access all via **Nginx hub at port 8080** (recommended for local dev).
+| Service | Container App | Internal Port | Purpose |
+|---------|---------------|---------------|---------|
+| **Admin API** | `ca-admin-dev-sdc` | 8005 | Org management backend |
+| **Auth** | `ca-auth-dev-sdc` | 8001 | Authentication & sessions |
+| **Cache** | `ca-cache-dev-sdc` | 8002 | Semantic + exact caching |
+| **LiteLLM** | `ca-litellm-dev-sdc` | 8003 | Model provider routing |
+| **Observability** | `ca-observability-dev-sdc` | 8004 | Usage tracking & audit |
+| **Identity** | `ca-identity-dev-sdc` | 8006 | Agent registry |
+| **Agent Relay** | `ca-agent-relay-dev-sdc` | 8007 | WebSocket relay bus |
+| **Librarian** | `ca-librarian-dev-sdc` | 8008 | Knowledge & embeddings |
+| **Memory** | `ca-memory-dev-sdc` | 8009 | Agent memory service |
+| **League** | `ca-league-dev-sdc` | 8010 | Gamified challenges |
+| **Scanner** | `ca-scanner-dev-sdc` | — (no ingress) | Security scanning worker |
+| **Admin Portal** | `ca-admin-portal-dev-sdc` | 3001 | Admin dashboard |
+| **Developer Portal** | `ca-portal-dev-sdc` | 3002 | Main user interface |
+
+External callers reach inference via the gateway FQDN (`https://aigw-dev.lab.cloud.scdom.net/v1`
+and `/anthropic`); the portals are reachable over the corporate VPN with Entra ID SSO.
 
 ## Common Tasks
 
 ### Create an Organization Node
 ```bash
-curl -X POST http://localhost:8080/admin/nodes \
+curl -X POST http://ca-admin-dev-sdc/nodes \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -166,7 +170,7 @@ See [Getting Started](guides/getting-started.md) for examples.
 
 ### Grant User Permission
 ```bash
-curl -X POST "http://localhost:8080/admin/nodes/{node_id}/permissions" \
+curl -X POST "http://ca-admin-dev-sdc/nodes/{node_id}/permissions" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -179,7 +183,7 @@ See [Nodes API Reference](api/nodes.md) for all permission endpoints.
 
 ### Check User Permissions
 ```bash
-curl http://localhost:8080/auth/me \
+curl http://ca-auth-dev-sdc/me \
   -H "Authorization: Bearer $TOKEN" | jq '.roles'
 ```
 
@@ -187,12 +191,8 @@ See [Permission Model Guide](guides/permission-model.md) for understanding resul
 
 ## Testing & Development
 
-### Local Setup
-```bash
-docker compose -f infra/docker-compose.yml up --build
-```
-
-See [Getting Started](guides/getting-started.md) for full instructions.
+The code is developed and tested locally, then deployed to Azure as container images.
+See [Getting Started](guides/getting-started.md) for access, testing, and deployment.
 
 ### Running Tests
 ```bash
@@ -200,11 +200,25 @@ pip install -e "services/admin[dev]"
 pytest services/ -v
 ```
 
+> The raw-SQL suites (`identity`, `admin`) use `testcontainers[postgres]` and need a
+> running Docker daemon. E2E smoke tests run against the deployed Azure environment
+> from a VNet-connected runner (`deploy.yml`).
+
 ### Linting & Formatting
 ```bash
 ruff check services/
 ruff format services/
 ```
+
+### Deploy
+```bash
+az deployment group create \
+  --resource-group rg-aigw-dev-sdc \
+  --template-file infra/bicep/environments/dev/main.bicep \
+  --parameters infra/bicep/environments/dev/main.bicepparam \
+  --parameters imageTag=sha-<git-sha>
+```
+Rollback by redeploying the previous `imageTag`.
 
 ## Database
 
