@@ -31,7 +31,7 @@ class Settings:
             database_url=os.environ["DATABASE_URL"]
             .replace("postgresql+asyncpg://", "postgresql://")
             .replace("postgresql+psycopg2://", "postgresql://"),
-            redis_url=os.getenv("REDIS_URL", "redis://redis:6379/0"),
+            redis_url=os.environ["REDIS_URL"],
             worker_id=os.getenv("WORKER_ID", f"worker-{socket.gethostname()}"),
             concurrency=int(os.getenv("WORKER_CONCURRENCY", "5")),
             poll_interval_s=float(os.getenv("WORKER_POLL_INTERVAL_S", "1.0")),
@@ -41,8 +41,8 @@ class Settings:
             # same host path is bind-mounted into agent containers at /run.
             host_runs_path=os.getenv("HOST_RUNS_PATH", "/tmp/aigw-runs"),
             container_network=os.getenv("AGENT_CONTAINER_NETWORK", "aigateway"),
-            relay_url=os.getenv("AGENT_RELAY_URL", "http://agent-relay:8007"),
-            admin_url=os.getenv("ADMIN_URL", "http://admin:8005"),
+            relay_url=os.environ["AGENT_RELAY_URL"],
+            admin_url=os.environ["ADMIN_URL"],
             agent_runtime=os.getenv("AGENT_CONTAINER_RUNTIME", "docker"),
             relay_secret=os.getenv("AGENT_RELAY_SECRET", ""),
             admin_internal_token=os.getenv("ADMIN_INTERNAL_TOKEN", ""),

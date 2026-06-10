@@ -6,8 +6,6 @@ import uuid
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-os.environ.setdefault("DEV_BYPASS_AUTH", "true")
-os.environ.setdefault("ENVIRONMENT", "development")
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://placeholder/placeholder")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
 os.environ.setdefault("SECRET_KEY", "test")

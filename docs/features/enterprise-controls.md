@@ -2,7 +2,7 @@
 
 The Admin Portal provides enterprise-grade controls for identity management, access governance, budget enforcement, and audit logging. These features are designed for large organizations (~2000 engineers) with hierarchical governance, contractor onboarding, and regulatory compliance requirements.
 
-**Access:** http://localhost:8080/admin-portal/ (via nginx) or http://localhost:3001/admin-portal/ (direct)
+**Access:** https://aigw-dev.lab.cloud.scdom.net/admin-portal/ (over the corporate VPN, Entra ID SSO)
 
 ---
 
@@ -79,7 +79,7 @@ Two distinct flows: self-service (forgot password) and admin-initiated.
 2. Enters email
 3. System checks if user exists and is active
 4. Generates one-time token (UUID, stored in Redis with 15-minute TTL)
-5. Sends email with reset link: `https://portal.local/reset?token=<uuid>`
+5. Sends email with reset link: `https://aigw-dev.lab.cloud.scdom.net/portal/reset?token=<uuid>`
 6. User clicks link, enters new password
 7. Validate password strength (12+ chars, uppercase, lowercase, digit, special char)
 8. Update `users.password_hash`, set `must_change_password=false`
@@ -398,7 +398,7 @@ Subject: "Welcome to AI Gateway"
 Hi John,
 
 You've been added to the Engineering team in the AI Gateway.
-Click here to set your password: https://portal.local/reset?token=xxx
+Click here to set your password: https://aigw-dev.lab.cloud.scdom.net/portal/reset?token=xxx
 
 This link expires in 15 minutes.
 

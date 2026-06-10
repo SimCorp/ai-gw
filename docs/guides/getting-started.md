@@ -1,131 +1,109 @@
 # Getting Started Guide
 
-Welcome to the AI Gateway platform. This guide gets you up and running locally within 10 minutes.
+Welcome to the AI Gateway platform. This guide explains how to access and use the
+deployed gateway, run the test suite on your machine, and ship changes to Azure.
+
+The platform runs on **Azure Container Apps (ACA)** in the SimCorp Landing Zone
+(Sweden Central). There is no local stack — every service is a Container App with
+**internal ingress**, and the environment has no public IP. Access requires the
+**corporate VPN**.
 
 ## Prerequisites
 
-- Docker & Docker Compose
-- Python 3.11+ (for local service testing)
+- **Corporate VPN** access (the ACA environment is internal-only, no public IP)
+- A **SimCorp Entra ID** account (SSO is the only sign-in method)
+- An `sk-*` **API key** for programmatic / inference access (issued via the admin portal)
+- Python 3.11+ — to run the test suite locally
+- **Docker** — only for the testcontainers-based suites (`identity`, `admin`)
+- **Azure CLI** (`az`) — only if you deploy or run migration jobs
 - Git
 
-## Local Development Setup
+## Accessing the Deployed Platform
 
-### 1. Clone & Configure
+The dev environment is reachable over the VPN at:
+
+```
+https://aigw-dev.lab.cloud.scdom.net
+```
+
+### Portals
+
+The admin and developer portals are reachable over the VPN. Sign in with **Entra ID
+SSO** — there is no local/password login.
+
+| Interface | How to access |
+|-----------|---------------|
+| **Admin Portal** | Reachable over VPN; sign in with Entra ID SSO |
+| **Developer Portal** | Reachable over VPN; sign in with Entra ID SSO |
+
+### SSO (Azure Entra ID)
+
+Authentication is **Azure Entra ID only** (tenant `aa81b43f-3969-4fd4-80c9-84c411508d82`).
+
+- **Issuer:** `https://login.microsoftonline.com/aa81b43f-3969-4fd4-80c9-84c411508d82/v2.0`
+- **Redirect URI:** `https://aigw-dev.lab.cloud.scdom.net/auth/oidc/callback`
+
+After signing in you have no assigned roles by default; ask a `platform_admin` to
+grant permissions on the org nodes you need.
+
+### Inference API
+
+The OpenAI-compatible and Anthropic-compatible inference endpoints are exposed on the
+gateway FQDN. Authenticate with your `sk-*` API key as a Bearer token.
+
+| API | Base URL |
+|-----|----------|
+| OpenAI-compatible | `https://aigw-dev.lab.cloud.scdom.net/v1` |
+| Anthropic-compatible | `https://aigw-dev.lab.cloud.scdom.net/anthropic` |
+
+**Test chat completions:**
 
 ```bash
-git clone https://github.com/SimCorp/ai-gateway.git
-cd ai-gateway
-
-# Copy environment template
-cp .env.example .env
-
-# Edit .env if you have real provider keys (optional)
-# OPENAI_API_KEY=sk-...
-# ANTHROPIC_API_KEY=sk-...
-# Leave blank to use Ollama or local stubs
-```
-
-### 2. Start Services
-
-```bash
-docker compose -f infra/docker-compose.yml up --build
-```
-
-**First run takes ~2-3 minutes** as services healthcheck and dependencies resolve.
-
-**Expected output:**
-```
-db-migrate | Successfully applied 0030 database migrations
-auth | [2024-01-22 15:30:00] INFO: Ready on port 8001
-admin | [2024-01-22 15:30:05] INFO: Ready on port 8005
-cache | [2024-01-22 15:30:10] INFO: Ready on port 8002
-litellm | [2024-01-22 15:30:15] INFO: Ready on port 8003
-admin-portal | ready - started server on 0.0.0.0:3001
-portal | ready - started server on 0.0.0.0:3002
-hub | [nginx] signal process started
-```
-
-### 3. Access the Platform
-
-Open your browser:
-
-| Interface | URL | Default Credentials |
-|-----------|-----|-------------------|
-| **Admin Portal** | http://localhost:8080/admin-portal/ | See below |
-| **Developer Portal** | http://localhost:8080/portal/ | See below |
-| **Dev Hub** | http://localhost:8080/ | — |
-
-**Development Login (local only):**
-- **Email:** any email (e.g., `admin@localhost`)
-- **Password:** any password (development mode auto-promotes bcrypt users to `platform_admin`)
-
-**OIDC Login (Dex):**
-1. Click "Sign in with Dex" on login page
-2. Enter any email: `user@example.com`
-3. Enter password: `password` (Dex default)
-4. You'll have no assigned roles; ask a platform_admin to grant permissions
-
-### 4. Verify Services
-
-**Health Check:**
-```bash
-# Admin API
-curl http://localhost:8080/admin/health
-
-# Auth service
-curl http://localhost:8080/auth/me \
-  -H "Authorization: Bearer YOUR_TOKEN_HERE"
-```
-
-**Test Session:**
-```bash
-# Login and get token
-curl -X POST http://localhost:8080/auth/login \
+curl -X POST https://aigw-dev.lab.cloud.scdom.net/v1/chat/completions \
+  -H "Authorization: Bearer sk-YOUR-API-KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "email": "admin@localhost",
-    "password": "test",
-    "remember_me": false
-  }' | jq '.token'
-
-# Use token in requests
-TOKEN="..."
-curl http://localhost:8080/admin/health \
-  -H "Authorization: Bearer $TOKEN"
+    "model": "gpt-3.5-turbo",
+    "messages": [
+      {"role": "user", "content": "Hello!"}
+    ]
+  }'
 ```
 
 ---
 
-## Service Ports (Pinned)
+## Service Topology
 
-These ports are fixed and do NOT change. If a port is already in use, stop the conflicting service.
+Each service is a Container App named `ca-<service>-dev-sdc` with **internal ingress**.
+Service-to-service traffic uses internal DNS (`http://ca-<service>-dev-sdc`). These
+hosts are only reachable from within the VNet; external callers use the gateway FQDN
+for inference and the portals for the UI.
 
-| Service | Direct Port | Via Nginx | Purpose |
-|---------|------------|-----------|---------|
-| **Admin API** | 8005 | 8080/admin | Organization & user management |
-| **Auth** | 8001 | 8080/auth | Login, sessions, permissions |
-| **Cache** | 8002 | 8080/cache | Semantic + exact caching |
-| **LiteLLM** | 8003 | 8080/litellm | Model provider routing |
-| **Observability** | 8004 | 8080/observability | Usage tracking, audit logs |
-| **Identity** | 8006 | 8080/identity | Agent registry, discovery |
-| **Agent Relay** | 8007 | 8080/agent-relay | WebSocket relay for agents |
-| **Librarian** | 8008 | 8080/librarian | Knowledge, embeddings, RAG |
-| **Memory** | 8009 | 8080/memory | Agent conversation memory |
-| **League** | 8010 | 8080/league | Gamified challenges |
-| **Scanner** | 8011 | 8080/scanner | Security scanning (Garak, etc.) |
-| **Admin Portal** | 3001 | 8080/admin-portal/ | Admin dashboard (Next.js) |
-| **Developer Portal** | 3002 | 8080/portal/ | Main user interface (Next.js) |
-| **PostgreSQL** | 5432 | — | Database |
-| **Redis** | 6379 | — | Session store, cache |
-| **Dex (OIDC)** | 5556 | — | Local identity provider |
+| Service | Container App | Internal Port | Purpose |
+|---------|---------------|---------------|---------|
+| **Admin API** | `ca-admin-dev-sdc` | 8005 | Organization & user management |
+| **Auth** | `ca-auth-dev-sdc` | 8001 | Login, sessions, permissions |
+| **Cache** | `ca-cache-dev-sdc` | 8002 | Semantic + exact caching |
+| **LiteLLM** | `ca-litellm-dev-sdc` | 8003 | Model provider routing |
+| **Observability** | `ca-observability-dev-sdc` | 8004 | Usage tracking, audit logs |
+| **Identity** | `ca-identity-dev-sdc` | 8006 | Agent registry, discovery |
+| **Agent Relay** | `ca-agent-relay-dev-sdc` | 8007 | WebSocket relay for agents |
+| **Librarian** | `ca-librarian-dev-sdc` | 8008 | Knowledge, embeddings, RAG |
+| **Memory** | `ca-memory-dev-sdc` | 8009 | Agent conversation memory |
+| **League** | `ca-league-dev-sdc` | 8010 | Gamified challenges |
+| **Scanner** | `ca-scanner-dev-sdc` | — (no ingress) | Security scanning worker |
+| **Admin Portal** | `ca-admin-portal-dev-sdc` | 3001 | Admin dashboard (Next.js) |
+| **Developer Portal** | `ca-portal-dev-sdc` | 3002 | Main user interface (Next.js) |
 
-**Access via Nginx:** Preferred for development; easier testing of multi-service requests.
-
-**Direct Ports:** Available within Docker network and for low-level debugging.
+Scanner and the workflow worker run without ingress (background workers). PostgreSQL
+and Redis are managed Azure resources, not Container Apps.
 
 ---
 
 ## Common Tasks
+
+These calls hit internal service ingress and must originate from inside the VNet (e.g.
+a VNet-connected runner or a bastion). Replace `$TOKEN` with a valid session token.
 
 ### Create a New Organization Node
 
@@ -133,7 +111,7 @@ These ports are fixed and do NOT change. If a port is already in use, stop the c
 TOKEN="your-session-token"
 
 # Create an area under root
-curl -X POST http://localhost:8080/admin/nodes \
+curl -X POST http://ca-admin-dev-sdc/nodes \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -148,16 +126,16 @@ curl -X POST http://localhost:8080/admin/nodes \
 ### Get Organization Tree
 
 ```bash
-curl http://localhost:8080/admin/nodes/tree \
+curl http://ca-admin-dev-sdc/nodes/tree \
   -H "Authorization: Bearer $TOKEN" | jq '.'
 ```
 
 ### Grant User Permission
 
-First, get the Entra group GUID (from Azure AD or use a placeholder for dev):
+Use the Entra group GUID for the group you want to grant:
 
 ```bash
-curl -X POST "http://localhost:8080/admin/nodes/{node_id}/permissions" \
+curl -X POST "http://ca-admin-dev-sdc/nodes/{node_id}/permissions" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -170,43 +148,46 @@ curl -X POST "http://localhost:8080/admin/nodes/{node_id}/permissions" \
 ### View Audit Log
 
 ```bash
-# Check observability service
-curl http://localhost:8080/observability/audit-log \
+curl http://ca-observability-dev-sdc/audit-log \
   -H "Authorization: Bearer $TOKEN" | jq '.'
 ```
 
-### Test Chat Completions
+### Check User Permissions
 
 ```bash
-curl -X POST http://localhost:8080/cache/v1/chat/completions \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "gpt-3.5-turbo",
-    "messages": [
-      {"role": "user", "content": "Hello!"}
-    ]
-  }'
+curl http://ca-auth-dev-sdc/me \
+  -H "Authorization: Bearer $TOKEN" | jq '.roles'
 ```
 
 ---
 
 ## Development Workflow
 
+The code is developed and tested locally, then deployed to Azure via container images.
+
 ### Running Tests
 
+Fast unit and integration tests run **locally** without Azure:
+
 ```bash
-# Install test dependencies for admin service
+# Install test dependencies
 pip install -e "services/admin[dev]"
 pip install -e "services/cache[dev]"
 pip install -e "services/observability[dev]"
 
-# Run tests
+# Run all tests
 pytest services/ -v
 
 # Run specific service tests
 pytest services/admin/tests/ -v --cov
 ```
+
+> **Docker note:** The raw-SQL suites (`identity`, `admin`) use
+> `testcontainers[postgres]` and require a running Docker daemon. The rest of the
+> test suite runs without Docker.
+
+**End-to-end smoke tests** run against the deployed Azure environment from a
+VNet-connected runner (see `deploy.yml`), not from a developer machine.
 
 ### Code Quality
 
@@ -221,11 +202,7 @@ ruff format services/
 mypy services/
 ```
 
-### Database Migrations
-
-Migrations are auto-applied on startup via `db-migrate` service.
-
-**To create a new migration:**
+### Authoring a Database Migration
 
 ```bash
 cd services/admin
@@ -234,36 +211,47 @@ cd services/admin
 alembic revision --autogenerate -m "describe your change"
 
 # Review and edit migrations/versions/xxxx_description.py
-
-# Test migration locally
-docker compose -f infra/docker-compose.yml up --build db-migrate
 ```
 
-### Debugging
+Migrations are applied in Azure by a dedicated Container Apps job (see Deployment
+below), not on service startup.
 
-**Tail logs:**
+---
+
+## Deployment
+
+Deployments are driven by Bicep templates and are idempotent. Build a container image,
+then deploy by pinning its tag.
+
 ```bash
-docker compose -f infra/docker-compose.yml logs -f admin
-docker compose -f infra/docker-compose.yml logs -f cache
+az deployment group create \
+  --resource-group rg-aigw-dev-sdc \
+  --template-file infra/bicep/environments/dev/main.bicep \
+  --parameters infra/bicep/environments/dev/main.bicepparam \
+  --parameters imageTag=sha-<git-sha>
 ```
 
-**Interactive debugging:**
-```bash
-# Enter service container
-docker compose -f infra/docker-compose.yml exec admin /bin/bash
+**Rollback:** redeploy the previous `imageTag`.
 
-# Inside container: pip install ipdb, then add breakpoints
-import ipdb; ipdb.set_trace()
-```
+### Database Migrations
 
-**Database inspection:**
+Run migrations against the deployed database via the migration job:
+
 ```bash
-docker compose -f infra/docker-compose.yml exec postgres psql -U aigateway -d aigateway
+az containerapp job start \
+  --name job-db-migrate-dev-sdc \
+  --resource-group rg-aigw-dev-sdc
 ```
 
 ---
 
 ## Key Concepts
+
+### Configuration & Secrets
+
+Configuration comes from **Azure Key Vault**, surfaced through ACA native secret
+references using the service's managed identity. Services **fail fast** when a required
+environment variable is missing — there are no local defaults.
 
 ### Path-Based Permissions
 
@@ -276,8 +264,8 @@ See `docs/guides/permission-model.md` for detailed examples.
 ### Session Token
 
 After login, the response includes a `token` field. This token:
-- Is a URL-safe string (no JWT encoding in dev mode)
-- Is stored in Redis with a TTL (7 days for dev, 8h for admin)
+- Is a URL-safe string
+- Is stored in Redis with a TTL (7 days for sessions, 8h for admin)
 - Contains user info, roles, and node assignments
 - Is validated on every request via `Authorization: Bearer {token}`
 
@@ -294,66 +282,20 @@ Budget alerts trigger when spend exceeds `budget_alert_threshold` (default 0.80 
 
 ## Troubleshooting
 
-### "Connection refused" on port 8080
+### Cannot reach the gateway or portals
 
-**Cause:** Nginx hub service not ready.
+**Cause:** The ACA environment is internal-only (no public IP).
 
-**Solution:**
-```bash
-# Wait for healthcheck
-docker compose -f infra/docker-compose.yml logs hub
-
-# Restart hub
-docker compose -f infra/docker-compose.yml restart hub
-```
+**Solution:** Confirm you are connected to the corporate VPN. The gateway FQDN
+(`https://aigw-dev.lab.cloud.scdom.net`) and the portals are only resolvable and
+reachable from inside the corporate network.
 
 ### "Session expired or invalid" after login
 
-**Cause:** Token not found in Redis or Redis connection failed.
+**Cause:** Token not found in Redis or sign-in did not complete.
 
-**Solution:**
-```bash
-# Check Redis
-docker compose -f infra/docker-compose.yml exec redis redis-cli PING
-
-# Verify session was stored
-docker compose -f infra/docker-compose.yml exec redis redis-cli KEYS "session:*"
-
-# Re-login
-```
-
-### Database migration fails
-
-**Cause:** Schema conflict or migration version mismatch.
-
-**Solution:**
-```bash
-# Check migration status
-docker compose -f infra/docker-compose.yml exec admin alembic current
-
-# View migration history
-docker compose -f infra/docker-compose.yml exec admin alembic history
-
-# Reset to clean state (dev only!)
-# rm -rf data/postgres/
-# docker compose down -v
-# docker compose up --build
-```
-
-### Services slow or timeout
-
-**Cause:** Insufficient resources or service unhealthy.
-
-**Solution:**
-```bash
-# Check all healthchecks
-docker compose -f infra/docker-compose.yml ps
-
-# Restart failing services
-docker compose -f infra/docker-compose.yml restart SERVICENAME
-
-# Increase Docker resources (Mac: 4GB RAM, 2 CPUs minimum)
-```
+**Solution:** Sign in again via Entra ID SSO. If the problem persists, the session
+store may be unhealthy — escalate in #ai-gateway.
 
 ---
 
@@ -362,7 +304,7 @@ docker compose -f infra/docker-compose.yml restart SERVICENAME
 1. **Explore the API:** Read `docs/api/nodes.md` for organization endpoints
 2. **Understand Permissions:** See `docs/guides/permission-model.md`
 3. **Review Architecture:** Check `docs/architecture/services.md` for service overview
-4. **Try the Portal:** Log in and explore the admin dashboard
+4. **Try the Portal:** Sign in over VPN with Entra ID SSO and explore the admin dashboard
 5. **Write Tests:** See `services/admin/tests/` for examples
 
 ---

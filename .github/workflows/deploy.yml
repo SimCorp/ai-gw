@@ -96,3 +96,83 @@ jobs:
           done
           echo "ERROR: Migration timed out after 5 minutes"
           exit 1
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Smoke test (control plane) — verify every Container App rolled out healthy.
+  # Runs from a GitHub-hosted runner via the Azure control plane (no VNet needed).
+  # ────────────────────────────────────────────────────────────────────────────
+  smoke-test:
+    name: Smoke test (control plane)
+    needs: deploy-dev
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Azure login (OIDC)
+        run: |
+          OIDC_TOKEN=$(curl -sSfL \
+            -H "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=api://AzureADTokenExchange" \
+            | python3 -c "import sys,json; print(json.load(sys.stdin)['value'])")
+          az login --service-principal \
+            --username "${{ secrets.AZURE_CLIENT_ID }}" \
+            --tenant "${{ secrets.AZURE_TENANT_ID }}" \
+            --federated-token "${OIDC_TOKEN}"
+          az account set --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+
+      - name: Verify all container apps are Running
+        run: |
+          set -euo pipefail
+          RG=rg-aigw-dev-sdc
+          APPS=(ca-auth ca-cache ca-litellm ca-observability ca-admin ca-identity \
+                ca-agent-relay ca-librarian ca-memory ca-league ca-scanner \
+                ca-workflow-worker ca-admin-portal ca-portal)
+          fail=0
+          for app in "${APPS[@]}"; do
+            name="${app}-dev-sdc"
+            STATE=$(az containerapp show -n "$name" -g "$RG" \
+              --query "properties.runningStatus" -o tsv 2>/dev/null | tr -d '\r' || echo "Missing")
+            echo "${name}: ${STATE}"
+            if [[ "$STATE" != "Running" ]]; then
+              echo "::error::${name} is not Running (state: ${STATE})"
+              fail=1
+            fi
+          done
+          exit $fail
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # E2E smoke (data plane) — real HTTP health + functional path against the
+  # gateway FQDN. The ACA environment is internal:true, so this MUST run from a
+  # VNet-connected self-hosted runner in the Landing Zone. Disabled (`if: false`)
+  # until that runner is registered — see plan Workstream H. Flip `if:` to
+  # `github.event.workflow_run.conclusion == 'success'` to enable.
+  # ────────────────────────────────────────────────────────────────────────────
+  e2e-test:
+    name: E2E smoke (data plane)
+    needs: smoke-test
+    if: false  # TODO(Workstream H): enable once a VNet-connected self-hosted runner exists
+    runs-on: [self-hosted, vnet-aigw-dev]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Gateway health checks
+        run: |
+          set -euo pipefail
+          BASE=https://aigw-dev.lab.cloud.scdom.net
+          for path in /auth/health /cache/health /admin/health; do
+            code=$(curl -fsS -o /dev/null -w '%{http_code}' "${BASE}${path}")
+            echo "${path}: ${code}"
+            [[ "$code" == "200" ]] || { echo "::error::${path} returned ${code}"; exit 1; }
+          done
+
+      - name: End-to-end inference path
+        env:
+          ADMIN_TOKEN: ${{ secrets.AIGW_ADMIN_TOKEN }}
+        run: |
+          # Full functional path (plan Workstream F / design §9 Phase 5):
+          # register a team -> issue an sk-* API key -> chat completion through the
+          # gateway -> assert a cache hit on the second identical call + a cost row
+          # recorded in Postgres. Implemented with the E2E rollout once the VNet
+          # runner is available; the health checks above already gate basic liveness.
+          echo "E2E functional flow runs here once the VNet runner is available."

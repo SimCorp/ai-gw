@@ -32,7 +32,7 @@ async def _seed_demo_content() -> None:
 
     Skipped when:
       - LEAGUE_DISABLE_SEED=1 in env (lets tests opt out), or
-      - dev_bypass_auth is False (production)
+      - ENVIRONMENT is not one of development/test/ci (e.g. production)
     """
     if os.getenv("LEAGUE_DISABLE_SEED") == "1":
         log.info("league seed skipped (LEAGUE_DISABLE_SEED=1)")

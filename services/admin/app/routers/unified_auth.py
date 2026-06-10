@@ -323,13 +323,6 @@ async def _can_manage_area(user: dict, area_id: str) -> bool:
 
 
 async def _check_rate_limit(redis, identifier: str, max_attempts: int = 10, window: int = 60):
-    # Skip login rate-limiting when auth is bypassed (dev/CI): the integration
-    # suite makes many login attempts from one host, and auth is non-enforcing
-    # there anyway. Production (dev_bypass_auth=False) is unaffected.
-    from app.config import settings as _cfg
-
-    if _cfg.dev_bypass_auth:
-        return
     key = f"login_rl:{identifier}"
     count = await redis.incr(key)
     if count == 1:
@@ -557,16 +550,9 @@ async def login(
         },
     )
 
-    # Dev escape hatch: ENVIRONMENT=development bcrypt login → synthetic platform_admin
-    import os as _os
-
-    _env = _os.getenv("ENVIRONMENT", "production")
-    if _env in ("development", "test", "ci"):
-        roles = [{"role": "platform_admin", "node_path": "/", "node_id": None, "node_name": "root"}]
-    else:
-        # Production: bcrypt users have no group membership — empty roles
-        # Access is granted via OIDC + role_assignments
-        roles = []
+    # bcrypt users have no group membership — empty roles.
+    # Access is granted via OIDC + role_assignments.
+    roles = []
 
     payload = await _build_session_payload(row, roles)
     payload["node_name"] = row["node_name"]
@@ -904,10 +890,6 @@ async def forgot_password(
             password_reset_html(portal_url, reset_url, row["display_name"] or row["email"]),
         )
 
-    # In dev mode, return the token directly
-    dev_mode = os.getenv("DEV_BYPASS_AUTH", "false").lower() == "true"
-    if dev_mode and row and raw_token:
-        return {"message": "Reset link sent (dev mode)", "token": raw_token, "reset_url": reset_url}
     return {"message": "If that email exists, a reset link has been sent"}
 
 

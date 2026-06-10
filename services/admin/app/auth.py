@@ -29,11 +29,6 @@ async def require_admin_auth(
     Checks new unified session:{token} key first, then legacy admin_session:{token}.
     Returns a dict with at least {"actor": str, "role": str} for audit logging.
     """
-    if settings.dev_bypass_auth:
-        result = {"actor": "dev-bypass", "role": "superadmin"}
-        request.state.admin_auth = result
-        return result
-
     # ── Path 1: static admin token (CI, automation) ──────────────────────────
     if x_admin_token and settings.admin_token:
         if secrets.compare_digest(x_admin_token, settings.admin_token):
@@ -96,14 +91,8 @@ async def require_authenticated_user(
     """Accept ANY authenticated session (developer or admin), or a static admin token.
 
     For endpoints every signed-in user may read — e.g. the developer tools
-    catalog (GET /tools). Honors dev_bypass_auth exactly like require_admin_auth
-    so local dev behaviour is unchanged. Does NOT enforce an admin role.
+    catalog (GET /tools). Does NOT enforce an admin role.
     """
-    if settings.dev_bypass_auth:
-        result = {"actor": "dev-bypass", "role": "superadmin"}
-        request.state.admin_auth = result
-        return result
-
     # Static admin token (CI/automation) is always accepted.
     if x_admin_token and settings.admin_token:
         if secrets.compare_digest(x_admin_token, settings.admin_token):

@@ -317,6 +317,9 @@ resource caAdmin 'Microsoft.App/containerApps@2024-03-01' = {
         { name: 'litellm-master-key', keyVaultUrl: '${kvUri}secrets/litellm-master-key', identity: uamiId }
         { name: 'identity-key-secret', keyVaultUrl: '${kvUri}secrets/identity-key-secret', identity: uamiId }
         { name: 'librarian-service-token', keyVaultUrl: '${kvUri}secrets/librarian-service-token', identity: uamiId }
+        // TODO(Workstream H.2): once the Entra app-registration creates the
+        // 'oidc-client-secret' Key Vault secret, add it here and switch the
+        // OIDC_CLIENT_SECRET env below from '' to secretRef: 'oidc-client-secret'.
       ])
     }
     template: {
@@ -332,15 +335,20 @@ resource caAdmin 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'LITELLM_MASTER_KEY', secretRef: 'litellm-master-key' }
             { name: 'IDENTITY_KEY_SECRET', secretRef: 'identity-key-secret' }
             { name: 'LIBRARIAN_SERVICE_TOKEN', secretRef: 'librarian-service-token' }
-            { name: 'DEV_BYPASS_AUTH', value: 'true' }
+            // Empty until Entra app-registration (H.2) — admin-portal OIDC login is
+            // disabled until then; switch to secretRef: 'oidc-client-secret' once it exists.
+            { name: 'OIDC_CLIENT_SECRET', value: '' }
+            // Entra ID OIDC issuer for SimCorp tenant (admin-portal SSO login)
+            #disable-next-line no-hardcoded-env-urls
+            { name: 'OIDC_ISSUER', value: 'https://login.microsoftonline.com/aa81b43f-3969-4fd4-80c9-84c411508d82/v2.0' }
+            { name: 'CORS_ORIGINS', value: '["https://aigw-dev.lab.cloud.scdom.net"]' }
             { name: 'AUTH_URL', value: authUrl }
             { name: 'CACHE_URL', value: cacheUrl }
             { name: 'LITELLM_URL', value: litellmUrl }
             { name: 'OBSERVABILITY_URL', value: observabilityUrl }
             { name: 'LEAGUE_URL', value: leagueUrl }
             { name: 'LIBRARIAN_URL', value: librarianUrl }
-            // Must be 'development' (not 'dev') to satisfy the DEV_BYPASS_AUTH startup guard
-            { name: 'ENVIRONMENT', value: 'development' }
+            { name: 'ENVIRONMENT', value: env }
           ]
           resources: stdResources
         }
@@ -455,6 +463,7 @@ resource caLibrarian 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'REDIS_URL', secretRef: 'redis-url' }
             { name: 'EMBEDDING_API_KEY', secretRef: 'litellm-master-key' }
             { name: 'LIBRARIAN_SERVICE_TOKEN', secretRef: 'librarian-service-token' }
+            { name: 'CORS_ORIGINS', value: 'https://aigw-dev.lab.cloud.scdom.net' }
             { name: 'AUTH_URL', value: authUrl }
             { name: 'CACHE_URL', value: cacheUrl }
             { name: 'EMBEDDING_BASE_URL', value: '${litellmUrl}/v1' }
@@ -541,6 +550,7 @@ resource caLeague 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'LITELLM_MASTER_KEY', secretRef: 'litellm-master-key' }
             { name: 'ADMIN_TOKEN', secretRef: 'admin-internal-token' }
             { name: 'LITELLM_URL', value: litellmUrl }
+            { name: 'CORS_ORIGINS', value: '["https://aigw-dev.lab.cloud.scdom.net"]' }
             { name: 'ENVIRONMENT', value: env }
           ]
           resources: stdResources
@@ -630,6 +640,64 @@ resource caWorkflowWorker 'Microsoft.App/containerApps@2024-03-01' = {
         }
       ]
       scale: { minReplicas: 1, maxReplicas: 1 }
+    }
+  }
+  dependsOn: [acrPullAssignment, kvSecretsUserAssignment]
+}
+
+// ── admin-portal (Next.js) ──────────────────────────────────────────────────
+// NEXT_PUBLIC_* are baked at image build time (Dockerfile.admin + ci.yml
+// build-args), so the runtime needs no app config / KV secrets. VNet-internal.
+resource caAdminPortal 'Microsoft.App/containerApps@2024-03-01' = {
+  name: 'ca-admin-portal-${env}-sdc'
+  location: location
+  tags: tags
+  identity: { type: 'UserAssigned', userAssignedIdentities: { '${uamiId}': {} } }
+  properties: {
+    managedEnvironmentId: acaEnvId
+    workloadProfileName: 'Consumption'
+    configuration: {
+      ingress: { external: false, targetPort: 3001, transport: 'Http' }
+      registries: ghcrRegistries
+      secrets: ghcrSecret
+    }
+    template: {
+      containers: [
+        {
+          name: 'admin-portal'
+          image: '${ghcrBase}/admin-portal:${imageTag}'
+          resources: stdResources
+        }
+      ]
+      scale: { minReplicas: 1, maxReplicas: 2 }
+    }
+  }
+  dependsOn: [acrPullAssignment, kvSecretsUserAssignment]
+}
+
+// ── portal (Next.js) ────────────────────────────────────────────────────────
+resource caPortal 'Microsoft.App/containerApps@2024-03-01' = {
+  name: 'ca-portal-${env}-sdc'
+  location: location
+  tags: tags
+  identity: { type: 'UserAssigned', userAssignedIdentities: { '${uamiId}': {} } }
+  properties: {
+    managedEnvironmentId: acaEnvId
+    workloadProfileName: 'Consumption'
+    configuration: {
+      ingress: { external: false, targetPort: 3002, transport: 'Http' }
+      registries: ghcrRegistries
+      secrets: ghcrSecret
+    }
+    template: {
+      containers: [
+        {
+          name: 'portal'
+          image: '${ghcrBase}/portal:${imageTag}'
+          resources: stdResources
+        }
+      ]
+      scale: { minReplicas: 1, maxReplicas: 2 }
     }
   }
   dependsOn: [acrPullAssignment, kvSecretsUserAssignment]

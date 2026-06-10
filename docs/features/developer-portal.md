@@ -2,7 +2,7 @@
 
 The Developer Portal (Next.js app at `apps/portal/`) is the primary interface for developers to interact with the AI Gateway. It provides a unified dashboard for model access, API key management, agent registration, and team collaboration.
 
-**Access:** http://localhost:8080/portal/ (via nginx) or http://localhost:3002/portal/ (direct)
+**Access:** https://aigw-dev.lab.cloud.scdom.net/portal/ (over the corporate VPN, Entra ID SSO)
 
 ---
 
@@ -146,7 +146,6 @@ Logic in `detectProvider()` maps model IDs to upstream services:
 - `azure-*` or Phi/DeepSeek/Cohere/Mistral/Llama → Azure AI Foundry
 - `copilot-*` → GitHub Copilot
 - `github-*` → GitHub Models
-- `ollama*`, `local` → Self-hosted
 
 ### Data Sources
 - LiteLLM `/v1/models` — live available models (requires admin key `sk-litellm-local-dev`)

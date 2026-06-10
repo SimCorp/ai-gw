@@ -1,8 +1,8 @@
 # AI Gateway — SimCorp Developer Platform
 
-An enterprise API gateway that centralises access to hosted and local LLMs for ~2,000 engineers. It enforces authentication, rate limits, and cost policy before every request reaches a provider, and caches responses to cut spend.
+An enterprise API gateway that centralises access to hosted LLMs for ~2,000 engineers. It enforces authentication, rate limits, and cost policy before every request reaches a provider, and caches responses to cut spend.
 
-Five FastAPI services share a single PostgreSQL database and Redis instance. Developers interact through an OpenAI-compatible endpoint at `:8002`; operators manage everything through the admin portal at `:8005`.
+The platform runs on **Azure Container Apps** in the SimCorp Landing Zone (Sweden Central). Developers reach it over the corporate VPN at the gateway's dev FQDN; operators manage everything through the admin portal. There is no local stack — see [Deploying & running](#deploying--running).
 
 ---
 
@@ -10,101 +10,74 @@ Five FastAPI services share a single PostgreSQL database and Redis instance. Dev
 
 ```
                         ┌─────────────────────────────────────────────┐
-                        │           Developer / CI caller              │
+                        │      Developer / CI caller (corp VPN)        │
                         └──────────────────┬──────────────────────────┘
                                            │  sk-*  API key or JWT
+                                           │  https://aigw-dev.lab.cloud.scdom.net
                                            ▼
                         ┌──────────────────────────────────┐
-                        │   auth  :8001                    │
+                        │   auth  (ca-auth)                 │
                         │   • validates sk-* / JWT          │
                         │   • rate-limit (Redis fixed-win)  │
                         │   • injects team identity header  │
                         └──────────────────┬───────────────┘
-                                           │
                                            ▼
                         ┌──────────────────────────────────┐
-                        │   cache  :8002                   │
-                        │   • exact-match cache (Redis)    │
-                        │   • semantic cache (embeddings)  │
+                        │   cache  (ca-cache)               │
+                        │   • exact-match cache (Redis)     │
+                        │   • semantic cache (embeddings)   │
                         │   • OpenAI + Anthropic endpoints  │
                         └──────────────────┬───────────────┘
                                            │ cache miss
                                            ▼
                         ┌──────────────────────────────────┐
-                        │   litellm  :8003                 │
-                        │   • provider routing             │
-                        │   • retries + fallbacks          │
-                        │   • model name normalisation     │
-                        └──────┬──────────┬───────┬────────┘
+                        │   litellm  (ca-litellm)           │
+                        │   • provider routing              │
+                        │   • retries + fallbacks           │
+                        │   • model name normalisation      │
+                        └──────┬──────────┬───────┬─────────┘
                                │          │       │
-                    ┌──────────┘  ┌───────┘  ┌───┘
-                    ▼             ▼           ▼
-               Anthropic      Azure       GitHub   … ollama (local)
+                    ┌──────────┘  ┌───────┘  ┌────┘
+                    ▼             ▼          ▼
+               Anthropic      Azure       GitHub
                Claude         OpenAI      Models
 
       ┌─────────────────────┐        ┌─────────────────────┐
-      │  observability:8004 │        │  admin  :8005        │
+      │  observability      │        │  admin               │
       │  async event log    │        │  operator portal     │
-      │  cost accounting    │        │  developer portal    │
+      │  cost accounting    │        │  developer portal     │
       └─────────────────────┘        └─────────────────────┘
 
-      ─────────────── shared ────────────────────────────────
-                PostgreSQL :5432          Redis :6379
+      ──────────────── managed PaaS (private endpoints) ─────────────
+        Azure Database for PostgreSQL    Azure Cache for Redis
+        Azure Key Vault                  Azure Service Bus
 ```
+
+Each service is a Container App (`ca-<service>-dev-sdc`) with internal ingress; the ACA environment is `internal: true` (no public IP). The `auth` app fronts the inference request path and is exposed on the custom domain. PaaS dependencies (PostgreSQL Flexible Server, Cache for Redis, Key Vault, Service Bus) are reached over private endpoints. See [`docs/superpowers/specs/2026-06-08-azure-enterprise-deployment-design.md`](docs/superpowers/specs/2026-06-08-azure-enterprise-deployment-design.md) for the full deployment design.
 
 ---
 
-## Quick Start
+## Access
 
-```bash
-# 1. Copy env template and fill in at least one provider key
-cp .env.example .env
+The gateway is **VNet-only**, reachable over the corporate VPN. There is no public endpoint.
 
-# 2. Start everything
-make up
-```
-
-Services are ready when all health checks pass (~2 min on first build).
-
-Default dev credentials: `admin@simcorp.com` / `password` (you'll be forced to change on first login).
-
----
-
-## Service Reference
-
-All services are available via the nginx hub at **http://localhost:8080** — no need to remember individual port numbers.
-
-| Service | Via nginx (preferred) | Direct port | Purpose |
+| Environment | Gateway FQDN | Subscription | Region |
 |---|---|---|---|
-| auth | http://localhost:8080/auth/ | :8001 | API key / JWT validation, per-team rate limiting |
-| cache | http://localhost:8080/cache/ | :8002 | Semantic + exact cache proxy; public LLM endpoint |
-| litellm | http://localhost:8080/litellm/ | :8003 | Provider routing, retries, fallbacks (OpenAI-compatible) |
-| observability | http://localhost:8080/observability/ | :8004 | Async event ingestion, cost accounting |
-| admin | http://localhost:8080/admin/ | :8005 | Operator + developer portal backend |
-| identity | http://localhost:8080/identity/ | :8006 | Agent registry — DNS-style resolve, heartbeat TTL |
-| agent-relay | http://localhost:8080/agent-relay/ | :8007 | WebSocket relay bus for agentic workflows |
-| librarian | http://localhost:8080/librarian/ | :8008 | Knowledge ingestion, chunking, semantic search |
-| memory | http://localhost:8080/memory/ | :8009 | Persistent agent memory scoped to user/team |
-| league | http://localhost:8080/league/ | :8010 | AI-League gamified challenge platform |
-| admin-portal | http://localhost:8080/admin-portal/ | :3001 | Admin Next.js app |
-| portal | http://localhost:8080/portal/ | :3002 | Developer Next.js app |
-| redis | — | :6379 | Cache store + rate-limit counters |
-| postgres | — | :5432 | Teams, API keys, policies, cost records |
-| dex (mock OIDC) | — | :5556 | Local Entra ID substitute for development |
-| ollama | — | :11434 | Local model serving (opt-in via `--profile ollama`) |
+| Dev | `https://aigw-dev.lab.cloud.scdom.net` | SC LZ PlatformAITooling Dev | Sweden Central |
+| Test | (provisioned in Phase 4) | SC LZ PlatformAITooling Test | Sweden Central |
 
-> **Ports are pinned.** The nginx config in `infra/nginx/default.conf` hardcodes these port numbers — changing any service port in `docker-compose.yml` requires a matching update there.
+Sign in to the portals with your SimCorp identity via **Entra ID SSO**.
 
 ---
 
 ## Using the Gateway
 
-All API calls go to the **cache service** at `:8002`. Authenticate with an `sk-*` API key.
+All API calls go to the gateway FQDN and are authenticated with an `sk-*` API key.
 
 ### OpenAI-compatible
 
 ```bash
-curl http://localhost:8002/v1/chat/completions \
+curl https://aigw-dev.lab.cloud.scdom.net/v1/chat/completions \
   -H "Authorization: Bearer sk-your-team-key" \
   -H "Content-Type: application/json" \
   -d '{
@@ -119,7 +92,7 @@ curl http://localhost:8002/v1/chat/completions \
 from openai import OpenAI
 
 client = OpenAI(
-    base_url="http://localhost:8002/v1",
+    base_url="https://aigw-dev.lab.cloud.scdom.net/v1",
     api_key="sk-your-team-key",
 )
 response = client.chat.completions.create(
@@ -134,12 +107,35 @@ response = client.chat.completions.create(
 import anthropic
 
 client = anthropic.Anthropic(
-    base_url="http://localhost:8002/anthropic",
+    base_url="https://aigw-dev.lab.cloud.scdom.net/anthropic",
     api_key="sk-your-team-key",
 )
 message = client.messages.create(model="claude-sonnet-4-6", max_tokens=1024,
     messages=[{"role": "user", "content": "Hello"}])
 ```
+
+---
+
+## Services
+
+| Service | Container App | Internal port | Purpose |
+|---|---|---|---|
+| auth | `ca-auth-dev-sdc` | 8001 | API key / JWT validation, per-team rate limiting; inference entry point |
+| cache | `ca-cache-dev-sdc` | 8002 | Semantic + exact cache proxy; OpenAI/Anthropic endpoints |
+| litellm | `ca-litellm-dev-sdc` | 8003 | Provider routing, retries, fallbacks (OpenAI-compatible) |
+| observability | `ca-observability-dev-sdc` | 8004 | Async event ingestion, cost accounting |
+| admin | `ca-admin-dev-sdc` | 8005 | Operator + developer portal backend |
+| identity | `ca-identity-dev-sdc` | 8006 | Agent registry — DNS-style resolve, heartbeat TTL |
+| agent-relay | `ca-agent-relay-dev-sdc` | 8007 | WebSocket relay bus for agentic workflows |
+| librarian | `ca-librarian-dev-sdc` | 8008 | Knowledge ingestion, chunking, semantic search |
+| memory | `ca-memory-dev-sdc` | 8009 | Persistent agent memory scoped to user/team |
+| league | `ca-league-dev-sdc` | 8010 | AI-League gamified challenge platform |
+| scanner | `ca-scanner-dev-sdc` | — | Security scanning worker (background) |
+| workflow-worker | `ca-workflow-worker-dev-sdc` | — | Agentic workflow runner (background, scale-to-zero) |
+| admin-portal | `ca-admin-portal-dev-sdc` | 3001 | Admin Next.js app |
+| portal | `ca-portal-dev-sdc` | 3002 | Developer Next.js app |
+
+Services discover each other over the ACA environment's internal DNS (`http://ca-<service>-dev-sdc`). Managed PaaS — PostgreSQL, Redis, Key Vault, Service Bus — is reached over private endpoints; connection strings are injected from Key Vault via each app's managed identity.
 
 ---
 
@@ -167,7 +163,7 @@ The platform uses a unified identity model — one `users` table for all human p
 | `GET` | `/auth/me` | Session | Current user profile + roles |
 | `POST` | `/auth/logout` | Session | Invalidate session |
 | `POST` | `/auth/change-password` | Session | Change password (clears session) |
-| `GET` | `/auth/oidc/login` | — | Redirect to Entra ID / Dex for SSO |
+| `GET` | `/auth/oidc/login` | — | Redirect to Entra ID for SSO |
 | `GET` | `/auth/oidc/callback` | — | OIDC callback; creates/links user, issues session |
 | `POST` | `/auth/invitations` | Session (admin/team_admin) | Create an invite link (48 h expiry) |
 | `GET` | `/auth/invitations` | Session (admin/team_admin) | List invitations |
@@ -184,23 +180,21 @@ The platform uses a unified identity model — one `users` table for all human p
 
 ### SSO configuration
 
-The gateway ships with a local Dex instance for development. To switch to real Azure Entra ID, set these variables in `.env`:
+Authentication is handled by **Azure Entra ID**. The OIDC settings are supplied to the `auth` and `admin` Container Apps from Key Vault:
 
 ```ini
-OIDC_ISSUER=https://login.microsoftonline.com/<tenant-id>/v2.0
+OIDC_ISSUER=https://login.microsoftonline.com/aa81b43f-3969-4fd4-80c9-84c411508d82/v2.0
 OIDC_CLIENT_ID=<app-registration-client-id>
-OIDC_CLIENT_SECRET=<client-secret>
+OIDC_CLIENT_SECRET=<client-secret>   # Key Vault secret ref
 ```
 
-The redirect URI to register in Azure: `https://<your-host>/auth/oidc/callback`
+The redirect URI registered in Entra ID: `https://aigw-dev.lab.cloud.scdom.net/auth/oidc/callback`
 
 ---
 
 ## Admin Portal
 
-**http://localhost:3001/admin**
-
-Sign in with `admin@simcorp.com` / `password` (dev). Forced password change on first login.
+Reachable over the VPN (Admin Container App). Sign in with your SimCorp identity via Entra ID SSO.
 
 | Page | Path | Function |
 |---|---|---|
@@ -230,9 +224,7 @@ Sign in with `admin@simcorp.com` / `password` (dev). Forced password change on f
 
 ## Developer Portal
 
-**http://localhost:3002/portal**
-
-Self-service for developers. Sign up with email + password, or use the **Sign in with Entra ID (SSO)** button.
+Reachable over the VPN (Developer Container App). Sign in with **Entra ID (SSO)**.
 
 - Generate `sk-*` API keys scoped to your team
 - View personal usage stats, cost per PR, and cache hit rate
@@ -274,7 +266,7 @@ The platform classifies every session as **interactive**, **agentic**, or **auto
 Run manually or on a schedule:
 
 ```bash
-curl -s -X POST http://localhost:8005/admin/transformation/classify \
+curl -s -X POST https://aigw-dev.lab.cloud.scdom.net/admin/transformation/classify \
   -H "Authorization: Bearer <admin-token>"
 ```
 
@@ -296,34 +288,42 @@ curl -s -X POST http://localhost:8005/admin/transformation/classify \
 | `llama-3.3-70b` | Azure AI Foundry |
 | `copilot-gpt-4o` | GitHub Copilot |
 | `gemini-1.5-pro` | Google |
-| `local` | Ollama (llama3.2) — requires `--profile ollama` |
 
 ---
 
-## Development
+## Deploying & running
 
-### Makefile commands
+The platform is deployed via Bicep to Azure Container Apps. CI builds and pushes service images; `deploy.yml` deploys them on a `master` push.
 
-| Command | Description |
-|---|---|
-| `make up` | Build and start the full gateway stack |
-| `make down` | Stop and remove containers |
-| `make logs` | Tail logs from all services |
-| `make test` | Run the full pytest suite against a live stack |
-| `make test-smoke` | Health and auth checks only |
-| `make sandbox` | Start the SSH-accessible Claude Code sandbox on port 2222 |
+### Deploy (dev)
 
-### Run tests locally (no Docker)
+```bash
+az deployment group create \
+  --resource-group rg-aigw-dev-sdc \
+  --template-file infra/bicep/environments/dev/main.bicep \
+  --parameters infra/bicep/environments/dev/main.bicepparam \
+  --parameters imageTag=sha-<git-sha>
+```
+
+Deployments are idempotent; rollback is a re-deploy with the previous `imageTag` (ACA revisions are atomic). See [`docs/ops-runbook.md`](docs/ops-runbook.md) for revision management, log streaming, and scale rules.
+
+### Run tests
+
+Fast unit/integration tests run locally — no deployed environment needed. The raw-SQL suites (e.g. `identity`, `admin`) use `testcontainers`, which needs a running Docker daemon.
 
 ```bash
 pip install \
   -e "services/auth[dev]" \
   -e "services/cache[dev]" \
   -e "services/observability[dev]" \
-  -e "services/admin[dev]"
+  -e "services/admin[dev]" \
+  -e "services/identity[dev]" \
+  -e "services/agent-relay[dev]"
 
 pytest services/ -v
 ```
+
+End-to-end smoke tests run against the deployed Azure environment from a VNet-connected runner (see `deploy.yml`).
 
 ### Lint
 
@@ -336,9 +336,11 @@ ruff format services/
 
 ```
 infra/
-  docker-compose.yml     Full stack compose file
-  dex/config.yaml        OIDC provider config (swap issuer for real Entra ID)
-  postgres/              DB init scripts
+  bicep/
+    environments/dev/      main.bicep + main.bicepparam (per-env values)
+    environments/test/     Test environment parameters
+    modules/               networking, containerEnv, containerApps, postgres,
+                           redis, keyVault, acr, serviceBus, monitoring, …
 services/
   auth/                  API key validation, JWT, rate limiting, budget enforcement
   cache/                 Semantic + exact caching proxy
@@ -347,14 +349,13 @@ services/
   admin/                 Operator + developer portal (FastAPI)
     app/routers/
       unified_auth.py    Single /auth/* surface for all user types
-      admin_auth.py      /admin-auth/* shim (backwards compat)
-      dev_auth.py        /dev-auth/* shim (backwards compat)
       transformation.py  AI transformation metrics
       users.py           Admin user management queries
-    migrations/          Alembic migration chain (0001 → 0011)
+    migrations/          Alembic migration chain
+  identity/ agent-relay/ librarian/ memory/ league/ scanner/ workflow-worker/
 apps/
-  admin/                 Next.js admin portal (port 3001)
-  portal/                Next.js developer portal (port 3002)
+  admin/                 Next.js admin portal
+  portal/                Next.js developer portal
 docs/
   api-reference.md       Full API reference
   developer-guide.md     Developer integration guide
@@ -366,38 +367,27 @@ docs/
 
 ## Configuration
 
-All services read from the `.env` file at repo root.
+Runtime configuration is supplied to each Container App from **Azure Key Vault** via native ACA secret references, resolved by the app's managed identity. Services fail fast on startup if a required value is missing — there are no local defaults.
 
-| Variable | Required | Description |
+| Variable | Source | Description |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | for Claude | Anthropic API key |
-| `GEMINI_API_KEY` | for Gemini | Google AI Studio key |
-| `GITHUB_MODELS_API_KEY` | for GitHub Models | GitHub PAT |
-| `LITELLM_MASTER_KEY` | yes | Shared secret between services |
-| `SECRET_KEY` | yes (prod) | Session signing key |
-| `ADMIN_TOKEN` | yes (prod) | Static bearer token for CI/automation |
-| `DEV_BYPASS_AUTH` | no | `true` skips admin auth in dev |
-| `OIDC_ISSUER` | no | OIDC issuer URL (default: local Dex) |
-| `OIDC_CLIENT_ID` | no | OIDC client ID |
-| `OIDC_CLIENT_SECRET` | no | OIDC client secret |
-| `ALLOWED_EMAIL_DOMAINS` | no | Comma-separated list; restricts self-registration |
-| `REDIS_URL` | no | Default `redis://localhost:6379/0` |
-| `DATABASE_URL` | no | Default `postgresql+asyncpg://aigateway:aigateway@localhost:5432/aigateway` |
+| `DATABASE_URL` | KV `postgres-url` | PostgreSQL connection string (asyncpg) |
+| `REDIS_URL` | KV `redis-url` | Cache + rate-limit store |
+| `LITELLM_MASTER_KEY` | KV `litellm-master-key` | Shared secret between services |
+| `SECRET_KEY` | KV | Session signing key |
+| `OIDC_ISSUER` / `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` | KV | Entra ID SSO settings |
+| `APPLICATIONINSIGHTS_CONNECTION_STRING` | KV `app-insights-conn` | Telemetry |
+| `SERVICE_BUS_CONNECTION` | KV `service-bus-conn` | Observability event bus |
+| `ANTHROPIC_API_KEY` / `GEMINI_API_KEY` / `GITHUB_MODELS_API_KEY` | KV | Provider keys |
+| `ALLOWED_EMAIL_DOMAINS` | env | Comma-separated list; restricts self-registration |
 
-Minimum viable local `.env`:
-
-```ini
-ANTHROPIC_API_KEY=sk-ant-...
-LITELLM_MASTER_KEY=sk-litellm-local-dev
-SECRET_KEY=change-me-in-production
-DEV_BYPASS_AUTH=true
-```
+Secrets are written to Key Vault by the `keyVault` Bicep module and never appear in IaC output or CI logs. See the deployment design for the full secret inventory.
 
 ---
 
 ## Database Migrations
 
-Migrations are managed by Alembic and run automatically at startup via the `db-migrate` service.
+Migrations are managed by Alembic and applied by the `job-db-migrate-dev-sdc` Container Apps Job, triggered as part of `deploy.yml` after each deploy.
 
 | Migration | Description |
 |---|---|
@@ -407,8 +397,8 @@ Migrations are managed by Alembic and run automatically at startup via the `db-m
 | 0010 | Unified identity: `users` + `user_roles` tables; migrates `admin_users` + `developers` |
 | 0011 | `user_invitations` + `service_accounts` tables |
 
-To run manually:
+To run manually against the deployed environment:
 
 ```bash
-docker compose -f infra/docker-compose.yml run --rm db-migrate
+az containerapp job start --name job-db-migrate-dev-sdc --resource-group rg-aigw-dev-sdc
 ```

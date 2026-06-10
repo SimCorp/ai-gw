@@ -11,9 +11,6 @@ async def require_dev_auth(
     authorization: str | None = Header(default=None),
 ) -> dict:
     """Validate developer session from shared Redis."""
-    if settings.dev_bypass_auth:
-        return {"user_id": "00000000-0000-0000-0000-000000000001", "email": "dev@simcorp.com"}
-
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Authorization required")
 
@@ -33,9 +30,6 @@ async def require_admin_auth(
     x_admin_token: str | None = Header(default=None),
 ) -> dict:
     """Validate admin token: static X-Admin-Token or session with admin role."""
-    if settings.dev_bypass_auth:
-        return {"user_id": "00000000-0000-0000-0000-000000000001", "role": "platform_admin"}
-
     if x_admin_token and settings.admin_token:
         if secrets.compare_digest(x_admin_token, settings.admin_token):
             return {"user_id": "token", "role": "platform_admin"}

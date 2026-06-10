@@ -701,12 +701,7 @@ All endpoints follow REST conventions:
 
 All endpoints are relative to the league service URL:
 ```
-http://localhost:8010
-```
-
-In production (with nginx):
-```
-http://localhost:8080/league
+https://aigw-dev.lab.cloud.scdom.net/league
 ```
 
 ## Example: Complete Challenge Workflow
