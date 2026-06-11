@@ -352,10 +352,17 @@ jobs:
           for tag in "${TAG_ARGS[@]}"; do
             DOCKER_TAGS="$DOCKER_TAGS --tag $tag"
           done
-          docker buildx build \
-            --push \
-            $DOCKER_TAGS \
-            --cache-from type=gha,scope=${{ matrix.component.name }} \
-            --cache-to type=gha,mode=max,scope=${{ matrix.component.name }} \
-            ${{ matrix.component.context }}
+          for attempt in 1 2 3; do
+            if docker buildx build \
+              --push \
+              $DOCKER_TAGS \
+              --cache-from type=gha,scope=${{ matrix.component.name }} \
+              --cache-to type=gha,mode=max,scope=${{ matrix.component.name }} \
+              ${{ matrix.component.context }}; then
+              exit 0
+            fi
+            echo "Build attempt ${attempt}/3 failed"
+            [[ ${attempt} -lt 3 ]] && sleep 15
+          done
+          exit 1
 
