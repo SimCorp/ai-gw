@@ -198,8 +198,23 @@ resource dbMigrateJob 'Microsoft.App/jobs@2024-03-01' = {
           name: 'db-migrate'
           image: '${ghcrBase}/admin-api:${imageTag}'
           command: ['alembic', '-c', '/app/alembic.ini', 'upgrade', 'head']
+          // migrations/env.py imports the service Settings, which (since the
+          // local-dev defaults were removed) requires every field below. Only
+          // DATABASE_URL is actually used by alembic — the rest are stubs.
           env: [
             { name: 'DATABASE_URL', secretRef: 'postgres-url' }
+            { name: 'REDIS_URL', value: 'migration-stub' }
+            { name: 'SECRET_KEY', value: 'migration-stub' }
+            { name: 'OIDC_ISSUER', value: 'migration-stub' }
+            { name: 'LITELLM_MASTER_KEY', value: 'migration-stub' }
+            { name: 'AUTH_URL', value: 'migration-stub' }
+            { name: 'CACHE_URL', value: 'migration-stub' }
+            { name: 'LITELLM_URL', value: 'migration-stub' }
+            { name: 'OBSERVABILITY_URL', value: 'migration-stub' }
+            { name: 'LEAGUE_URL', value: 'migration-stub' }
+            { name: 'LIBRARIAN_URL', value: 'migration-stub' }
+            { name: 'IDENTITY_KEY_SECRET', value: 'migration-stub' }
+            { name: 'CORS_ORIGINS', value: '[]' }
           ]
           resources: stdResources
         }
