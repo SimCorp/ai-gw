@@ -1,4 +1,4 @@
-"""Worker configuration. Reads from env vars set in docker-compose."""
+"""Worker configuration. Reads from environment variables (Key Vault in Azure)."""
 
 from __future__ import annotations
 
