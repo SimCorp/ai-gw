@@ -126,10 +126,11 @@ jobs:
       - name: Pre-build compose services with layer cache
         run: |
           # Build all services needed for integration tests in parallel with GHA layer cache.
-          # --load imports images into the local Docker daemon with names docker compose expects
-          # (ai-gateway-auth, ai-gateway-cache, etc. — from name: ai-gateway in docker-compose.yml).
+          # --load imports images into Docker daemon with names compose expects (ai-gateway-auth etc.)
+          # *.env-file= strips the env_file directive (only needed at runtime, not for image builds).
           docker buildx bake \
             --file infra/docker-compose.yml \
+            --set "*.env-file=" \
             --set "db-migrate.cache-from=type=gha,scope=int-db-migrate" \
             --set "db-migrate.cache-to=type=gha,mode=max,scope=int-db-migrate" \
             --set "auth.cache-from=type=gha,scope=int-auth" \
