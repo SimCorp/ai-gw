@@ -14,6 +14,9 @@ jobs:
   validate:
     name: Validate Bicep (dev)
     runs-on: ubuntu-latest
+    # Skip fork PRs: secrets and OIDC are unavailable for forks and would
+    # cause this job to fail. Push and dispatch runs are unaffected.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     permissions:
       id-token: write
       contents: read
