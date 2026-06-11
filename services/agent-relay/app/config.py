@@ -1,4 +1,4 @@
-"""Agent Relay configuration. Reads from env vars set in docker-compose."""
+"""Agent Relay configuration. Reads from environment variables (Key Vault in Azure)."""
 
 from __future__ import annotations
 
