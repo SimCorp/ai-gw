@@ -37,8 +37,8 @@ function Chip({ children }: { children: React.ReactNode }) {
         fontSize: 11,
         padding: "2px 8px",
         borderRadius: 999,
-        background: "rgba(8,62,167,0.08)",
-        color: "var(--sc-blue)",
+        background: "var(--accent-soft)",
+        color: "var(--accent)",
         marginRight: 4,
         marginTop: 4,
       }}
@@ -170,8 +170,8 @@ function ContentCard({ item }: { item: ContentItem }) {
             padding: "4px 10px",
             borderRadius: 999,
             border: "1px solid var(--rule)",
-            background: state.upvoted ? "rgba(8,62,167,0.10)" : "transparent",
-            color: state.upvoted ? "var(--sc-blue)" : "var(--fg-2)",
+            background: state.upvoted ? "var(--accent-soft)" : "transparent",
+            color: state.upvoted ? "var(--accent)" : "var(--fg-2)",
             cursor: developer ? "pointer" : "not-allowed",
             fontSize: 12,
             fontFamily: "inherit",
@@ -209,7 +209,7 @@ function ContentCard({ item }: { item: ContentItem }) {
             padding: 10,
             borderRadius: 6,
             border: "1px solid var(--rule)",
-            background: "rgba(0,0,0,0.02)",
+            background: "var(--surface-soft)",
           }}
         >
           <textarea
@@ -354,8 +354,8 @@ export default function ChampionsHubPage() {
                       width: 40,
                       height: 40,
                       borderRadius: "50%",
-                      background: "var(--sc-blue)",
-                      color: "white",
+                      background: "var(--accent)",
+                      color: "var(--accent-fg)",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",

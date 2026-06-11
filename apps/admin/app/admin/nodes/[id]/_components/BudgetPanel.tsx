@@ -48,7 +48,7 @@ export function BudgetPanel({ nodeId }: BudgetPanelProps) {
 
   const pct = data.pct_used != null ? Math.min(data.pct_used * 100, 100) : null;
   const budgetSet = data.budget_usd != null;
-  const barColor = pct == null ? '#667' : pct >= 90 ? '#EF3E4A' : pct >= 70 ? '#FB9B2A' : '#10B981';
+  const barColor = pct == null ? 'var(--fg-3)' : pct >= 90 ? 'var(--bad)' : pct >= 70 ? 'var(--warn)' : 'var(--good)';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -92,12 +92,12 @@ export function BudgetPanel({ nodeId }: BudgetPanelProps) {
               placeholder="e.g. 5000"
               value={budgetInput}
               onChange={e => setBudgetInput(e.target.value)}
-              style={{ flex: '1 1 140px', padding: '6px 10px', fontSize: 12, background: 'var(--surface)', border: '1px solid var(--rule)', borderRadius: 5, color: 'var(--fg)' }}
+              style={{ flex: '1 1 140px', padding: '6px 10px', fontSize: 12, background: 'var(--surface)', border: '1px solid var(--rule)', borderRadius: 5, color: 'var(--fg-1)' }}
             />
             <button
               onClick={() => saveMutation.mutate(budgetInput ? parseFloat(budgetInput) : null)}
               disabled={saveMutation.isPending}
-              style={{ padding: '6px 12px', fontSize: 12, background: 'var(--sc-blue)', color: '#fff', border: 'none', borderRadius: 5, cursor: 'pointer' }}
+              style={{ padding: '6px 12px', fontSize: 12, background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 5, cursor: 'pointer' }}
             >
               Save
             </button>
@@ -119,14 +119,14 @@ export function BudgetPanel({ nodeId }: BudgetPanelProps) {
             style={{
               padding: '7px 14px', fontSize: 12,
               background: 'var(--surface-2)', border: '1px solid var(--rule)',
-              borderRadius: 6, color: 'var(--fg)', cursor: 'pointer',
+              borderRadius: 6, color: 'var(--fg-1)', cursor: 'pointer',
             }}
           >
             {budgetSet ? 'Edit budget' : 'Set budget'}
           </button>
         )}
         {saveMutation.isError && (
-          <div style={{ marginTop: 8, fontSize: 12, color: '#EF3E4A' }}>
+          <div style={{ marginTop: 8, fontSize: 12, color: 'var(--bad)' }}>
             {(saveMutation.error as Error).message}
           </div>
         )}
@@ -140,13 +140,13 @@ function KpiCard({ label, value, accent, muted }: { label: string; value: string
     <div style={{
       padding: '14px 16px',
       background: 'var(--surface)',
-      border: `1px solid ${accent ? '#EF3E4A44' : 'var(--rule)'}`,
+      border: `1px solid ${accent ? 'color-mix(in srgb, var(--bad) 27%, transparent)' : 'var(--rule)'}`,
       borderRadius: 8,
     }}>
-      <div style={{ fontSize: 11, color: muted ? 'var(--fg-3)' : 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>
+      <div className="microlabel" style={{ marginBottom: 4 }}>
         {label}
       </div>
-      <div style={{ fontSize: 20, fontWeight: 700, color: accent ? '#EF3E4A' : muted ? 'var(--fg-3)' : 'var(--fg)' }}>
+      <div style={{ fontSize: 20, fontWeight: 700, color: accent ? 'var(--bad)' : muted ? 'var(--fg-3)' : 'var(--fg-1)' }}>
         {value}
       </div>
     </div>

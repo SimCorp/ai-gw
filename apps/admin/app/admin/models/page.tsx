@@ -16,14 +16,14 @@ interface Model {
 }
 
 const PROVIDER_COLORS: Record<string, string> = {
-  anthropic: '#D97757',
-  openai: '#10A37F',
-  google: '#4285F4',
-  gemini: '#4285F4',
-  'github-copilot': '#24292F',
-  azure: '#0078D4',
-  'github-models': '#1A1D31',
-  ollama: '#1D958E',
+  anthropic: 'var(--cat-orange)',
+  openai: 'var(--cat-teal)',
+  google: 'var(--accent)',
+  gemini: 'var(--accent)',
+  'github-copilot': 'var(--fg-1)',
+  azure: 'var(--accent)',
+  'github-models': 'var(--fg-1)',
+  ollama: 'var(--cat-teal)',
 };
 
 const PROVIDER_OPTIONS = [
@@ -42,7 +42,7 @@ function getProviderColor(provider: string): string {
   for (const [k, color] of Object.entries(PROVIDER_COLORS)) {
     if (key.includes(k)) return color;
   }
-  return '#888';
+  return 'var(--fg-3)';
 }
 
 function enabledPill(enabled: boolean, onClick: () => void) {

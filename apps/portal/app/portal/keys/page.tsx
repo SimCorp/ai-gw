@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState, useEffect, useCallback } from "react";
+import { Button, CodeBlock, EmptyState, Pill, Skeleton } from "@aigw/ui";
 import { useTeam } from "../_lib/teamContext";
 import { useAuth } from "../_lib/authContext";
 
@@ -67,6 +68,13 @@ const msg = await client.messages.create({
   messages: [{ role: "user", content: "Hello" }],
 });`,
 };
+
+function firstCallSnippet(key: string) {
+  return `curl https://aigw-dev.lab.cloud.scdom.net/v1/chat/completions \\
+  -H "authorization: Bearer ${key}" \\
+  -H "content-type: application/json" \\
+  -d '{"model": "claude-sonnet-4-6", "messages": [{"role": "user", "content": "Hello"}]}'`;
+}
 
 interface ApiKey {
   id: string;
@@ -138,15 +146,11 @@ function KeyVerifier({ initialKey }: { initialKey: string | null }) {
         <div style={{ display: "flex", gap: 8 }}>
           <input
             type="text"
+            className="input mono"
             value={keyInput}
             onChange={e => setKeyInput(e.target.value)}
             placeholder="sk-..."
-            style={{
-              flex: 1, padding: "8px 12px", border: "1px solid var(--rule)",
-              borderRadius: 7, background: "var(--surface)", fontSize: 13,
-              fontFamily: "var(--font-mono)", color: "var(--fg-1)", outline: "none",
-              boxSizing: "border-box",
-            }}
+            style={{ flex: 1 }}
           />
           <button
             className="btn btn--primary"
@@ -157,20 +161,20 @@ function KeyVerifier({ initialKey }: { initialKey: string | null }) {
           </button>
         </div>
         {status === "ok" && (
-          <div style={{ marginTop: 10, padding: "10px 14px", borderRadius: 8, background: "rgba(31,138,91,0.06)", border: "1px solid rgba(31,138,91,0.2)", display: "flex", gap: 10, alignItems: "flex-start" }}>
+          <div style={{ marginTop: 10, padding: "10px 14px", borderRadius: "var(--r-2)", background: "var(--good-soft)", display: "flex", gap: 10, alignItems: "flex-start" }}>
             <span style={{ color: "var(--good)", fontWeight: 700, fontSize: 15 }}>✓</span>
             <div>
               <div style={{ fontSize: 13, color: "var(--good)", fontWeight: 500 }}>Key is valid · gateway responded in {latency}ms</div>
-              {response && <div className="mono" style={{ fontSize: 12, color: "var(--fg-2)", marginTop: 3 }}>{response}</div>}
+              {response && <div className="mono muted" style={{ fontSize: 12, marginTop: 3 }}>{response}</div>}
             </div>
           </div>
         )}
         {status === "error" && (
-          <div style={{ marginTop: 10, padding: "10px 14px", borderRadius: 8, background: "rgba(239,62,74,0.06)", border: "1px solid rgba(239,62,74,0.2)", display: "flex", gap: 10, alignItems: "flex-start" }}>
+          <div style={{ marginTop: 10, padding: "10px 14px", borderRadius: "var(--r-2)", background: "var(--bad-soft)", display: "flex", gap: 10, alignItems: "flex-start" }}>
             <span style={{ color: "var(--bad)", fontWeight: 700, fontSize: 15 }}>✗</span>
             <div>
               <div style={{ fontSize: 13, color: "var(--bad)", fontWeight: 500 }}>Test failed{latency ? ` · ${latency}ms` : ""}</div>
-              {errorMsg && <div className="mono" style={{ fontSize: 12, color: "var(--fg-2)", marginTop: 3 }}>{errorMsg}</div>}
+              {errorMsg && <div className="mono muted" style={{ fontSize: 12, marginTop: 3 }}>{errorMsg}</div>}
             </div>
           </div>
         )}
@@ -187,13 +191,14 @@ export default function KeysPage() {
   const { teamId, teamName } = useTeam();
   const { token } = useAuth();
   const [lang, setLang] = useState<Lang>("curl");
-  const [copied, setCopied] = useState<string | null>(null);
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [newKeyValue, setNewKeyValue] = useState<string | null>(null);
   const [newKeyName, setNewKeyName] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
+  const [draftName, setDraftName] = useState("");
 
   const loadKeys = useCallback(async () => {
     if (!teamId) return;
@@ -217,15 +222,8 @@ export default function KeysPage() {
     loadKeys();
   }, [loadKeys]);
 
-  const handleCopy = (text: string, id: string) => {
-    navigator.clipboard.writeText(text).then(() => {
-      setCopied(id);
-      setTimeout(() => setCopied(null), 2000);
-    });
-  };
-
   const handleCreateKey = async () => {
-    const name = prompt("Enter a name for the new key:");
+    const name = draftName;
     if (!name?.trim() || !teamId) return;
     setCreating(true);
     try {
@@ -241,6 +239,8 @@ export default function KeysPage() {
       const data = await r.json();
       setNewKeyValue(data.key);
       setNewKeyName(data.name);
+      setShowCreate(false);
+      setDraftName("");
       await loadKeys();
     } catch (e) {
       alert(`Failed to create key: ${e}`);
@@ -290,46 +290,65 @@ export default function KeysPage() {
           </p>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button className="btn btn--primary" onClick={handleCreateKey} disabled={creating}>
-            {creating ? "Creating…" : "+ Issue key"}
-          </button>
+          <Button variant="primary" onClick={() => setShowCreate(true)} disabled={creating || showCreate || !!newKeyValue}>
+            + Create key
+          </Button>
         </div>
       </div>
 
-      {/* New key reveal */}
-      {newKeyValue && (
-        <div
-          className="card"
-          style={{
-            borderColor: "var(--good)",
-            background: "linear-gradient(180deg,rgba(31,138,91,0.04),transparent 40%)",
-            marginBottom: 20,
-          }}
-        >
-          <div className="card__head">
-            <h3 className="card__title">
-              Your new key — <span className="mono">{newKeyName}</span>
-            </h3>
-            <span className="card__sub">copy it now · we won&apos;t show it again</span>
-          </div>
-          <div className="card__body">
-            <div className="code-block" style={{ marginBottom: 10 }}>
-              {newKeyValue}
-              <button className="copy-btn" onClick={() => handleCopy(newKeyValue, "newkey")}>
-                {copied === "newkey" ? "Copied!" : "Copy"}
-              </button>
-            </div>
-            <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 12.5, color: "var(--fg-2)" }}>
-              <span style={{ color: "var(--good)" }}>✓ store this somewhere safe — it will not be shown again</span>
-              <button
-                className="btn btn--sm btn--ghost"
-                style={{ marginLeft: "auto" }}
-                onClick={() => { setNewKeyValue(null); setNewKeyName(null); }}
-              >
-                Dismiss
-              </button>
-            </div>
-          </div>
+      {/* Create panel / one-time key reveal */}
+      {(showCreate || newKeyValue) && (
+        <div className="card card--trace" style={{ marginBottom: 20 }}>
+          {newKeyValue ? (
+            <>
+              <div className="card__head">
+                <h3 className="card__title">
+                  Key created — <span className="mono">{newKeyName}</span>
+                </h3>
+                <Pill variant="warn" dot>Shown once — store it now</Pill>
+                <div className="card__actions">
+                  <Button variant="ghost" size="sm" onClick={() => { setNewKeyValue(null); setNewKeyName(null); }}>
+                    Done
+                  </Button>
+                </div>
+              </div>
+              <div className="card__body">
+                <CodeBlock code={newKeyValue} copyable />
+                <div className="muted" style={{ fontSize: 12.5, margin: "8px 0 16px" }}>
+                  This is the only time the full key is displayed. Store it in Key Vault before dismissing.
+                </div>
+                <div className="microlabel" style={{ marginBottom: 6 }}>Next: make your first call</div>
+                <CodeBlock code={firstCallSnippet(newKeyValue)} language="bash" copyable />
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="card__head">
+                <h3 className="card__title">Create a new key</h3>
+                <span className="card__sub">scoped to {teamName} · one key per service</span>
+              </div>
+              <div className="card__body">
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input
+                    type="text"
+                    className="input"
+                    autoFocus
+                    value={draftName}
+                    onChange={(e) => setDraftName(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") handleCreateKey(); }}
+                    placeholder="Key name, e.g. order-enrichment-prod"
+                    style={{ flex: 1 }}
+                  />
+                  <Button variant="primary" onClick={handleCreateKey} disabled={creating || !draftName.trim()}>
+                    {creating ? "Creating…" : "Create key"}
+                  </Button>
+                  <Button variant="ghost" onClick={() => { setShowCreate(false); setDraftName(""); }}>
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -348,20 +367,31 @@ export default function KeysPage() {
             <h3 className="card__title">Your keys</h3>
             <span className="card__sub">{activeKeys.length} active</span>
           </div>
-          <div className="card__body" style={{ padding: 0 }}>
+          <div className="card__body card__body--flush">
             {loading ? (
-              <div style={{ padding: 16, fontSize: 13, color: "var(--fg-3)" }}>Loading keys…</div>
-            ) : keys.length === 0 ? (
-              <div style={{ padding: 16, fontSize: 13, color: "var(--fg-3)" }}>
-                No keys yet. Issue your first key above.
+              <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 10 }}>
+                <Skeleton width="60%" />
+                <Skeleton width="80%" />
+                <Skeleton width="70%" />
               </div>
+            ) : keys.length === 0 ? (
+              <EmptyState
+                title="No API keys yet"
+                description={`Create your first key to start making requests on behalf of ${teamName}.`}
+                action={
+                  <Button variant="primary" onClick={() => setShowCreate(true)}>
+                    Create key
+                  </Button>
+                }
+              />
             ) : (
               <table className="tbl">
                 <thead>
                   <tr>
                     <th>Name</th>
                     <th>Key prefix</th>
-                    <th>Budget</th>
+                    <th>Team</th>
+                    <th className="num">Budget</th>
                     <th>Created</th>
                     <th>Status</th>
                     <th />
@@ -371,21 +401,21 @@ export default function KeysPage() {
                   {keys.map((k) => (
                     <tr key={k.id}>
                       <td><strong>{k.name}</strong></td>
-                      <td><span className="mono">{k.key_hash.slice(0, 8)}…</span></td>
-                      <td>{k.monthly_budget_usd != null ? `$${k.monthly_budget_usd}/mo` : <span className="muted">unlimited</span>}</td>
-                      <td>{formatDate(k.created_at)}</td>
+                      <td><span className="tag">{k.key_hash.slice(0, 8)}…</span></td>
+                      <td>{teamName}</td>
+                      <td className="num">{k.monthly_budget_usd != null ? `$${k.monthly_budget_usd}/mo` : <span className="muted">unlimited</span>}</td>
+                      <td className="num">{formatDate(k.created_at)}</td>
                       <td>
                         {k.revoked_at ? (
-                          <span className="pill pill--bad"><span className="dot" />revoked</span>
+                          <Pill variant="bad" dot>revoked</Pill>
                         ) : (
-                          <span className="pill pill--good"><span className="dot" />active</span>
+                          <Pill variant="good" dot>active</Pill>
                         )}
                       </td>
                       <td>
                         {!k.revoked_at && (
                           <button
-                            className="btn btn--sm btn--ghost"
-                            style={{ color: "var(--bad)" }}
+                            className="btn btn--danger btn--sm"
                             onClick={() => handleRevoke(k.id, k.name)}
                           >
                             Revoke
@@ -431,17 +461,12 @@ export default function KeysPage() {
         ))}
       </div>
 
-      <div className="code-block">
-        <pre style={{ margin: 0, fontFamily: "var(--font-mono)", fontSize: 13, lineHeight: 1.6, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{CODE[lang as Lang]}</pre>
-        <button className="copy-btn" onClick={() => handleCopy(CODE[lang as Lang], "code")}>
-          {copied === "code" ? "Copied!" : "Copy"}
-        </button>
-      </div>
+      <CodeBlock code={CODE[lang]} language={lang} copyable />
 
-      <div style={{ display: "flex", gap: 18, marginTop: 18, fontSize: 12.5, color: "var(--fg-2)" }}>
+      <div style={{ display: "flex", gap: 18, marginTop: 18, fontSize: 12.5 }}>
         <span><span className="muted">Base URL:</span> <span className="mono">https://aigw.simcorp.internal/v1</span></span>
         <span><span className="muted">Anthropic-shaped:</span> <span className="mono">/anthropic</span></span>
-        <span><span className="muted">Status:</span> <a href="#" style={{ color: "var(--sc-blue)" }}>aigw.simcorp.internal/status</a></span>
+        <span><span className="muted">Status:</span> <a href="#" style={{ color: "var(--accent-text)" }}>aigw.simcorp.internal/status</a></span>
       </div>
     </main>
   );

@@ -67,7 +67,7 @@ export default function RelatedChampionContent({ tags, label = "Related champion
                   {(it.metadata.tags ?? []).slice(0, 3).map((t) => (
                     <span key={t} style={{
                       fontSize: 10.5, padding: "1px 6px", borderRadius: 999,
-                      background: "rgba(8,62,167,0.08)", color: "var(--sc-blue)",
+                      background: "var(--accent-soft)", color: "var(--accent-text)",
                     }}>{t}</span>
                   ))}
                 </div>

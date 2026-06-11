@@ -315,7 +315,7 @@ export default function McpPage() {
 
       {/* Gateway-managed built-in servers — always available, pre-authorized */}
       <div style={{ marginBottom: 8 }}>
-        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+        <div className="microlabel" style={{ marginBottom: 8 }}>
           Gateway-managed
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -333,20 +333,20 @@ export default function McpPage() {
             const testLabel = isMemory ? 'Test Memory' : 'Test Librarian';
             const testOkMsg = isMemory ? 'Memory is reachable' : 'Librarian is reachable';
             return (
-            <div key={gws.id} className="card" style={{ border: '1px solid var(--sc-blue, #0A7BD7)' }}>
+            <div key={gws.id} className="card" style={{ border: '1px solid var(--accent)' }}>
               <div className="card__head" style={{ alignItems: 'flex-start' }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                     <span style={{
                       width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
-                      background: 'var(--sc-blue, #0A7BD7)',
-                      boxShadow: '0 0 0 2px rgba(10,123,215,0.15)',
+                      background: 'var(--accent)',
+                      boxShadow: '0 0 0 2px var(--accent-soft)',
                     }} />
                     <h3 className="card__title" style={{ margin: 0 }}>{gws.name}</h3>
                     <span className="pill" style={{ fontSize: 11, padding: '2px 7px' }}>
                       {gws.tool_count} tools
                     </span>
-                    <span className="pill" style={{ fontSize: 11, padding: '2px 7px', background: 'var(--sc-blue, #0A7BD7)', color: '#fff', borderColor: 'transparent' }}>
+                    <span className="pill" style={{ fontSize: 11, padding: '2px 7px', background: 'var(--accent)', color: 'var(--accent-fg)', borderColor: 'transparent' }}>
                       built-in
                     </span>
                   </div>
@@ -369,11 +369,11 @@ export default function McpPage() {
                   {/* Setup steps */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                     <div>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg-2)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      <div className="microlabel" style={{ marginBottom: 8 }}>
                         Connect from Claude Code (or any MCP client)
                       </div>
                       <ol style={{ margin: 0, paddingLeft: 20, fontSize: 13, lineHeight: 1.7, color: 'var(--fg-2)', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <li>Copy your AIGW key from the <a href="/portal/keys" style={{ color: 'var(--sc-blue)' }}>Keys page</a>.</li>
+                        <li>Copy your AIGW key from the <a href="/portal/keys" style={{ color: 'var(--accent)' }}>Keys page</a>.</li>
                         <li>
                           Add this block to <span className="mono" style={{ fontSize: 12 }}>~/.claude/settings.json</span> (replacing the key):
                           <div style={{ position: 'relative', marginTop: 8 }}>
@@ -398,7 +398,7 @@ export default function McpPage() {
 
                     {/* Test connection */}
                     <div style={{ paddingTop: 12, borderTop: '1px solid var(--rule)' }}>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg-2)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      <div className="microlabel" style={{ marginBottom: 8 }}>
                         Test connection (uses your portal session)
                       </div>
                       <button
@@ -409,7 +409,7 @@ export default function McpPage() {
                         {testStatus === 'testing' ? 'Testing…' : testLabel}
                       </button>
                       {testStatus === 'ok' && (
-                        <div style={{ marginTop: 10, padding: '10px 14px', borderRadius: 8, background: 'rgba(31,138,91,0.06)', border: '1px solid rgba(31,138,91,0.2)', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                        <div style={{ marginTop: 10, padding: '10px 14px', borderRadius: 8, background: 'var(--good-soft)', border: '1px solid var(--good)', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                           <span style={{ color: 'var(--good)', fontWeight: 700, fontSize: 15 }}>✓</span>
                           <div>
                             <div style={{ fontSize: 13, color: 'var(--good)', fontWeight: 500 }}>{testOkMsg}</div>
@@ -418,7 +418,7 @@ export default function McpPage() {
                         </div>
                       )}
                       {testStatus === 'error' && (
-                        <div style={{ marginTop: 10, padding: '10px 14px', borderRadius: 8, background: 'rgba(239,62,74,0.06)', border: '1px solid rgba(239,62,74,0.2)', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                        <div style={{ marginTop: 10, padding: '10px 14px', borderRadius: 8, background: 'var(--bad-soft)', border: '1px solid var(--bad)', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                           <span style={{ color: 'var(--bad)', fontWeight: 700, fontSize: 15 }}>✗</span>
                           <div>
                             <div style={{ fontSize: 13, color: 'var(--bad)', fontWeight: 500 }}>Connection failed</div>
@@ -437,7 +437,7 @@ export default function McpPage() {
       </div>
 
       {activeServers.length > 0 && (
-        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+        <div className="microlabel" style={{ marginBottom: 8 }}>
           Team servers
         </div>
       )}
@@ -450,7 +450,7 @@ export default function McpPage() {
               key={server.id}
               className="card"
               style={{
-                border: isExpanded ? '1px solid var(--sc-blue, #0A7BD7)' : undefined,
+                border: isExpanded ? '1px solid var(--accent)' : undefined,
               }}
             >
               <div className="card__head" style={{ alignItems: 'flex-start' }}>
@@ -460,7 +460,7 @@ export default function McpPage() {
                       style={{
                         width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
                         background: 'var(--good)',
-                        boxShadow: '0 0 0 2px rgba(31,138,91,0.15)',
+                        boxShadow: '0 0 0 2px var(--good-soft)',
                       }}
                     />
                     <h3 className="card__title" style={{ margin: 0 }}>{server.name}</h3>

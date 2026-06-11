@@ -9,24 +9,22 @@ type Period = 7 | 30 | 90;
 
 // ── Design tokens ──────────────────────────────────────────────────────────────
 const C = {
-  azure:   '#56b6f5',
-  amber:   '#f5b556',
-  rose:    '#f47272',
-  indigo:  '#7c8cf8',
-  emerald: '#34d399',
-  bg:      '#0f1729',
-  border:  'rgba(255,255,255,0.08)',
-  grid:    '#1c2942',
-  fg2:     '#9aa6bd',
+  azure:   'var(--accent)',
+  amber:   'var(--warn)',
+  rose:    'var(--bad)',
+  indigo:  'var(--cat-purple)',
+  emerald: 'var(--good)',
+  bg:      'var(--surface)',
+  border:  'var(--rule)',
+  grid:    'var(--rule)',
+  fg2:     'var(--fg-2)',
   display: "'Space Grotesk','Rubik',system-ui,sans-serif",
   mono:    "'Roboto Mono',monospace",
   ui:      "'Rubik',-apple-system,system-ui,sans-serif",
 };
 
 const CARD: React.CSSProperties = {
-  background: 'linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.025)),rgba(15,23,41,0.55)',
-  backdropFilter: 'blur(20px) saturate(150%)',
-  WebkitBackdropFilter: 'blur(20px) saturate(150%)',
+  background: 'var(--surface-2)',
   border: `1px solid ${C.border}`,
   borderRadius: 14,
   padding: 18,
@@ -34,7 +32,7 @@ const CARD: React.CSSProperties = {
   flexDirection: 'column',
   gap: 12,
   minWidth: 0,
-  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08),0 18px 40px -24px rgba(0,0,0,0.6)',
+  boxShadow: 'var(--shadow-1)',
 };
 
 // ── Mock data ─────────────────────────────────────────────────────────────────
@@ -166,9 +164,9 @@ function LineChart({series,labels,height=220,yMax,yFormat=(v:number)=>String(v),
         {labels.map((l,i)=>{const skip=Math.ceil(n/12);if(i%skip!==0&&i!==n-1)return null;return<text key={i} x={xAt(i)} y={H-6} textAnchor="middle" style={{fill:C.fg2,fontSize:10,fontFamily:C.mono}}>{l}</text>;})}
       </svg>
       {hover!==null&&(
-        <div style={{position:'absolute',left:`${(xAt(hover)/W)*100}%`,top:0,transform:'translateX(-50%)',pointerEvents:'none',background:'rgba(10,17,31,0.95)',border:`1px solid ${C.border}`,borderRadius:8,padding:'6px 10px',fontSize:12,whiteSpace:'nowrap',boxShadow:'0 4px 16px rgba(0,0,0,0.4)',zIndex:10}}>
+        <div style={{position:'absolute',left:`${(xAt(hover)/W)*100}%`,top:0,transform:'translateX(-50%)',pointerEvents:'none',background:'var(--surface-2)',border:`1px solid ${C.border}`,borderRadius:8,padding:'6px 10px',fontSize:12,whiteSpace:'nowrap',boxShadow:'var(--shadow-pop)',zIndex:10}}>
           <div style={{color:C.fg2,marginBottom:4,fontSize:11}}>{labels[hover]}</div>
-          {series.map((s,i)=><div key={i} style={{display:'flex',alignItems:'center',gap:6}}><span style={{width:8,height:8,borderRadius:2,background:s.color,flexShrink:0,display:'inline-block'}}/><span style={{color:C.fg2}}>{s.name}</span><span style={{marginLeft:'auto',color:'#fff',fontWeight:700,fontFamily:C.mono}}>{yFormat(s.data[hover!])}{unit}</span></div>)}
+          {series.map((s,i)=><div key={i} style={{display:'flex',alignItems:'center',gap:6}}><span style={{width:8,height:8,borderRadius:2,background:s.color,flexShrink:0,display:'inline-block'}}/><span style={{color:C.fg2}}>{s.name}</span><span style={{marginLeft:'auto',color:'var(--fg-1)',fontWeight:700,fontFamily:C.mono}}>{yFormat(s.data[hover!])}{unit}</span></div>)}
         </div>
       )}
     </div>
@@ -187,11 +185,11 @@ function BarChart({data,height=220,yMax,yFormat=(v:number)=>String(v),refLine}:{
   return (
     <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{display:'block',overflow:'visible'}}>
       {ticks.map((v,i)=><g key={i}><line x1={padL} x2={W-padR} y1={yAt(v)} y2={yAt(v)} stroke={C.grid} strokeWidth={0.5}/><text x={padL-6} y={yAt(v)+3} textAnchor="end" style={{fill:C.fg2,fontSize:10,fontFamily:C.mono}}>{yFormat(v)}</text></g>)}
-      {refLine&&<g><line x1={padL} x2={W-padR} y1={yAt(refLine.value)} y2={yAt(refLine.value)} stroke={C.amber} strokeWidth={1.5} strokeDasharray="5 4"/><rect x={W-padR-96} y={yAt(refLine.value)-11} width="92" height="22" rx="11" fill="rgba(245,181,86,0.14)" stroke={C.amber} strokeWidth={1}/><text x={W-padR-50} y={yAt(refLine.value)+4} textAnchor="middle" style={{fill:C.amber,fontSize:10,fontWeight:700,fontFamily:C.mono}}>{refLine.label}</text></g>}
+      {refLine&&<g><line x1={padL} x2={W-padR} y1={yAt(refLine.value)} y2={yAt(refLine.value)} stroke={C.amber} strokeWidth={1.5} strokeDasharray="5 4"/><rect x={W-padR-96} y={yAt(refLine.value)-11} width="92" height="22" rx="11" fill="var(--warn-soft)" stroke={C.amber} strokeWidth={1}/><text x={W-padR-50} y={yAt(refLine.value)+4} textAnchor="middle" style={{fill:C.amber,fontSize:10,fontWeight:700,fontFamily:C.mono}}>{refLine.label}</text></g>}
       {data.map((d,i)=>{const color=d.color??C.indigo;return(<g key={i} onMouseEnter={()=>setHover(i)} onMouseLeave={()=>setHover(null)} style={{cursor:'pointer'}}>
         <rect x={xAt(i)} y={yAt(d.value)} width={barW} height={padT+innerH-yAt(d.value)} rx={3} fill={color} opacity={hover===i?1:0.9}/>
-        <text x={xAt(i)+barW/2} y={yAt(d.value)-8} textAnchor="middle" style={{fill:'#fff',fontSize:11,fontWeight:700,fontFamily:C.display}}>{yFormat(d.value)}</text>
-        <text x={xAt(i)+barW/2} y={H-padB+18} textAnchor="middle" style={{fill:'#fff',fontSize:11,fontWeight:600}}>{d.label}</text>
+        <text x={xAt(i)+barW/2} y={yAt(d.value)-8} textAnchor="middle" style={{fill:'var(--fg-1)',fontSize:11,fontWeight:700,fontFamily:C.display}}>{yFormat(d.value)}</text>
+        <text x={xAt(i)+barW/2} y={H-padB+18} textAnchor="middle" style={{fill:'var(--fg-1)',fontSize:11,fontWeight:600}}>{d.label}</text>
         {d.sub&&<text x={xAt(i)+barW/2} y={H-padB+34} textAnchor="middle" style={{fill:C.fg2,fontSize:9}}>{d.sub}</text>}
       </g>);})}
     </svg>
@@ -208,9 +206,9 @@ function Gauge({value,max=100,color=C.azure,size=140,thickness=14,label}:{value:
   const vbH=cy+thickness+(label?22:4);
   return (
     <svg viewBox={`0 0 ${size} ${vbH}`} width="100%" style={{display:'block'}}>
-      <path d={`M ${sx} ${sy} A ${r} ${r} 0 0 1 ${ex} ${ey}`} stroke="rgba(255,255,255,0.08)" strokeWidth={thickness} fill="none" strokeLinecap="round"/>
+      <path d={`M ${sx} ${sy} A ${r} ${r} 0 0 1 ${ex} ${ey}`} stroke="var(--rule)" strokeWidth={thickness} fill="none" strokeLinecap="round"/>
       <path d={`M ${sx} ${sy} A ${r} ${r} 0 ${largeArc} 1 ${vx} ${vy}`} stroke={color} strokeWidth={thickness} fill="none" strokeLinecap="round"/>
-      <text x={cx} y={cy-4} textAnchor="middle" style={{fill:'#fff',fontSize:size*0.22,fontWeight:700,fontFamily:C.display}}>{Math.round(value)}%</text>
+      <text x={cx} y={cy-4} textAnchor="middle" style={{fill:'var(--fg-1)',fontSize:size*0.22,fontWeight:700,fontFamily:C.display}}>{Math.round(value)}%</text>
       {label&&<text x={cx} y={cy+thickness+14} textAnchor="middle" style={{fill:C.fg2,fontSize:10,fontFamily:C.mono}}>{label}</text>}
     </svg>
   );
@@ -222,9 +220,9 @@ function Donut({segments,size=120,thickness=16,centerLabel,centerValue}:{segment
   let acc=0;
   return (
     <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size} style={{display:'block'}}>
-      <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth={thickness}/>
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke="var(--rule)" strokeWidth={thickness}/>
       {segments.map((s,i)=>{const len=(s.value/total)*2*Math.PI*r, off=-((acc/total)*2*Math.PI*r);acc+=s.value;return<circle key={i} cx={cx} cy={cy} r={r} fill="none" stroke={s.color} strokeWidth={thickness} strokeDasharray={`${len} ${2*Math.PI*r}`} strokeDashoffset={off} transform={`rotate(-90 ${cx} ${cy})`} strokeLinecap="butt"/>;})}
-      {centerValue&&<text x={cx} y={cy-2} textAnchor="middle" style={{fill:'#fff',fontSize:size*0.21,fontWeight:700,fontFamily:C.display}}>{centerValue}</text>}
+      {centerValue&&<text x={cx} y={cy-2} textAnchor="middle" style={{fill:'var(--fg-1)',fontSize:size*0.21,fontWeight:700,fontFamily:C.display}}>{centerValue}</text>}
       {centerLabel&&<text x={cx} y={cy+14} textAnchor="middle" style={{fill:C.fg2,fontSize:10}}>{centerLabel}</text>}
     </svg>
   );
@@ -247,9 +245,9 @@ function GroupedBars({groups,series,height=180}:{groups:string[];series:{name:st
 
 function Bullet({value,target,max,color=C.azure}:{value:number;target:number;max:number;color?:string}) {
   return (
-    <div style={{position:'relative',height:8,background:'rgba(255,255,255,0.05)',borderRadius:18,marginTop:4}}>
+    <div style={{position:'relative',height:8,background:'var(--surface-soft)',borderRadius:18,marginTop:4}}>
       <div style={{width:`${(value/max)*100}%`,height:'100%',background:color,borderRadius:18}}/>
-      <div style={{position:'absolute',left:`${(target/max)*100}%`,top:-2,bottom:-2,width:2,background:'#fff',borderRadius:1}} title={`target ${target}`}/>
+      <div style={{position:'absolute',left:`${(target/max)*100}%`,top:-2,bottom:-2,width:2,background:'var(--fg-1)',borderRadius:1}} title={`target ${target}`}/>
     </div>
   );
 }
@@ -264,7 +262,7 @@ function CardHead({title,sub,help,right}:{title:string;sub?:string;help?:string;
   return (
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:12}}>
       <div>
-        <div style={{fontSize:14,fontWeight:600,color:'#fff',fontFamily:C.ui}}>{title}</div>
+        <div style={{fontSize:14,fontWeight:600,color:'var(--fg-1)',fontFamily:C.ui}}>{title}</div>
         {sub&&<div style={{fontSize:11,color:C.fg2,marginTop:2}}>{sub}</div>}
       </div>
       <div style={{display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
@@ -278,7 +276,7 @@ function CardHead({title,sub,help,right}:{title:string;sub?:string;help?:string;
 function DeltaChip({value,inverted=false,suffix='%'}:{value:number;inverted?:boolean;suffix?:string}) {
   const pos=inverted?value<=0:value>=0;
   return (
-    <span style={{fontSize:11,fontWeight:700,padding:'2px 6px',borderRadius:4,background:pos?'rgba(86,182,245,0.12)':'rgba(244,114,114,0.12)',color:pos?C.azure:C.rose}}>
+    <span style={{fontSize:11,fontWeight:700,padding:'2px 6px',borderRadius:4,background:pos?'var(--accent-soft)':'var(--bad-soft)',color:pos?C.azure:C.rose}}>
       {pos?'▲':'▼'} {Math.abs(value)}{suffix}
     </span>
   );
@@ -287,7 +285,7 @@ function DeltaChip({value,inverted=false,suffix='%'}:{value:number;inverted?:boo
 function BigNum({value,unit,color}:{value:string|number;unit?:string;color?:string}) {
   return (
     <div style={{display:'flex',alignItems:'baseline',gap:5}}>
-      <span style={{fontSize:32,fontWeight:700,color:color??'#fff',fontFamily:C.display,lineHeight:1}}>{value}</span>
+      <span style={{fontSize:32,fontWeight:700,color:color??'var(--fg-1)',fontFamily:C.display,lineHeight:1}}>{value}</span>
       {unit&&<span style={{fontSize:13,fontWeight:600,color:C.fg2,textTransform:'uppercase',letterSpacing:'.25px'}}>{unit}</span>}
     </div>
   );
@@ -303,8 +301,8 @@ function Legend({items}:{items:{label:string;color:string}[]}) {
 
 function SegControl({options,value,onChange}:{options:{value:string;label:string}[];value:string;onChange:(v:string)=>void}) {
   return (
-    <div style={{display:'flex',background:'rgba(255,255,255,0.04)',borderRadius:8,padding:2,gap:2}}>
-      {options.map(o=><button key={o.value} onClick={()=>onChange(o.value)} style={{padding:'4px 10px',fontSize:11,fontWeight:600,borderRadius:6,border:'none',cursor:'pointer',fontFamily:C.ui,background:value===o.value?'rgba(86,182,245,0.18)':'transparent',color:value===o.value?C.azure:C.fg2,transition:'all 120ms'}}>{o.label}</button>)}
+    <div style={{display:'flex',background:'var(--surface-soft)',borderRadius:8,padding:2,gap:2}}>
+      {options.map(o=><button key={o.value} onClick={()=>onChange(o.value)} style={{padding:'4px 10px',fontSize:11,fontWeight:600,borderRadius:6,border:'none',cursor:'pointer',fontFamily:C.ui,background:value===o.value?'var(--accent-soft)':'transparent',color:value===o.value?C.azure:C.fg2,transition:'all 120ms'}}>{o.label}</button>)}
     </div>
   );
 }
@@ -316,31 +314,31 @@ function IntegrationCallout({title, description, fields}: {
 }) {
   const [open, setOpen] = React.useState(false);
   return (
-    <div style={{border:`1px solid rgba(245,181,86,0.3)`,borderRadius:8,overflow:'hidden',marginTop:8}}>
+    <div style={{border:`1px solid var(--warn)`,borderRadius:8,overflow:'hidden',marginTop:8}}>
       <div
         onClick={()=>setOpen(o=>!o)}
-        style={{display:'flex',alignItems:'center',gap:8,padding:'8px 12px',background:'rgba(245,181,86,0.08)',cursor:'pointer',userSelect:'none'}}
+        style={{display:'flex',alignItems:'center',gap:8,padding:'8px 12px',background:'var(--warn-soft)',cursor:'pointer',userSelect:'none'}}
       >
-        <span style={{color:'#f5b556',fontSize:13}}>⚙</span>
-        <span style={{fontWeight:600,fontSize:12,color:'#f5b556',flex:1}}>{title}</span>
+        <span style={{color:'var(--warn)',fontSize:13}}>⚙</span>
+        <span style={{fontWeight:600,fontSize:12,color:'var(--warn)',flex:1}}>{title}</span>
         <span style={{color:C.fg2,fontSize:11}}>{open?'▲':'▼'} {open?'Hide':'Configure'}</span>
       </div>
       {open&&(
-        <div style={{padding:'12px 14px',background:'rgba(15,23,41,0.6)'}}>
+        <div style={{padding:'12px 14px',background:'var(--surface-2)'}}>
           <p style={{margin:'0 0 12px',fontSize:12.5,color:C.fg2,lineHeight:1.6}}>{description}</p>
           <div style={{display:'flex',flexDirection:'column',gap:8}}>
             {fields.map(f=>(
               <div key={f.envVar}>
                 <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:3}}>
-                  <span style={{fontSize:12,fontWeight:600,color:'#fff'}}>{f.label}</span>
-                  <span style={{fontSize:11,fontFamily:C.mono,color:'#f5b556',background:'rgba(245,181,86,0.1)',padding:'1px 6px',borderRadius:3}}>{f.envVar}</span>
+                  <span style={{fontSize:12,fontWeight:600,color:'var(--fg-1)'}}>{f.label}</span>
+                  <span style={{fontSize:11,fontFamily:C.mono,color:'var(--warn)',background:'var(--warn-soft)',padding:'1px 6px',borderRadius:3}}>{f.envVar}</span>
                   {f.docs&&<a href={f.docs} target="_blank" rel="noopener noreferrer" style={{fontSize:11,color:C.azure,textDecoration:'none'}}>docs ↗</a>}
                 </div>
                 <input
                   type="password"
                   placeholder={f.placeholder}
                   disabled
-                  style={{width:'100%',padding:'6px 10px',background:'rgba(255,255,255,0.04)',border:`1px solid rgba(255,255,255,0.1)`,borderRadius:5,color:C.fg2,fontSize:12,fontFamily:C.mono,cursor:'not-allowed',boxSizing:'border-box'}}
+                  style={{width:'100%',padding:'6px 10px',background:'var(--surface-soft)',border:`1px solid var(--rule)`,borderRadius:5,color:C.fg2,fontSize:12,fontFamily:C.mono,cursor:'not-allowed',boxSizing:'border-box'}}
                 />
                 <div style={{fontSize:11,color:C.fg2,marginTop:3}}>Set this environment variable on the admin service to enable live data.</div>
               </div>
@@ -354,22 +352,22 @@ function IntegrationCallout({title, description, fields}: {
 
 function HeatCell({v}:{v:number}) {
   const intensity=Math.max(0.06,v/100);
-  return <div style={{padding:'4px 2px',background:`rgba(86,182,245,${intensity*0.95})`,color:v>60?'rgba(10,17,31,0.85)':'rgba(255,255,255,0.75)',fontSize:9,fontWeight:600,textAlign:'center',borderRadius:3,fontFamily:C.mono}}>{v}</div>;
+  return <div style={{padding:'4px 2px',background:`color-mix(in srgb, var(--accent) ${Math.round(intensity*95)}%, transparent)`,color:v>60?'var(--accent-fg)':'var(--fg-1)',fontSize:9,fontWeight:600,textAlign:'center',borderRadius:3,fontFamily:C.mono}}>{v}</div>;
 }
 
 function BarTrack({value,color=C.azure,height=5}:{value:number;color?:string;height?:number}) {
-  return <div style={{height,background:'rgba(255,255,255,0.06)',borderRadius:3,overflow:'hidden'}}><div style={{width:`${value}%`,height:'100%',background:color,borderRadius:3}}/></div>;
+  return <div style={{height,background:'var(--surface-soft)',borderRadius:3,overflow:'hidden'}}><div style={{width:`${value}%`,height:'100%',background:color,borderRadius:3}}/></div>;
 }
 
 type ToolTileData = typeof MOCK.tools[number];
 function ToolTile({tool,chartType}:{tool:ToolTileData;chartType:string}) {
   return (
-    <div style={{background:'rgba(255,255,255,0.03)',border:`1px solid rgba(255,255,255,0.06)`,borderRadius:12,padding:16,display:'flex',flexDirection:'column',gap:14}}>
+    <div style={{background:'var(--surface-soft)',border:`1px solid var(--rule)`,borderRadius:12,padding:16,display:'flex',flexDirection:'column',gap:14}}>
       <div style={{display:'flex',alignItems:'center',gap:10}}>
-        <div style={{width:32,height:32,borderRadius:8,background:`${tool.color}20`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:700,color:tool.color}}>{tool.name.slice(0,2).toUpperCase()}</div>
+        <div style={{width:32,height:32,borderRadius:8,background:`color-mix(in srgb, ${tool.color} 12%, transparent)`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:700,color:tool.color}}>{tool.name.slice(0,2).toUpperCase()}</div>
         <div style={{flex:1}}>
-          <div style={{fontSize:14,fontWeight:600,color:'#fff'}}>{tool.name}</div>
-          <div style={{fontSize:11,color:C.fg2,marginTop:2,textTransform:'uppercase',letterSpacing:'.04em'}}>{tool.activeWeek} / {tool.seats} seats · 7d</div>
+          <div style={{fontSize:14,fontWeight:600,color:'var(--fg-1)'}}>{tool.name}</div>
+          <div className="microlabel" style={{marginTop:2}}>{tool.activeWeek} / {tool.seats} seats · 7d</div>
         </div>
         <DeltaChip value={tool.deltas.adoption}/>
       </div>
@@ -390,7 +388,7 @@ function ToolTile({tool,chartType}:{tool:ToolTileData;chartType:string}) {
             <div key={s.l}>
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:5}}>
                 <span style={{fontSize:12,color:C.fg2}}>{s.l}</span>
-                <div style={{display:'flex',alignItems:'center',gap:8}}><span style={{fontSize:14,fontWeight:700,color:'#fff',fontFamily:C.display}}>{s.v}%</span><DeltaChip value={s.d}/></div>
+                <div style={{display:'flex',alignItems:'center',gap:8}}><span style={{fontSize:14,fontWeight:700,color:'var(--fg-1)',fontFamily:C.display}}>{s.v}%</span><DeltaChip value={s.d}/></div>
               </div>
               <BarTrack value={s.v} color={s.c} height={6}/>
             </div>
@@ -416,21 +414,21 @@ function InsightsPanel({period}:{period:Period}) {
   },[period]);
   const ins=data?.insights;
   return (
-    <div style={{border:`1px solid rgba(86,182,245,0.25)`,borderRadius:12,overflow:'hidden',marginBottom:4}}>
-      <div onClick={()=>setOpen(o=>!o)} style={{display:'flex',alignItems:'center',gap:10,padding:'12px 16px',background:'rgba(86,182,245,0.07)',cursor:'pointer',userSelect:'none'}}>
+    <div style={{border:`1px solid var(--accent)`,borderRadius:12,overflow:'hidden',marginBottom:4}}>
+      <div onClick={()=>setOpen(o=>!o)} style={{display:'flex',alignItems:'center',gap:10,padding:'12px 16px',background:'var(--accent-soft)',cursor:'pointer',userSelect:'none'}}>
         <span style={{fontSize:16,color:C.azure}}>✦</span>
         <span style={{fontWeight:700,fontSize:13,color:C.azure,flex:1,fontFamily:C.ui}}>AI Analysis — last {period} days</span>
-        {!loading&&<button onClick={e=>{e.stopPropagation();analyze();}} style={{padding:'4px 12px',borderRadius:6,background:'rgba(86,182,245,0.15)',border:`1px solid rgba(86,182,245,0.35)`,color:C.azure,fontFamily:C.ui,fontSize:12,fontWeight:600,cursor:'pointer'}}>{data?'Refresh':'Analyse'}</button>}
+        {!loading&&<button onClick={e=>{e.stopPropagation();analyze();}} style={{padding:'4px 12px',borderRadius:6,background:'var(--accent-soft)',border:`1px solid var(--accent)`,color:C.azure,fontFamily:C.ui,fontSize:12,fontWeight:600,cursor:'pointer'}}>{data?'Refresh':'Analyse'}</button>}
         {loading&&<span style={{fontSize:12,color:C.azure}}>Analysing…</span>}
         <span style={{color:C.fg2,fontSize:12}}>{open?'▲':'▼'}</span>
       </div>
       {open&&(
-        <div style={{padding:'16px 20px',background:'rgba(15,23,41,0.55)'}}>
+        <div style={{padding:'16px 20px',background:'var(--surface-2)'}}>
           {error&&<ErrorBox msg={error}/>}
           {!data&&!loading&&!error&&<div style={{fontSize:13,color:C.fg2,padding:'8px 0'}}>Click <strong style={{color:C.azure}}>Analyse</strong> to generate an AI-powered summary of current adoption health, anomalies, and recommendations.</div>}
           {ins&&(
             <div style={{display:'flex',flexDirection:'column',gap:16}}>
-              <p style={{margin:0,fontSize:13,lineHeight:1.7,color:'#fff'}}>{ins.summary}</p>
+              <p style={{margin:0,fontSize:13,lineHeight:1.7,color:'var(--fg-1)'}}>{ins.summary}</p>
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:12}}>
                 <InsightBlock title="Key Findings" items={ins.highlights} color={C.azure} icon="◆"/>
                 <InsightBlock title="Recommendations" items={ins.recommendations} color={C.emerald} icon="→"/>
@@ -447,10 +445,10 @@ function InsightsPanel({period}:{period:Period}) {
 function InsightBlock({title,items,color,icon}:{title:string;items:string[];color:string;icon:string}) {
   if(!items.length) return null;
   return (
-    <div style={{background:`${color}0d`,border:`1px solid ${color}33`,borderTop:`2px solid ${color}`,borderRadius:8,padding:'12px 14px'}}>
-      <div style={{fontWeight:700,fontSize:11,letterSpacing:'.06em',textTransform:'uppercase',color,marginBottom:10}}>{title}</div>
+    <div style={{background:`color-mix(in srgb, ${color} 5%, transparent)`,border:`1px solid color-mix(in srgb, ${color} 20%, transparent)`,borderTop:`2px solid ${color}`,borderRadius:8,padding:'12px 14px'}}>
+      <div className="microlabel" style={{color,marginBottom:10}}>{title}</div>
       <ul style={{margin:0,padding:0,listStyle:'none',display:'flex',flexDirection:'column',gap:8}}>
-        {items.map((item,i)=><li key={i} style={{display:'flex',gap:8,fontSize:12,lineHeight:1.5,color:'#e8eaf0'}}><span style={{color,flexShrink:0,marginTop:1}}>{icon}</span><span>{item}</span></li>)}
+        {items.map((item,i)=><li key={i} style={{display:'flex',gap:8,fontSize:12,lineHeight:1.5,color:'var(--fg-1)'}}><span style={{color,flexShrink:0,marginTop:1}}>{icon}</span><span>{item}</span></li>)}
       </ul>
     </div>
   );
@@ -513,8 +511,8 @@ function AdoptionMockContent({km,activeDev,totalDev,adoptionPct,trendSeries,disp
 }) {
   return (
     <div style={{display:'flex',flexDirection:'column',gap:16}}>
-      <div style={{fontSize:11.5,color:C.fg2,marginBottom:8,padding:'6px 12px',background:'rgba(245,181,86,0.06)',border:'1px solid rgba(245,181,86,0.15)',borderRadius:6,display:'flex',alignItems:'center',gap:6}}>
-        <span style={{color:'#f5b556',fontSize:12}}>⚡</span>
+      <div style={{fontSize:11.5,color:C.fg2,marginBottom:8,padding:'6px 12px',background:'var(--warn-soft)',border:'1px solid var(--warn)',borderRadius:6,display:'flex',alignItems:'center',gap:6}}>
+        <span style={{color:'var(--warn)',fontSize:12}}>⚡</span>
         <span>Live API data where available · heatmap, charts, and tool tiles use representative data</span>
       </div>
       {/* KPI row */}
@@ -523,7 +521,7 @@ function AdoptionMockContent({km,activeDev,totalDev,adoptionPct,trendSeries,disp
           <CardHead title="Overall adoption" sub="Developers using GenAI weekly" help="% of developers with ≥1 GenAI interaction in the last 7 days"/>
           <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12}}>
             <div style={{width:120,flexShrink:0}}><Gauge value={adoptionPct} color={C.azure} size={120} thickness={14}/></div>
-            <div style={{textAlign:'right'}}><DeltaChip value={km.overallDelta}/><div style={{fontSize:10,color:C.fg2,marginTop:4,textTransform:'uppercase',letterSpacing:'.04em'}}>from last month</div></div>
+            <div style={{textAlign:'right'}}><DeltaChip value={km.overallDelta}/><div className="microlabel" style={{marginTop:4}}>from last month</div></div>
           </div>
         </CardWrap>
         <CardWrap>
@@ -541,8 +539,8 @@ function AdoptionMockContent({km,activeDev,totalDev,adoptionPct,trendSeries,disp
           <CardHead title="Code commits" sub="Commits with GenAI suggestions" help="% of commits in last 30d touched by a GenAI suggestion"/>
           <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12}}>
             <Donut size={110} thickness={16} centerValue={`${km.commits}%`} centerLabel="OF COMMITS"
-              segments={[{value:km.commits,color:C.indigo},{value:100-km.commits,color:'rgba(255,255,255,0.04)'}]}/>
-            <div style={{textAlign:'right'}}><DeltaChip value={km.commitsDelta}/><div style={{fontSize:10,color:C.fg2,marginTop:4,textTransform:'uppercase',letterSpacing:'.04em'}}>from last month</div></div>
+              segments={[{value:km.commits,color:C.indigo},{value:100-km.commits,color:'var(--surface-soft)'}]}/>
+            <div style={{textAlign:'right'}}><DeltaChip value={km.commitsDelta}/><div className="microlabel" style={{marginTop:4}}>from last month</div></div>
           </div>
         </CardWrap>
       </div>
@@ -575,13 +573,13 @@ function AdoptionMockContent({km,activeDev,totalDev,adoptionPct,trendSeries,disp
           <CardHead title="By team" sub="Adoption ranked · top 6"/>
           <div style={{display:'flex',flexDirection:'column'}}>
             {displayTeams.slice(0,6).map((t,i)=>(
-              <div key={t.id} style={{display:'grid',gridTemplateColumns:'28px 1fr 80px',gap:10,alignItems:'center',padding:'8px 0',borderBottom:`1px solid rgba(255,255,255,0.04)`}}>
+              <div key={t.id} style={{display:'grid',gridTemplateColumns:'28px 1fr 80px',gap:10,alignItems:'center',padding:'8px 0',borderBottom:`1px solid var(--rule)`}}>
                 <div style={{fontSize:11,fontWeight:700,color:C.fg2,fontFamily:C.mono}}>{String(i+1).padStart(2,'0')}</div>
                 <div style={{display:'flex',alignItems:'center',gap:8}}>
-                  <div style={{width:26,height:26,borderRadius:6,background:'rgba(124,140,248,0.15)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:700,color:C.indigo}}>{t.icon}</div>
-                  <div><div style={{fontSize:13,fontWeight:600,color:'#fff'}}>{t.name}</div><div style={{fontSize:10,color:C.fg2,textTransform:'uppercase',letterSpacing:'.04em'}}>{t.size} DEVS</div></div>
+                  <div style={{width:26,height:26,borderRadius:6,background:'color-mix(in srgb, var(--cat-purple) 15%, transparent)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:700,color:C.indigo}}>{t.icon}</div>
+                  <div><div style={{fontSize:13,fontWeight:600,color:'var(--fg-1)'}}>{t.name}</div><div className="microlabel">{t.size} DEVS</div></div>
                 </div>
-                <div><div style={{fontSize:14,fontWeight:700,color:'#fff',fontFamily:C.display,textAlign:'right'}}>{t.adoption}%</div><BarTrack value={t.adoption} color={C.azure} height={4}/></div>
+                <div><div style={{fontSize:14,fontWeight:700,color:'var(--fg-1)',fontFamily:C.display,textAlign:'right'}}>{t.adoption}%</div><BarTrack value={t.adoption} color={C.azure} height={4}/></div>
               </div>
             ))}
           </div>
@@ -617,7 +615,7 @@ function AdoptionMockContent({km,activeDev,totalDev,adoptionPct,trendSeries,disp
           )}
           <div style={{display:'flex',alignItems:'center',gap:8,fontSize:11,color:C.fg2,justifyContent:'flex-end'}}>
             <span>Less</span>
-            {[0.08,.2,.4,.65,.9].map((o,i)=><span key={i} style={{width:12,height:12,borderRadius:2,background:`rgba(86,182,245,${o})`,display:'inline-block'}}/>)}
+            {[0.08,.2,.4,.65,.9].map((o,i)=><span key={i} style={{width:12,height:12,borderRadius:2,background:`color-mix(in srgb, var(--accent) ${Math.round(o*100)}%, transparent)`,display:'inline-block'}}/>)}
             <span>More</span>
           </div>
         </CardWrap>
@@ -631,7 +629,7 @@ function AdoptionMockContent({km,activeDev,totalDev,adoptionPct,trendSeries,disp
             {MOCK.toolMix.map(s=>(
               <div key={s.label} style={{display:'grid',gridTemplateColumns:'10px 1fr auto auto',gap:8,alignItems:'center'}}>
                 <span style={{width:10,height:10,borderRadius:2,background:s.color,display:'inline-block'}}/>
-                <span style={{fontSize:13,color:'#fff'}}>{s.label}</span>
+                <span style={{fontSize:13,color:'var(--fg-1)'}}>{s.label}</span>
                 <span style={{fontSize:12,color:C.fg2,fontFamily:C.mono}}>{s.value}</span>
                 <span style={{fontSize:12,color:C.azure,fontWeight:700,fontFamily:C.display}}>{s.pct}%</span>
               </div>
@@ -678,8 +676,8 @@ function ProductivityTab({period}:{period:Period}) {
   return (
     <div style={{display:'flex',flexDirection:'column',gap:16}}>
       {error&&<ErrorBox msg={`Failed to load productivity data: ${error} — charts show illustrative data`}/>}
-      <div style={{fontSize:11.5,color:C.fg2,marginBottom:8,padding:'6px 12px',background:'rgba(245,181,86,0.06)',border:'1px solid rgba(245,181,86,0.15)',borderRadius:6,display:'flex',alignItems:'center',gap:6}}>
-        <span style={{color:'#f5b556',fontSize:12}}>⚡</span>
+      <div style={{fontSize:11.5,color:C.fg2,marginBottom:8,padding:'6px 12px',background:'var(--warn-soft)',border:'1px solid var(--warn)',borderRadius:6,display:'flex',alignItems:'center',gap:6}}>
+        <span style={{color:'var(--warn)',fontSize:12}}>⚡</span>
         <span>Live API data where available · cycle time charts and team ranking use representative data</span>
       </div>
       {/* KPI row */}
@@ -736,8 +734,8 @@ function ProductivityTab({period}:{period:Period}) {
           <CardHead title="GenAI PR cycle time" sub="First commit to merge · monthly average"
             right={<div style={{display:'flex',gap:12,alignItems:'center'}}><Legend items={[{label:'PR cycle time',color:C.azure},{label:'Trend',color:C.amber}]}/><SegControl options={[{value:'line',label:'Line'},{value:'bars',label:'Bars'}]} value={cycleChart} onChange={setCycleChart}/></div>}/>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-end',marginBottom:4}}>
-            <div style={{fontSize:11,color:C.fg2,textTransform:'uppercase',letterSpacing:'.04em'}}>Last 9 months</div>
-            <div style={{textAlign:'right'}}><div style={{fontSize:28,fontWeight:700,color:'#fff',fontFamily:C.display,lineHeight:1}}>{MOCK.cycleAvg}</div><div style={{fontSize:11,color:C.fg2,textTransform:'uppercase',letterSpacing:'.04em'}}>avg. cycle time</div></div>
+            <div className="microlabel">Last 9 months</div>
+            <div style={{textAlign:'right'}}><div style={{fontSize:28,fontWeight:700,color:'var(--fg-1)',fontFamily:C.display,lineHeight:1}}>{MOCK.cycleAvg}</div><div className="microlabel">avg. cycle time</div></div>
           </div>
           {cycleChart==='line'
             ?<LineChart series={cycleSeries} labels={MOCK.monthLabels} height={240} yMax={10} yFormat={v=>`${v}d`} unit="d" showArea={false}/>
@@ -748,10 +746,10 @@ function ProductivityTab({period}:{period:Period}) {
           <CardHead title="DORA breakdown" sub="PR lifecycle averages"/>
           {MOCK.dora.map(s=>(
             <div key={s.label} style={{display:'grid',gridTemplateColumns:'1fr auto',gap:8,alignItems:'center',padding:'10px 0',borderTop:`1px solid ${C.grid}`}}>
-              <div><div style={{fontSize:13,fontWeight:600,color:'#fff'}}>{s.label}</div><div style={{fontSize:11,color:C.fg2,marginTop:2}}>{s.sub}</div></div>
+              <div><div style={{fontSize:13,fontWeight:600,color:'var(--fg-1)'}}>{s.label}</div><div style={{fontSize:11,color:C.fg2,marginTop:2}}>{s.sub}</div></div>
               <div style={{textAlign:'right',display:'flex',alignItems:'center',gap:12}}>
                 <Sparkline data={s.spark} color={s.up?C.azure:C.amber} w={64} h={28} fill={false}/>
-                <div><div style={{fontSize:22,fontWeight:700,color:'#fff',fontFamily:C.display,lineHeight:1}}>{s.value}<span style={{fontSize:10,fontWeight:600,color:C.fg2,marginLeft:4}}>{s.unit}</span></div><div style={{fontSize:9,color:s.up?C.azure:C.amber,marginTop:3,fontWeight:700}}>{s.delta}</div></div>
+                <div><div style={{fontSize:22,fontWeight:700,color:'var(--fg-1)',fontFamily:C.display,lineHeight:1}}>{s.value}<span style={{fontSize:10,fontWeight:600,color:C.fg2,marginLeft:4}}>{s.unit}</span></div><div style={{fontSize:9,color:s.up?C.azure:C.amber,marginTop:3,fontWeight:700}}>{s.delta}</div></div>
               </div>
             </div>
           ))}
@@ -773,8 +771,8 @@ function ProductivityTab({period}:{period:Period}) {
         <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12,paddingTop:12,borderTop:`1px solid ${C.grid}`}}>
           {MOCK.cyclePerTool.map(t=>(
             <div key={t.label} style={{textAlign:'center'}}>
-              <div style={{fontSize:12,fontWeight:600,color:'#fff',marginBottom:6}}>{t.label}</div>
-              <span style={{display:'inline-block',fontSize:11,fontWeight:700,padding:'3px 8px',borderRadius:12,background:`${t.color}18`,color:t.color,border:`1px solid ${t.color}33`}}>{t.sub}</span>
+              <div style={{fontSize:12,fontWeight:600,color:'var(--fg-1)',marginBottom:6}}>{t.label}</div>
+              <span style={{display:'inline-block',fontSize:11,fontWeight:700,padding:'3px 8px',borderRadius:12,background:`color-mix(in srgb, ${t.color} 10%, transparent)`,color:t.color,border:`1px solid color-mix(in srgb, ${t.color} 20%, transparent)`}}>{t.sub}</span>
             </div>
           ))}
         </div>
@@ -791,11 +789,11 @@ function ProductivityTab({period}:{period:Period}) {
           <CardHead title="Team productivity ranking" sub="Cycle-time improvement vs baseline"/>
           <div style={{display:'flex',flexDirection:'column'}}>
             {rankTeams.map((t,i)=>(
-              <div key={t.id} style={{display:'grid',gridTemplateColumns:'28px 1fr auto',gap:10,alignItems:'center',padding:'8px 0',borderBottom:`1px solid rgba(255,255,255,0.04)`}}>
+              <div key={t.id} style={{display:'grid',gridTemplateColumns:'28px 1fr auto',gap:10,alignItems:'center',padding:'8px 0',borderBottom:`1px solid var(--rule)`}}>
                 <div style={{fontSize:11,fontWeight:700,color:C.fg2,fontFamily:C.mono}}>{String(i+1).padStart(2,'0')}</div>
                 <div style={{display:'flex',alignItems:'center',gap:8}}>
-                  <div style={{width:26,height:26,borderRadius:6,background:'rgba(124,140,248,0.15)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:700,color:C.indigo}}>{t.icon}</div>
-                  <div><div style={{fontSize:13,fontWeight:600,color:'#fff'}}>{t.name}</div><div style={{fontSize:10,color:C.fg2}}>{t.size} {t.unit==='/5'?'sessions':'devs'}</div></div>
+                  <div style={{width:26,height:26,borderRadius:6,background:'color-mix(in srgb, var(--cat-purple) 15%, transparent)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:700,color:C.indigo}}>{t.icon}</div>
+                  <div><div style={{fontSize:13,fontWeight:600,color:'var(--fg-1)'}}>{t.name}</div><div style={{fontSize:10,color:C.fg2}}>{t.size} {t.unit==='/5'?'sessions':'devs'}</div></div>
                 </div>
                 <div style={{textAlign:'right'}}><div style={{fontSize:14,fontWeight:700,color:C.azure,fontFamily:C.display}}>+{t.value.toFixed(1)}{t.unit}</div></div>
               </div>
@@ -825,8 +823,8 @@ function ProductivityTab({period}:{period:Period}) {
           {[{name:'Claude Code',hrs:1124,color:C.azure,pct:61},{name:'Copilot',hrs:716,color:C.indigo,pct:39}].map(s=>(
             <div key={s.name} style={{marginBottom:12}}>
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:5}}>
-                <span style={{fontSize:13,fontWeight:600,color:'#fff'}}>{s.name}</span>
-                <span style={{fontSize:18,fontWeight:700,color:'#fff',fontFamily:C.display}}>{s.hrs.toLocaleString()}<span style={{fontSize:10,color:C.fg2,marginLeft:4}}>HRS</span></span>
+                <span style={{fontSize:13,fontWeight:600,color:'var(--fg-1)'}}>{s.name}</span>
+                <span style={{fontSize:18,fontWeight:700,color:'var(--fg-1)',fontFamily:C.display}}>{s.hrs.toLocaleString()}<span style={{fontSize:10,color:C.fg2,marginLeft:4}}>HRS</span></span>
               </div>
               <BarTrack value={s.pct} color={s.color} height={8}/>
               <div style={{fontSize:11,color:C.fg2,marginTop:4}}>{s.pct}% of total saved</div>
@@ -845,12 +843,12 @@ function ProductivityTab({period}:{period:Period}) {
           <CardHead title="Session quality cohort comparison" sub={`High vs low adoption · last ${period} days`}/>
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
             {[{label:'High Adoption (≥15 active days)',stats:summary.high_adoption,color:C.azure},{label:'Low Adoption (<4 active days)',stats:summary.low_adoption,color:C.rose}].map(c=>(
-              <div key={c.label} style={{background:'rgba(255,255,255,0.03)',border:`1px solid ${c.color}33`,borderTop:`3px solid ${c.color}`,borderRadius:10,padding:'14px 16px'}}>
+              <div key={c.label} style={{background:'var(--surface-soft)',border:`1px solid color-mix(in srgb, ${c.color} 20%, transparent)`,borderTop:`3px solid ${c.color}`,borderRadius:10,padding:'14px 16px'}}>
                 <div style={{fontWeight:700,fontSize:13,color:c.color,marginBottom:12}}>{c.label}</div>
                 {[{k:'avg_quality_score',l:'Avg quality score',u:' / 5'},{k:'avg_inter_request_s',l:'Avg inter-request time',u:'s'},{k:'avg_turn_count',l:'Avg turns per session',u:''},{k:'session_count',l:'Sessions',u:''}].map(f=>(
                   <div key={f.k} style={{display:'flex',justifyContent:'space-between',marginBottom:8,fontSize:13}}>
                     <span style={{color:C.fg2}}>{f.l}</span>
-                    <span style={{fontWeight:600,color:'#fff'}}>{fmt((c.stats as unknown as Record<string,number|null>)[f.k])}{f.u}</span>
+                    <span style={{fontWeight:600,color:'var(--fg-1)'}}>{fmt((c.stats as unknown as Record<string,number|null>)[f.k])}{f.u}</span>
                   </div>
                 ))}
               </div>
@@ -893,8 +891,8 @@ function QualityTab({period}:{period:Period}) {
   return (
     <div style={{display:'flex',flexDirection:'column',gap:16}}>
       {error&&<ErrorBox msg={`Failed to load quality data: ${error} — charts show illustrative data`}/>}
-      <div style={{fontSize:11.5,color:C.fg2,marginBottom:8,padding:'6px 12px',background:'rgba(245,181,86,0.06)',border:'1px solid rgba(245,181,86,0.15)',borderRadius:6,display:'flex',alignItems:'center',gap:6}}>
-        <span style={{color:'#f5b556',fontSize:12}}>⚡</span>
+      <div style={{fontSize:11.5,color:C.fg2,marginBottom:8,padding:'6px 12px',background:'var(--warn-soft)',border:'1px solid var(--warn)',borderRadius:6,display:'flex',alignItems:'center',gap:6}}>
+        <span style={{color:'var(--warn)',fontSize:12}}>⚡</span>
         <span>Live API data where available · durability charts and revert-rate bars use representative data</span>
       </div>
       {/* KPI row */}
@@ -959,15 +957,15 @@ function QualityTab({period}:{period:Period}) {
         <CardHead title="Most impacted contributors" sub="Groups with highest GenAI impact · avg PR cycle time"/>
         <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12}}>
           {MOCK.qualityContribs.map(c=>(
-            <div key={c.name} style={{background:'rgba(255,255,255,0.03)',border:`1px solid rgba(255,255,255,0.06)`,borderRadius:10,padding:'14px 16px',display:'flex',flexDirection:'column',gap:8}}>
+            <div key={c.name} style={{background:'var(--surface-soft)',border:`1px solid var(--rule)`,borderRadius:10,padding:'14px 16px',display:'flex',flexDirection:'column',gap:8}}>
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                <div style={{width:32,height:32,borderRadius:8,background:`${c.color}20`,display:'flex',alignItems:'center',justifyContent:'center',color:c.color,fontSize:14}}>●</div>
-                <span style={{fontSize:18,fontWeight:700,color:'#fff',fontFamily:C.display}}>{c.cycle}</span>
+                <div style={{width:32,height:32,borderRadius:8,background:`color-mix(in srgb, ${c.color} 12%, transparent)`,display:'flex',alignItems:'center',justifyContent:'center',color:c.color,fontSize:14}}>●</div>
+                <span style={{fontSize:18,fontWeight:700,color:'var(--fg-1)',fontFamily:C.display}}>{c.cycle}</span>
               </div>
-              <div style={{fontSize:13,fontWeight:600,color:'#fff'}}>{c.name}</div>
+              <div style={{fontSize:13,fontWeight:600,color:'var(--fg-1)'}}>{c.name}</div>
               <div style={{display:'flex',gap:3}}>
-                {['JK','RM','SE','NV'].map((a,i)=><div key={i} style={{width:22,height:22,borderRadius:'50%',background:[C.indigo,C.amber,C.rose,'rgba(66,32,130,0.8)'][i],display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:700,color:'#fff',marginLeft:i?-4:0,border:'1.5px solid rgba(15,23,41,0.8)'}}>{a}</div>)}
-                <div style={{width:22,height:22,borderRadius:'50%',background:'rgba(255,255,255,0.08)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:8,color:C.fg2,marginLeft:-4,border:'1.5px solid rgba(15,23,41,0.8)'}}>15+</div>
+                {['JK','RM','SE','NV'].map((a,i)=><div key={i} style={{width:22,height:22,borderRadius:'50%',background:[C.indigo,C.amber,C.rose,'var(--cat-magenta)'][i],display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:700,color:'var(--accent-fg)',marginLeft:i?-4:0,border:'1.5px solid var(--surface-2)'}}>{a}</div>)}
+                <div style={{width:22,height:22,borderRadius:'50%',background:'var(--surface-soft)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:8,color:C.fg2,marginLeft:-4,border:'1.5px solid var(--surface-2)'}}>15+</div>
               </div>
             </div>
           ))}
@@ -980,8 +978,8 @@ function QualityTab({period}:{period:Period}) {
           <CardHead title="Code durability" sub="Code remaining stable for more than 30 days"
             right={<div style={{display:'flex',gap:12,alignItems:'center'}}><Legend items={[{label:'GenAI Tools',color:C.indigo},{label:'Non GenAI',color:C.fg2}]}/><SegControl options={[{value:'line',label:'Line'},{value:'bars',label:'Bars'}]} value={durChart} onChange={setDurChart}/></div>}/>
           <div style={{display:'flex',gap:24,alignItems:'flex-end',marginBottom:8}}>
-            <div><div style={{fontSize:10,color:C.fg2,textTransform:'uppercase',letterSpacing:'.04em'}}>All GenAI Tools</div><div style={{display:'flex',gap:10,alignItems:'baseline',marginTop:4}}><span style={{fontSize:32,fontWeight:700,color:C.azure,fontFamily:C.display,lineHeight:1}}>{km.testCovered}%</span><DeltaChip value={km.testCoveredDelta}/></div></div>
-            <div><div style={{fontSize:10,color:C.fg2,textTransform:'uppercase',letterSpacing:'.04em'}}>Delta</div><div style={{fontSize:28,color:'#fff',fontFamily:C.display,fontWeight:700,marginTop:4,lineHeight:1}}>+{km.durability}%</div><div style={{fontSize:11,color:C.fg2,textTransform:'uppercase',letterSpacing:'.04em'}}>more stable with genai</div></div>
+            <div><div className="microlabel">All GenAI Tools</div><div style={{display:'flex',gap:10,alignItems:'baseline',marginTop:4}}><span style={{fontSize:32,fontWeight:700,color:C.azure,fontFamily:C.display,lineHeight:1}}>{km.testCovered}%</span><DeltaChip value={km.testCoveredDelta}/></div></div>
+            <div><div className="microlabel">Delta</div><div style={{fontSize:28,color:'var(--fg-1)',fontFamily:C.display,fontWeight:700,marginTop:4,lineHeight:1}}>+{km.durability}%</div><div className="microlabel">more stable with genai</div></div>
           </div>
           {durChart==='line'
             ?<LineChart series={durSeries} labels={MOCK.durability.months} height={240} yMax={100} yFormat={v=>`${v}%`} showArea={true}/>
@@ -993,8 +991,8 @@ function QualityTab({period}:{period:Period}) {
             <CardHead title="Tests covered commits" help=""/>
             <div style={{display:'flex',alignItems:'baseline',gap:10}}><span style={{fontSize:28,fontWeight:700,color:C.azure,fontFamily:C.display}}>{km.testCovered}%</span><DeltaChip value={km.testCoveredDelta}/></div>
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
-              <div style={{background:'rgba(255,255,255,0.03)',borderRadius:8,padding:'10px 12px',border:`1px solid ${C.border}`}}><div style={{fontSize:10,color:C.fg2,textTransform:'uppercase',letterSpacing:'.04em'}}>Non-GenAI</div><div style={{fontSize:18,fontWeight:700,color:'#fff',fontFamily:C.display,marginTop:4}}>8.2%</div><div style={{fontSize:10,color:C.fg2}}>of commits</div></div>
-              <div style={{background:'rgba(86,182,245,0.06)',borderRadius:8,padding:'10px 12px',border:`1px solid rgba(86,182,245,0.25)`}}><div style={{fontSize:10,color:C.azure,textTransform:'uppercase',letterSpacing:'.04em'}}>GenAI</div><div style={{fontSize:18,fontWeight:700,color:'#fff',fontFamily:C.display,marginTop:4}}>{km.testCovered}%</div><div style={{fontSize:10,color:C.fg2}}>of commits</div></div>
+              <div style={{background:'var(--surface-soft)',borderRadius:8,padding:'10px 12px',border:`1px solid ${C.border}`}}><div className="microlabel">Non-GenAI</div><div style={{fontSize:18,fontWeight:700,color:'var(--fg-1)',fontFamily:C.display,marginTop:4}}>8.2%</div><div style={{fontSize:10,color:C.fg2}}>of commits</div></div>
+              <div style={{background:'var(--accent-soft)',borderRadius:8,padding:'10px 12px',border:`1px solid var(--accent)`}}><div className="microlabel" style={{color:C.azure}}>GenAI</div><div style={{fontSize:18,fontWeight:700,color:'var(--fg-1)',fontFamily:C.display,marginTop:4}}>{km.testCovered}%</div><div style={{fontSize:10,color:C.fg2}}>of commits</div></div>
             </div>
           </CardWrap>
           <CardWrap style={{gap:10}}>
@@ -1002,8 +1000,8 @@ function QualityTab({period}:{period:Period}) {
             <div style={{display:'flex',alignItems:'baseline',gap:10}}><span style={{fontSize:28,fontWeight:700,color:C.rose,fontFamily:C.display}}>{km.reviewImpact}%</span><DeltaChip value={km.reviewImpactDelta} inverted={true}/></div>
             <div style={{fontSize:11,color:C.fg2}}>Time in review on GenAI PRs vs non-GenAI</div>
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
-              <div style={{background:'rgba(255,255,255,0.03)',borderRadius:8,padding:'10px 12px',border:`1px solid ${C.border}`}}><div style={{fontSize:10,color:C.fg2,textTransform:'uppercase'}}>Non-GenAI</div><div style={{fontSize:18,fontWeight:700,color:'#fff',fontFamily:C.display,marginTop:4}}>2.2d</div></div>
-              <div style={{background:'rgba(124,140,248,0.08)',borderRadius:8,padding:'10px 12px',border:`1px solid rgba(124,140,248,0.25)`}}><div style={{fontSize:10,color:C.indigo,textTransform:'uppercase'}}>GenAI</div><div style={{fontSize:18,fontWeight:700,color:'#fff',fontFamily:C.display,marginTop:4}}>1.8d</div></div>
+              <div style={{background:'var(--surface-soft)',borderRadius:8,padding:'10px 12px',border:`1px solid ${C.border}`}}><div className="microlabel">Non-GenAI</div><div style={{fontSize:18,fontWeight:700,color:'var(--fg-1)',fontFamily:C.display,marginTop:4}}>2.2d</div></div>
+              <div style={{background:'color-mix(in srgb, var(--cat-purple) 10%, transparent)',borderRadius:8,padding:'10px 12px',border:`1px solid var(--cat-purple)`}}><div className="microlabel" style={{color:C.indigo}}>GenAI</div><div style={{fontSize:18,fontWeight:700,color:'var(--fg-1)',fontFamily:C.display,marginTop:4}}>1.8d</div></div>
             </div>
           </CardWrap>
           <CardWrap style={{gap:10}}>
@@ -1025,11 +1023,11 @@ function QualityTab({period}:{period:Period}) {
           <CardHead title="Bug-introducing commits" sub="Commits later linked to incidents · last 90 days"/>
           <div style={{display:'grid',gridTemplateColumns:'auto 1fr',gap:18,alignItems:'center'}}>
             <Donut size={140} thickness={20} centerValue="4.2%" centerLabel="OF COMMITS"
-              segments={[{value:4.2,color:C.rose},{value:95.8,color:'rgba(255,255,255,0.04)'}]}/>
+              segments={[{value:4.2,color:C.rose},{value:95.8,color:'var(--surface-soft)'}]}/>
             <div style={{display:'flex',flexDirection:'column',gap:10}}>
               {[{label:'GenAI assisted',v:'3.1%',pct:31,color:C.azure,sub:'lower than baseline'},{label:'Non-GenAI',v:'5.4%',pct:54,color:C.rose,sub:'above baseline'},{label:'Mixed',v:'4.0%',pct:40,color:C.amber,sub:'at baseline'}].map(s=>(
                 <div key={s.label}>
-                  <div style={{display:'flex',justifyContent:'space-between',marginBottom:4}}><span style={{color:'#fff',fontSize:12}}>{s.label}</span><span style={{color:'#fff',fontSize:13,fontWeight:700,fontFamily:C.display}}>{s.v}</span></div>
+                  <div style={{display:'flex',justifyContent:'space-between',marginBottom:4}}><span style={{color:'var(--fg-1)',fontSize:12}}>{s.label}</span><span style={{color:'var(--fg-1)',fontSize:13,fontWeight:700,fontFamily:C.display}}>{s.v}</span></div>
                   <BarTrack value={s.pct} color={s.color} height={6}/>
                   <div style={{fontSize:9,color:C.fg2,marginTop:3}}>{s.sub}</div>
                 </div>
@@ -1047,12 +1045,12 @@ function QualityTab({period}:{period:Period}) {
           <CardHead title="Session error & cache metrics" sub={`Cohort comparison · last ${period} days`}/>
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
             {[{label:'High Adoption (≥15 active days)',stats:summary.high_adoption,color:C.azure},{label:'Low Adoption (<4 active days)',stats:summary.low_adoption,color:C.rose}].map(c=>(
-              <div key={c.label} style={{background:'rgba(255,255,255,0.03)',border:`1px solid ${c.color}33`,borderTop:`3px solid ${c.color}`,borderRadius:10,padding:'14px 16px'}}>
+              <div key={c.label} style={{background:'var(--surface-soft)',border:`1px solid color-mix(in srgb, ${c.color} 20%, transparent)`,borderTop:`3px solid ${c.color}`,borderRadius:10,padding:'14px 16px'}}>
                 <div style={{fontWeight:700,fontSize:13,color:c.color,marginBottom:12}}>{c.label}</div>
                 {[{k:'avg_error_rate_pct',l:'Avg error rate',u:'%'},{k:'avg_retry_rate_pct',l:'Avg retry rate',u:'%'},{k:'cache_hit_rate_pct',l:'Cache hit rate',u:'%'}].map(f=>(
                   <div key={f.k} style={{display:'flex',justifyContent:'space-between',marginBottom:8,fontSize:13}}>
                     <span style={{color:C.fg2}}>{f.l}</span>
-                    <span style={{fontWeight:600,color:'#fff'}}>{fmt((c.stats as unknown as Record<string,number|null>)[f.k])}{f.u}</span>
+                    <span style={{fontWeight:600,color:'var(--fg-1)'}}>{fmt((c.stats as unknown as Record<string,number|null>)[f.k])}{f.u}</span>
                   </div>
                 ))}
               </div>
@@ -1060,10 +1058,10 @@ function QualityTab({period}:{period:Period}) {
           </div>
           {teams.length>0&&(
             <>
-              <div style={{fontSize:12,fontWeight:600,color:C.fg2,textTransform:'uppercase',letterSpacing:'.06em',marginTop:8}}>By Team</div>
+              <div className="microlabel" style={{marginTop:8}}>By Team</div>
               <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
-                <thead><tr style={{borderBottom:`1px solid ${C.grid}`}}>{['Team','Sessions','Error Rate','Retry Rate','Cache Hit',''].map((h,i)=><th key={i} style={{padding:'6px 8px',textAlign:'left',fontSize:10,textTransform:'uppercase',letterSpacing:'.04em',color:C.fg2}}>{h}</th>)}</tr></thead>
-                <tbody>{teams.map(t=><tr key={t.team_id} style={{borderBottom:`1px solid rgba(255,255,255,0.04)`}}><td style={{padding:'8px',color:'#fff',fontWeight:500}}>{t.team_name}</td><td style={{padding:'8px',color:C.fg2}}>{t.session_count}</td><td style={{padding:'8px'}}><span style={{color:(t.avg_error_rate_pct??0)>10?C.rose:C.azure,fontWeight:600}}>{fmt(t.avg_error_rate_pct)}%</span></td><td style={{padding:'8px',color:'#fff'}}>{fmt(t.avg_retry_rate_pct)}%</td><td style={{padding:'8px',color:'#fff'}}>{fmt(t.cache_hit_rate_pct)}%</td><td style={{padding:'8px'}}>{t.high_error_flag&&<span style={{fontSize:11,padding:'2px 6px',borderRadius:4,background:`rgba(244,114,114,0.1)`,color:C.rose,fontWeight:600}}>⚠ High error rate</span>}</td></tr>)}</tbody>
+                <thead><tr style={{borderBottom:`1px solid ${C.grid}`}}>{['Team','Sessions','Error Rate','Retry Rate','Cache Hit',''].map((h,i)=><th key={i} className="microlabel" style={{padding:'6px 8px',textAlign:'left'}}>{h}</th>)}</tr></thead>
+                <tbody>{teams.map(t=><tr key={t.team_id} style={{borderBottom:`1px solid var(--rule)`}}><td style={{padding:'8px',color:'var(--fg-1)',fontWeight:500}}>{t.team_name}</td><td className="num" style={{padding:'8px',color:C.fg2}}>{t.session_count}</td><td className="num" style={{padding:'8px'}}><span style={{color:(t.avg_error_rate_pct??0)>10?C.rose:C.azure,fontWeight:600}}>{fmt(t.avg_error_rate_pct)}%</span></td><td className="num" style={{padding:'8px',color:'var(--fg-1)'}}>{fmt(t.avg_retry_rate_pct)}%</td><td className="num" style={{padding:'8px',color:'var(--fg-1)'}}>{fmt(t.cache_hit_rate_pct)}%</td><td style={{padding:'8px'}}>{t.high_error_flag&&<span style={{fontSize:11,padding:'2px 6px',borderRadius:4,background:`var(--bad-soft)`,color:C.rose,fontWeight:600}}>⚠ High error rate</span>}</td></tr>)}</tbody>
               </table>
             </>
           )}
@@ -1075,7 +1073,7 @@ function QualityTab({period}:{period:Period}) {
 
 // ── Utils ─────────────────────────────────────────────────────────────────────
 function Spinner() { return <div style={{padding:'32px 0',color:C.fg2,fontSize:14,textAlign:'center'}}>Loading…</div>; }
-function ErrorBox({msg}:{msg:string}) { return <div style={{padding:'10px 14px',background:'rgba(244,114,114,0.1)',border:`1px solid ${C.rose}`,borderRadius:8,color:C.rose,fontSize:13}}>{msg}</div>; }
+function ErrorBox({msg}:{msg:string}) { return <div style={{padding:'10px 14px',background:'var(--bad-soft)',border:`1px solid ${C.rose}`,borderRadius:8,color:C.rose,fontSize:13}}>{msg}</div>; }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function GenAiAdoptionPage() {
@@ -1093,22 +1091,20 @@ export default function GenAiAdoptionPage() {
   const tabs=[{id:'adoption' as Tab,label:'GenAI Adoption'},{id:'productivity' as Tab,label:'GenAI Productivity'},{id:'quality' as Tab,label:'GenAI Code Quality'}];
 
   return (
-    <div style={{fontFamily:C.ui,color:'#fff',minHeight:'100vh',position:'relative'}}>
-      {/* Ambient orbs */}
-      <div style={{position:'fixed',inset:0,pointerEvents:'none',zIndex:0,background:'radial-gradient(900px 600px at 12% 8%,rgba(124,140,248,0.14),transparent 60%),radial-gradient(800px 500px at 88% 18%,rgba(86,182,245,0.11),transparent 65%),radial-gradient(700px 500px at 75% 92%,rgba(245,181,86,0.07),transparent 65%),radial-gradient(600px 400px at 22% 78%,rgba(244,114,114,0.06),transparent 65%)'}}/>
+    <div style={{fontFamily:C.ui,color:'var(--fg-1)',minHeight:'100vh',position:'relative'}}>
       <div style={{position:'relative',zIndex:1,padding:'28px 32px',maxWidth:1100}}>
         {/* Header */}
         <div style={{display:'flex',alignItems:'flex-start',gap:16,marginBottom:24}}>
           <div>
-            <h1 style={{margin:0,fontSize:22,fontWeight:700,color:'#fff',fontFamily:C.display,letterSpacing:'-.01em'}}>
+            <h1 style={{margin:0,fontSize:22,fontWeight:700,color:'var(--fg-1)',fontFamily:C.display,letterSpacing:'-.01em'}}>
               GenAI Adoption <span style={{color:C.azure}}>✦</span>
             </h1>
             <div style={{fontSize:11,color:C.fg2,marginTop:4,display:'flex',alignItems:'center',gap:6}}>
-              <span style={{padding:'1px 6px',borderRadius:4,background:'rgba(245,181,86,0.12)',border:'1px solid rgba(245,181,86,0.3)',color:C.amber,fontSize:10,fontWeight:600}}>ILLUSTRATIVE</span>
+              <span style={{padding:'1px 6px',borderRadius:4,background:'var(--warn-soft)',border:'1px solid var(--warn)',color:C.amber,fontSize:10,fontWeight:600}}>ILLUSTRATIVE</span>
               <span>Charts use representative data · live cohort metrics load where available</span>
             </div>
           </div>
-          <select value={period} onChange={e=>setPeriod(Number(e.target.value) as Period)} style={{marginLeft:'auto',padding:'7px 14px',borderRadius:10,background:'rgba(124,140,248,0.18)',border:'1px solid rgba(124,140,248,0.30)',color:'#fff',fontFamily:C.ui,fontSize:13,cursor:'pointer',backdropFilter:'blur(12px)'}}>
+          <select value={period} onChange={e=>setPeriod(Number(e.target.value) as Period)} style={{marginLeft:'auto',padding:'7px 14px',borderRadius:10,background:'var(--accent-soft)',border:'1px solid var(--accent)',color:'var(--fg-1)',fontFamily:C.ui,fontSize:13,cursor:'pointer'}}>
             <option value={7}>Last 7 days</option>
             <option value={30}>Last 30 days</option>
             <option value={90}>Last 90 days</option>
@@ -1119,7 +1115,7 @@ export default function GenAiAdoptionPage() {
         <InsightsPanel period={period}/>
 
         {/* Tabs */}
-        <div style={{display:'flex',gap:2,marginBottom:24,borderBottom:`1px solid rgba(255,255,255,0.08)`,paddingBottom:0}}>
+        <div style={{display:'flex',gap:2,marginBottom:24,borderBottom:`1px solid var(--rule)`,paddingBottom:0}}>
           {tabs.map(t=>(
             <button key={t.id} onClick={()=>setTab(t.id)} style={{padding:'9px 18px',background:'transparent',border:'none',borderBottom:tab===t.id?`2px solid ${C.azure}`:'2px solid transparent',color:tab===t.id?C.azure:C.fg2,fontFamily:C.ui,fontSize:13,fontWeight:tab===t.id?600:400,cursor:'pointer',paddingBottom:10,marginBottom:-1,transition:'all 120ms'}}>
               {t.label}

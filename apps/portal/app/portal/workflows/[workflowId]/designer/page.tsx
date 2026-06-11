@@ -46,11 +46,11 @@ interface NodeData extends Record<string, unknown> {
 // ---------------------------------------------------------------------------
 
 const CATEGORY_COLORS: Record<string, string> = {
-  llm:       'var(--blue)',
-  tool:      '#a78bfa',
-  transform: '#34d399',
-  io:        '#fb923c',
-  control:   '#f472b6',
+  llm:       'var(--accent)',
+  tool:      'var(--cat-purple)',
+  transform: 'var(--good)',
+  io:        'var(--cat-orange)',
+  control:   'var(--cat-magenta)',
 };
 
 function AgentNode({ data, selected }: NodeProps) {
@@ -63,16 +63,16 @@ function AgentNode({ data, selected }: NodeProps) {
       borderRadius: 8,
       padding: '8px 14px',
       minWidth: 140,
-      boxShadow: selected ? `0 0 0 2px ${color}33` : '0 2px 8px rgba(0,0,0,0.35)',
+      boxShadow: selected ? `0 0 0 2px color-mix(in srgb, ${color} 20%, transparent)` : 'var(--shadow-1)',
       cursor: 'grab',
     }}>
-      <div style={{ fontSize: 10, color, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>
+      <div className="microlabel" style={{ color, marginBottom: 2 }}>
         {d.category}
       </div>
       <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg-1)' }}>{d.agent_name}</div>
       <div style={{ fontSize: 10.5, color: 'var(--fg-3)', fontFamily: 'var(--font-mono,monospace)', marginTop: 1 }}>{d.agent_slug}</div>
       {d.loop_enabled && (
-        <div style={{ fontSize: 10, color: '#fb923c', marginTop: 3 }}>loop ×{d.loop_max_iterations}</div>
+        <div style={{ fontSize: 10, color: 'var(--cat-orange)', marginTop: 3 }}>loop ×{d.loop_max_iterations}</div>
       )}
     </div>
   );
@@ -143,7 +143,7 @@ function NodePanel({
         <div style={{ fontSize: 11, color: 'var(--fg-3)', marginBottom: 4 }}>Agent slug</div>
         <div style={{ fontSize: 12, fontFamily: 'var(--font-mono,monospace)', color: 'var(--fg-1)', marginBottom: 12 }}>{d.agent_slug}</div>
 
-        <div style={{ fontSize: 11, color: 'var(--fg-3)', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Inputs</div>
+        <div className="microlabel" style={{ marginBottom: 8 }}>Inputs</div>
         {inputs.map(([k, v], i) => (
           <div key={i} style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
             <input
@@ -163,7 +163,7 @@ function NodePanel({
         ))}
         <button onClick={addRow} style={addBtnStyle}>+ Add input</button>
 
-        <div style={{ marginTop: 16, fontSize: 11, color: 'var(--fg-3)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Loop</div>
+        <div className="microlabel" style={{ marginTop: 16 }}>Loop</div>
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, fontSize: 12, color: 'var(--fg-2)', cursor: 'pointer' }}>
           <input
             type="checkbox"
@@ -465,7 +465,7 @@ export default function DesignerPage() {
           ← Workflows
         </button>
         <span style={{ flex: 1, fontSize: 14, fontWeight: 600, color: 'var(--fg-1)' }}>Designer</span>
-        {saveMsg && <span style={{ fontSize: 12, color: saveMsg.startsWith('Error') ? 'var(--red, #ef4444)' : 'var(--green)' }}>{saveMsg}</span>}
+        {saveMsg && <span style={{ fontSize: 12, color: saveMsg.startsWith('Error') ? 'var(--bad)' : 'var(--good)' }}>{saveMsg}</span>}
         <button
           onClick={handleSave}
           disabled={saving}
@@ -490,7 +490,7 @@ export default function DesignerPage() {
           overflowY: 'auto', padding: '12px 10px',
           background: 'var(--bg)',
         }}>
-          <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Agents</div>
+          <div className="microlabel" style={{ marginBottom: 8 }}>Agents</div>
           {agents.length === 0 && (
             <div style={{ fontSize: 11.5, color: 'var(--fg-3)' }}>No agents available.</div>
           )}
@@ -508,7 +508,7 @@ export default function DesignerPage() {
                 cursor: 'grab', userSelect: 'none',
               }}
             >
-              <div style={{ fontSize: 10, color: CATEGORY_COLORS[a.category] ?? 'var(--fg-3)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{a.category}</div>
+              <div className="microlabel" style={{ color: CATEGORY_COLORS[a.category] ?? 'var(--fg-3)' }}>{a.category}</div>
               <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg-1)', marginTop: 1 }}>{a.name}</div>
               <div style={{ fontSize: 10.5, color: 'var(--fg-3)', fontFamily: 'var(--font-mono,monospace)' }}>{a.slug}</div>
             </div>
@@ -570,8 +570,8 @@ function topBtnStyle(primary: boolean): React.CSSProperties {
   return {
     padding: '5px 14px', fontSize: 12, borderRadius: 6, cursor: 'pointer',
     fontWeight: 600,
-    background: primary ? 'var(--blue)' : 'var(--surface)',
-    color: primary ? '#fff' : 'var(--fg-1)',
+    background: primary ? 'var(--accent)' : 'var(--surface)',
+    color: primary ? 'var(--accent-fg)' : 'var(--fg-1)',
     border: primary ? 'none' : '1px solid var(--rule)',
   };
 }

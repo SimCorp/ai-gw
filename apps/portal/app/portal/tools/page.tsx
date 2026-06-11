@@ -74,8 +74,8 @@ export default function ToolsPage() {
           onChange={e => setSearch(e.target.value)}
           style={{
             flex: '1 1 220px', maxWidth: 340, padding: '8px 12px',
-            background: 'var(--surface)', border: '1px solid var(--border)',
-            borderRadius: 6, color: 'var(--fg)', fontSize: 14,
+            background: 'var(--surface)', border: '1px solid var(--rule)',
+            borderRadius: 6, color: 'var(--fg-1)', fontSize: 14,
           }}
         />
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -85,9 +85,9 @@ export default function ToolsPage() {
               onClick={() => setActiveCategory(cat)}
               style={{
                 padding: '5px 12px', borderRadius: 20, fontSize: 13, cursor: 'pointer',
-                border: '1px solid var(--border)',
+                border: '1px solid var(--rule)',
                 background: activeCategory === cat ? 'var(--accent)' : 'var(--surface)',
-                color: activeCategory === cat ? '#fff' : 'var(--fg-mute)',
+                color: activeCategory === cat ? 'var(--accent-fg)' : 'var(--fg-2)',
                 fontFamily: 'inherit',
               }}
             >
@@ -97,10 +97,10 @@ export default function ToolsPage() {
         </div>
       </div>
 
-      {loading && <p style={{ color: 'var(--fg-mute)' }}>Loading tools…</p>}
+      {loading && <p style={{ color: 'var(--fg-2)' }}>Loading tools…</p>}
 
       {!loading && filtered.length === 0 && (
-        <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--fg-mute)' }}>
+        <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--fg-2)' }}>
           <p style={{ fontSize: 16 }}>No tools match your search.</p>
           <button
             onClick={() => { setSearch(''); setActiveCategory('All'); }}
@@ -126,10 +126,10 @@ export default function ToolsPage() {
                 <div style={{ fontSize: 20, marginBottom: 8 }}>
                   {CATEGORY_EMOJI[tool.category] ?? '🔧'}
                 </div>
-                <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4, color: 'var(--fg)' }}>
+                <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4, color: 'var(--fg-1)' }}>
                   {tool.label}
                 </div>
-                <div style={{ fontSize: 12, color: 'var(--fg-mute)' }}>
+                <div style={{ fontSize: 12, color: 'var(--fg-2)' }}>
                   {tool.category}
                 </div>
               </div>

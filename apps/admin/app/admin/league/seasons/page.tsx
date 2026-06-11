@@ -20,9 +20,9 @@ interface Season {
 }
 
 const STATUS_COLORS: Record<SeasonStatus, string> = {
-  upcoming: 'var(--warn, #B45309)',
-  active: 'var(--good, #1F8A5B)',
-  closed: 'var(--fg-3, #999)',
+  upcoming: 'var(--warn)',
+  active: 'var(--good)',
+  closed: 'var(--fg-3)',
 };
 
 function fmt(iso: string) {
@@ -85,13 +85,13 @@ function EditSeasonModal({ season, onClose, onSaved }: EditSeasonModalProps) {
     }}>
       <div style={{
         background: 'var(--surface)', border: '1px solid var(--rule)',
-        borderRadius: 12, padding: '24px', width: 440, boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
+        borderRadius: 12, padding: '24px', width: 440, boxShadow: 'var(--shadow-pop)',
       }}>
         <h2 style={{ margin: '0 0 4px', fontSize: 17, fontWeight: 600 }}>Edit Season</h2>
         <p style={{ margin: '0 0 20px', fontSize: 13, color: 'var(--fg-3)' }}>{season.name}</p>
         {error && (
           <div style={{ marginBottom: 14, padding: '9px 12px', borderRadius: 6, fontSize: 13,
-            background: 'rgba(220,38,38,0.1)', border: '1px solid rgba(220,38,38,0.3)', color: '#FCA5A5' }}>
+            background: 'var(--bad-soft)', border: '1px solid var(--bad)', color: 'var(--bad)' }}>
             {error}
           </div>
         )}
@@ -137,7 +137,7 @@ function EditSeasonModal({ season, onClose, onSaved }: EditSeasonModalProps) {
             disabled={saving || status === season.status || season.status === 'closed'}
             style={{
               padding: '8px 18px', borderRadius: 6, border: 'none',
-              background: 'var(--sc-blue, #083EA7)', color: '#fff',
+              background: 'var(--accent)', color: 'var(--accent-fg)',
               cursor: (saving || status === season.status || season.status === 'closed') ? 'not-allowed' : 'pointer',
               fontSize: 13, fontWeight: 600,
               opacity: (saving || status === season.status || season.status === 'closed') ? 0.5 : 1,
@@ -206,12 +206,12 @@ function CreateSeasonModal({ onClose, onSaved }: CreateSeasonModalProps) {
     }}>
       <div style={{
         background: 'var(--surface)', border: '1px solid var(--rule)',
-        borderRadius: 12, padding: '24px', width: 440, boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
+        borderRadius: 12, padding: '24px', width: 440, boxShadow: 'var(--shadow-pop)',
       }}>
         <h2 style={{ margin: '0 0 20px', fontSize: 17, fontWeight: 600 }}>New Season</h2>
         {error && (
           <div style={{ marginBottom: 14, padding: '9px 12px', borderRadius: 6, fontSize: 13,
-            background: 'rgba(220,38,38,0.1)', border: '1px solid rgba(220,38,38,0.3)', color: '#FCA5A5' }}>
+            background: 'var(--bad-soft)', border: '1px solid var(--bad)', color: 'var(--bad)' }}>
             {error}
           </div>
         )}
@@ -249,7 +249,7 @@ function CreateSeasonModal({ onClose, onSaved }: CreateSeasonModalProps) {
           }}>Cancel</button>
           <button onClick={handleSave} disabled={saving} style={{
             padding: '8px 18px', borderRadius: 6, border: 'none',
-            background: 'var(--sc-blue, #083EA7)', color: '#fff', cursor: saving ? 'not-allowed' : 'pointer',
+            background: 'var(--accent)', color: 'var(--accent-fg)', cursor: saving ? 'not-allowed' : 'pointer',
             fontSize: 13, fontWeight: 600, opacity: saving ? 0.7 : 1,
           }}>{saving ? 'Creating…' : 'Create season'}</button>
         </div>

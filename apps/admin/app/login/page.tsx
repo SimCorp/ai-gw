@@ -2,6 +2,7 @@
 
 import { useState, FormEvent, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { BrandMark } from '@aigw/ui';
 import { setAdminToken } from '../../lib/adminAuth';
 
 const ADMIN_API = process.env.NEXT_PUBLIC_ADMIN_API ?? 'http://localhost:8005';
@@ -11,10 +12,11 @@ const inputStyle: React.CSSProperties = {
   boxSizing: 'border-box',
   padding: '9px 12px',
   fontSize: 13,
-  background: 'var(--side-bg, #0F1224)',
-  border: '1px solid var(--side-rule, #232950)',
-  borderRadius: 6,
-  color: 'var(--side-fg, #C8CDDC)',
+  fontFamily: 'inherit',
+  background: 'var(--surface-2)',
+  border: '1px solid var(--rule-strong)',
+  borderRadius: 'var(--r-2)',
+  color: 'var(--fg-1)',
   outline: 'none',
 };
 
@@ -22,8 +24,18 @@ const labelStyle: React.CSSProperties = {
   display: 'block',
   fontSize: 12.5,
   fontWeight: 500,
-  color: 'var(--side-fg, #C8CDDC)',
+  color: 'var(--fg-2)',
   marginBottom: 6,
+};
+
+const errorBoxStyle: React.CSSProperties = {
+  background: 'var(--bad-soft)',
+  border: '1px solid var(--bad)',
+  borderRadius: 'var(--r-2)',
+  padding: '10px 12px',
+  marginBottom: 16,
+  fontSize: 13,
+  color: 'var(--bad)',
 };
 
 export default function LoginPage() {
@@ -132,77 +144,51 @@ export default function LoginPage() {
     }
   }
 
-  const cardStyle: React.CSSProperties = {
-    background: 'var(--surface, #161A33)',
-    border: '1px solid var(--side-rule, #232950)',
-    borderRadius: 12,
-    padding: '28px 24px',
-    boxShadow: 'var(--shadow-pop, 0 12px 32px rgba(0,0,0,0.3))',
-  };
-
-  const submitButtonStyle = (disabled: boolean): React.CSSProperties => ({
-    width: '100%',
-    padding: '10px 16px',
-    fontSize: 14,
-    fontWeight: 600,
-    background: disabled ? 'var(--sc-blue-hover, #062E7D)' : 'var(--sc-blue, #083EA7)',
-    color: '#fff',
-    border: 'none',
-    borderRadius: 7,
-    cursor: disabled ? 'not-allowed' : 'pointer',
-    transition: 'background 0.15s',
-    opacity: disabled ? 0.75 : 1,
-  });
-
   return (
-    <div style={{
-      minHeight: '100vh',
-      background: 'var(--bg, #0F1224)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      fontFamily: 'var(--font-sans, "Geist", system-ui, sans-serif)',
-    }}>
+    <div
+      style={{
+        minHeight: '100vh',
+        background: 'var(--bg)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
       <div style={{ width: '100%', maxWidth: 400, padding: '0 16px' }}>
-
         {/* Branding */}
-        <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <div style={{
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-            width: 44, height: 44, borderRadius: 10,
-            background: 'var(--sc-blue, #083EA7)', color: '#fff',
-            fontWeight: 700, fontSize: 16, marginBottom: 16,
-          }}>AI</div>
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: 'var(--fg-inv, #FFFFFF)', letterSpacing: '-0.02em' }}>
-            AI Gateway
+        <div style={{ textAlign: 'center', marginBottom: 28 }}>
+          <div style={{ display: 'inline-flex', marginBottom: 12 }}>
+            <BrandMark size={40} />
+          </div>
+          <h1 style={{ margin: 0, fontSize: 21, fontWeight: 650, color: 'var(--fg-1)', letterSpacing: '-0.02em' }}>
+            ai-gw <span className="mono" style={{ fontSize: 13, color: 'var(--fg-3)' }}>/admin</span>
           </h1>
-          <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--side-fg-mute, #8089A3)' }}>
-            {pendingToken ? 'Set a new password to continue' : 'Admin portal — sign in to continue'}
+          <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--fg-2)' }}>
+            {pendingToken ? 'Set a new password to continue' : 'Sign in to continue'}
           </p>
         </div>
 
         {/* ── Change-password form (shown after first login) ── */}
         {pendingToken ? (
-          <div style={cardStyle}>
-            <div style={{
-              background: 'rgba(8, 62, 167, 0.15)',
-              border: '1px solid rgba(8, 62, 167, 0.4)',
-              borderRadius: 6, padding: '10px 12px', marginBottom: 20,
-              fontSize: 13, color: '#93C5FD',
-            }}>
+          <div className="card card--trace" style={{ padding: '26px 24px' }}>
+            <div
+              style={{
+                background: 'var(--accent-soft)',
+                border: '1px solid var(--accent)',
+                borderRadius: 'var(--r-2)',
+                padding: '10px 12px',
+                marginBottom: 20,
+                fontSize: 13,
+                color: 'var(--accent-text)',
+              }}
+            >
               Your account requires a password change before you can continue.
               Choose a password that is at least 12 characters and includes uppercase,
               lowercase, a digit, and a special character.
             </div>
 
             <form onSubmit={handleChangePassword} noValidate>
-              {changeError && (
-                <div style={{
-                  background: 'rgba(220,38,38,0.12)', border: '1px solid rgba(220,38,38,0.4)',
-                  borderRadius: 6, padding: '10px 12px', marginBottom: 16,
-                  fontSize: 13, color: '#FCA5A5',
-                }}>{changeError}</div>
-              )}
+              {changeError && <div style={errorBoxStyle}>{changeError}</div>}
 
               <div style={{ marginBottom: 16 }}>
                 <label style={labelStyle}>New password</label>
@@ -213,8 +199,6 @@ export default function LoginPage() {
                   value={newPassword}
                   onChange={e => setNewPassword(e.target.value)}
                   style={inputStyle}
-                  onFocus={e => { e.currentTarget.style.borderColor = 'var(--sc-blue, #083EA7)'; }}
-                  onBlur={e => { e.currentTarget.style.borderColor = 'var(--side-rule, #232950)'; }}
                 />
               </div>
 
@@ -226,128 +210,102 @@ export default function LoginPage() {
                   value={confirmPassword}
                   onChange={e => setConfirmPassword(e.target.value)}
                   style={inputStyle}
-                  onFocus={e => { e.currentTarget.style.borderColor = 'var(--sc-blue, #083EA7)'; }}
-                  onBlur={e => { e.currentTarget.style.borderColor = 'var(--side-rule, #232950)'; }}
                 />
               </div>
 
               <button
                 type="submit"
                 disabled={changeLoading}
-                style={submitButtonStyle(changeLoading)}
-                onMouseEnter={e => { if (!changeLoading) (e.currentTarget as HTMLElement).style.background = 'var(--sc-blue-hover, #062E7D)'; }}
-                onMouseLeave={e => { if (!changeLoading) (e.currentTarget as HTMLElement).style.background = 'var(--sc-blue, #083EA7)'; }}
+                className="btn btn--primary"
+                style={{ width: '100%', justifyContent: 'center', padding: '10px 16px', fontSize: 13.5 }}
               >
                 {changeLoading ? 'Saving…' : 'Set password and continue'}
               </button>
             </form>
           </div>
         ) : (
+          /* ── Normal login form ── */
+          <div className="card card--trace" style={{ padding: '26px 24px' }}>
+            <form onSubmit={handleLogin} noValidate>
+              {error && <div style={errorBoxStyle}>{error}</div>}
 
-        /* ── Normal login form ── */
-        <div style={cardStyle}>
-          <form onSubmit={handleLogin} noValidate>
-            {error && (
-              <div style={{
-                background: 'rgba(220,38,38,0.12)', border: '1px solid rgba(220,38,38,0.4)',
-                borderRadius: 6, padding: '10px 12px', marginBottom: 16,
-                fontSize: 13, color: '#FCA5A5',
-              }}>{error}</div>
-            )}
-
-            <div style={{ marginBottom: 16 }}>
-              <label style={labelStyle}>Email</label>
-              <input
-                type="email"
-                autoComplete="email"
-                required
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                placeholder="you@simcorp.com"
-                style={inputStyle}
-                onFocus={e => { e.currentTarget.style.borderColor = 'var(--sc-blue, #083EA7)'; }}
-                onBlur={e => { e.currentTarget.style.borderColor = 'var(--side-rule, #232950)'; }}
-              />
-              {process.env.NODE_ENV !== 'production' && (
-                <div style={{ fontSize: 11, color: 'var(--fg-3, #666)', marginTop: 4 }}>
-                  Local dev: <code style={{ fontFamily: 'monospace' }}>admin@simcorp.com</code> / <code style={{ fontFamily: 'monospace' }}>Admin1234!</code>
-                </div>
-              )}
-            </div>
-
-            <div style={{ marginBottom: 20 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                <label style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--side-fg, #C8CDDC)' }}>
-                  Password
-                </label>
-                <a href="#" style={{ fontSize: 12, color: 'var(--sc-link, #0A7BD7)', textDecoration: 'none' }}>
-                  Forgot password?
-                </a>
+              <div style={{ marginBottom: 16 }}>
+                <label style={labelStyle}>Email</label>
+                <input
+                  type="email"
+                  autoComplete="email"
+                  required
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="you@simcorp.com"
+                  style={inputStyle}
+                />
               </div>
-              <input
-                type="password"
-                autoComplete="current-password"
-                required
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                style={inputStyle}
-                onFocus={e => { e.currentTarget.style.borderColor = 'var(--sc-blue, #083EA7)'; }}
-                onBlur={e => { e.currentTarget.style.borderColor = 'var(--side-rule, #232950)'; }}
-              />
-            </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
-              <input
-                id="remember"
-                type="checkbox"
-                checked={rememberMe}
-                onChange={e => setRememberMe(e.target.checked)}
-                style={{ cursor: 'pointer', accentColor: 'var(--sc-blue, #083EA7)' }}
-              />
-              <label htmlFor="remember" style={{ fontSize: 12.5, color: 'var(--side-fg-mute, #8089A3)', cursor: 'pointer' }}>
-                Stay signed in for 30 days
-              </label>
-            </div>
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <label style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--fg-2)' }}>Password</label>
+                  <a href="#" style={{ fontSize: 12, color: 'var(--accent-text)' }}>
+                    Forgot password?
+                  </a>
+                </div>
+                <input
+                  type="password"
+                  autoComplete="current-password"
+                  required
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  style={inputStyle}
+                />
+              </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              style={submitButtonStyle(loading)}
-              onMouseEnter={e => { if (!loading) (e.currentTarget as HTMLElement).style.background = 'var(--sc-blue-hover, #062E7D)'; }}
-              onMouseLeave={e => { if (!loading) (e.currentTarget as HTMLElement).style.background = 'var(--sc-blue, #083EA7)'; }}
-            >
-              {loading ? 'Signing in…' : 'Sign in'}
-            </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
+                <input
+                  id="remember"
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={e => setRememberMe(e.target.checked)}
+                  style={{ cursor: 'pointer', accentColor: 'var(--accent)' }}
+                />
+                <label htmlFor="remember" style={{ fontSize: 12.5, color: 'var(--fg-2)', cursor: 'pointer' }}>
+                  Stay signed in for 30 days
+                </label>
+              </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '16px 0' }}>
-              <div style={{ flex: 1, height: 1, background: 'var(--side-rule, #232950)' }} />
-              <span style={{ fontSize: 11, color: 'var(--side-fg-mute, #8089A3)', whiteSpace: 'nowrap' }}>or</span>
-              <div style={{ flex: 1, height: 1, background: 'var(--side-rule, #232950)' }} />
-            </div>
+              <button
+                type="submit"
+                disabled={loading}
+                className="btn btn--primary"
+                style={{ width: '100%', justifyContent: 'center', padding: '10px 16px', fontSize: 13.5 }}
+              >
+                {loading ? 'Signing in…' : 'Sign in'}
+              </button>
 
-            <a
-              href={`${ADMIN_API}/auth/oidc/login`}
-              style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                width: '100%', padding: '9px 16px', fontSize: 13, fontWeight: 600,
-                background: 'transparent', color: 'var(--side-fg, #C8CDDC)',
-                border: '1px solid var(--side-rule, #232950)', borderRadius: 7,
-                cursor: 'pointer', textDecoration: 'none', transition: 'border-color 0.15s',
-              }}
-              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--sc-blue, #083EA7)'; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--side-rule, #232950)'; }}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-              </svg>
-              Sign in with Entra ID (SSO)
-            </a>
-          </form>
-        </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '16px 0' }}>
+                <div style={{ flex: 1, height: 1, background: 'var(--rule)' }} />
+                <span style={{ fontSize: 11, color: 'var(--fg-3)', whiteSpace: 'nowrap' }}>or</span>
+                <div style={{ flex: 1, height: 1, background: 'var(--rule)' }} />
+              </div>
+
+              <a
+                href={`${ADMIN_API}/auth/oidc/login`}
+                className="btn"
+                style={{ width: '100%', justifyContent: 'center', padding: '9px 16px', fontSize: 13 }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                </svg>
+                Sign in with Entra ID (SSO)
+              </a>
+            </form>
+          </div>
         )}
 
-        <p style={{ textAlign: 'center', marginTop: 20, fontSize: 12, color: 'var(--side-fg-mute, #8089A3)' }}>
-          SimCorp AI Gateway · Admin access only
+        <p
+          className="microlabel"
+          style={{ textAlign: 'center', marginTop: 20 }}
+        >
+          ai-gw · admin access only
         </p>
       </div>
     </div>

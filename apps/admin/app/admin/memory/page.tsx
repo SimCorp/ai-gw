@@ -64,7 +64,7 @@ function TaxonomyPanel({ devId, onClose }: { devId: string; onClose: () => void 
           )}
           {q.data && (
             <div>
-              <div style={{ fontWeight: 600, fontSize: 12, color: 'var(--fg-2)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              <div className="microlabel" style={{ marginBottom: 8 }}>
                 Memory structure — categories & topics
               </div>
               {Object.keys(q.data.taxonomy).length === 0 ? (

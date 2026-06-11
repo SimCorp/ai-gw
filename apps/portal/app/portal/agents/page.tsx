@@ -32,9 +32,9 @@ interface IdentityAgent {
 
 const CATEGORY_COLOR: Record<string, string> = {
   utility:     'var(--fg-3)',
-  llm:         'var(--blue)',
-  integration: 'var(--teal, #14b8a6)',
-  data:        'var(--purple, #8b5cf6)',
+  llm:         'var(--accent)',
+  integration: 'var(--cat-teal)',
+  data:        'var(--cat-purple)',
 };
 
 function OnlineDot({ online }: { online: boolean }) {
@@ -46,7 +46,7 @@ function OnlineDot({ online }: { online: boolean }) {
         width: 8,
         height: 8,
         borderRadius: '50%',
-        background: online ? 'var(--green, #22c55e)' : 'var(--fg-3)',
+        background: online ? 'var(--good)' : 'var(--fg-3)',
         marginRight: 5,
         flexShrink: 0,
       }}
@@ -134,7 +134,7 @@ export default function AgentsPage() {
               padding: '6px 10px',
               fontSize: 13,
               background: 'var(--surface-2)',
-              border: '1px solid var(--border)',
+              border: '1px solid var(--rule)',
               borderRadius: 4,
               color: 'var(--fg-1)',
               outline: 'none',
@@ -147,7 +147,7 @@ export default function AgentsPage() {
           )}
 
           {searchError && (
-            <div style={{ fontSize: 12, color: 'var(--red)', marginTop: 8 }}>
+            <div style={{ fontSize: 12, color: 'var(--bad)', marginTop: 8 }}>
               Could not reach identity service: {searchError}
             </div>
           )}
@@ -168,18 +168,18 @@ export default function AgentsPage() {
                         padding: '8px 10px',
                         background: 'var(--surface-2)',
                         borderRadius: 4,
-                        border: '1px solid var(--border)',
+                        border: '1px solid var(--rule)',
                       }}
                     >
                       <OnlineDot online={a.online} />
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                           <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--fg-1)' }}>{a.name}</span>
-                          <code style={{ fontSize: 11, color: 'var(--fg-3)', background: 'var(--surface-3, var(--surface-2))', padding: '1px 4px', borderRadius: 3 }}>
+                          <code style={{ fontSize: 11, color: 'var(--fg-3)', background: 'var(--surface-soft)', padding: '1px 4px', borderRadius: 3 }}>
                             {a.slug}
                           </code>
                           {a.managed && (
-                            <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', color: 'var(--blue)', border: '1px solid var(--blue)', padding: '1px 5px', borderRadius: 3 }}>
+                            <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', color: 'var(--accent)', border: '1px solid var(--accent)', padding: '1px 5px', borderRadius: 3 }}>
                               MANAGED
                             </span>
                           )}
@@ -194,7 +194,7 @@ export default function AgentsPage() {
                             {a.capabilities.map(cap => (
                               <span
                                 key={cap}
-                                style={{ fontSize: 10, color: 'var(--fg-3)', background: 'var(--surface-1, var(--bg))', border: '1px solid var(--border)', padding: '1px 5px', borderRadius: 3 }}
+                                style={{ fontSize: 10, color: 'var(--fg-3)', background: 'var(--surface-soft)', border: '1px solid var(--rule)', padding: '1px 5px', borderRadius: 3 }}
                               >
                                 {cap}
                               </span>
@@ -218,7 +218,7 @@ export default function AgentsPage() {
 
       {/* ── Agent grid ── */}
       {loading && <div className="card"><div className="card__body" style={{ color: 'var(--fg-3)', padding: '40px 20px', textAlign: 'center' }}>Loading…</div></div>}
-      {error && <div className="card" style={{ borderColor: 'var(--red)' }}><div className="card__body" style={{ color: 'var(--red)' }}>{error}</div></div>}
+      {error && <div className="card" style={{ borderColor: 'var(--bad)' }}><div className="card__body" style={{ color: 'var(--bad)' }}>{error}</div></div>}
 
       {!loading && !error && agents.length === 0 && (
         <div className="card"><div className="card__body" style={{ color: 'var(--fg-3)', padding: '40px 20px', textAlign: 'center', fontSize: 13 }}>
@@ -233,7 +233,7 @@ export default function AgentsPage() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
                 <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--fg-1)' }}>{a.name}</div>
                 {a.managed && (
-                  <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', color: 'var(--blue)', border: '1px solid var(--blue)', padding: '1px 5px', borderRadius: 3 }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', color: 'var(--accent)', border: '1px solid var(--accent)', padding: '1px 5px', borderRadius: 3 }}>
                     MANAGED
                   </span>
                 )}

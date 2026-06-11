@@ -210,11 +210,11 @@ function ServerModal({
                 required placeholder="https://mcp.example.com"
               />
               {form.url.includes('localhost') && (
-                <div style={{ marginTop: 5, fontSize: 11.5, color: 'var(--warn, #F59E0B)' }}>
+                <div style={{ marginTop: 5, fontSize: 11.5, color: 'var(--warn)' }}>
                   ⚠ The gateway runs inside Docker — use{' '}
                   <button
                     type="button"
-                    style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--sc-blue)', textDecoration: 'underline' }}
+                    style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--accent-text)', textDecoration: 'underline' }}
                     onClick={() => setForm(f => ({ ...f, url: f.url.replace('localhost', 'host.docker.internal') }))}
                   >
                     host.docker.internal
@@ -355,7 +355,7 @@ function ToolRunner({ serverId, tool }: { serverId: string; tool: McpTool }) {
       </button>
       {open && (
         <div style={{ marginTop: 8, padding: '12px 14px', background: 'var(--surface-soft)', borderRadius: 8, border: '1px solid var(--rule)', display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--fg-2)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Arguments (JSON)</div>
+          <div className="microlabel">Arguments (JSON)</div>
           <textarea
             value={args}
             onChange={e => setArgs(e.target.value)}
@@ -481,7 +481,7 @@ function ExpandedRow({
           {detail && (
             <>
               <div>
-                <div style={{ fontWeight: 600, fontSize: 12, color: 'var(--fg-2)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                <div className="microlabel" style={{ marginBottom: 8 }}>
                   Tools ({detail.tools.length})
                 </div>
                 {detail.tools.length === 0 ? (
@@ -522,7 +522,7 @@ function ExpandedRow({
               </div>
 
               <div>
-                <div style={{ fontWeight: 600, fontSize: 12, color: 'var(--fg-2)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                <div className="microlabel" style={{ marginBottom: 8 }}>
                   Team access ({detail.access.length})
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>

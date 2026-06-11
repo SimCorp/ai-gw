@@ -98,8 +98,8 @@ export default function ChampionProfilePage() {
                 width: 56,
                 height: 56,
                 borderRadius: "50%",
-                background: "var(--sc-blue)",
-                color: "white",
+                background: "var(--accent)",
+                color: "var(--accent-fg)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -138,8 +138,8 @@ export default function ChampionProfilePage() {
                       fontSize: 11,
                       padding: "2px 8px",
                       borderRadius: 999,
-                      background: "rgba(8,62,167,0.08)",
-                      color: "var(--sc-blue)",
+                      background: "var(--accent-soft)",
+                      color: "var(--accent)",
                       marginRight: 4,
                       marginTop: 4,
                     }}
@@ -217,7 +217,7 @@ export default function ChampionProfilePage() {
             {bookingResult && (
               <div style={{
                 marginTop: 10, fontSize: 12,
-                color: bookingResult === "Request sent." ? "var(--good, #1F8A5B)" : "var(--bad)",
+                color: bookingResult === "Request sent." ? "var(--good)" : "var(--bad)",
               }}>
                 {bookingResult}
               </div>
