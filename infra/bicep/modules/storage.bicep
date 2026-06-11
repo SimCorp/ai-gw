@@ -17,9 +17,22 @@ resource runsStorage 'Microsoft.Storage/storageAccounts@2023-01-01' = {
     name: 'Standard_LRS'
   }
   kind: 'StorageV2'
+  // Properties below satisfy the SCLZ "Enforce-Guardrails-Storage" deny
+  // policies (allowedCopyScope/networkAcls.bypass/allowSharedKeyAccess must
+  // be explicit; cross-tenant replication and open network access denied).
+  // allowSharedKeyAccess stays true: containerApps.bicep mounts the share
+  // via listKeys() (ACA azureFile env-storage requires the account key).
   properties: {
     minimumTlsVersion: 'TLS1_2'
+    supportsHttpsTrafficOnly: true
     allowBlobPublicAccess: false
+    allowedCopyScope: 'AAD'
+    allowCrossTenantReplication: false
+    allowSharedKeyAccess: true
+    networkAcls: {
+      bypass: 'AzureServices'
+      defaultAction: 'Deny'
+    }
   }
 }
 
