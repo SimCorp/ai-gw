@@ -18,17 +18,18 @@ resource runsStorage 'Microsoft.Storage/storageAccounts@2023-01-01' = {
   }
   kind: 'StorageV2'
   // Properties below satisfy the SCLZ "Enforce-Guardrails-Storage" deny
-  // policies (allowedCopyScope/networkAcls.bypass/allowSharedKeyAccess must
-  // be explicit; cross-tenant replication and open network access denied).
-  // allowSharedKeyAccess stays true: containerApps.bicep mounts the share
-  // via listKeys() (ACA azureFile env-storage requires the account key).
+  // policies. allowSharedKeyAccess MUST be false — the policy set denies
+  // `true` outright. The azureFile env-storage mount in containerApps.bicep
+  // uses listKeys(), which still deploys (control plane), but the SMB mount
+  // will be rejected at data plane until ACA-Jobs spawn moves to
+  // identity-based access or a policy exemption lands (Workstream H).
   properties: {
     minimumTlsVersion: 'TLS1_2'
     supportsHttpsTrafficOnly: true
     allowBlobPublicAccess: false
     allowedCopyScope: 'AAD'
     allowCrossTenantReplication: false
-    allowSharedKeyAccess: true
+    allowSharedKeyAccess: false
     networkAcls: {
       bypass: 'AzureServices'
       defaultAction: 'Deny'
