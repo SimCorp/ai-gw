@@ -10,7 +10,10 @@ class Settings(BaseSettings):
     admin_token: str = ""  # required for X-Admin-Token auth path; empty disables it
     oidc_issuer: str
     oidc_client_id: str = "ai-gateway-admin"
-    oidc_client_secret: str
+    # Optional until the Entra app-registration exists (plan Workstream H.2);
+    # empty disables OIDC client-secret auth (admin-portal SSO) but lets the
+    # service start. Set via Key Vault once the registration is created.
+    oidc_client_secret: str = ""
 
     litellm_master_key: str
 
