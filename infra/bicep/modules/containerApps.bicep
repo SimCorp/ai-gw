@@ -337,17 +337,21 @@ resource caGateway 'Microsoft.App/containerApps@2024-03-01' = {
     workloadProfileName: 'Consumption'
     configuration: {
       ingress: {
+        // external stays false to satisfy Deny-ContainerApps-Public-Network-
+        // Access. The environment is internal:true, so even the custom-domain
+        // binding is served only on the VNet-internal load balancer — reached
+        // over the corp VPN. SNI binding is what lets the env LB terminate TLS
+        // for the gateway FQDN; without it the LB has no SNI match and resets.
         external: gatewayExternal
         targetPort: 8080
         transport: 'Http'
-        // Hostname/cert binding only makes sense on the env load balancer.
-        customDomains: gatewayExternal ? [
+        customDomains: [
           {
             name: gatewayHostname
             certificateId: '${acaEnvId}/certificates/${tlsCertName}'
             bindingType: 'SniEnabled'
           }
-        ] : []
+        ]
       }
       registries: ghcrRegistries
       secrets: ghcrSecret
