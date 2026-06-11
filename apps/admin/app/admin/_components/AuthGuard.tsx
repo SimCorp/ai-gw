@@ -20,7 +20,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     return (
       <div style={{
         position: 'fixed', inset: 0,
-        background: '#0f1117',
+        background: 'var(--bg)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
         <div style={{ color: '#666', fontSize: 13 }}>Loading…</div>

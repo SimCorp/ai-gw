@@ -31,8 +31,8 @@ function Chip({ children }: { children: React.ReactNode }) {
         fontSize: 11,
         padding: "2px 8px",
         borderRadius: 999,
-        background: "rgba(8,62,167,0.08)",
-        color: "var(--sc-blue)",
+        background: "var(--accent-soft)",
+        color: "var(--accent)",
         marginRight: 4,
         marginTop: 4,
       }}
@@ -45,15 +45,15 @@ function Chip({ children }: { children: React.ReactNode }) {
 function statusColor(status: string): { bg: string; fg: string } {
   switch (status) {
     case "open":
-      return { bg: "rgba(8,62,167,0.10)", fg: "var(--sc-blue)" };
+      return { bg: "var(--accent-soft)", fg: "var(--accent)" };
     case "claimed":
-      return { bg: "rgba(245,158,11,0.14)", fg: "#b45309" };
+      return { bg: "var(--warn-soft)", fg: "var(--warn)" };
     case "resolved_pending":
-      return { bg: "rgba(168,85,247,0.14)", fg: "#7c3aed" };
+      return { bg: "var(--surface-soft)", fg: "var(--cat-purple)" };
     case "resolved":
-      return { bg: "rgba(34,197,94,0.14)", fg: "#15803d" };
+      return { bg: "var(--good-soft)", fg: "var(--good)" };
     default:
-      return { bg: "rgba(0,0,0,0.06)", fg: "var(--fg-3)" };
+      return { bg: "var(--surface-soft)", fg: "var(--fg-3)" };
   }
 }
 

@@ -205,7 +205,7 @@ export default function RequestsPage() {
 
               {selectedRow.latency_ms != null && (
                 <>
-                  <h4 style={{ margin: '14px 0 6px', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--fg-2)' }}>
+                  <h4 className="microlabel" style={{ margin: '14px 0 6px' }}>
                     Trace <span style={{ fontWeight: 400, textTransform: 'none', fontSize: 10.5, color: 'var(--fg-3)' }}>· estimated from total latency</span>
                   </h4>
                   {(() => {
@@ -217,14 +217,14 @@ export default function RequestsPage() {
                     return (
                       <>
                         <div style={{ display: 'flex', height: 22, borderRadius: 4, overflow: 'hidden', background: 'var(--surface-soft)' }}>
-                          <span style={{ background: 'var(--sc-purple)', width: `${pct[0]}%` }}></span>
-                          <span style={{ background: 'var(--sc-teal)', width: `${pct[1]}%` }}></span>
-                          {provider > 0 && <span style={{ background: 'var(--sc-blue)', width: `${pct[2]}%` }}></span>}
+                          <span style={{ background: 'var(--cat-purple)', width: `${pct[0]}%` }}></span>
+                          <span style={{ background: 'var(--cat-teal)', width: `${pct[1]}%` }}></span>
+                          {provider > 0 && <span style={{ background: 'var(--accent)', width: `${pct[2]}%` }}></span>}
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--fg-2)', marginTop: 6 }}>
-                          <span><span className="statusdot" style={{ background: 'var(--sc-purple)', boxShadow: 'none' }}></span>auth {auth.toFixed(0)}ms</span>
-                          <span><span className="statusdot" style={{ background: 'var(--sc-teal)', boxShadow: 'none' }}></span>cache {cacheLookup.toFixed(0)}ms</span>
-                          {provider > 0 && <span><span className="statusdot" style={{ background: 'var(--sc-blue)', boxShadow: 'none' }}></span>provider {provider.toFixed(0)}ms</span>}
+                          <span><span className="statusdot" style={{ background: 'var(--cat-purple)', boxShadow: 'none' }}></span>auth {auth.toFixed(0)}ms</span>
+                          <span><span className="statusdot" style={{ background: 'var(--cat-teal)', boxShadow: 'none' }}></span>cache {cacheLookup.toFixed(0)}ms</span>
+                          {provider > 0 && <span><span className="statusdot" style={{ background: 'var(--accent)', boxShadow: 'none' }}></span>provider {provider.toFixed(0)}ms</span>}
                           <span className="mono">total {total}ms</span>
                         </div>
                       </>

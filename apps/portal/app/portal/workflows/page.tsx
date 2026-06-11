@@ -50,8 +50,8 @@ export default function WorkflowsPage() {
         <div className="card"><div className="card__body" style={{ color: 'var(--fg-3)', padding: '40px 20px', textAlign: 'center' }}>Loading…</div></div>
       )}
       {error && (
-        <div className="card" style={{ borderColor: 'var(--red)' }}>
-          <div className="card__body" style={{ color: 'var(--red)' }}>{error}</div>
+        <div className="card" style={{ borderColor: 'var(--bad)' }}>
+          <div className="card__body" style={{ color: 'var(--bad)' }}>{error}</div>
         </div>
       )}
 
@@ -79,7 +79,7 @@ export default function WorkflowsPage() {
               </Link>
               <Link
                 href={`/portal/workflows/${wf.id}/runs/new`}
-                style={{ fontSize: 12, color: 'var(--blue)', textDecoration: 'none', padding: '3px 8px', border: '1px solid var(--blue)', borderRadius: 5 }}
+                style={{ fontSize: 12, color: 'var(--accent)', textDecoration: 'none', padding: '3px 8px', border: '1px solid var(--accent)', borderRadius: 5 }}
               >
                 View runs →
               </Link>

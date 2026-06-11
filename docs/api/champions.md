@@ -655,10 +655,5 @@ All endpoints follow REST conventions:
 
 All endpoints are relative to the gateway base URL:
 ```
-http://localhost:8005
-```
-
-In production (with nginx):
-```
-http://localhost:8080/admin
+https://aigw-dev.lab.cloud.scdom.net/admin
 ```

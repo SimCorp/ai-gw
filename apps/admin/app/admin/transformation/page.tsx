@@ -42,7 +42,7 @@ interface TransformData {
 }
 
 function OrgChart({ data }: { data: OrgWeek[] }) {
-  if (!data.length) return <div style={{ color: 'var(--side-fg-mute)', fontSize: 13 }}>No session data yet.</div>;
+  if (!data.length) return <div style={{ color: 'var(--panel-fg-mute)', fontSize: 13 }}>No session data yet.</div>;
   const max = Math.max(...data.map(w => w.total_sessions), 1);
   return (
     <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 80 }}>
@@ -54,18 +54,18 @@ function OrgChart({ data }: { data: OrgWeek[] }) {
             <div style={{
               width: '100%',
               height: `${(w.total_sessions / max) * 68}px`,
-              background: 'var(--side-rule, #232950)',
+              background: 'var(--panel-rule)',
               borderRadius: '3px 3px 0 0',
               position: 'relative', overflow: 'hidden',
             }}>
               <div style={{
                 position: 'absolute', bottom: 0, left: 0, right: 0,
                 height: `${w.agentic_pct}%`,
-                background: 'var(--sc-blue, #083EA7)',
+                background: 'var(--accent)',
               }} />
             </div>
           </div>
-          <div style={{ fontSize: 9, color: 'var(--side-fg-mute)', whiteSpace: 'nowrap', marginTop: 2 }}>
+          <div style={{ fontSize: 9, color: 'var(--panel-fg-mute)', whiteSpace: 'nowrap', marginTop: 2 }}>
             {w.week.slice(5)}
           </div>
         </div>
@@ -75,13 +75,13 @@ function OrgChart({ data }: { data: OrgWeek[] }) {
 }
 
 function pctBar(pct: number, laggard: boolean) {
-  const color = laggard ? 'var(--bad, #EF3E4A)' : pct >= 60 ? 'var(--good, #1A7A3C)' : 'var(--sc-blue, #083EA7)';
+  const color = laggard ? 'var(--bad)' : pct >= 60 ? 'var(--good)' : 'var(--accent)';
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <div style={{ flex: 1, height: 6, background: 'var(--side-rule)', borderRadius: 3, overflow: 'hidden' }}>
+      <div style={{ flex: 1, height: 6, background: 'var(--panel-rule)', borderRadius: 3, overflow: 'hidden' }}>
         <div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: 3 }} />
       </div>
-      <span style={{ fontSize: 12, color: 'var(--side-fg)', minWidth: 36, textAlign: 'right' }}>{pct}%</span>
+      <span style={{ fontSize: 12, color: 'var(--panel-fg)', minWidth: 36, textAlign: 'right' }}>{pct}%</span>
     </div>
   );
 }
@@ -120,7 +120,7 @@ export default function TransformationPage() {
     }
   }
 
-  if (loading) return <main className="amain"><div style={{ color: 'var(--side-fg-mute)', padding: 32 }}>Loading…</div></main>;
+  if (loading) return <main className="amain"><div style={{ color: 'var(--panel-fg-mute)', padding: 32 }}>Loading…</div></main>;
   if (error) return <main className="amain"><div style={{ color: 'var(--bad)', padding: 32 }}>Error: {error}</div></main>;
   if (!data) return null;
 
@@ -155,54 +155,54 @@ export default function TransformationPage() {
           { label: 'Active this week', value: latestWeek ? String(latestWeek.active_devs) : '—', sub: 'developers' },
         ].map(c => (
           <div key={c.label} style={{
-            background: 'var(--surface, #161A33)',
-            border: `1px solid ${c.warn ? 'var(--bad, #EF3E4A)' : 'var(--side-rule, #232950)'}`,
+            background: 'var(--surface-2)',
+            border: `1px solid ${c.warn ? 'var(--bad)' : 'var(--panel-rule)'}`,
             borderRadius: 10, padding: '16px 18px',
           }}>
-            <div style={{ fontSize: 12, color: 'var(--side-fg-mute)', marginBottom: 4 }}>{c.label}</div>
-            <div style={{ fontSize: 24, fontWeight: 700, color: c.warn ? 'var(--bad)' : 'var(--fg-inv, #fff)' }}>{c.value}</div>
-            <div style={{ fontSize: 11, color: 'var(--side-fg-mute)', marginTop: 2 }}>{c.sub}</div>
+            <div style={{ fontSize: 12, color: 'var(--panel-fg-mute)', marginBottom: 4 }}>{c.label}</div>
+            <div style={{ fontSize: 24, fontWeight: 700, color: c.warn ? 'var(--bad)' : 'var(--fg-1)' }}>{c.value}</div>
+            <div style={{ fontSize: 11, color: 'var(--panel-fg-mute)', marginTop: 2 }}>{c.sub}</div>
           </div>
         ))}
       </div>
 
       {/* Org adoption chart */}
       <div style={{
-        background: 'var(--surface, #161A33)',
-        border: '1px solid var(--side-rule, #232950)',
+        background: 'var(--surface-2)',
+        border: '1px solid var(--panel-rule)',
         borderRadius: 10, padding: '18px 22px', marginBottom: 24,
       }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--side-fg)', marginBottom: 14 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--panel-fg)', marginBottom: 14 }}>
           Organisation adoption over time
-          <span style={{ fontSize: 11, color: 'var(--side-fg-mute)', fontWeight: 400, marginLeft: 8 }}>blue = agentic sessions</span>
+          <span style={{ fontSize: 11, color: 'var(--panel-fg-mute)', fontWeight: 400, marginLeft: 8 }}>blue = agentic sessions</span>
         </div>
         <OrgChart data={data.org_weekly} />
       </div>
 
       {/* Teams table */}
       <div style={{
-        background: 'var(--surface, #161A33)',
-        border: '1px solid var(--side-rule, #232950)',
+        background: 'var(--surface-2)',
+        border: '1px solid var(--panel-rule)',
         borderRadius: 10, marginBottom: 24, overflow: 'hidden',
       }}>
-        <div style={{ padding: '16px 22px', borderBottom: '1px solid var(--side-rule)', fontSize: 13, fontWeight: 600, color: 'var(--side-fg)' }}>
+        <div style={{ padding: '16px 22px', borderBottom: '1px solid var(--panel-rule)', fontSize: 13, fontWeight: 600, color: 'var(--panel-fg)' }}>
           Teams
         </div>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
-            <tr style={{ borderBottom: '1px solid var(--side-rule)' }}>
+            <tr style={{ borderBottom: '1px solid var(--panel-rule)' }}>
               {['Team', 'Developers', 'Agentic devs (30d)', 'Agentic session %', 'Status', ''].map(h => (
-                <th key={h} style={{ padding: '10px 16px', textAlign: 'left', color: 'var(--side-fg-mute)', fontWeight: 500, fontSize: 12 }}>{h}</th>
+                <th key={h} style={{ padding: '10px 16px', textAlign: 'left', color: 'var(--panel-fg-mute)', fontWeight: 500, fontSize: 12 }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {data.teams.map(t => (
               <>
-                <tr key={t.team_id} style={{ borderBottom: '1px solid var(--side-rule)' }}>
-                  <td style={{ padding: '12px 16px', color: 'var(--fg-inv)', fontWeight: 500 }}>{t.team_name ?? '—'}</td>
-                  <td style={{ padding: '12px 16px', color: 'var(--side-fg)' }}>{t.dev_count}</td>
-                  <td style={{ padding: '12px 16px', color: 'var(--side-fg)' }}>{t.agentic_devs_30d}</td>
+                <tr key={t.team_id} style={{ borderBottom: '1px solid var(--panel-rule)' }}>
+                  <td style={{ padding: '12px 16px', color: 'var(--fg-1)', fontWeight: 500 }}>{t.team_name ?? '—'}</td>
+                  <td className="num" style={{ padding: '12px 16px', color: 'var(--panel-fg)' }}>{t.dev_count}</td>
+                  <td className="num" style={{ padding: '12px 16px', color: 'var(--panel-fg)' }}>{t.agentic_devs_30d}</td>
                   <td style={{ padding: '12px 16px', minWidth: 160 }}>{pctBar(t.agentic_session_pct_30d, t.laggard)}</td>
                   <td style={{ padding: '12px 16px' }}>
                     {t.laggard
@@ -214,7 +214,7 @@ export default function TransformationPage() {
                   <td style={{ padding: '12px 16px' }}>
                     <button
                       onClick={() => setExpandTeam(expandTeam === t.team_id ? null : t.team_id)}
-                      style={{ background: 'none', border: 0, color: 'var(--sc-link, #0A7BD7)', cursor: 'pointer', fontSize: 12, fontFamily: 'inherit' }}
+                      style={{ background: 'none', border: 0, color: 'var(--accent-text)', cursor: 'pointer', fontSize: 12, fontFamily: 'inherit' }}
                     >
                       {expandTeam === t.team_id ? 'Hide' : 'Show developers'}
                     </button>
@@ -222,26 +222,26 @@ export default function TransformationPage() {
                 </tr>
                 {expandTeam === t.team_id && (
                   <tr key={`${t.team_id}-devs`}>
-                    <td colSpan={6} style={{ padding: '0 16px 12px 32px', background: 'var(--surface-soft, rgba(0,0,0,0.08))' }}>
+                    <td colSpan={6} style={{ padding: '0 16px 12px 32px', background: 'var(--surface-soft)' }}>
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                         <thead>
                           <tr>
                             {['Developer', 'Sessions (30d)', 'Agentic', 'Agentic %', 'Achievements'].map(h => (
-                              <th key={h} style={{ padding: '8px 12px', textAlign: 'left', color: 'var(--side-fg-mute)', fontWeight: 500 }}>{h}</th>
+                              <th key={h} style={{ padding: '8px 12px', textAlign: 'left', color: 'var(--panel-fg-mute)', fontWeight: 500 }}>{h}</th>
                             ))}
                           </tr>
                         </thead>
                         <tbody>
                           {data.developers.filter(d => d.team_id === t.team_id).map(d => (
                             <tr key={d.developer_id}>
-                              <td style={{ padding: '8px 12px', color: 'var(--side-fg)' }}>
-                                <div style={{ fontWeight: 500, color: 'var(--fg-inv)' }}>{d.display_name}</div>
-                                <div style={{ color: 'var(--side-fg-mute)', fontSize: 11 }}>{d.email}</div>
+                              <td style={{ padding: '8px 12px', color: 'var(--panel-fg)' }}>
+                                <div style={{ fontWeight: 500, color: 'var(--fg-1)' }}>{d.display_name}</div>
+                                <div style={{ color: 'var(--panel-fg-mute)', fontSize: 11 }}>{d.email}</div>
                               </td>
-                              <td style={{ padding: '8px 12px', color: 'var(--side-fg)' }}>{d.total_sessions_30d}</td>
-                              <td style={{ padding: '8px 12px', color: 'var(--side-fg)' }}>{d.agentic_sessions_30d}</td>
+                              <td className="num" style={{ padding: '8px 12px', color: 'var(--panel-fg)' }}>{d.total_sessions_30d}</td>
+                              <td className="num" style={{ padding: '8px 12px', color: 'var(--panel-fg)' }}>{d.agentic_sessions_30d}</td>
                               <td style={{ padding: '8px 12px' }}>{pctBar(d.agentic_pct, d.agentic_pct < 20 && d.total_sessions_30d > 5)}</td>
-                              <td style={{ padding: '8px 12px', color: 'var(--side-fg-mute)' }}>{d.achievement_count} 🏅</td>
+                              <td className="num" style={{ padding: '8px 12px', color: 'var(--panel-fg-mute)' }}>{d.achievement_count} 🏅</td>
                             </tr>
                           ))}
                         </tbody>

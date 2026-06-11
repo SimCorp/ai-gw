@@ -4,8 +4,16 @@ on:
   push:
     branches: [main, master]
     tags: ["v*.*.*"]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - ".github/dependabot.yml"
   pull_request:
     branches: [main, master]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - ".github/dependabot.yml"
 
 # Cancel in-flight runs for the same ref (saves minutes on fast-moving PRs)
 concurrency:
@@ -73,8 +81,8 @@ jobs:
       - name: Build
         run: pnpm build
         env:
-          NEXT_PUBLIC_ADMIN_API: http://localhost:8005
-          NEXT_PUBLIC_ADMIN_BASE_URL: http://localhost:8005
+          NEXT_PUBLIC_ADMIN_API: https://aigw-dev.lab.cloud.scdom.net/admin
+          NEXT_PUBLIC_ADMIN_BASE_URL: https://aigw-dev.lab.cloud.scdom.net/admin
           NEXT_TELEMETRY_DISABLED: "1"
 
   # ────────────────────────────────────────────────────────────────────────────
@@ -86,7 +94,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [auth, cache, observability, admin, librarian, memory, scanner]
+        service: [auth, cache, observability, admin, identity, agent-relay, league, librarian, memory, scanner]
 
     steps:
       - uses: actions/checkout@v4
@@ -101,11 +109,10 @@ jobs:
 
       - name: Run unit tests
         working-directory: services/${{ matrix.service }}
+        # Each service's conftest sets the env it needs (config is fail-fast with no
+        # local defaults). BUS_PROVIDER=memory keeps observability off Service Bus.
         env:
-          DEV_BYPASS_AUTH: "true"
           BUS_PROVIDER: memory
-          DATABASE_URL: postgresql+asyncpg://aigateway:aigateway@localhost:5432/aigateway
-          REDIS_URL: redis://localhost:6379/0
           ENVIRONMENT: test
         run: python3 -m pytest tests/ -v --tb=short
 
@@ -280,7 +287,7 @@ jobs:
   build-push:
     name: Build & push — ${{ matrix.component.name }}
     runs-on: ubuntu-latest
-    needs: [lint-python, lint-frontend, unit-tests, integration-tests]
+    needs: [lint-python, lint-frontend, unit-tests]
     if: github.event_name == 'push'
     permissions:
       contents: read
@@ -314,12 +321,25 @@ jobs:
             context: services/workflow-worker
           - name: litellm
             context: services/litellm
-          # admin-portal / portal are intentionally omitted:
-          # this is a pnpm monorepo with workspace:* deps, and their
-          # Dockerfiles (npm ci, single-app context) cannot build. Nothing
-          # consumes the images today — compose runs the apps via
-          # node:20-alpine + npm run dev. Containerize them in a dedicated
-          # effort with a proper pnpm-monorepo build.
+          # Next.js portals: pnpm-monorepo Dockerfiles at repo root, root build
+          # context. NEXT_PUBLIC_* are baked at build time → passed as build-args
+          # pointing at the gateway dev FQDN. (NEXT_PUBLIC_LITELLM_KEY is left
+          # unset on purpose — never bake a provider key into a browser bundle.)
+          - name: admin-portal
+            context: .
+            dockerfile: Dockerfile.admin
+            build_args: >-
+              --build-arg NEXT_PUBLIC_ADMIN_API=https://aigw-dev.lab.cloud.scdom.net/admin
+          - name: portal
+            context: .
+            dockerfile: Dockerfile.portal
+            build_args: >-
+              --build-arg NEXT_PUBLIC_ADMIN_BASE_URL=https://aigw-dev.lab.cloud.scdom.net/admin
+              --build-arg NEXT_PUBLIC_CACHE_BASE_URL=https://aigw-dev.lab.cloud.scdom.net/cache
+              --build-arg NEXT_PUBLIC_IDENTITY_BASE_URL=https://aigw-dev.lab.cloud.scdom.net/identity
+              --build-arg NEXT_PUBLIC_LIBRARIAN_BASE_URL=https://aigw-dev.lab.cloud.scdom.net/librarian
+              --build-arg NEXT_PUBLIC_MEMORY_BASE_URL=https://aigw-dev.lab.cloud.scdom.net/memory
+              --build-arg NEXT_PUBLIC_LITELLM_BASE_URL=https://aigw-dev.lab.cloud.scdom.net/litellm
 
     steps:
       - uses: actions/checkout@v4
@@ -352,10 +372,16 @@ jobs:
           for tag in "${TAG_ARGS[@]}"; do
             DOCKER_TAGS="$DOCKER_TAGS --tag $tag"
           done
+          DF_FLAG=""
+          if [ -n "${{ matrix.component.dockerfile }}" ]; then
+            DF_FLAG="-f ${{ matrix.component.dockerfile }}"
+          fi
           for attempt in 1 2 3; do
             if docker buildx build \
               --push \
               $DOCKER_TAGS \
+              $DF_FLAG \
+              ${{ matrix.component.build_args }} \
               --cache-from type=gha,scope=${{ matrix.component.name }} \
               --cache-to type=gha,mode=max,scope=${{ matrix.component.name }} \
               ${{ matrix.component.context }}; then

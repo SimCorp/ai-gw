@@ -39,7 +39,7 @@ export default function ToolPage({ params }: { params: Promise<{ slug: string }>
   if (loading) {
     return (
       <main className="pmain">
-        <p style={{ color: 'var(--fg-mute)' }}>Loading…</p>
+        <p style={{ color: 'var(--fg-2)' }}>Loading…</p>
       </main>
     );
   }
@@ -59,16 +59,16 @@ export default function ToolPage({ params }: { params: Promise<{ slug: string }>
   return (
     <main className="pmain" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexShrink: 0 }}>
-        <Link href="/portal/tools" style={{ color: 'var(--fg-mute)', textDecoration: 'none', fontSize: 13 }}>
+        <Link href="/portal/tools" style={{ color: 'var(--fg-2)', textDecoration: 'none', fontSize: 13 }}>
           ← Tools
         </Link>
         {tool && (
           <>
-            <span style={{ color: 'var(--border)' }}>/</span>
-            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)' }}>{tool.label}</span>
+            <span style={{ color: 'var(--rule)' }}>/</span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg-1)' }}>{tool.label}</span>
             <span style={{
               padding: '2px 8px', borderRadius: 20, fontSize: 11,
-              background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--fg-mute)',
+              background: 'var(--surface)', border: '1px solid var(--rule)', color: 'var(--fg-2)',
             }}>
               {tool.category}
             </span>
@@ -80,17 +80,17 @@ export default function ToolPage({ params }: { params: Promise<{ slug: string }>
         title={tool?.label ?? slug}
         style={{
           flex: 1, border: 'none', borderRadius: 8,
-          background: '#fff', minHeight: 600,
+          background: 'var(--surface)', minHeight: 600,
         }}
         onError={() => {/* handled by browser's native iframe error display */}}
       />
-      <div style={{ padding: '10px 0', fontSize: 12, color: 'var(--fg-mute)', flexShrink: 0 }}>
+      <div style={{ padding: '10px 0', fontSize: 12, color: 'var(--fg-2)', flexShrink: 0 }}>
         Having trouble? Access the tools app directly at{' '}
         <a
           href={`${TOOLS_APP_BASE}/${slug}`}
           target="_blank"
           rel="noopener noreferrer"
-          style={{ color: 'var(--sc-link, #0A7BD7)' }}
+          style={{ color: 'var(--accent-text)' }}
         >
           {TOOLS_APP_BASE}/{slug} ↗
         </a>

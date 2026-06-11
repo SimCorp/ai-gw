@@ -1,4 +1,4 @@
-"""Worker configuration. Reads from env vars set in docker-compose."""
+"""Worker configuration. Reads from environment variables (Key Vault in Azure)."""
 
 from __future__ import annotations
 
@@ -23,6 +23,17 @@ class Settings:
     agent_runtime: str
     relay_secret: str
     admin_internal_token: str
+    # --- Azure Container Apps Jobs runtime (only required when
+    # AGENT_CONTAINER_RUNTIME=aca_job; harmless empty defaults for docker/relay).
+    # Env var names below are what bicep must wire to match. ---
+    agent_runner_job_name: (
+        str  # AGENT_RUNNER_JOB_NAME — pre-declared ACA job, e.g. job-agent-runner-<env>-sdc
+    )
+    azure_resource_group: str  # AZURE_RESOURCE_GROUP — RG holding the job + storage
+    azure_subscription_id: str  # AZURE_SUBSCRIPTION_ID — subscription of the job
+    runs_share_name: str  # AIGW_RUNS_SHARE — Azure Files share for per-run I/O exchange
+    runs_storage_account: str  # AIGW_RUNS_STORAGE_ACCOUNT — storage account hosting the share
+    aca_poll_interval_s: float  # AGENT_ACA_POLL_INTERVAL_S — execution status poll cadence
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -31,7 +42,7 @@ class Settings:
             database_url=os.environ["DATABASE_URL"]
             .replace("postgresql+asyncpg://", "postgresql://")
             .replace("postgresql+psycopg2://", "postgresql://"),
-            redis_url=os.getenv("REDIS_URL", "redis://redis:6379/0"),
+            redis_url=os.environ["REDIS_URL"],
             worker_id=os.getenv("WORKER_ID", f"worker-{socket.gethostname()}"),
             concurrency=int(os.getenv("WORKER_CONCURRENCY", "5")),
             poll_interval_s=float(os.getenv("WORKER_POLL_INTERVAL_S", "1.0")),
@@ -41,9 +52,15 @@ class Settings:
             # same host path is bind-mounted into agent containers at /run.
             host_runs_path=os.getenv("HOST_RUNS_PATH", "/tmp/aigw-runs"),
             container_network=os.getenv("AGENT_CONTAINER_NETWORK", "aigateway"),
-            relay_url=os.getenv("AGENT_RELAY_URL", "http://agent-relay:8007"),
-            admin_url=os.getenv("ADMIN_URL", "http://admin:8005"),
+            relay_url=os.environ["AGENT_RELAY_URL"],
+            admin_url=os.environ["ADMIN_URL"],
             agent_runtime=os.getenv("AGENT_CONTAINER_RUNTIME", "docker"),
             relay_secret=os.getenv("AGENT_RELAY_SECRET", ""),
             admin_internal_token=os.getenv("ADMIN_INTERNAL_TOKEN", ""),
+            agent_runner_job_name=os.getenv("AGENT_RUNNER_JOB_NAME", ""),
+            azure_resource_group=os.getenv("AZURE_RESOURCE_GROUP", ""),
+            azure_subscription_id=os.getenv("AZURE_SUBSCRIPTION_ID", ""),
+            runs_share_name=os.getenv("AIGW_RUNS_SHARE", ""),
+            runs_storage_account=os.getenv("AIGW_RUNS_STORAGE_ACCOUNT", ""),
+            aca_poll_interval_s=float(os.getenv("AGENT_ACA_POLL_INTERVAL_S", "2.0")),
         )

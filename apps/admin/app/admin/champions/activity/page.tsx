@@ -64,10 +64,10 @@ export default function ChampionsActivityPage() {
       </div>
 
       {loading && (
-        <div style={{ color: 'var(--side-fg-mute)', fontSize: 13 }}>Loading…</div>
+        <div style={{ color: 'var(--panel-fg-mute)', fontSize: 13 }}>Loading…</div>
       )}
       {error && (
-        <div style={{ color: 'var(--bad, #EF3E4A)', fontSize: 13, marginBottom: 16 }}>{error}</div>
+        <div style={{ color: 'var(--bad)', fontSize: 13, marginBottom: 16 }}>{error}</div>
       )}
 
       {data && (
@@ -85,16 +85,16 @@ export default function ChampionsActivityPage() {
               <div
                 key={key}
                 style={{
-                  background: 'var(--surface, #161A33)',
-                  border: '1px solid var(--side-rule, #232950)',
+                  background: 'var(--surface-2)',
+                  border: '1px solid var(--panel-rule)',
                   borderRadius: 10,
                   padding: '16px 18px',
                 }}
               >
-                <div style={{ fontSize: 11.5, color: 'var(--side-fg-mute)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                <div className="microlabel" style={{ marginBottom: 6 }}>
                   {label}
                 </div>
-                <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--fg-inv, #fff)' }}>
+                <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--fg-1)' }}>
                   {data.org[key]}
                 </div>
               </div>
@@ -104,8 +104,8 @@ export default function ChampionsActivityPage() {
           {/* Per-champion table */}
           <div
             style={{
-              background: 'var(--surface, #161A33)',
-              border: '1px solid var(--side-rule, #232950)',
+              background: 'var(--surface-2)',
+              border: '1px solid var(--panel-rule)',
               borderRadius: 10,
               overflow: 'hidden',
             }}
@@ -113,29 +113,29 @@ export default function ChampionsActivityPage() {
             <div
               style={{
                 padding: '16px 22px',
-                borderBottom: '1px solid var(--side-rule)',
+                borderBottom: '1px solid var(--panel-rule)',
                 fontSize: 13,
                 fontWeight: 600,
-                color: 'var(--side-fg)',
+                color: 'var(--panel-fg)',
               }}
             >
               Per champion (last 30 days)
             </div>
             {sorted.length === 0 ? (
-              <div style={{ padding: 22, color: 'var(--side-fg-mute)', fontSize: 13 }}>
+              <div style={{ padding: 22, color: 'var(--panel-fg-mute)', fontSize: 13 }}>
                 No champion activity yet.
               </div>
             ) : (
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                 <thead>
-                  <tr style={{ borderBottom: '1px solid var(--side-rule)' }}>
+                  <tr style={{ borderBottom: '1px solid var(--panel-rule)' }}>
                     {['Developer', 'Contributions', 'Asks resolved', 'Bookings done', 'Points (30d)'].map((h) => (
                       <th
                         key={h}
                         style={{
                           padding: '10px 16px',
                           textAlign: 'left',
-                          color: 'var(--side-fg-mute)',
+                          color: 'var(--panel-fg-mute)',
                           fontWeight: 500,
                           fontSize: 12,
                         }}
@@ -147,20 +147,20 @@ export default function ChampionsActivityPage() {
                 </thead>
                 <tbody>
                   {sorted.map((c) => (
-                    <tr key={c.developer_id} style={{ borderBottom: '1px solid var(--side-rule)' }}>
+                    <tr key={c.developer_id} style={{ borderBottom: '1px solid var(--panel-rule)' }}>
                       <td
                         style={{
                           padding: '12px 16px',
-                          color: 'var(--fg-inv)',
+                          color: 'var(--fg-1)',
                           fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
                         }}
                       >
                         {c.developer_id.slice(0, 8)}…
                       </td>
-                      <td style={{ padding: '12px 16px', color: 'var(--side-fg)' }}>{c.contributions}</td>
-                      <td style={{ padding: '12px 16px', color: 'var(--side-fg)' }}>{c.asks_resolved}</td>
-                      <td style={{ padding: '12px 16px', color: 'var(--side-fg)' }}>{c.bookings_done}</td>
-                      <td style={{ padding: '12px 16px', color: 'var(--fg-inv)', fontWeight: 600 }}>
+                      <td className="num" style={{ padding: '12px 16px', color: 'var(--panel-fg)' }}>{c.contributions}</td>
+                      <td className="num" style={{ padding: '12px 16px', color: 'var(--panel-fg)' }}>{c.asks_resolved}</td>
+                      <td className="num" style={{ padding: '12px 16px', color: 'var(--panel-fg)' }}>{c.bookings_done}</td>
+                      <td className="num" style={{ padding: '12px 16px', color: 'var(--fg-1)', fontWeight: 600 }}>
                         {c.points_30d}
                       </td>
                     </tr>

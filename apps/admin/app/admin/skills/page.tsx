@@ -102,7 +102,7 @@ export default function AdminSkillsPage() {
       </div>
 
       {creating && (
-        <div className="card" style={{ marginBottom: 20, border: '1px solid var(--sc-blue, #0A7BD7)' }}>
+        <div className="card" style={{ marginBottom: 20, border: '1px solid var(--accent)' }}>
           <div className="card__head"><h3 className="card__title">New skill</h3><button className="btn btn--sm btn--ghost" onClick={() => setCreating(false)}>Cancel</button></div>
           <div className="card__body">
             <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>

@@ -1,4 +1,4 @@
-"""Agent Relay configuration. Reads from env vars set in docker-compose."""
+"""Agent Relay configuration. Reads from environment variables (Key Vault in Azure)."""
 
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    redis_url: str = "redis://redis:6379/0"
-    relay_secret: str = ""  # AGENT_RELAY_SECRET — leave empty to allow all (dev mode)
+    redis_url: str
+    relay_secret: str  # RELAY_SECRET — empty value allows all (set explicitly)
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

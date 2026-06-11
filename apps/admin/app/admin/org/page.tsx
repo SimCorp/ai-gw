@@ -76,7 +76,7 @@ function CreateNodeModal({
     width: '100%', boxSizing: 'border-box',
     padding: '8px 10px', fontSize: 13,
     background: 'var(--surface-2)', border: '1px solid var(--rule)',
-    borderRadius: 6, color: 'var(--fg)', outline: 'none',
+    borderRadius: 6, color: 'var(--fg-1)', outline: 'none',
   };
   const labelStyle: React.CSSProperties = {
     display: 'block', fontSize: 12, fontWeight: 500,
@@ -91,22 +91,22 @@ function CreateNodeModal({
       <div style={{
         background: 'var(--surface)', border: '1px solid var(--rule)',
         borderRadius: 12, padding: '24px 24px 20px', width: 420,
-        boxShadow: '0 16px 48px rgba(0,0,0,0.4)',
+        boxShadow: 'var(--shadow-pop)',
       }} onClick={e => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--fg)' }}>Add org node</h2>
+          <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--fg-1)' }}>Add org node</h2>
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--fg-3)', cursor: 'pointer', fontSize: 18, lineHeight: 1 }}>✕</button>
         </div>
 
         {preselectedParentName && (
           <div style={{ marginBottom: 16, padding: '8px 12px', background: 'var(--surface-2)', borderRadius: 6, fontSize: 12, color: 'var(--fg-2)' }}>
-            Adding child under: <strong style={{ color: 'var(--fg)' }}>{preselectedParentName}</strong>
+            Adding child under: <strong style={{ color: 'var(--fg-1)' }}>{preselectedParentName}</strong>
           </div>
         )}
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {error && (
-            <div style={{ padding: '8px 12px', background: 'rgba(220,38,38,0.12)', border: '1px solid rgba(220,38,38,0.4)', borderRadius: 6, fontSize: 12, color: '#FCA5A5' }}>
+            <div style={{ padding: '8px 12px', background: 'var(--bad-soft)', border: '1px solid var(--bad)', borderRadius: 6, fontSize: 12, color: 'var(--bad)' }}>
               {error}
             </div>
           )}
@@ -137,9 +137,9 @@ function CreateNodeModal({
                     onClick={() => setForm(f => ({ ...f, type: t }))}
                     style={{
                       flex: 1, padding: '7px 0', fontSize: 12.5, fontWeight: selected ? 600 : 400,
-                      background: selected ? 'var(--sc-blue, #083EA7)' : 'var(--surface-2)',
+                      background: selected ? 'var(--accent)' : 'var(--surface-2)',
                       color: selected ? '#fff' : 'var(--fg-2)',
-                      border: `1px solid ${selected ? 'var(--sc-blue, #083EA7)' : 'var(--rule)'}`,
+                      border: `1px solid ${selected ? 'var(--accent)' : 'var(--rule)'}`,
                       borderRadius: 6, cursor: 'pointer', transition: 'all 0.1s',
                     }}
                   >
@@ -180,11 +180,11 @@ function CreateNodeModal({
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
             <button type="button" onClick={onClose} style={{
               padding: '8px 16px', fontSize: 13, background: 'var(--surface-2)',
-              border: '1px solid var(--rule)', borderRadius: 6, color: 'var(--fg)', cursor: 'pointer',
+              border: '1px solid var(--rule)', borderRadius: 6, color: 'var(--fg-1)', cursor: 'pointer',
             }}>Cancel</button>
             <button type="submit" disabled={saving || !form.name.trim()} style={{
               padding: '8px 16px', fontSize: 13, fontWeight: 600,
-              background: 'var(--sc-blue, #083EA7)', color: '#fff',
+              background: 'var(--accent)', color: '#fff',
               border: 'none', borderRadius: 6, cursor: saving ? 'not-allowed' : 'pointer',
               opacity: saving || !form.name.trim() ? 0.7 : 1,
             }}>{saving ? 'Creating…' : 'Create node'}</button>
@@ -247,7 +247,7 @@ export default function OrgTreePage() {
   return (
     <div>
       <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--fg)', margin: 0 }}>
+        <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--fg-1)', margin: 0 }}>
           Org Tree
         </h1>
         <p style={{ fontSize: 13, color: 'var(--fg-3)', margin: '4px 0 0' }}>
@@ -264,20 +264,20 @@ export default function OrgTreePage() {
           style={{
             flex: '1 1 240px', padding: '7px 12px', fontSize: 13,
             background: 'var(--surface-2)', border: '1px solid var(--rule)',
-            borderRadius: 6, color: 'var(--fg)',
+            borderRadius: 6, color: 'var(--fg-1)',
           }}
         />
-        <button onClick={expandAll} style={{ padding: '7px 14px', fontSize: 12, background: 'var(--surface-2)', border: '1px solid var(--rule)', borderRadius: 6, color: 'var(--fg)', cursor: 'pointer' }}>
+        <button onClick={expandAll} style={{ padding: '7px 14px', fontSize: 12, background: 'var(--surface-2)', border: '1px solid var(--rule)', borderRadius: 6, color: 'var(--fg-1)', cursor: 'pointer' }}>
           Expand all
         </button>
-        <button onClick={collapseAll} style={{ padding: '7px 14px', fontSize: 12, background: 'var(--surface-2)', border: '1px solid var(--rule)', borderRadius: 6, color: 'var(--fg)', cursor: 'pointer' }}>
+        <button onClick={collapseAll} style={{ padding: '7px 14px', fontSize: 12, background: 'var(--surface-2)', border: '1px solid var(--rule)', borderRadius: 6, color: 'var(--fg-1)', cursor: 'pointer' }}>
           Collapse all
         </button>
         <button
           onClick={() => openCreate()}
           style={{
             padding: '7px 14px', fontSize: 12, fontWeight: 600,
-            background: 'var(--sc-blue, #083EA7)', color: '#fff',
+            background: 'var(--accent)', color: '#fff',
             border: 'none', borderRadius: 6, cursor: 'pointer',
           }}
         >

@@ -23,12 +23,12 @@ const ROLE_OPTIONS = [
 ];
 
 const ROLE_COLORS: Record<string, string> = {
-  platform_admin: '#EF3E4A',
-  area_owner: '#FB9B2A',
-  unit_lead: '#9D2E7B',
-  team_admin: '#0A7BD7',
-  developer: '#1D958E',
-  viewer: '#4B17B6',
+  platform_admin: 'var(--cat-coral)',
+  area_owner: 'var(--cat-orange)',
+  unit_lead: 'var(--cat-magenta)',
+  team_admin: 'var(--accent)',
+  developer: 'var(--cat-teal)',
+  viewer: 'var(--cat-purple)',
 };
 
 const ROLE_LABELS: Record<string, string> = {
@@ -41,12 +41,12 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 function RolePill({ role }: { role: string }) {
-  const color = ROLE_COLORS[role] ?? '#888';
+  const color = ROLE_COLORS[role] ?? 'var(--fg-3)';
   return (
     <span style={{
       display: 'inline-block', padding: '2px 7px',
       borderRadius: 10, fontSize: 11, fontWeight: 600,
-      background: color + '22', color, border: `1px solid ${color}44`,
+      background: `color-mix(in srgb, ${color} 13%, transparent)`, color, border: `1px solid color-mix(in srgb, ${color} 27%, transparent)`,
     }}>
       {ROLE_LABELS[role] ?? role}
     </span>
@@ -105,7 +105,7 @@ export function PermissionsPanel({ nodeId }: PermissionsPanelProps) {
       <div style={{
         padding: '10px 14px', fontSize: 12, color: 'var(--fg-3)',
         background: 'var(--surface-2)', border: '1px solid var(--rule)',
-        borderRadius: 7, borderLeft: '3px solid var(--sc-blue)',
+        borderRadius: 7, borderLeft: '3px solid var(--accent)',
       }}>
         Access inherited from ancestor nodes is not shown here — manage it on those nodes.
       </div>
@@ -113,14 +113,14 @@ export function PermissionsPanel({ nodeId }: PermissionsPanelProps) {
       {/* Assignment list */}
       <div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)' }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg-1)' }}>
             Entra groups on this node
           </div>
           <button
             onClick={() => setShowForm(v => !v)}
             style={{
               padding: '5px 12px', fontSize: 12,
-              background: 'var(--sc-blue)', color: '#fff',
+              background: 'var(--accent)', color: '#fff',
               border: 'none', borderRadius: 5, cursor: 'pointer',
             }}
           >
@@ -138,18 +138,18 @@ export function PermissionsPanel({ nodeId }: PermissionsPanelProps) {
               placeholder="Entra group ID (UUID)"
               value={groupId}
               onChange={e => setGroupId(e.target.value)}
-              style={{ flex: '2 1 220px', padding: '6px 10px', fontSize: 12, background: 'var(--surface)', border: '1px solid var(--rule)', borderRadius: 5, color: 'var(--fg)', fontFamily: 'monospace' }}
+              style={{ flex: '2 1 220px', padding: '6px 10px', fontSize: 12, background: 'var(--surface)', border: '1px solid var(--rule)', borderRadius: 5, color: 'var(--fg-1)', fontFamily: 'monospace' }}
             />
             <input
               placeholder="Display name (optional)"
               value={groupName}
               onChange={e => setGroupName(e.target.value)}
-              style={{ flex: '2 1 180px', padding: '6px 10px', fontSize: 12, background: 'var(--surface)', border: '1px solid var(--rule)', borderRadius: 5, color: 'var(--fg)' }}
+              style={{ flex: '2 1 180px', padding: '6px 10px', fontSize: 12, background: 'var(--surface)', border: '1px solid var(--rule)', borderRadius: 5, color: 'var(--fg-1)' }}
             />
             <select
               value={role}
               onChange={e => setRole(e.target.value)}
-              style={{ flex: '1 1 140px', padding: '6px 10px', fontSize: 12, background: 'var(--surface)', border: '1px solid var(--rule)', borderRadius: 5, color: 'var(--fg)' }}
+              style={{ flex: '1 1 140px', padding: '6px 10px', fontSize: 12, background: 'var(--surface)', border: '1px solid var(--rule)', borderRadius: 5, color: 'var(--fg-1)' }}
             >
               {ROLE_OPTIONS.map(r => (
                 <option key={r} value={r}>{ROLE_LABELS[r] ?? r}</option>
@@ -158,7 +158,7 @@ export function PermissionsPanel({ nodeId }: PermissionsPanelProps) {
             <button
               onClick={() => addMutation.mutate({ entra_group_id: groupId.trim(), entra_group_name: groupName.trim(), role })}
               disabled={!groupId.trim() || addMutation.isPending}
-              style={{ padding: '6px 12px', fontSize: 12, background: 'var(--sc-blue)', color: '#fff', border: 'none', borderRadius: 5, cursor: 'pointer' }}
+              style={{ padding: '6px 12px', fontSize: 12, background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 5, cursor: 'pointer' }}
             >
               Save
             </button>
@@ -187,7 +187,7 @@ export function PermissionsPanel({ nodeId }: PermissionsPanelProps) {
                 <span style={{ fontSize: 16, flexShrink: 0 }}>&#x1F465;</span>
                 {/* Name + ID */}
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--fg)' }}>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--fg-1)' }}>
                     {a.entra_group_name ?? 'Unnamed group'}
                   </div>
                   <div style={{
@@ -208,7 +208,7 @@ export function PermissionsPanel({ nodeId }: PermissionsPanelProps) {
                   style={{
                     padding: '3px 9px', fontSize: 11, background: 'transparent',
                     border: '1px solid var(--rule)', borderRadius: 4,
-                    color: 'var(--bad, #EF3E4A)', cursor: 'pointer',
+                    color: 'var(--bad)', cursor: 'pointer',
                   }}
                 >
                   Remove
@@ -219,7 +219,7 @@ export function PermissionsPanel({ nodeId }: PermissionsPanelProps) {
         )}
 
         {(addMutation.isError || removeMutation.isError) && (
-          <div style={{ marginTop: 8, fontSize: 12, color: '#EF3E4A' }}>
+          <div style={{ marginTop: 8, fontSize: 12, color: 'var(--bad)' }}>
             {((addMutation.error ?? removeMutation.error) as Error).message}
           </div>
         )}

@@ -75,7 +75,7 @@ export default function AiHelpWidget() {
         style={{
           position: 'fixed', bottom: 24, right: 24, zIndex: 1000,
           width: 44, height: 44, borderRadius: '50%',
-          background: 'var(--sc-blue, #0A7BD7)',
+          background: 'var(--accent)',
           border: 'none', cursor: 'pointer',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           boxShadow: '0 2px 12px rgba(0,0,0,0.3)',
@@ -95,7 +95,7 @@ export default function AiHelpWidget() {
           width: 360, maxHeight: '70vh',
           display: 'flex', flexDirection: 'column',
           background: 'var(--bg, #1a1f2e)',
-          border: '1px solid var(--side-rule, rgba(255,255,255,0.1))',
+          border: '1px solid var(--rule)',
           borderRadius: 12,
           boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
           overflow: 'hidden',
@@ -103,14 +103,14 @@ export default function AiHelpWidget() {
           {/* Header */}
           <div style={{
             padding: '12px 16px',
-            borderBottom: '1px solid var(--side-rule, rgba(255,255,255,0.1))',
+            borderBottom: '1px solid var(--rule)',
             display: 'flex', alignItems: 'center', gap: 10,
             background: 'rgba(10,123,215,0.08)',
           }}>
             <span style={{ fontSize: 18 }}>✦</span>
             <div>
-              <div style={{ fontWeight: 600, fontSize: 13.5, color: 'var(--side-fg, #e8eaf0)' }}>Gateway Assistant</div>
-              <div style={{ fontSize: 11.5, color: 'var(--side-fg-mute, #8b8fa8)' }}>Ask me anything about the admin portal</div>
+              <div style={{ fontWeight: 600, fontSize: 13.5, color: 'var(--fg-1)' }}>Gateway Assistant</div>
+              <div style={{ fontSize: 11.5, color: 'var(--fg-2)' }}>Ask me anything about the admin portal</div>
             </div>
           </div>
 
@@ -118,7 +118,7 @@ export default function AiHelpWidget() {
           <div style={{ flex: 1, overflowY: 'auto', padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
             {messages.length === 0 && (
               <div>
-                <div style={{ fontSize: 12.5, color: 'var(--side-fg-mute, #8b8fa8)', marginBottom: 10 }}>
+                <div style={{ fontSize: 12.5, color: 'var(--fg-2)', marginBottom: 10 }}>
                   Quick questions:
                 </div>
                 {STARTERS.map(s => (
@@ -129,9 +129,9 @@ export default function AiHelpWidget() {
                       display: 'block', width: '100%', textAlign: 'left',
                       padding: '7px 10px', marginBottom: 4,
                       background: 'rgba(255,255,255,0.05)',
-                      border: '1px solid var(--side-rule, rgba(255,255,255,0.1))',
+                      border: '1px solid var(--rule)',
                       borderRadius: 8, cursor: 'pointer',
-                      fontSize: 12.5, color: 'var(--side-fg, #e8eaf0)',
+                      fontSize: 12.5, color: 'var(--fg-1)',
                       fontFamily: 'inherit',
                     }}
                   >
@@ -151,9 +151,9 @@ export default function AiHelpWidget() {
                   padding: '8px 12px',
                   borderRadius: m.role === 'user' ? '12px 12px 2px 12px' : '12px 12px 12px 2px',
                   background: m.role === 'user'
-                    ? 'var(--sc-blue, #0A7BD7)'
+                    ? 'var(--accent)'
                     : 'rgba(255,255,255,0.07)',
-                  color: m.role === 'user' ? '#fff' : 'var(--side-fg, #e8eaf0)',
+                  color: m.role === 'user' ? '#fff' : 'var(--fg-1)',
                   fontSize: 13,
                   lineHeight: 1.5,
                   whiteSpace: 'pre-wrap',
@@ -164,7 +164,7 @@ export default function AiHelpWidget() {
             ))}
 
             {loading && (
-              <div style={{ color: 'var(--side-fg-mute, #8b8fa8)', fontSize: 13, fontStyle: 'italic' }}>
+              <div style={{ color: 'var(--fg-2)', fontSize: 13, fontStyle: 'italic' }}>
                 Thinking…
               </div>
             )}
@@ -174,7 +174,7 @@ export default function AiHelpWidget() {
           {/* Input */}
           <div style={{
             padding: '10px 12px',
-            borderTop: '1px solid var(--side-rule, rgba(255,255,255,0.1))',
+            borderTop: '1px solid var(--rule)',
             display: 'flex', gap: 8, alignItems: 'flex-end',
           }}>
             <textarea
@@ -187,11 +187,11 @@ export default function AiHelpWidget() {
               disabled={loading}
               style={{
                 flex: 1, resize: 'none',
-                border: '1px solid var(--side-rule, rgba(255,255,255,0.1))',
+                border: '1px solid var(--rule)',
                 borderRadius: 8, padding: '7px 10px',
                 fontSize: 13, fontFamily: 'inherit',
                 background: 'rgba(255,255,255,0.05)',
-                color: 'var(--side-fg, #e8eaf0)',
+                color: 'var(--fg-1)',
                 outline: 'none', lineHeight: 1.4,
                 maxHeight: 100, overflowY: 'auto',
               }}
@@ -201,7 +201,7 @@ export default function AiHelpWidget() {
               disabled={loading || !input.trim()}
               style={{
                 padding: '7px 14px',
-                background: 'var(--sc-blue, #0A7BD7)',
+                background: 'var(--accent)',
                 color: '#fff', border: 'none', borderRadius: 8,
                 cursor: loading || !input.trim() ? 'not-allowed' : 'pointer',
                 fontSize: 13, fontFamily: 'inherit',

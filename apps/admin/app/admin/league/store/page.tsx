@@ -81,12 +81,12 @@ function CreateItemModal({ onClose, onSaved }: CreateItemModalProps) {
     }}>
       <div style={{
         background: 'var(--surface)', border: '1px solid var(--rule)',
-        borderRadius: 12, padding: '24px', width: 440, boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
+        borderRadius: 12, padding: '24px', width: 440, boxShadow: 'var(--shadow-pop)',
       }}>
         <h2 style={{ margin: '0 0 20px', fontSize: 17, fontWeight: 600 }}>New Store Item</h2>
         {error && (
           <div style={{ marginBottom: 14, padding: '9px 12px', borderRadius: 6, fontSize: 13,
-            background: 'rgba(220,38,38,0.1)', border: '1px solid rgba(220,38,38,0.3)', color: '#FCA5A5' }}>
+            background: 'var(--bad-soft)', border: '1px solid var(--bad)', color: 'var(--bad)' }}>
             {error}
           </div>
         )}
@@ -127,7 +127,7 @@ function CreateItemModal({ onClose, onSaved }: CreateItemModalProps) {
           }}>Cancel</button>
           <button onClick={handleSave} disabled={saving} style={{
             padding: '8px 18px', borderRadius: 6, border: 'none',
-            background: 'var(--sc-blue, #083EA7)', color: '#fff', cursor: saving ? 'not-allowed' : 'pointer',
+            background: 'var(--accent)', color: 'var(--accent-fg)', cursor: saving ? 'not-allowed' : 'pointer',
             fontSize: 13, fontWeight: 600, opacity: saving ? 0.7 : 1,
           }}>{saving ? 'Creating…' : 'Create item'}</button>
         </div>
@@ -191,7 +191,7 @@ function EditItemModal({ item, onClose, onSaved }: EditItemModalProps) {
     }}>
       <div style={{
         background: 'var(--surface)', border: '1px solid var(--rule)',
-        borderRadius: 12, padding: '24px', width: 440, boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
+        borderRadius: 12, padding: '24px', width: 440, boxShadow: 'var(--shadow-pop)',
       }}>
         <h2 style={{ margin: '0 0 4px', fontSize: 17, fontWeight: 600 }}>Edit Store Item</h2>
         <p style={{ margin: '0 0 20px', fontSize: 13, color: 'var(--fg-3)' }}>
@@ -199,7 +199,7 @@ function EditItemModal({ item, onClose, onSaved }: EditItemModalProps) {
         </p>
         {error && (
           <div style={{ marginBottom: 14, padding: '9px 12px', borderRadius: 6, fontSize: 13,
-            background: 'rgba(220,38,38,0.1)', border: '1px solid rgba(220,38,38,0.3)', color: '#FCA5A5' }}>
+            background: 'var(--bad-soft)', border: '1px solid var(--bad)', color: 'var(--bad)' }}>
             {error}
           </div>
         )}
@@ -230,7 +230,7 @@ function EditItemModal({ item, onClose, onSaved }: EditItemModalProps) {
               type="checkbox"
               checked={form.active}
               onChange={e => setForm(f => ({ ...f, active: e.target.checked }))}
-              style={{ cursor: 'pointer', accentColor: 'var(--sc-blue, #083EA7)' }}
+              style={{ cursor: 'pointer', accentColor: 'var(--accent)' }}
             />
             Active — appears in the developer store
           </label>
@@ -242,7 +242,7 @@ function EditItemModal({ item, onClose, onSaved }: EditItemModalProps) {
           }}>Cancel</button>
           <button onClick={handleSave} disabled={saving} style={{
             padding: '8px 18px', borderRadius: 6, border: 'none',
-            background: 'var(--sc-blue, #083EA7)', color: '#fff', cursor: saving ? 'not-allowed' : 'pointer',
+            background: 'var(--accent)', color: 'var(--accent-fg)', cursor: saving ? 'not-allowed' : 'pointer',
             fontSize: 13, fontWeight: 600, opacity: saving ? 0.7 : 1,
           }}>{saving ? 'Saving…' : 'Save changes'}</button>
         </div>
@@ -328,7 +328,7 @@ export default function StoreEditorPage() {
             return (
             <div key={item.id} style={{
               background: 'var(--surface)',
-              border: `1px solid ${isInactive ? 'var(--bad, #DC2626)' : 'var(--rule)'}`,
+              border: `1px solid ${isInactive ? 'var(--bad)' : 'var(--rule)'}`,
               borderRadius: 10, padding: '16px',
               display: 'flex', flexDirection: 'column', gap: 10,
               opacity: isInactive ? 0.65 : 1,
@@ -337,8 +337,8 @@ export default function StoreEditorPage() {
               {isInactive && (
                 <div style={{
                   position: 'absolute', top: 8, right: 8,
-                  fontSize: 10, fontWeight: 700, color: 'var(--bad, #DC2626)',
-                  background: 'rgba(220,38,38,0.15)', padding: '2px 6px', borderRadius: 4,
+                  fontSize: 10, fontWeight: 700, color: 'var(--bad)',
+                  background: 'var(--bad-soft)', padding: '2px 6px', borderRadius: 4,
                 }}>INACTIVE</div>
               )}
               <div style={{ fontSize: 32, textAlign: 'center' }}>{TYPE_ICONS[item.type]}</div>
@@ -350,7 +350,7 @@ export default function StoreEditorPage() {
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                 paddingTop: 10, borderTop: '1px solid var(--rule)',
               }}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--warn, #B45309)' }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--warn)' }}>
                   ★ {item.point_cost.toLocaleString()}
                 </span>
                 {item.exclusive_season_id && (

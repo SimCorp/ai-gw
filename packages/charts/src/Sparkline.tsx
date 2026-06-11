@@ -3,7 +3,7 @@ import React from "react";
 export interface SparklineProps {
   data: number[];
   variant: "line" | "bar" | "area";
-  /** CSS color or var() reference. Defaults to var(--sc-blue). */
+  /** CSS color or var() reference. Defaults to var(--accent). */
   color?: string;
   /** px height of the SVG element. Defaults to 28. */
   height?: number;
@@ -50,7 +50,7 @@ function buildAreaPath(norm: number[]): string {
 export function Sparkline({
   data,
   variant,
-  color = "var(--sc-blue)",
+  color = "var(--accent)",
   height = 28,
   width,
 }: SparklineProps): React.ReactElement {

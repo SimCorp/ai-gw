@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from app.rate_limiter import check_rate_limit
 from app.validators.api_key import validate_api_key
+from app.validators.jwt import _validate_jwks_uri
 from fastapi import HTTPException
 
 
@@ -67,3 +68,23 @@ async def test_rate_limit_blocks_over_limit():
 
     assert exc_info.value.status_code == 429
     assert "Retry-After" in exc_info.value.headers
+
+
+def test_jwks_uri_private_resolution_blocked(monkeypatch):
+    """Hostname resolving to a private address is rejected regardless of ENVIRONMENT.
+
+    Guards the SSRF gate: the env-based bypass (development/test/ci) was removed,
+    so the private-address check must always fire after resolution.
+    """
+    monkeypatch.setenv("ENVIRONMENT", "development")
+    monkeypatch.setattr("app.validators.jwt.socket.gethostbyname", lambda host: "10.0.0.1")
+
+    with pytest.raises(ValueError, match="private address"):
+        _validate_jwks_uri("https://internal-idp.example/keys")
+
+
+def test_jwks_uri_public_resolution_allowed(monkeypatch):
+    """Hostname resolving to a public address passes."""
+    monkeypatch.setattr("app.validators.jwt.socket.gethostbyname", lambda host: "93.184.216.34")
+
+    _validate_jwks_uri("https://idp.example/keys")  # must not raise

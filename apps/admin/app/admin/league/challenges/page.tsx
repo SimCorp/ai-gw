@@ -26,8 +26,8 @@ interface Season {
 
 const STATUS_COLORS: Record<ChallengeStatus, string> = {
   draft: 'var(--fg-3)',
-  active: 'var(--good, #1F8A5B)',
-  closed: 'var(--warn, #B45309)',
+  active: 'var(--good)',
+  closed: 'var(--warn)',
 };
 
 function StatusPill({ status }: { status: ChallengeStatus }) {
@@ -91,7 +91,7 @@ function EditChallengeModal({ challenge, onClose, onSaved }: EditChallengeModalP
     }}>
       <div style={{
         background: 'var(--surface)', border: '1px solid var(--rule)',
-        borderRadius: 12, padding: '24px', width: 480, boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
+        borderRadius: 12, padding: '24px', width: 480, boxShadow: 'var(--shadow-pop)',
       }}>
         <h2 style={{ margin: '0 0 4px', fontSize: 17, fontWeight: 600 }}>Edit Challenge</h2>
         <p style={{ margin: '0 0 20px', fontSize: 13, color: 'var(--fg-3)' }}>{challenge.title}</p>
@@ -103,7 +103,7 @@ function EditChallengeModal({ challenge, onClose, onSaved }: EditChallengeModalP
 
         {error && (
           <div style={{ marginBottom: 14, padding: '9px 12px', borderRadius: 6, fontSize: 13,
-            background: 'rgba(220,38,38,0.1)', border: '1px solid rgba(220,38,38,0.3)', color: '#FCA5A5' }}>
+            background: 'var(--bad-soft)', border: '1px solid var(--bad)', color: 'var(--bad)' }}>
             {error}
           </div>
         )}
@@ -151,7 +151,7 @@ function EditChallengeModal({ challenge, onClose, onSaved }: EditChallengeModalP
             disabled={saving || status === challenge.status || challenge.status === 'closed'}
             style={{
               padding: '8px 18px', borderRadius: 6, border: 'none',
-              background: 'var(--sc-blue, #083EA7)', color: '#fff',
+              background: 'var(--accent)', color: 'var(--accent-fg)',
               cursor: (saving || status === challenge.status || challenge.status === 'closed') ? 'not-allowed' : 'pointer',
               fontSize: 13, fontWeight: 600,
               opacity: (saving || status === challenge.status || challenge.status === 'closed') ? 0.5 : 1,
@@ -225,13 +225,13 @@ function CreateChallengeModal({ seasons, onClose, onSaved }: CreateChallengeModa
     }}>
       <div style={{
         background: 'var(--surface)', border: '1px solid var(--rule)',
-        borderRadius: 12, padding: '24px', width: 520, boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
+        borderRadius: 12, padding: '24px', width: 520, boxShadow: 'var(--shadow-pop)',
         maxHeight: '80vh', overflowY: 'auto',
       }}>
         <h2 style={{ margin: '0 0 20px', fontSize: 17, fontWeight: 600 }}>New Challenge</h2>
         {error && (
           <div style={{ marginBottom: 14, padding: '9px 12px', borderRadius: 6, fontSize: 13,
-            background: 'rgba(220,38,38,0.1)', border: '1px solid rgba(220,38,38,0.3)', color: '#FCA5A5' }}>
+            background: 'var(--bad-soft)', border: '1px solid var(--bad)', color: 'var(--bad)' }}>
             {error}
           </div>
         )}
@@ -282,7 +282,7 @@ function CreateChallengeModal({ seasons, onClose, onSaved }: CreateChallengeModa
           }}>Cancel</button>
           <button onClick={handleSave} disabled={saving} style={{
             padding: '8px 18px', borderRadius: 6, border: 'none',
-            background: 'var(--sc-blue, #083EA7)', color: '#fff', cursor: saving ? 'not-allowed' : 'pointer',
+            background: 'var(--accent)', color: 'var(--accent-fg)', cursor: saving ? 'not-allowed' : 'pointer',
             fontSize: 13, fontWeight: 600, opacity: saving ? 0.7 : 1,
           }}>{saving ? 'Creating…' : 'Create challenge'}</button>
         </div>
@@ -385,7 +385,7 @@ export default function ChallengesPage() {
             }}>
               <div style={{
                 width: 40, height: 40, borderRadius: 8, flexShrink: 0,
-                background: 'rgba(8,62,167,0.15)',
+                background: 'var(--accent-soft)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: 18,
               }}>⚔️</div>
@@ -419,7 +419,7 @@ export default function ChallengesPage() {
                     disabled={publishingId === c.id}
                     style={{
                       padding: '6px 14px', borderRadius: 6, border: 'none',
-                      background: 'var(--good, #1F8A5B)', color: '#fff',
+                      background: 'var(--good)', color: '#fff',
                       cursor: publishingId === c.id ? 'not-allowed' : 'pointer',
                       fontSize: 12.5, fontWeight: 600,
                       opacity: publishingId === c.id ? 0.7 : 1,
@@ -454,8 +454,8 @@ export default function ChallengesPage() {
           style={{
             position: 'fixed', bottom: 24, right: 24, zIndex: 2000,
             padding: '12px 16px', borderRadius: 8, fontSize: 13,
-            background: 'rgba(220,38,38,0.15)', border: '1px solid rgba(220,38,38,0.4)',
-            color: '#FCA5A5', cursor: 'pointer', maxWidth: 360,
+            background: 'var(--bad-soft)', border: '1px solid var(--bad)',
+            color: 'var(--bad)', cursor: 'pointer', maxWidth: 360,
           }}
         >Publish failed: {publishError} — click to dismiss</div>
       )}

@@ -20,9 +20,9 @@ interface Proposal {
 }
 
 const STATUS_COLORS: Record<ProposalStatus, string> = {
-  pending: 'var(--warn, #B45309)',
-  approved: 'var(--good, #1F8A5B)',
-  rejected: 'var(--bad, #DC2626)',
+  pending: 'var(--warn)',
+  approved: 'var(--good)',
+  rejected: 'var(--bad)',
 };
 
 function StatusPill({ status }: { status: ProposalStatus }) {
@@ -78,7 +78,7 @@ function ReviewModal({ proposal, onClose, onSaved }: ReviewModalProps) {
     }}>
       <div style={{
         background: 'var(--surface)', border: '1px solid var(--rule)',
-        borderRadius: 12, padding: '24px', width: 500, boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
+        borderRadius: 12, padding: '24px', width: 500, boxShadow: 'var(--shadow-pop)',
       }}>
         <h2 style={{ margin: '0 0 4px', fontSize: 17, fontWeight: 600 }}>Review Proposal</h2>
         <p style={{ margin: '0 0 20px', fontSize: 13, color: 'var(--fg-3)' }}>from {proposal.proposer_name ?? proposal.proposed_by}</p>
@@ -93,7 +93,7 @@ function ReviewModal({ proposal, onClose, onSaved }: ReviewModalProps) {
 
         {error && (
           <div style={{ marginBottom: 14, padding: '9px 12px', borderRadius: 6, fontSize: 13,
-            background: 'rgba(220,38,38,0.1)', border: '1px solid rgba(220,38,38,0.3)', color: '#FCA5A5' }}>
+            background: 'var(--bad-soft)', border: '1px solid var(--bad)', color: 'var(--bad)' }}>
             {error}
           </div>
         )}
@@ -121,12 +121,12 @@ function ReviewModal({ proposal, onClose, onSaved }: ReviewModalProps) {
           }}>Cancel</button>
           <button onClick={() => handle('rejected')} disabled={saving} style={{
             padding: '8px 16px', borderRadius: 6, border: 'none',
-            background: 'rgba(220,38,38,0.15)', color: 'var(--bad, #DC2626)',
+            background: 'var(--bad-soft)', color: 'var(--bad)',
             cursor: saving ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 600,
           }}>Reject</button>
           <button onClick={() => handle('approved')} disabled={saving} style={{
             padding: '8px 18px', borderRadius: 6, border: 'none',
-            background: 'var(--good, #1F8A5B)', color: '#fff',
+            background: 'var(--good)', color: '#fff',
             cursor: saving ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 600,
           }}>Approve</button>
         </div>
@@ -170,8 +170,8 @@ export default function ProposalsPage() {
               style={{
                 padding: '6px 14px', borderRadius: 6, fontSize: 12.5, fontWeight: 500,
                 border: '1px solid var(--rule)', cursor: 'pointer',
-                background: filter === f ? 'var(--sc-blue, #083EA7)' : 'transparent',
-                color: filter === f ? '#fff' : 'var(--fg-2)',
+                background: filter === f ? 'var(--accent)' : 'transparent',
+                color: filter === f ? 'var(--accent-fg)' : 'var(--fg-2)',
               }}
             >
               {f.charAt(0).toUpperCase() + f.slice(1)}

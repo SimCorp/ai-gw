@@ -36,16 +36,16 @@ const SCOPE_TYPE_LABELS: Record<string, string> = {
 };
 
 const ROLE_COLORS: Record<string, string> = {
-  platform_admin: '#EF3E4A', area_owner: '#FB9B2A', unit_lead: '#9D2E7B',
-  team_admin: '#0A7BD7', developer: '#1D958E', viewer: '#4B17B6',
+  platform_admin: 'var(--cat-coral)', area_owner: 'var(--cat-orange)', unit_lead: 'var(--cat-magenta)',
+  team_admin: 'var(--accent)', developer: 'var(--cat-teal)', viewer: 'var(--cat-purple)',
 };
 
 function RolePill({ role }: { role: string }) {
-  const c = ROLE_COLORS[role] ?? '#888';
+  const c = ROLE_COLORS[role] ?? 'var(--fg-3)';
   return (
     <span style={{
       display: 'inline-block', padding: '2px 8px', borderRadius: 10,
-      fontSize: 11, fontWeight: 600, background: c + '22', color: c, border: `1px solid ${c}44`,
+      fontSize: 11, fontWeight: 600, background: `color-mix(in srgb, ${c} 13%, transparent)`, color: c, border: `1px solid color-mix(in srgb, ${c} 27%, transparent)`,
     }}>
       {ROLE_OPTIONS.find(r => r.value === role)?.label ?? role}
     </span>
@@ -113,7 +113,7 @@ export default function EntraSettingsPage() {
   return (
     <div>
       <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--fg)', margin: 0 }}>
+        <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--fg-1)', margin: 0 }}>
           Azure Entra ID Integration
         </h1>
         <p style={{ fontSize: 13, color: 'var(--fg-3)', margin: '4px 0 0' }}>
@@ -124,8 +124,8 @@ export default function EntraSettingsPage() {
       {/* How it works */}
       <div style={{
         marginBottom: 24, padding: '14px 16px',
-        background: '#0A7BD711', border: '1px solid #0A7BD733', borderRadius: 8,
-        fontSize: 13, color: 'var(--fg)',
+        background: 'var(--accent-soft)', border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)', borderRadius: 8,
+        fontSize: 13, color: 'var(--fg-1)',
       }}>
         <strong>How it works:</strong> When a user signs in via Entra ID, their JWT includes a{' '}
         <code style={{ fontFamily: 'monospace', fontSize: 12 }}>groups</code> claim containing
@@ -149,7 +149,7 @@ export default function EntraSettingsPage() {
             onClick={() => setShowAdd(true)}
             style={{
               padding: '8px 16px', fontSize: 13, fontWeight: 600,
-              background: 'var(--sc-blue)', color: '#fff',
+              background: 'var(--accent)', color: '#fff',
               border: 'none', borderRadius: 6, cursor: 'pointer',
             }}
           >
@@ -160,7 +160,7 @@ export default function EntraSettingsPage() {
             padding: 20, background: 'var(--surface-2)',
             border: '1px solid var(--rule)', borderRadius: 8, marginBottom: 16,
           }}>
-            <h3 style={{ margin: '0 0 16px', fontSize: 14, fontWeight: 600, color: 'var(--fg)' }}>
+            <h3 style={{ margin: '0 0 16px', fontSize: 14, fontWeight: 600, color: 'var(--fg-1)' }}>
               New group → role mapping
             </h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -170,7 +170,7 @@ export default function EntraSettingsPage() {
                   value={form.entra_group_id}
                   onChange={e => setForm(f => ({ ...f, entra_group_id: e.target.value }))}
                   placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                  style={{ padding: '7px 10px', fontSize: 13, background: 'var(--surface)', border: '1px solid var(--rule)', borderRadius: 6, color: 'var(--fg)' }}
+                  style={{ padding: '7px 10px', fontSize: 13, background: 'var(--surface)', border: '1px solid var(--rule)', borderRadius: 6, color: 'var(--fg-1)' }}
                 />
               </label>
               <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -179,7 +179,7 @@ export default function EntraSettingsPage() {
                   value={form.entra_group_name}
                   onChange={e => setForm(f => ({ ...f, entra_group_name: e.target.value }))}
                   placeholder="e.g. sg-ai-gw-area-owners-investment"
-                  style={{ padding: '7px 10px', fontSize: 13, background: 'var(--surface)', border: '1px solid var(--rule)', borderRadius: 6, color: 'var(--fg)' }}
+                  style={{ padding: '7px 10px', fontSize: 13, background: 'var(--surface)', border: '1px solid var(--rule)', borderRadius: 6, color: 'var(--fg-1)' }}
                 />
               </label>
               <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -187,7 +187,7 @@ export default function EntraSettingsPage() {
                 <select
                   value={form.role}
                   onChange={e => setForm(f => ({ ...f, role: e.target.value }))}
-                  style={{ padding: '7px 10px', fontSize: 13, background: 'var(--surface)', border: '1px solid var(--rule)', borderRadius: 6, color: 'var(--fg)' }}
+                  style={{ padding: '7px 10px', fontSize: 13, background: 'var(--surface)', border: '1px solid var(--rule)', borderRadius: 6, color: 'var(--fg-1)' }}
                 >
                   {ROLE_OPTIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                 </select>
@@ -197,7 +197,7 @@ export default function EntraSettingsPage() {
                 <select
                   value={form.scope_type}
                   onChange={e => setForm(f => ({ ...f, scope_type: e.target.value, scope_id: '' }))}
-                  style={{ padding: '7px 10px', fontSize: 13, background: 'var(--surface)', border: '1px solid var(--rule)', borderRadius: 6, color: 'var(--fg)' }}
+                  style={{ padding: '7px 10px', fontSize: 13, background: 'var(--surface)', border: '1px solid var(--rule)', borderRadius: 6, color: 'var(--fg-1)' }}
                 >
                   <option value="global">Global (all areas)</option>
                   <option value="area">Area</option>
@@ -213,7 +213,7 @@ export default function EntraSettingsPage() {
                   <select
                     value={form.scope_id}
                     onChange={e => setForm(f => ({ ...f, scope_id: e.target.value }))}
-                    style={{ padding: '7px 10px', fontSize: 13, background: 'var(--surface)', border: '1px solid var(--rule)', borderRadius: 6, color: 'var(--fg)' }}
+                    style={{ padding: '7px 10px', fontSize: 13, background: 'var(--surface)', border: '1px solid var(--rule)', borderRadius: 6, color: 'var(--fg-1)' }}
                   >
                     <option value="">— select —</option>
                     {scopeOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -227,7 +227,7 @@ export default function EntraSettingsPage() {
                 disabled={!form.entra_group_id || addMutation.isPending}
                 style={{
                   padding: '8px 20px', fontSize: 13, fontWeight: 600,
-                  background: 'var(--sc-blue)', color: '#fff',
+                  background: 'var(--accent)', color: '#fff',
                   border: 'none', borderRadius: 6, cursor: 'pointer',
                   opacity: addMutation.isPending ? 0.6 : 1,
                 }}
@@ -236,13 +236,13 @@ export default function EntraSettingsPage() {
               </button>
               <button
                 onClick={() => setShowAdd(false)}
-                style={{ padding: '8px 16px', fontSize: 13, background: 'transparent', border: '1px solid var(--rule)', borderRadius: 6, color: 'var(--fg)', cursor: 'pointer' }}
+                style={{ padding: '8px 16px', fontSize: 13, background: 'transparent', border: '1px solid var(--rule)', borderRadius: 6, color: 'var(--fg-1)', cursor: 'pointer' }}
               >
                 Cancel
               </button>
             </div>
             {addMutation.isError && (
-              <p style={{ color: '#EF3E4A', fontSize: 12, marginTop: 8 }}>
+              <p style={{ color: 'var(--bad)', fontSize: 12, marginTop: 8 }}>
                 Failed to save. Check Group ID and try again.
               </p>
             )}
@@ -255,10 +255,10 @@ export default function EntraSettingsPage() {
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
             <tr style={{ background: 'var(--surface-2)', borderBottom: '2px solid var(--rule)' }}>
-              <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 600, color: 'var(--fg-3)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Group</th>
-              <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 600, color: 'var(--fg-3)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Role</th>
-              <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 600, color: 'var(--fg-3)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Scope</th>
-              <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 600, color: 'var(--fg-3)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Created by</th>
+              <th className="microlabel" style={{ padding: '10px 14px', textAlign: 'left' }}>Group</th>
+              <th className="microlabel" style={{ padding: '10px 14px', textAlign: 'left' }}>Role</th>
+              <th className="microlabel" style={{ padding: '10px 14px', textAlign: 'left' }}>Scope</th>
+              <th className="microlabel" style={{ padding: '10px 14px', textAlign: 'left' }}>Created by</th>
               <th style={{ padding: '10px 14px' }} />
             </tr>
           </thead>
@@ -273,7 +273,7 @@ export default function EntraSettingsPage() {
             {(mappings ?? []).map(m => (
               <tr key={m.id} style={{ borderBottom: '1px solid var(--rule)' }}>
                 <td style={{ padding: '10px 14px' }}>
-                  <div style={{ fontWeight: 500, color: 'var(--fg)' }}>
+                  <div style={{ fontWeight: 500, color: 'var(--fg-1)' }}>
                     {m.entra_group_name ?? '—'}
                   </div>
                   <div style={{ fontSize: 11, color: 'var(--fg-3)', fontFamily: 'monospace' }}>
@@ -302,7 +302,7 @@ export default function EntraSettingsPage() {
                     style={{
                       padding: '4px 10px', fontSize: 12,
                       background: 'transparent', border: '1px solid var(--rule)',
-                      borderRadius: 4, color: '#EF3E4A', cursor: 'pointer',
+                      borderRadius: 4, color: 'var(--bad)', cursor: 'pointer',
                     }}
                   >
                     Remove

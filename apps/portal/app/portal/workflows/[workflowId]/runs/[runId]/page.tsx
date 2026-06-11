@@ -27,9 +27,9 @@ interface RunState {
 
 const STATUS_COLOR: Record<string, string> = {
   pending:   'var(--fg-3)',
-  running:   'var(--blue)',
-  succeeded: 'var(--green)',
-  failed:    'var(--red, #ef4444)',
+  running:   'var(--accent)',
+  succeeded: 'var(--good)',
+  failed:    'var(--bad)',
   cancelled: 'var(--fg-3)',
 };
 
@@ -149,7 +149,7 @@ export default function RunViewerPage() {
   if (error) return (
     <main className="pmain">
       <div className="phero"><div><h1>Run</h1></div></div>
-      <div className="card" style={{ borderColor: 'var(--red)' }}><div className="card__body" style={{ color: 'var(--red)' }}>{error}</div></div>
+      <div className="card" style={{ borderColor: 'var(--bad)' }}><div className="card__body" style={{ color: 'var(--bad)' }}>{error}</div></div>
     </main>
   );
 
@@ -161,7 +161,7 @@ export default function RunViewerPage() {
           {run && <p style={{ marginTop: 4, fontSize: 13 }}>Workflow {run.workflow_id.slice(0, 8)} · v{run.version}</p>}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          {live && <span style={{ fontSize: 12, color: 'var(--blue)' }}>● live</span>}
+          {live && <span style={{ fontSize: 12, color: 'var(--accent)' }}>● live</span>}
           {run && <Badge status={run.status} />}
         </div>
       </div>
@@ -192,7 +192,7 @@ export default function RunViewerPage() {
 
               {/* Error */}
               {n.error && (
-                <div style={{ fontSize: 12, color: 'var(--red, #ef4444)', background: 'rgba(239,68,68,0.08)', padding: '6px 10px', borderRadius: 5, marginBottom: 6 }}>
+                <div style={{ fontSize: 12, color: 'var(--bad)', background: 'var(--bad-soft)', padding: '6px 10px', borderRadius: 5, marginBottom: 6 }}>
                   {n.error}
                 </div>
               )}
@@ -233,9 +233,9 @@ export default function RunViewerPage() {
 
       {/* Run outputs */}
       {run?.status === 'succeeded' && (
-        <div className="card" style={{ marginTop: 8, borderColor: 'var(--green)' }}>
+        <div className="card" style={{ marginTop: 8, borderColor: 'var(--good)' }}>
           <div className="card__body">
-            <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--green)', marginBottom: 6 }}>Run completed</div>
+            <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--good)', marginBottom: 6 }}>Run completed</div>
             <div style={{ fontSize: 11.5, color: 'var(--fg-3)' }}>
               {run.started_at && run.finished_at &&
                 `Duration: ${((new Date(run.finished_at).getTime() - new Date(run.started_at).getTime()) / 1000).toFixed(1)}s`}

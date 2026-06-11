@@ -1,6 +1,6 @@
 import type { NextConfig } from "next";
 
-const adminApi = process.env.NEXT_PUBLIC_ADMIN_API ?? 'http://localhost:8005';
+const adminApi = process.env.NEXT_PUBLIC_ADMIN_API ?? 'https://aigw-dev.lab.cloud.scdom.net/admin';
 
 const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
@@ -12,10 +12,10 @@ const securityHeaders = [
     value: [
       "default-src 'self'",
       "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob:",
-      `connect-src 'self' ${adminApi} http://localhost:8080`,
-      "font-src 'self' https://fonts.gstatic.com",
+      `connect-src 'self' ${adminApi}`,
+      "font-src 'self'",
       "frame-ancestors 'none'",
     ].join("; "),
   },

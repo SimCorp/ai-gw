@@ -113,11 +113,6 @@ async def test_expired_token_rejected(fake_redis):
 @pytest.mark.asyncio
 async def test_jwks_endpoint_returns_public_key(fake_redis):
     """GET /identity/jwks must return a JWK Set with at least one RSA key."""
-    import os
-
-    os.environ.setdefault("DEV_BYPASS_AUTH", "true")
-    os.environ.setdefault("ENVIRONMENT", "development")
-
     from app.main import app
     from httpx import ASGITransport, AsyncClient
 

@@ -1,14 +1,10 @@
 # services/league/tests/test_leaderboard.py
-import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
-os.environ.setdefault("DEV_BYPASS_AUTH", "true")
-os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
-os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
-
+from app.auth import require_dev_auth
 from app.db import get_session
 from app.main import app
 
@@ -20,6 +16,10 @@ def _make_session_override(mock_session):
         yield mock_session
 
     return _override
+
+
+async def _fake_dev_auth():
+    return {"user_id": "00000000-0000-0000-0000-000000000001", "email": "dev@simcorp.com"}
 
 
 def _mock_redis():
@@ -48,12 +48,13 @@ def test_leaderboard_returns_ranked_entries():
     mock_session.execute = AsyncMock(return_value=mock_result)
 
     app.dependency_overrides[get_session] = _make_session_override(mock_session)
+    app.dependency_overrides[require_dev_auth] = _fake_dev_auth
     try:
         with patch("app.main.aioredis.from_url", return_value=_mock_redis()):
             with TestClient(app) as client:
                 resp = client.get(f"/seasons/{_SEASON_ID}/leaderboard")
     finally:
-        app.dependency_overrides.pop(get_session, None)
+        app.dependency_overrides.clear()
 
     assert resp.status_code == 200
     data = resp.json()
@@ -73,12 +74,13 @@ def test_my_rank_returns_engineer_position():
     mock_session.execute = AsyncMock(return_value=mock_result)
 
     app.dependency_overrides[get_session] = _make_session_override(mock_session)
+    app.dependency_overrides[require_dev_auth] = _fake_dev_auth
     try:
         with patch("app.main.aioredis.from_url", return_value=_mock_redis()):
             with TestClient(app) as client:
                 resp = client.get(f"/seasons/{_SEASON_ID}/leaderboard/me")
     finally:
-        app.dependency_overrides.pop(get_session, None)
+        app.dependency_overrides.clear()
 
     assert resp.status_code == 200
     body = resp.json()

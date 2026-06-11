@@ -56,19 +56,19 @@ interface DiscoveredModel {
 }
 
 const PROVIDER_COLORS: Record<string, string> = {
-  'Anthropic': '#D97757',
-  'OpenAI': '#10A37F',
-  'Google': '#4285F4',
-  'GitHub Copilot': '#24292F',
-  'Azure AI Foundry': '#0078D4',
-  'GitHub Models': '#1A1D31',
+  'Anthropic': 'var(--cat-orange)',
+  'OpenAI': 'var(--cat-teal)',
+  'Google': 'var(--accent)',
+  'GitHub Copilot': 'var(--fg-1)',
+  'Azure AI Foundry': 'var(--accent)',
+  'GitHub Models': 'var(--fg-1)',
 };
 
 function getProviderColor(name: string): string {
   for (const [key, color] of Object.entries(PROVIDER_COLORS)) {
     if (name.toLowerCase().includes(key.toLowerCase())) return color;
   }
-  return '#555';
+  return 'var(--fg-2)';
 }
 
 function ProviderCard({ p, onSaved }: { p: Provider; onSaved: () => void }) {
@@ -281,7 +281,7 @@ function ProviderCard({ p, onSaved }: { p: Provider; onSaved: () => void }) {
         </div>
         {p.is_set && (
           <div style={{ borderTop: '1px solid var(--rule)', paddingTop: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--fg-3)' }}>Model registry</span>
+            <span className="microlabel">Model registry</span>
             <button className="btn btn--sm" onClick={fetchModels} disabled={discovering} style={{ marginLeft: 'auto' }}>
               {discovering ? 'Fetching…' : 'Fetch models'}
             </button>
@@ -509,7 +509,7 @@ function AutoDriveSection() {
       }}>
         {/* Candidate models input */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg-2)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+          <label className="microlabel">
             Candidate models
           </label>
           <textarea
@@ -545,7 +545,7 @@ function AutoDriveSection() {
 
         {/* Model score gauges */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg-2)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+          <div className="microlabel">
             Model scores
           </div>
           {scores.length === 0 ? (
@@ -573,7 +573,7 @@ function AutoDriveSection() {
                     <div style={{
                       height: '100%',
                       width: `${Math.min(100, score * 100)}%`,
-                      background: score >= 0.8 ? 'var(--green)' : score >= 0.5 ? 'var(--teal)' : 'var(--blue)',
+                      background: score >= 0.8 ? 'var(--good)' : score >= 0.5 ? 'var(--cat-teal)' : 'var(--accent)',
                       borderRadius: 3,
                       transition: 'width 0.4s ease',
                     }} />

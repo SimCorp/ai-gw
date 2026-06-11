@@ -1,0 +1,127 @@
+/* ============================================================
+   ai-gw design system — semantic tokens
+   :root = light theme. [data-theme="dark"] overrides.
+   Accent tokens (--accent*) are mapped per app in surface.css.
+   ============================================================ */
+:root {
+  /* Surfaces */
+  --bg:           var(--n-50);
+  --surface:      var(--n-0);
+  --surface-2:    var(--n-25);
+  --surface-soft: var(--n-75);
+  --rule:         var(--n-100);
+  --rule-strong:  var(--n-200);
+
+  /* Text */
+  --fg-1:   #18182E;
+  --fg-2:   var(--n-600);
+  --fg-3:   var(--n-400);
+  --fg-inv: #FFFFFF;
+
+  /* Brand gradient endpoints (trace only — borders, underlines, logo) */
+  --trace-from: var(--indigo-500);
+  --trace-to:   var(--fuchsia-500);
+
+  /* Accent defaults (overridden per surface) */
+  --accent:       var(--indigo-600);
+  --accent-hover: var(--indigo-700);
+  --accent-soft:  #EEF0FE;
+  --accent-text:  var(--indigo-600);
+  --accent-fg:    #FFFFFF;
+
+  /* Status */
+  --good:      var(--green-600);
+  --good-soft: #DCFCE7;
+  --warn:      var(--amber-600);
+  --warn-soft: #FEF3C7;
+  --bad:       var(--red-600);
+  --bad-soft:  #FEE2E2;
+
+  /* Nav panel (rail + contextual panel + legacy sidebar) */
+  --panel-bg:      var(--n-25);
+  --panel-bg-2:    var(--n-75);
+  --panel-fg:      var(--fg-1);
+  --panel-fg-mute: var(--n-500);
+  --panel-active:  var(--accent-soft);
+  --panel-rule:    var(--n-100);
+
+  /* Type */
+  --font-sans: var(--font-geist-sans, "Geist"), -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono, "Geist Mono"), ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* Density (overridden by .density-compact) */
+  --row-h: 40px;
+  --pad-card: 18px;
+  --pad-cell: 11px 14px;
+  --gap-card: 14px;
+
+  /* Shadow */
+  --shadow-1: 0 1px 2px rgba(11,11,20,0.05);
+  --shadow-2: 0 4px 14px rgba(11,11,20,0.07), 0 1px 3px rgba(11,11,20,0.04);
+  --shadow-pop: 0 16px 40px rgba(11,11,20,0.16), 0 2px 8px rgba(11,11,20,0.08);
+
+  /* Radii (semantic aliases) */
+  --radius-1: var(--r-1);
+  --radius-2: var(--r-2);
+  --radius-3: var(--r-3);
+  --radius-pill: var(--r-pill);
+
+  /* Layout */
+  --rail-w: 56px;
+  --ctxpanel-w: 216px;
+  --side-w: 224px; /* legacy */
+  --top-h: 52px;
+
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --bg:           var(--n-950);
+  --surface:      #12121C;
+  --surface-2:    var(--n-925);
+  --surface-soft: #1A1A28;
+  --rule:         #232336;
+  --rule-strong:  #303048;
+
+  --fg-1:   #ECECF6;
+  --fg-2:   #9C9CB3;
+  --fg-3:   #62627A;
+  --fg-inv: #FFFFFF;
+
+  --trace-from: var(--indigo-400);
+  --trace-to:   var(--fuchsia-400);
+
+  --accent:       var(--indigo-400);
+  --accent-hover: var(--indigo-300);
+  --accent-soft:  rgba(99,102,241,0.16);
+  --accent-text:  var(--indigo-300);
+  --accent-fg:    #FFFFFF;
+
+  --good:      var(--green-400);
+  --good-soft: rgba(74,222,128,0.12);
+  --warn:      var(--amber-400);
+  --warn-soft: rgba(251,191,36,0.12);
+  --bad:       var(--red-400);
+  --bad-soft:  rgba(248,113,113,0.12);
+
+  --panel-bg:      var(--n-925);
+  --panel-bg-2:    #1A1A28;
+  --panel-fg:      var(--fg-1);
+  --panel-fg-mute: var(--fg-3);
+  --panel-active:  var(--accent-soft);
+  --panel-rule:    #1E1E2E;
+
+  /* Categorical — brighter for dark surfaces */
+  --cat-coral:   #FB7185;
+  --cat-orange:  #FB923C;
+  --cat-yellow:  #FACC15;
+  --cat-teal:    #2DD4BF;
+  --cat-purple:  #A78BFA;
+  --cat-magenta: #E879F9;
+
+  --shadow-1: 0 1px 2px rgba(0,0,0,0.4);
+  --shadow-2: 0 4px 14px rgba(0,0,0,0.45);
+  --shadow-pop: 0 16px 40px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.4);
+
+  color-scheme: dark;
+}

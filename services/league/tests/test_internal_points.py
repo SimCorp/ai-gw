@@ -6,9 +6,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-os.environ.setdefault("DEV_BYPASS_AUTH", "true")
-os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
-os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
 os.environ["ADMIN_TOKEN"] = "test-admin-token"
 
 # Reimport settings + app fresh with ADMIN_TOKEN set

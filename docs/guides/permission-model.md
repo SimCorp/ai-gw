@@ -374,11 +374,11 @@ const visibleNodes = allNodes.filter(n => canAccessNode(currentUser, n.path));
 **Diagnosis:**
 ```bash
 # Get user's session
-curl http://localhost:8080/auth/me \
+curl https://aigw-dev.lab.cloud.scdom.net/auth/me \
   -H "Authorization: Bearer $TOKEN" | jq '.roles'
 
 # Check the node's path
-curl http://localhost:8080/admin/nodes/{id} \
+curl https://aigw-dev.lab.cloud.scdom.net/admin/nodes/{id} \
   -H "Authorization: Bearer $TOKEN" | jq '.path'
 
 # Manually run the check

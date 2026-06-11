@@ -58,6 +58,25 @@ def _docker():
     return _docker_client
 
 
+def _use_aca() -> bool:
+    return settings.scanner_container_runtime == "aca_job"
+
+
+def _spawn_tool(image: str, command: list[str], output_file: str | None = None) -> str:
+    """Run a tool container and return its captured output.
+
+    docker mode: run a sibling container, capture stdout (output_file ignored).
+    aca_job mode: start an ACA job execution that writes to output_file on the
+    shared Azure Files mount, then read that file back. Callers building an
+    aca command must direct the tool's output to /run/<output_file>.
+    """
+    if _use_aca():
+        from app.worker.aca_job_runner import run_tool_via_aca
+
+        return run_tool_via_aca(image, command, output_file)
+    return _run_container(image, command)
+
+
 async def _post_internal(path: str, payload: Any) -> None:
     async with httpx.AsyncClient(timeout=30.0) as client:
         await client.post(
@@ -94,9 +113,16 @@ async def _run_nmap(job_id: str, target_url: str, tier: str) -> None:
 
     host = urlparse(target_url).hostname or target_url
     args = _TIER_NMAP_ARGS.get(tier, _TIER_NMAP_ARGS["quick"])
-    command = ["-oX", "-"] + args + [host]
+    output_file = None
+    if _use_aca():
+        from app.worker.aca_job_runner import new_run_token
+
+        output_file = f"{new_run_token()}/nmap.xml"
+        command = ["-oX", f"/run/{output_file}"] + args + [host]
+    else:
+        command = ["-oX", "-"] + args + [host]
     log.info("Running nmap for job %s", job_id)
-    xml_output = await asyncio.to_thread(_run_container, "instrumentisto/nmap", command)
+    xml_output = await asyncio.to_thread(_spawn_tool, "instrumentisto/nmap", command, output_file)
     findings = parse_nmap_xml(xml_output)
     if findings:
         await _post_internal(f"/internal/jobs/{job_id}/findings", {"findings": findings})
@@ -108,8 +134,16 @@ async def _run_nuclei(job_id: str, target_url: str, tier: str) -> None:
     for t in templates:
         template_args += ["-t", t]
     command = ["-u", target_url, "-json"] + template_args + ["-silent", "-no-color"]
+    output_file = None
+    if _use_aca():
+        from app.worker.aca_job_runner import new_run_token
+
+        output_file = f"{new_run_token()}/nuclei.json"
+        command += ["-o", f"/run/{output_file}"]
     log.info("Running nuclei for job %s", job_id)
-    raw_output = await asyncio.to_thread(_run_container, "projectdiscovery/nuclei", command)
+    raw_output = await asyncio.to_thread(
+        _spawn_tool, "projectdiscovery/nuclei", command, output_file
+    )
     records = []
     for line in raw_output.splitlines():
         try:
@@ -122,6 +156,13 @@ async def _run_nuclei(job_id: str, target_url: str, tier: str) -> None:
 
 
 async def _run_zap(job_id: str, target_url: str, openapi_spec_url: str) -> None:
+    output_file = None
+    results_path = "/zap/results.json"
+    if _use_aca():
+        from app.worker.aca_job_runner import new_run_token
+
+        output_file = f"{new_run_token()}/zap.json"
+        results_path = f"/run/{output_file}"
     command = [
         "zap-api-scan.py",
         "-t",
@@ -129,11 +170,11 @@ async def _run_zap(job_id: str, target_url: str, openapi_spec_url: str) -> None:
         "-f",
         "openapi",
         "-J",
-        "/zap/results.json",
+        results_path,
         "-I",
     ]
     log.info("Running ZAP for job %s against spec %s", job_id, openapi_spec_url)
-    await asyncio.to_thread(_run_container, "zaproxy/zap-stable", command)
+    await asyncio.to_thread(_spawn_tool, "zaproxy/zap-stable", command, output_file)
     findings = [
         {
             "scanner": "zap",
@@ -153,18 +194,29 @@ async def _run_garak(job_id: str, target_url: str, tier: str) -> None:
     probe_args: list[str] = []
     for p in probes:
         probe_args += ["--probe", p]
+    output_file = None
+    report_prefix = "/tmp/garak_out"
+    if _use_aca():
+        from app.worker.aca_job_runner import new_run_token
+
+        token = new_run_token()
+        report_prefix = f"/run/{token}/garak_out"
+        # garak appends ".report.jsonl" to the prefix.
+        output_file = f"{token}/garak_out.report.jsonl"
     command = [
         "--model_type",
         "rest",
         "--model_name",
         target_url,
         "--report_prefix",
-        "/tmp/garak_out",
+        report_prefix,
         "--parallel_requests",
         "1",
     ] + probe_args
     log.info("Running garak for job %s", job_id)
-    raw_output = await asyncio.to_thread(_run_container, "ai-gateway/garak:latest", command)
+    raw_output = await asyncio.to_thread(
+        _spawn_tool, "ai-gateway/garak:latest", command, output_file
+    )
     findings = parse_garak_jsonl(raw_output)
     if findings:
         await _post_internal(f"/internal/jobs/{job_id}/findings", {"findings": findings})

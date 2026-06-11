@@ -1,14 +1,15 @@
 """ContainerRuntime port.
 
-Two impls (only Docker in v0.1; Kubernetes lands with AKS deployment in v0.5):
-- DockerRuntime  — uses host docker.sock via aiodocker
-- KubernetesRuntime — v0.5+, not in this milestone
+Three impls:
+- DockerRuntime  — uses host docker.sock via aiodocker (local dev)
+- ACAJobRuntime  — Azure Container Apps Jobs executions (Azure deployment)
+- RelayRuntime   — forwards relay:// agents to the agent-relay service
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, AsyncIterator, Protocol
+from typing import Any, Callable, Protocol
 
 
 @dataclass
@@ -28,5 +29,5 @@ class ContainerRuntime(Protocol):
         run_id: str,
         node_id: str,
         timeout_s: float,
-        log_stream: AsyncIterator[str] | None = None,
+        on_log: Callable | None = None,
     ) -> RunResult: ...

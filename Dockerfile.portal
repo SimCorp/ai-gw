@@ -1,0 +1,58 @@
+# syntax=docker/dockerfile:1
+# Build context = repo root (pnpm monorepo). Build: docker build -f Dockerfile.portal .
+
+FROM node:20-alpine AS deps
+WORKDIR /app
+RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
+# Workspace manifests only, for a cacheable install layer.
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml .npmrc ./
+COPY apps/admin/package.json apps/admin/package.json
+COPY apps/portal/package.json apps/portal/package.json
+COPY packages/ui/package.json packages/ui/package.json
+COPY packages/charts/package.json packages/charts/package.json
+COPY packages/hooks/package.json packages/hooks/package.json
+COPY packages/contracts/package.json packages/contracts/package.json
+RUN pnpm install --frozen-lockfile
+
+FROM node:20-alpine AS builder
+WORKDIR /app
+RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
+COPY --from=deps /app ./
+COPY . .
+
+# NEXT_PUBLIC_* are baked at build time and must be set before `pnpm build`.
+ARG NEXT_PUBLIC_ADMIN_BASE_URL=https://aigw-dev.lab.cloud.scdom.net/admin
+ARG NEXT_PUBLIC_CACHE_BASE_URL=https://aigw-dev.lab.cloud.scdom.net/cache
+ARG NEXT_PUBLIC_IDENTITY_BASE_URL=https://aigw-dev.lab.cloud.scdom.net/identity
+ARG NEXT_PUBLIC_LIBRARIAN_BASE_URL=https://aigw-dev.lab.cloud.scdom.net/librarian
+ARG NEXT_PUBLIC_MEMORY_BASE_URL=https://aigw-dev.lab.cloud.scdom.net/memory
+ARG NEXT_PUBLIC_LITELLM_BASE_URL=https://aigw-dev.lab.cloud.scdom.net/litellm
+ARG NEXT_PUBLIC_LITELLM_KEY=
+ENV NEXT_PUBLIC_ADMIN_BASE_URL=$NEXT_PUBLIC_ADMIN_BASE_URL
+ENV NEXT_PUBLIC_CACHE_BASE_URL=$NEXT_PUBLIC_CACHE_BASE_URL
+ENV NEXT_PUBLIC_IDENTITY_BASE_URL=$NEXT_PUBLIC_IDENTITY_BASE_URL
+ENV NEXT_PUBLIC_LIBRARIAN_BASE_URL=$NEXT_PUBLIC_LIBRARIAN_BASE_URL
+ENV NEXT_PUBLIC_MEMORY_BASE_URL=$NEXT_PUBLIC_MEMORY_BASE_URL
+ENV NEXT_PUBLIC_LITELLM_BASE_URL=$NEXT_PUBLIC_LITELLM_BASE_URL
+ENV NEXT_PUBLIC_LITELLM_KEY=$NEXT_PUBLIC_LITELLM_KEY
+ENV NEXT_TELEMETRY_DISABLED=1
+
+RUN pnpm --filter @aigw/portal build
+
+FROM node:20-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
+
+# Monorepo standalone layout: server.js lives under apps/portal/, with a
+# top-level node_modules at the standalone root.
+# Note: apps/portal has no public/ dir, so no public COPY (unlike admin).
+COPY --from=builder --chown=nextjs:nodejs /app/apps/portal/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/apps/portal/.next/static ./apps/portal/.next/static
+
+USER nextjs
+EXPOSE 3002
+ENV PORT=3002
+ENV HOSTNAME=0.0.0.0
+CMD ["node", "apps/portal/server.js"]

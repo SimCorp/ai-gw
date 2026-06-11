@@ -94,10 +94,10 @@ export default function AdminChampionsPage() {
   };
 
   const inputStyle: React.CSSProperties = {
-    background: 'var(--surface, #161A33)',
-    border: '1px solid var(--side-rule, #232950)',
+    background: 'var(--surface-2)',
+    border: '1px solid var(--panel-rule)',
     borderRadius: 6,
-    color: 'var(--fg-inv, #fff)',
+    color: 'var(--fg-1)',
     padding: '8px 10px',
     fontSize: 13,
     fontFamily: 'inherit',
@@ -115,14 +115,14 @@ export default function AdminChampionsPage() {
       {/* Nominate form */}
       <div
         style={{
-          background: 'var(--surface, #161A33)',
-          border: '1px solid var(--side-rule, #232950)',
+          background: 'var(--surface-2)',
+          border: '1px solid var(--panel-rule)',
           borderRadius: 10,
           padding: '18px 22px',
           marginBottom: 24,
         }}
       >
-        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--side-fg)', marginBottom: 14 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--panel-fg)', marginBottom: 14 }}>
           Nominate a champion
         </div>
         <div
@@ -152,7 +152,7 @@ export default function AdminChampionsPage() {
           />
         </div>
         {error && (
-          <div style={{ color: 'var(--bad, #EF3E4A)', fontSize: 12, marginTop: 10 }}>{error}</div>
+          <div style={{ color: 'var(--bad)', fontSize: 12, marginTop: 10 }}>{error}</div>
         )}
         <button
           onClick={nominate}
@@ -167,8 +167,8 @@ export default function AdminChampionsPage() {
       {/* Active champions table */}
       <div
         style={{
-          background: 'var(--surface, #161A33)',
-          border: '1px solid var(--side-rule, #232950)',
+          background: 'var(--surface-2)',
+          border: '1px solid var(--panel-rule)',
           borderRadius: 10,
           overflow: 'hidden',
         }}
@@ -176,31 +176,31 @@ export default function AdminChampionsPage() {
         <div
           style={{
             padding: '16px 22px',
-            borderBottom: '1px solid var(--side-rule)',
+            borderBottom: '1px solid var(--panel-rule)',
             fontSize: 13,
             fontWeight: 600,
-            color: 'var(--side-fg)',
+            color: 'var(--panel-fg)',
           }}
         >
           Active champions
         </div>
         {loading ? (
-          <div style={{ padding: 22, color: 'var(--side-fg-mute)', fontSize: 13 }}>Loading…</div>
+          <div style={{ padding: 22, color: 'var(--panel-fg-mute)', fontSize: 13 }}>Loading…</div>
         ) : list.length === 0 ? (
-          <div style={{ padding: 22, color: 'var(--side-fg-mute)', fontSize: 13 }}>
+          <div style={{ padding: 22, color: 'var(--panel-fg-mute)', fontSize: 13 }}>
             No champions yet.
           </div>
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
-              <tr style={{ borderBottom: '1px solid var(--side-rule)' }}>
+              <tr style={{ borderBottom: '1px solid var(--panel-rule)' }}>
                 {['Developer', 'Bio', 'Focus areas', ''].map((h) => (
                   <th
                     key={h}
                     style={{
                       padding: '10px 16px',
                       textAlign: 'left',
-                      color: 'var(--side-fg-mute)',
+                      color: 'var(--panel-fg-mute)',
                       fontWeight: 500,
                       fontSize: 12,
                     }}
@@ -212,18 +212,18 @@ export default function AdminChampionsPage() {
             </thead>
             <tbody>
               {list.map((c) => (
-                <tr key={c.developer_id} style={{ borderBottom: '1px solid var(--side-rule)' }}>
+                <tr key={c.developer_id} style={{ borderBottom: '1px solid var(--panel-rule)' }}>
                   <td
                     style={{
                       padding: '12px 16px',
-                      color: 'var(--fg-inv)',
+                      color: 'var(--fg-1)',
                       fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
                     }}
                   >
                     {c.developer_id.slice(0, 8)}…
                   </td>
-                  <td style={{ padding: '12px 16px', color: 'var(--side-fg)' }}>{c.bio ?? '—'}</td>
-                  <td style={{ padding: '12px 16px', color: 'var(--side-fg)' }}>
+                  <td style={{ padding: '12px 16px', color: 'var(--panel-fg)' }}>{c.bio ?? '—'}</td>
+                  <td style={{ padding: '12px 16px', color: 'var(--panel-fg)' }}>
                     {c.focus_areas.join(', ') || '—'}
                   </td>
                   <td style={{ padding: '12px 16px', textAlign: 'right' }}>
@@ -231,9 +231,9 @@ export default function AdminChampionsPage() {
                       onClick={() => retire(c.developer_id)}
                       style={{
                         background: 'none',
-                        border: '1px solid var(--side-rule, #232950)',
+                        border: '1px solid var(--panel-rule)',
                         borderRadius: 6,
-                        color: 'var(--bad, #EF3E4A)',
+                        color: 'var(--bad)',
                         cursor: 'pointer',
                         fontSize: 12,
                         fontFamily: 'inherit',

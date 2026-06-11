@@ -26,12 +26,12 @@ interface ScanJob {
   partial_results: boolean;
 }
 
-const STATUS_COLOR: Record<string, string> = {
-  queued: 'bg-gray-100 text-gray-700',
-  running: 'bg-blue-100 text-blue-700',
-  completed: 'bg-green-100 text-green-700',
-  failed: 'bg-red-100 text-red-700',
-  cancelled: 'bg-gray-200 text-gray-500',
+const STATUS_PILL: Record<string, string> = {
+  queued: 'pill',
+  running: 'pill pill--info',
+  completed: 'pill pill--good',
+  failed: 'pill pill--bad',
+  cancelled: 'pill',
 };
 
 export default function ScansPage() {
@@ -75,27 +75,29 @@ export default function ScansPage() {
   });
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-semibold">Security — Scans</h1>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="px-4 py-2 bg-blue-600 text-white rounded text-sm"
-        >
-          + Run scan
-        </button>
+    <div className="page">
+      <div className="page__head">
+        <div>
+          <h1 className="page__title">Security — Scans</h1>
+          <p className="page__sub">Run security scans against your approved targets</p>
+        </div>
+        <div className="page__actions">
+          <button onClick={() => setShowForm(!showForm)} className="btn btn--primary">
+            + Run scan
+          </button>
+        </div>
       </div>
 
       {showForm && (
-        <div className="border rounded p-4 mb-4 bg-gray-50">
-          <h2 className="font-medium mb-3">New scan</h2>
-          <div className="flex gap-3 items-end">
+        <div className="card" style={{ padding: 16, marginBottom: 16 }}>
+          <div style={{ fontWeight: 600, fontSize: 13.5, marginBottom: 12 }}>New scan</div>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Target</label>
+              <label className="microlabel" style={{ display: 'block', marginBottom: 5 }}>Target</label>
               <select
                 value={selectedTarget}
                 onChange={e => setSelectedTarget(e.target.value)}
-                className="border rounded px-3 py-2 text-sm"
+                className="input"
               >
                 <option value="">Select target…</option>
                 {targets.map(t => (
@@ -104,11 +106,11 @@ export default function ScansPage() {
               </select>
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Tier</label>
+              <label className="microlabel" style={{ display: 'block', marginBottom: 5 }}>Tier</label>
               <select
                 value={selectedTier}
                 onChange={e => setSelectedTier(e.target.value)}
-                className="border rounded px-3 py-2 text-sm"
+                className="input"
               >
                 <option value="quick">Quick (~5 min)</option>
                 <option value="standard">Standard (~15 min)</option>
@@ -118,31 +120,38 @@ export default function ScansPage() {
             <button
               onClick={() => submit.mutate()}
               disabled={!selectedTarget}
-              className="px-4 py-2 bg-blue-600 text-white rounded text-sm disabled:opacity-50"
+              className="btn btn--primary"
             >
               Start scan
             </button>
-            <button onClick={() => setShowForm(false)} className="px-4 py-2 bg-gray-200 rounded text-sm">
+            <button onClick={() => setShowForm(false)} className="btn">
               Cancel
             </button>
           </div>
         </div>
       )}
 
-      <div className="grid gap-3">
+      <div style={{ display: 'grid', gap: 10 }}>
         {jobs.map(j => (
           <div
             key={j.id}
             onClick={() => j.status === 'completed' && router.push(`/portal/security/scans/${j.id}`)}
-            className={`border rounded p-4 flex items-center justify-between ${j.status === 'completed' ? 'cursor-pointer hover:bg-gray-50' : ''}`}
+            className="card"
+            style={{
+              padding: 16,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              cursor: j.status === 'completed' ? 'pointer' : 'default',
+            }}
           >
             <div>
-              <div className="font-mono text-sm text-gray-600">{j.id.slice(0, 8)}…</div>
-              <div className="text-xs text-gray-400 mt-0.5">
+              <div className="mono" style={{ fontSize: 13, color: 'var(--fg-2)' }}>{j.id.slice(0, 8)}…</div>
+              <div style={{ fontSize: 12, color: 'var(--fg-3)', marginTop: 2 }}>
                 {j.tier} · {new Date(j.queued_at).toLocaleString()}
               </div>
             </div>
-            <span className={`px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLOR[j.status] ?? 'bg-gray-100'}`}>
+            <span className={STATUS_PILL[j.status] ?? 'pill'}>
               {j.status}{j.partial_results ? ' (partial)' : ''}
             </span>
           </div>

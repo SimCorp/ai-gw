@@ -20,9 +20,9 @@ interface AccessRequest {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  pending: '#FB9B2A',
-  approved: '#1D958E',
-  rejected: '#EF3E4A',
+  pending: 'var(--warn)',
+  approved: 'var(--good)',
+  rejected: 'var(--bad)',
 };
 
 export default function ApprovalsPage() {
@@ -56,7 +56,7 @@ export default function ApprovalsPage() {
   return (
     <div>
       <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--fg)', margin: 0 }}>Approvals</h1>
+        <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--fg-1)', margin: 0 }}>Approvals</h1>
         <p style={{ fontSize: 13, color: 'var(--fg-3)', margin: '4px 0 0' }}>
           Review model access and budget increase requests from your teams.
         </p>
@@ -66,9 +66,9 @@ export default function ApprovalsPage() {
         {['pending', 'approved', 'rejected'].map(s => (
           <button key={s} onClick={() => setFilter(s)} style={{
             padding: '6px 14px', fontSize: 13, borderRadius: 6,
-            border: `1px solid ${filter === s ? 'var(--sc-blue)' : 'var(--rule)'}`,
-            background: filter === s ? 'var(--sc-blue)' : 'transparent',
-            color: filter === s ? '#fff' : 'var(--fg)', cursor: 'pointer', textTransform: 'capitalize',
+            border: `1px solid ${filter === s ? 'var(--accent)' : 'var(--rule)'}`,
+            background: filter === s ? 'var(--accent)' : 'transparent',
+            color: filter === s ? '#fff' : 'var(--fg-1)', cursor: 'pointer', textTransform: 'capitalize',
           }}>{s}</button>
         ))}
       </div>
@@ -99,9 +99,9 @@ export default function ApprovalsPage() {
                   <td style={{ padding: '10px 14px' }}>
                     <span style={{
                       display: 'inline-block', padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 600,
-                      background: (STATUS_COLORS[r.status] ?? '#888') + '22',
-                      color: STATUS_COLORS[r.status] ?? '#888',
-                      border: `1px solid ${(STATUS_COLORS[r.status] ?? '#888')}44`,
+                      background: `color-mix(in srgb, ${STATUS_COLORS[r.status] ?? 'var(--fg-3)'} 13%, transparent)`,
+                      color: STATUS_COLORS[r.status] ?? 'var(--fg-3)',
+                      border: `1px solid color-mix(in srgb, ${STATUS_COLORS[r.status] ?? 'var(--fg-3)'} 27%, transparent)`,
                     }}>
                       {r.status}
                     </span>
@@ -110,7 +110,7 @@ export default function ApprovalsPage() {
                     {r.status === 'pending' && (
                       <button
                         onClick={() => setReviewing(r.id)}
-                        style={{ padding: '4px 10px', fontSize: 12, background: 'var(--sc-blue)', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer' }}
+                        style={{ padding: '4px 10px', fontSize: 12, background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer' }}
                       >
                         Review
                       </button>
@@ -126,26 +126,26 @@ export default function ApprovalsPage() {
                           onChange={e => setNote(e.target.value)}
                           placeholder="Review note (optional)"
                           rows={2}
-                          style={{ padding: '7px 10px', fontSize: 13, background: 'var(--surface)', border: '1px solid var(--rule)', borderRadius: 6, color: 'var(--fg)', resize: 'vertical' }}
+                          style={{ padding: '7px 10px', fontSize: 13, background: 'var(--surface)', border: '1px solid var(--rule)', borderRadius: 6, color: 'var(--fg-1)', resize: 'vertical' }}
                         />
                         <div style={{ display: 'flex', gap: 8 }}>
                           <button
                             onClick={() => decide.mutate({ id: r.id, status: 'approved' })}
                             disabled={decide.isPending}
-                            style={{ padding: '6px 16px', background: '#1D958E', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+                            style={{ padding: '6px 16px', background: 'var(--good)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
                           >
                             Approve
                           </button>
                           <button
                             onClick={() => decide.mutate({ id: r.id, status: 'rejected' })}
                             disabled={decide.isPending}
-                            style={{ padding: '6px 16px', background: '#EF3E4A', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+                            style={{ padding: '6px 16px', background: 'var(--bad)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
                           >
                             Reject
                           </button>
                           <button
                             onClick={() => { setReviewing(null); setNote(''); }}
-                            style={{ padding: '6px 14px', background: 'transparent', border: '1px solid var(--rule)', borderRadius: 6, color: 'var(--fg)', cursor: 'pointer', fontSize: 13 }}
+                            style={{ padding: '6px 14px', background: 'transparent', border: '1px solid var(--rule)', borderRadius: 6, color: 'var(--fg-1)', cursor: 'pointer', fontSize: 13 }}
                           >
                             Cancel
                           </button>
