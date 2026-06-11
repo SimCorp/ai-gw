@@ -14,6 +14,11 @@ param acrName string
 param ghcrPat string
 param ghcrUsername string
 param imageTag string = 'latest'
+
+// Front-door hostname bound to the gateway router app; the wildcard cert is
+// uploaded on the managed environment (see Enforce-Guardrails note in docs).
+param gatewayHostname string = 'aigw-dev.lab.cloud.scdom.net'
+param tlsCertName string = 'tls-wildcard-lab'
 param location string
 param tags object = {}
 
@@ -315,6 +320,48 @@ resource scannerRunnerJob 'Microsoft.App/jobs@2024-03-01' = {
 }
 
 // ── auth ──────────────────────────────────────────────────────────────────────
+// ── gateway (front door) ────────────────────────────────────────────────
+// nginx path-router: serves the gateway FQDN (TLS via the env wildcard cert)
+// and routes /admin-portal, /portal and /<service>/ prefixes to the apps.
+resource caGateway 'Microsoft.App/containerApps@2024-03-01' = {
+  name: 'ca-gateway-${env}-sdc'
+  location: location
+  tags: tags
+  properties: {
+    managedEnvironmentId: acaEnvId
+    workloadProfileName: 'Consumption'
+    configuration: {
+      ingress: {
+        external: true
+        targetPort: 8080
+        transport: 'Http'
+        customDomains: [
+          {
+            name: gatewayHostname
+            certificateId: '${acaEnvId}/certificates/${tlsCertName}'
+            bindingType: 'SniEnabled'
+          }
+        ]
+      }
+      registries: ghcrRegistries
+      secrets: ghcrSecret
+    }
+    template: {
+      containers: [
+        {
+          name: 'gateway'
+          image: '${ghcrBase}/gateway:${imageTag}'
+          env: [
+            { name: 'ENV_SUFFIX', value: '${env}-sdc' }
+          ]
+          resources: stdResources
+        }
+      ]
+      scale: { minReplicas: 1, maxReplicas: 2 }
+    }
+  }
+}
+
 resource caAuth 'Microsoft.App/containerApps@2024-03-01' = {
   name: 'ca-auth-${env}-sdc'
   location: location
