@@ -5,6 +5,12 @@ on:
     workflows: ["ci"]
     branches: [master, main]
     types: [completed]
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Image tag to deploy (e.g. sha-abc1234 or latest)'
+        required: false
+        default: 'latest'
 
 # Prevent concurrent deploys to dev
 concurrency:
@@ -15,7 +21,9 @@ jobs:
   deploy-dev:
     name: Deploy to Dev
     runs-on: ubuntu-latest
-    if: github.event.workflow_run.conclusion == 'success'
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
     permissions:
       id-token: write
       contents: read
@@ -23,7 +31,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Azure login (OIDC)
         # azure/login action is blocked by SimCorp org policy (only actions/* allowed).
@@ -42,7 +50,12 @@ jobs:
       - name: Resolve runtime values
         id: resolve
         run: |
-          SHA=$(echo "${{ github.event.workflow_run.head_sha }}" | cut -c1-7)
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            IMAGE_TAG="${{ inputs.image_tag }}"
+          else
+            SHA=$(echo "${{ github.event.workflow_run.head_sha }}" | cut -c1-7)
+            IMAGE_TAG="sha-${SHA}"
+          fi
           ACA_ENV_ID=$(az containerapp env show \
             --name cae-aigw-dev-sdc \
             --resource-group rg-aigw-dev-sdc \
@@ -51,7 +64,7 @@ jobs:
             --name kv-aigw-dev-sdc \
             --resource-group rg-aigw-dev-sdc \
             --query properties.vaultUri -o tsv | tr -d '\r')
-          echo "sha=${SHA}" >> "${GITHUB_OUTPUT}"
+          echo "imageTag=${IMAGE_TAG}" >> "${GITHUB_OUTPUT}"
           echo "acaEnvId=${ACA_ENV_ID}" >> "${GITHUB_OUTPUT}"
           echo "kvUri=${KV_URI}" >> "${GITHUB_OUTPUT}"
 
@@ -70,7 +83,7 @@ jobs:
                 acrName=acraigwdevsdc \
                 "ghcrPat=${GHCR_PAT}" \
                 "ghcrUsername=${{ github.actor }}" \
-                "imageTag=sha-${{ steps.resolve.outputs.sha }}" \
+                "imageTag=${{ steps.resolve.outputs.imageTag }}" \
                 location=swedencentral \
             --name "container-apps-$(date +%Y%m%d%H%M)"
 
