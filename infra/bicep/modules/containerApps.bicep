@@ -19,6 +19,11 @@ param imageTag string = 'latest'
 // uploaded on the managed environment (see Enforce-Guardrails note in docs).
 param gatewayHostname string = 'aigw-dev.lab.cloud.scdom.net'
 param tlsCertName string = 'tls-wildcard-lab'
+// SCLZ policy Deny-ContainerApps-Public-Network-Access denies ingress.external
+// even on internal:true environments (where it only means VNet-visible).
+// Default false keeps deploys green; flip to true once the platform team
+// grants a policy exemption for this environment.
+param gatewayExternal bool = false
 param location string
 param tags object = {}
 
@@ -332,16 +337,17 @@ resource caGateway 'Microsoft.App/containerApps@2024-03-01' = {
     workloadProfileName: 'Consumption'
     configuration: {
       ingress: {
-        external: true
+        external: gatewayExternal
         targetPort: 8080
         transport: 'Http'
-        customDomains: [
+        // Hostname/cert binding only makes sense on the env load balancer.
+        customDomains: gatewayExternal ? [
           {
             name: gatewayHostname
             certificateId: '${acaEnvId}/certificates/${tlsCertName}'
             bindingType: 'SniEnabled'
           }
-        ]
+        ] : []
       }
       registries: ghcrRegistries
       secrets: ghcrSecret
