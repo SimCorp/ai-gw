@@ -120,6 +120,31 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set up Docker Buildx
+        run: docker buildx create --use --name ci-builder
+
+      - name: Pre-build compose services with layer cache
+        run: |
+          # Build all services needed for integration tests in parallel with GHA layer cache.
+          # --load imports images into the local Docker daemon with names docker compose expects
+          # (ai-gateway-auth, ai-gateway-cache, etc. — from name: ai-gateway in docker-compose.yml).
+          docker buildx bake \
+            --file infra/docker-compose.yml \
+            --set "db-migrate.cache-from=type=gha,scope=int-db-migrate" \
+            --set "db-migrate.cache-to=type=gha,mode=max,scope=int-db-migrate" \
+            --set "auth.cache-from=type=gha,scope=int-auth" \
+            --set "auth.cache-to=type=gha,mode=max,scope=int-auth" \
+            --set "cache.cache-from=type=gha,scope=int-cache" \
+            --set "cache.cache-to=type=gha,mode=max,scope=int-cache" \
+            --set "litellm.cache-from=type=gha,scope=int-litellm" \
+            --set "litellm.cache-to=type=gha,mode=max,scope=int-litellm" \
+            --set "observability.cache-from=type=gha,scope=int-observability" \
+            --set "observability.cache-to=type=gha,mode=max,scope=int-observability" \
+            --set "admin.cache-from=type=gha,scope=int-admin" \
+            --set "admin.cache-to=type=gha,mode=max,scope=int-admin" \
+            --load \
+            db-migrate auth cache litellm observability admin
+
       - name: Create .env for stack
         run: |
           cat > .env <<'EOF'
@@ -145,7 +170,7 @@ jobs:
         # `pnpm install` not present in CI) don't gate `--wait`. UI/e2e tests
         # (test_e2e_navigation.py) are intentionally not part of this job.
         run: >
-          docker compose -f infra/docker-compose.yml up --build --wait --timeout 180
+          docker compose -f infra/docker-compose.yml up --wait --timeout 180
           auth cache litellm observability admin
         env:
           COMPOSE_ANSI: never
