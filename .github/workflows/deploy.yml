@@ -55,6 +55,18 @@ jobs:
           echo "acaEnvId=${ACA_ENV_ID}" >> "${GITHUB_OUTPUT}"
           echo "kvUri=${KV_URI}" >> "${GITHUB_OUTPUT}"
 
+      - name: Deploy foundation storage (ACA-Jobs runs share)
+        # containerApps.bicep references staigwruns${env}sdc as `existing`;
+        # it is created by the environment main.bicep, which this workflow
+        # never runs. Deploy the storage module here (idempotent) so the
+        # container-apps deployment can resolve it.
+        run: |
+          az deployment group create \
+            --resource-group rg-aigw-dev-sdc \
+            --template-file infra/bicep/modules/storage.bicep \
+            --parameters env=dev location=swedencentral \
+            --name "runs-storage-$(date +%Y%m%d%H%M)"
+
       - name: Deploy container apps
         env:
           GHCR_PAT: ${{ secrets.GHCR_PAT }}
