@@ -210,6 +210,9 @@ async def create_workflow_version(
     # --- Security invariants ---
     _IMAGE_RE = re.compile(r"^[a-z0-9][a-z0-9._/\-]*:[a-z0-9._\-]+$")
     _RELAY_RE = re.compile(r"^relay://[a-z0-9][a-z0-9\-]*$")
+    # node id becomes a path segment in the shared run share ({run_id}/{node_id});
+    # restrict it so it can't traverse into another run's directory.
+    _NODE_ID_RE = re.compile(r"^[A-Za-z0-9._-]+$")
     _CONDITION_RE = re.compile(r"^[\w.]+\s*(==|!=|>|>=|<|<=)\s*.+$")
     _MAX_NODES = 50
     _MAX_LOOP_ITERATIONS = 10
@@ -220,6 +223,12 @@ async def create_workflow_version(
     for node in dag["nodes"]:
         if not isinstance(node, dict) or "id" not in node:
             raise HTTPException(422, "Each node must be a dict with an 'id' field")
+
+        if not _NODE_ID_RE.match(str(node["id"])):
+            raise HTTPException(
+                422,
+                f"Node id '{node['id']}': only letters, digits, '.', '_', '-' allowed",
+            )
 
         # Only validate if 'image' is explicitly set in the node spec
         if node.get("image"):

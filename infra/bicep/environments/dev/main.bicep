@@ -149,6 +149,17 @@ module monitoring '../../modules/monitoring.bicep' = {
   }
 }
 
+// ── Storage (Azure Files share for ACA-Jobs spawn runtime I/O) ────────────────
+module storage '../../modules/storage.bicep' = {
+  name: 'storage'
+  scope: rg
+  params: {
+    env: env
+    location: location
+    tags: tags
+  }
+}
+
 // ── ACA Environment ───────────────────────────────────────────────────────────
 module containerEnv '../../modules/containerEnv.bicep' = {
   name: 'containerEnv'
@@ -184,7 +195,7 @@ module kvPaasSecrets '../../modules/kvPaasSecrets.bicep' = {
 module containerApps '../../modules/containerApps.bicep' = {
   name: 'containerApps'
   scope: rg
-  dependsOn: [kvPaasSecrets]
+  dependsOn: [kvPaasSecrets, storage]
   params: {
     env: env
     acaEnvId: containerEnv.outputs.acaEnvId

@@ -20,6 +20,13 @@ param tags object = {}
 // ── Role definition IDs ───────────────────────────────────────────────────────
 var acrPullRoleId = '7f951dda-4ed3-4680-a7ca-43fe172d538d'
 var kvSecretsUserRoleId = '4633458b-17de-408a-b874-0445c86b69e6'
+// Storage File Data SMB Share Contributor — read/write the aigw-runs file share.
+var storageFileShareContributorRoleId = '0c867c2a-1d8c-454a-a3db-ab2ea1bdc8bb'
+// Contributor — granted scoped to the two runner Jobs (NOT the resource group) so
+// the worker/scanner MI can start ACA Job executions (Microsoft.App/jobs/start/action).
+// There is no narrow built-in "jobs operator" role; a custom role limited to
+// jobs/start/action + read would tighten this further. Tracked as a follow-up.
+var contributorRoleId = 'b24988ac-6180-42a0-ab88-20f7382dd24c'
 
 // ── Existing resources (for role assignment scopes) ───────────────────────────
 resource acrRef 'Microsoft.ContainerRegistry/registries@2023-07-01' existing = {
@@ -28,6 +35,19 @@ resource acrRef 'Microsoft.ContainerRegistry/registries@2023-07-01' existing = {
 
 resource kvRef 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
   name: kvName
+}
+
+// Storage account is provisioned as a foundation resource (modules/storage.bicep,
+// wired in environments/dev/main.bicep). Deterministic name lets us bind here
+// without a shared param. Referenced existing for its access key + id.
+resource runsStorage 'Microsoft.Storage/storageAccounts@2023-01-01' existing = {
+  name: 'staigwruns${env}sdc'
+}
+
+// ACA managed environment — referenced existing so the env-storage mount can use
+// it as parent. Name matches containerEnv.bicep (cae-aigw-${env}-sdc).
+resource acaEnv 'Microsoft.App/managedEnvironments@2024-03-01' existing = {
+  name: 'cae-aigw-${env}-sdc'
 }
 
 // ── Shared User-Assigned Managed Identity ─────────────────────────────────────
@@ -58,6 +78,69 @@ resource kvSecretsUserAssignment 'Microsoft.Authorization/roleAssignments@2022-0
 }
 
 var uamiId = appIdentity.id
+
+// Dedicated ZERO-PRIVILEGE identity for spawned job executions (agent images from
+// the agents table + third-party scanner images) and the jumpbox. It has NO Key
+// Vault / RG role assignments, so a compromised agent/scanner image cannot read
+// secrets or act on Azure. The aigw-runs share is mounted via the env storage
+// (storage account key), not this identity, so job containers need no Azure role.
+resource jobsIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
+  name: 'id-aca-jobs-${env}-sdc'
+  location: location
+  tags: tags
+}
+var jobsUamiId = jobsIdentity.id
+
+// ── Spawn-runtime role assignments (Component 2) ──────────────────────────────
+// (i) SMB Share Contributor on the runs storage account — worker/scanner MI
+//     reads/writes the aigw-runs file share mounted at /run in job executions.
+resource storageShareContributorAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(runsStorage.id, appIdentity.id, storageFileShareContributorRoleId)
+  scope: runsStorage
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', storageFileShareContributorRoleId)
+    principalId: appIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// (ii) Contributor scoped to the two runner Jobs ONLY — lets the worker/scanner
+//      app MI start + read those job executions without resource-group-wide power.
+//      (A custom role limited to Microsoft.App/jobs/start/action + read could
+//      narrow it further; job-scoped Contributor already bounds the blast radius.)
+resource agentJobStartAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(agentRunnerJob.id, appIdentity.id, contributorRoleId)
+  scope: agentRunnerJob
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', contributorRoleId)
+    principalId: appIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+resource scannerJobStartAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(scannerRunnerJob.id, appIdentity.id, contributorRoleId)
+  scope: scannerRunnerJob
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', contributorRoleId)
+    principalId: appIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// ── ACA env storage mount — binds the aigw-runs Azure Files share into the env
+//    so Jobs can declare an AzureFile volume referencing it (storageName: aigw-runs).
+resource runsEnvStorage 'Microsoft.App/managedEnvironments/storages@2024-03-01' = {
+  parent: acaEnv
+  name: 'aigw-runs'
+  properties: {
+    azureFile: {
+      accountName: runsStorage.name
+      accountKey: runsStorage.listKeys().keys[0].value
+      shareName: 'aigw-runs'
+      accessMode: 'ReadWrite'
+    }
+  }
+}
 
 // ── GHCR registry pull credentials ───────────────────────────────────────────
 var ghcrBase = 'ghcr.io/simcorp/ai-gw'
@@ -124,6 +207,96 @@ resource dbMigrateJob 'Microsoft.App/jobs@2024-03-01' = {
     }
   }
   dependsOn: [acrPullAssignment, kvSecretsUserAssignment]
+}
+
+// ── agent-runner Job (Component 2) ────────────────────────────────────────────
+// Pre-declared manual job. workflow-worker starts one execution per agent run via
+// the management API, supplying a per-execution template override (real image +
+// run env). The declared image here is a PLACEHOLDER. The aigw-runs share is
+// mounted at /run for inputs.json / outputs.json exchange.
+resource agentRunnerJob 'Microsoft.App/jobs@2024-03-01' = {
+  name: 'job-agent-runner-${env}-sdc'
+  location: location
+  tags: tags
+  identity: {
+    type: 'UserAssigned'
+    userAssignedIdentities: { '${jobsUamiId}': {} }
+  }
+  properties: {
+    environmentId: acaEnvId
+    workloadProfileName: 'Consumption'
+    configuration: {
+      triggerType: 'Manual'
+      replicaTimeout: 3600
+      manualTriggerConfig: {
+        parallelism: 1
+        replicaCompletionCount: 1
+      }
+      registries: ghcrRegistries
+      secrets: ghcrSecret
+    }
+    template: {
+      containers: [
+        {
+          name: 'agent-runner'
+          // Placeholder — overridden per execution by the worker.
+          image: '${ghcrBase}/workflow-worker:${imageTag}'
+          resources: stdResources
+          volumeMounts: [
+            { volumeName: 'aigw-runs', mountPath: '/run' }
+          ]
+        }
+      ]
+      volumes: [
+        { name: 'aigw-runs', storageType: 'AzureFile', storageName: 'aigw-runs' }
+      ]
+    }
+  }
+  dependsOn: [acrPullAssignment, kvSecretsUserAssignment, runsEnvStorage]
+}
+
+// ── scanner-runner Job (Component 2) ──────────────────────────────────────────
+// Same mechanism for the scanner service (nmap/nuclei/ZAP/garak). Declared image
+// is a PLACEHOLDER; the scanner overrides image + env per execution.
+resource scannerRunnerJob 'Microsoft.App/jobs@2024-03-01' = {
+  name: 'job-scanner-runner-${env}-sdc'
+  location: location
+  tags: tags
+  identity: {
+    type: 'UserAssigned'
+    userAssignedIdentities: { '${jobsUamiId}': {} }
+  }
+  properties: {
+    environmentId: acaEnvId
+    workloadProfileName: 'Consumption'
+    configuration: {
+      triggerType: 'Manual'
+      replicaTimeout: 3600
+      manualTriggerConfig: {
+        parallelism: 1
+        replicaCompletionCount: 1
+      }
+      registries: ghcrRegistries
+      secrets: ghcrSecret
+    }
+    template: {
+      containers: [
+        {
+          name: 'scanner-runner'
+          // Placeholder — overridden per execution by the scanner.
+          image: '${ghcrBase}/scanner:${imageTag}'
+          resources: stdResources
+          volumeMounts: [
+            { volumeName: 'aigw-runs', mountPath: '/run' }
+          ]
+        }
+      ]
+      volumes: [
+        { name: 'aigw-runs', storageType: 'AzureFile', storageName: 'aigw-runs' }
+      ]
+    }
+  }
+  dependsOn: [acrPullAssignment, kvSecretsUserAssignment, runsEnvStorage]
 }
 
 // ── auth ──────────────────────────────────────────────────────────────────────
@@ -592,6 +765,13 @@ resource caScanner 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'AUTH_URL', value: authUrl }
             { name: 'INTERNAL_API_KEY', secretRef: 'internal-api-key' }
             { name: 'SCANNER_WORKER_SECRET', secretRef: 'scanner-worker-secret' }
+            // ACA-Jobs spawn runtime (Component 2)
+            { name: 'SCANNER_CONTAINER_RUNTIME', value: 'aca_job' }
+            { name: 'SCANNER_RUNNER_JOB_NAME', value: 'job-scanner-runner-${env}-sdc' }
+            { name: 'AZURE_RESOURCE_GROUP', value: resourceGroup().name }
+            { name: 'AZURE_SUBSCRIPTION_ID', value: subscription().subscriptionId }
+            { name: 'AIGW_RUNS_SHARE', value: 'aigw-runs' }
+            { name: 'AIGW_RUNS_STORAGE_ACCOUNT', value: 'staigwruns${env}sdc' }
             { name: 'ENVIRONMENT', value: env }
           ]
           resources: stdResources
@@ -634,6 +814,13 @@ resource caWorkflowWorker 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'ADMIN_INTERNAL_TOKEN', secretRef: 'admin-internal-token' }
             { name: 'AGENT_RELAY_URL', value: agentRelayUrl }
             { name: 'ADMIN_URL', value: adminUrl }
+            // ACA-Jobs spawn runtime (Component 2)
+            { name: 'AGENT_CONTAINER_RUNTIME', value: 'aca_job' }
+            { name: 'AGENT_RUNNER_JOB_NAME', value: 'job-agent-runner-${env}-sdc' }
+            { name: 'AZURE_RESOURCE_GROUP', value: resourceGroup().name }
+            { name: 'AZURE_SUBSCRIPTION_ID', value: subscription().subscriptionId }
+            { name: 'AIGW_RUNS_SHARE', value: 'aigw-runs' }
+            { name: 'AIGW_RUNS_STORAGE_ACCOUNT', value: 'staigwruns${env}sdc' }
             { name: 'ENVIRONMENT', value: env }
           ]
           resources: stdResources
@@ -701,4 +888,34 @@ resource caPortal 'Microsoft.App/containerApps@2024-03-01' = {
     }
   }
   dependsOn: [acrPullAssignment, kvSecretsUserAssignment]
+}
+
+// ── toolbox (VNet jumpbox, Component 3) ───────────────────────────────────────
+// Minimal VNet-internal Container App with no ingress. Provides control-plane
+// reachability to the internal:true gateway for tests + deploy.yml E2E via
+// `az containerapp exec`. Uses the public mcr azure-cli image (az+curl+python),
+// so no GHCR registry/secret block is needed. Kept alive with sleep infinity.
+resource caToolbox 'Microsoft.App/containerApps@2024-03-01' = {
+  name: 'ca-toolbox-${env}-sdc'
+  location: location
+  tags: tags
+  // Zero-privilege identity: the jumpbox runs E2E over HTTP (no Azure calls) and
+  // must not be a standing RG/Key-Vault foothold.
+  identity: { type: 'UserAssigned', userAssignedIdentities: { '${jobsUamiId}': {} } }
+  properties: {
+    managedEnvironmentId: acaEnvId
+    workloadProfileName: 'Consumption'
+    configuration: {}
+    template: {
+      containers: [
+        {
+          name: 'toolbox'
+          image: 'mcr.microsoft.com/azure-cli:latest'
+          command: ['sleep', 'infinity']
+          resources: stdResources
+        }
+      ]
+      scale: { minReplicas: 1, maxReplicas: 1 }
+    }
+  }
 }
