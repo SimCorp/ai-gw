@@ -65,20 +65,15 @@ async def mint_key() -> tuple[str, str]:
     raw = "sk-" + secrets.token_urlsafe(32)
     key_hash = hashlib.sha256(raw.encode()).hexdigest()
     async with async_session_maker() as s:
-        tid = (
-            await s.execute(
-                text(
-                    "INSERT INTO teams (name, slug) VALUES ('verify-team', 'verify-team') "
-                    "ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name RETURNING id"
-                )
-            )
-        ).scalar()
+        # auth validates an inference key purely by key_hash + revoked_at IS NULL
+        # (services/auth/app/validators/api_key.py); node_id/team is optional, so
+        # this stays decoupled from the org-node model. node_id defaults to NULL.
         await s.execute(
             text(
-                "INSERT INTO api_keys (node_id, name, key_hash, scopes) "
-                "VALUES (:tid, 'verify-key', :h, ARRAY['ai-gw:inference:*'])"
+                "INSERT INTO api_keys (name, key_hash, scopes) "
+                "VALUES ('verify-key', :h, ARRAY['ai-gw:inference:*'])"
             ),
-            {"tid": tid, "h": key_hash},
+            {"h": key_hash},
         )
         await s.commit()
     return raw, key_hash
