@@ -355,6 +355,7 @@ resource caAuth 'Microsoft.App/containerApps@2024-03-01' = {
       secrets: concat(ghcrSecret, [
         { name: 'postgres-url', keyVaultUrl: '${kvUri}secrets/postgres-url', identity: uamiId }
         { name: 'redis-url', keyVaultUrl: '${kvUri}secrets/redis-url', identity: uamiId }
+        { name: 'app-insights-conn', keyVaultUrl: '${kvUri}secrets/app-insights-conn', identity: uamiId }
       ])
     }
     template: {
@@ -372,6 +373,7 @@ resource caAuth 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'ENTRA_CLIENT_ID', value: 'placeholder-pending-app-registration' }
             { name: 'ADMIN_URL', value: adminUrl }
             { name: 'ENVIRONMENT', value: env }
+            { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', secretRef: 'app-insights-conn' }
           ]
           resources: stdResources
         }
@@ -398,6 +400,7 @@ resource caCache 'Microsoft.App/containerApps@2024-03-01' = {
         { name: 'redis-url', keyVaultUrl: '${kvUri}secrets/redis-url', identity: uamiId }
         { name: 'litellm-master-key', keyVaultUrl: '${kvUri}secrets/litellm-master-key', identity: uamiId }
         { name: 'internal-api-key', keyVaultUrl: '${kvUri}secrets/internal-api-key', identity: uamiId }
+        { name: 'app-insights-conn', keyVaultUrl: '${kvUri}secrets/app-insights-conn', identity: uamiId }
       ])
     }
     template: {
@@ -416,6 +419,7 @@ resource caCache 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'EMBEDDING_BASE_URL', value: '${litellmUrl}/v1' }
             { name: 'EMBEDDING_MODEL', value: 'text-embedding-3-small' }
             { name: 'ENVIRONMENT', value: env }
+            { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', secretRef: 'app-insights-conn' }
           ]
           resources: stdResources
         }
@@ -534,6 +538,7 @@ resource caAdmin 'Microsoft.App/containerApps@2024-03-01' = {
         { name: 'litellm-master-key', keyVaultUrl: '${kvUri}secrets/litellm-master-key', identity: uamiId }
         { name: 'identity-key-secret', keyVaultUrl: '${kvUri}secrets/identity-key-secret', identity: uamiId }
         { name: 'librarian-service-token', keyVaultUrl: '${kvUri}secrets/librarian-service-token', identity: uamiId }
+        { name: 'app-insights-conn', keyVaultUrl: '${kvUri}secrets/app-insights-conn', identity: uamiId }
         // TODO(Workstream H.2): once the Entra app-registration creates the
         // 'oidc-client-secret' Key Vault secret, add it here and switch the
         // OIDC_CLIENT_SECRET env below from '' to secretRef: 'oidc-client-secret'.
@@ -566,6 +571,7 @@ resource caAdmin 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'LEAGUE_URL', value: leagueUrl }
             { name: 'LIBRARIAN_URL', value: librarianUrl }
             { name: 'ENVIRONMENT', value: env }
+            { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', secretRef: 'app-insights-conn' }
           ]
           resources: stdResources
         }

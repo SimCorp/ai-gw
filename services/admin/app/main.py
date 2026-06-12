@@ -531,6 +531,11 @@ app = FastAPI(
     redoc_url="/redoc" if _is_dev else None,
     openapi_url="/openapi.json" if _is_dev else None,
 )
+
+from app.observability import init_observability  # noqa: E402
+
+init_observability(app, service_name="admin")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=app_settings.cors_origins,

@@ -19,6 +19,11 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="AI Gateway — Cache Service", lifespan=lifespan)
+
+from app.observability import init_observability  # noqa: E402
+
+init_observability(app, service_name="cache")
+
 app.include_router(router)
 
 
