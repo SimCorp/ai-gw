@@ -8,7 +8,7 @@
 This is the first of three planned specs from the resilience brainstorming:
 
 1. **Spec 1 — Multi-AZ HA hardening (this document).** Infrastructure/config; closes the single-points-of-failure.
-2. **Spec 2 — Zero-downtime delivery + connection resilience.** Health-gated blue-green CD, readiness/drain, agent-relay reconnect/resume, durable scanner queue.
+2. **Spec 2 — Zero-downtime delivery + connection resilience.** Health-gated blue-green CD, readiness/drain, leader election for in-process schedulers (unlocks `minReplicas: 2` for admin/observability/librarian), agent-relay reconnect/resume, durable scanner queue.
 3. **Spec 3 — Native-Azure inference modernization.** Azure OpenAI / AI Foundry load-balancing; APIM evaluation (deferred).
 
 ---
@@ -19,7 +19,7 @@ This is the first of three planned specs from the resilience brainstorming:
 
 **Approach:** mostly Bicep configuration. Make the Container Apps environment zone-redundant; give request-path apps ≥2 replicas so ACA spreads them across zones; move PostgreSQL to a tier that supports zone-redundant HA; enable zone redundancy on Redis; move job-I/O storage to ZRS. Lift hardcoded SKUs and replica counts into parameters so Dev/Test/Prod deploy the same topology and differ only in compute sizing.
 
-**Target SLO:** ~99.99% for the request path (the ACA + zone-redundant PaaS composite), bounded by `agent-relay`, which remains single-zone until Spec 2 (see §6).
+**Target SLO:** ~99.99% for the request path (the ACA + zone-redundant PaaS composite). Bounded by the services that stay single-zone in Spec 1 — `admin`, `observability`, `librarian` (in-process schedulers) and `agent-relay` (in-memory connections) — all lifted to multi-zone in Spec 2 (see §6).
 
 ### Decisions locked during brainstorming
 
@@ -59,9 +59,10 @@ This is the first of three planned specs from the resilience brainstorming:
 Sweden Central (3 availability zones)
   Zone-redundant ACA environment  cae-aigw-<env>-sdc  (zoneRedundant: true)
     multi-replica  minReplicas: 2  → replicas spread across zones automatically
-      gateway · cache · auth · litellm · observability · admin · admin-portal · portal · identity · librarian · memory · league
+      gateway · cache · auth · litellm · identity · memory · league · admin-portal · portal
       scanner (background, safe as competing consumers on the Redis queue)
     single-zone (bridged by Spec 2)  minReplicas: 1
+      admin · observability · librarian (in-process schedulers — double-fire at 2 without leader election)
       agent-relay (in-memory connection state) · workflow-worker (singleton) · toolbox (jumpbox)
   PostgreSQL Flexible Server   General Purpose D2ds_v5, highAvailability: ZoneRedundant  (sync standby in 2nd zone)
   Azure Cache for Redis        Premium P1, automatic zonal allocation + replica (+ optional RDB persistence)
@@ -112,6 +113,8 @@ properties: {
 
 `azure.extensions` (`pgcrypto,vector`), both databases (`aigateway`, `litellm`), backup (7 days), and the private endpoint are unchanged. pgvector data is preserved across the tier change. **Billing note:** v5-tier HA bills primary + standby (2×).
 
+**Implementer note (ordering):** HA cannot be enabled on Burstable, so on the *existing* Dev server the tier change to General Purpose must complete *before* HA is enabled — a single Bicep pass that sets both may be rejected. The plan should sequence it as two steps (resize to GP, then enable HA) or recreate the Dev server already on GP. New Test/Prod servers are created GP-with-HA in one pass.
+
 ### 4.3 Redis — `modules/redis.bicep`
 
 Bump the API version and enable automatic zonal allocation with a replica (in-place update, no recreate):
@@ -151,15 +154,15 @@ The account holds only ephemeral job-exchange files (`inputs.json`/`outputs.json
 Replace the hardcoded `scale: { minReplicas: 1, maxReplicas: 2 }` blocks with parameters. Two tiers:
 
 ```bicep
-param minReplicasRequestPath int = 2   // request-path + user-facing apps
-param maxReplicasRequestPath int = 4
-param minReplicasSingleton int = 1      // agent-relay, workflow-worker, toolbox (see §6)
+param minReplicasMulti int = 2    // services safe to run 2+ replicas (zone-spread)
+param maxReplicasMulti int = 4
+param minReplicasSingle int = 1   // services NOT multi-replica-safe (see §6)
 ```
 
-- `minReplicasRequestPath` (2): gateway, cache, auth, litellm, observability, admin, identity, librarian, memory, league, admin-portal, portal — plus `scanner` (a background worker, but safe to run two as competing consumers on its Redis queue, so it gets zone-spread too).
-- `minReplicasSingleton` (1): **agent-relay** (in-memory state), **workflow-worker** (singleton claim-based worker), **toolbox** (jumpbox).
+- `minReplicasMulti` (2) — stateless or competing-consumer apps, safe to zone-spread: gateway, cache, auth, litellm, identity, memory, league, admin-portal, portal, and `scanner` (background, but safe as competing consumers on its Redis queue).
+- `minReplicasSingle` (1) — **not** multi-replica-safe in Spec 1 (see §6): admin, observability, librarian (in-process schedulers that would double-fire), agent-relay (in-memory connections), workflow-worker (singleton), toolbox (jumpbox).
 
-Container CPU/memory stay at the existing `stdResources`/`lgResources` (container compute is a minor cost relative to the PaaS SKUs).
+`cache`'s in-memory `_identity_cache` is a soft per-replica cache, so two replicas stay correctness-safe (each just warms its own). Container CPU/memory stay at the existing `stdResources`/`lgResources` (minor cost vs the PaaS SKUs). Readiness/liveness probes are deferred to Spec 2; ACA's default probes suffice for 2-replica routing in the meantime.
 
 ### 4.6 No change (documented)
 
@@ -179,7 +182,7 @@ The HA topology is identical across environments; only compute size differs. Lif
 | `postgresHaMode` | `ZoneRedundant` | `ZoneRedundant` | `ZoneRedundant` | parity: HA on everywhere |
 | `redisCapacity` | `1` (P1) | `1` | `2` (P2) | per-env compute lever |
 | `storageSku` | `Standard_ZRS` | `Standard_ZRS` | `Standard_ZRS` | |
-| `minReplicasRequestPath` | `2` | `2` | `2` | parity: zone spread everywhere |
+| `minReplicasMulti` | `2` | `2` | `2` | parity: zone spread everywhere |
 
 `infra/bicep/environments/test/` and `prod/` each get a `main.bicep` (identical to `dev/`) and a `main.bicepparam`. Test reuses the existing PlatformAITooling Test subscription; the Prod param file is provided ready-to-use even if the Prod subscription is provisioned later.
 
@@ -187,15 +190,22 @@ The HA topology is identical across environments; only compute size differs. Lif
 
 ---
 
-## 6. Known limitation — `agent-relay` (Spec 1 → Spec 2 bridge)
+## 6. Services that stay single-zone in Spec 1 (Spec 1 → Spec 2 bridge)
 
-`agent-relay` keeps WebSocket connections, the agent registry, and pending invocations **in process memory** (`_connections`, `_registered_agents`, `_pending`, `_slug_to_token`), with no graceful drain and no reconnect path. Consequences for Spec 1:
+Three classes of service are **not** safe at `minReplicas: 2` today, so they stay at 1 and gain zone protection only in Spec 2. Spec 1 documents the gap rather than papering over it; §1's SLO caveat names them.
 
-- It must stay at `minReplicas: 1` — two replicas would split the connection registry, and invocations routed to the wrong replica would fail.
-- It therefore has **no zone protection**: if its zone fails, active agent connections drop and do not reconnect.
-- `workflow-worker` is a singleton claim-based worker (Postgres `work_queue` + sweeper); it tolerates restart but runs single-replica for now.
+**(a) In-process schedulers/timers — double-fire at 2 replicas.** None guards its scheduled work with a distributed lock or leader election, so a second replica re-runs every timer:
+- **admin** — APScheduler cron (`weekly_digest`, `workday_sync`, `auto_confirm_asks`), `optimization_worker`, and the Copilot catalog sync loop. Double-firing means duplicate digests and a second hit to the Workday API — a correctness regression, not just cost. admin is also semi-request-path (auth, league, identity, librarian, memory, and workflow-worker call `ADMIN_URL`; it serves `/admin/*` and `/auth/*`), so keeping it single-zone bounds the request-path SLO.
+- **observability** — its Service Bus *queue consumer* is multi-replica-safe (competing consumers), but its three timer loops (`budget_alert` 300s, `cost_anomaly` 600s, `session_cleanup` 3600s) would double-fire duplicate budget/anomaly webhooks.
+- **librarian** — `_research_loop` would double-poll; idempotent `ON CONFLICT` upserts keep it correct, but it doubles research LLM spend.
 
-Closing this is **Spec 2** (move connection/session state to Redis, add reconnect/resume, then raise `minReplicas`). Spec 1 explicitly documents the gap rather than papering over it.
+**(b) In-memory connection state.** **agent-relay** keeps WebSocket connections, the agent registry, and pending invocations in process memory (`_connections`, `_registered_agents`, `_pending`, `_slug_to_token`) with no drain and no reconnect — two replicas would split the registry and misroute invocations.
+
+**(c) Singletons.** **workflow-worker** (Postgres `work_queue` + claim/sweeper) tolerates restart but runs single-replica; **toolbox** is the jumpbox.
+
+**Spec 2 closes (a) and (b):** add Redis/Postgres leader election (a `SET NX` lease or advisory lock) so only one replica runs the scheduled loops — then admin, observability, librarian move to `minReplicas: 2`; and move agent-relay's connection/session state to Redis with reconnect/resume. After Spec 2, only the deliberate singletons remain at 1.
+
+(`identity` runs only an idempotent startup seed — no recurring timer — so it is safe at 2 and lives in the multi-replica group.)
 
 ---
 
@@ -246,7 +256,7 @@ Dominant driver is Postgres GP+HA, roughly **+$450/env/month**, i.e. ~+$900/mont
 
 ## 10. Out of scope (and why)
 
-- **Zero-downtime deploys, readiness/drain, agent-relay reconnect, durable scanner queue** → Spec 2.
+- **Zero-downtime deploys, readiness/drain, leader election for schedulers (to lift admin/observability/librarian to 2 replicas), agent-relay reconnect, durable scanner queue** → Spec 2.
 - **Azure OpenAI / AI Foundry load-balancing, APIM** → Spec 3.
 - **Azure Managed Redis migration** — tracked follow-up (Premium retires 2028); not needed for multi-AZ now.
 - **Multi-region / DR / geo-replication** — explicitly excluded (single region chosen).
