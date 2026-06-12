@@ -202,8 +202,6 @@ jobs:
             context: services/workflow-worker
           - name: litellm
             context: services/litellm
-          - name: gateway
-            context: services/gateway
           # Next.js portals: pnpm-monorepo Dockerfiles at repo root, root build
           # context. NEXT_PUBLIC_* are baked at build time → passed as build-args
           # pointing at the gateway dev FQDN. (NEXT_PUBLIC_LITELLM_KEY is left

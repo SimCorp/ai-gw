@@ -15,15 +15,12 @@ param ghcrPat string
 param ghcrUsername string
 param imageTag string = 'latest'
 
-// Front-door hostname bound to the gateway router app; the wildcard cert is
-// uploaded on the managed environment (see Enforce-Guardrails note in docs).
+// Front-door hostname + wildcard cert (bound to the Caddy gateway module below).
+// The gateway uses internal ingress (external ingress is denied by the SCLZ
+// policy Deny-ContainerApps-Public-Network-Access); the custom-domain binding is
+// inactive until the domain is validated in public DNS, which is harmless.
 param gatewayHostname string = 'aigw-dev.lab.cloud.scdom.net'
 param tlsCertName string = 'tls-wildcard-lab'
-// SCLZ policy Deny-ContainerApps-Public-Network-Access denies ingress.external
-// even on internal:true environments (where it only means VNet-visible).
-// Default false keeps deploys green; flip to true once the platform team
-// grants a policy exemption for this environment.
-param gatewayExternal bool = false
 param location string
 param tags object = {}
 
@@ -324,53 +321,25 @@ resource scannerRunnerJob 'Microsoft.App/jobs@2024-03-01' = {
   dependsOn: [acrPullAssignment, kvSecretsUserAssignment, runsEnvStorage]
 }
 
-// ── auth ──────────────────────────────────────────────────────────────────────
-// ── gateway (front door) ────────────────────────────────────────────────
-// nginx path-router: serves the gateway FQDN (TLS via the env wildcard cert)
-// and routes /admin-portal, /portal and /<service>/ prefixes to the apps.
-resource caGateway 'Microsoft.App/containerApps@2024-03-01' = {
-  name: 'ca-gateway-${env}-sdc'
-  location: location
-  tags: tags
-  properties: {
-    managedEnvironmentId: acaEnvId
-    workloadProfileName: 'Consumption'
-    configuration: {
-      ingress: {
-        // external stays false to satisfy Deny-ContainerApps-Public-Network-
-        // Access. The environment is internal:true, so even the custom-domain
-        // binding is served only on the VNet-internal load balancer — reached
-        // over the corp VPN. SNI binding is what lets the env LB terminate TLS
-        // for the gateway FQDN; without it the LB has no SNI match and resets.
-        external: gatewayExternal
-        targetPort: 8080
-        transport: 'Http'
-        customDomains: [
-          {
-            name: gatewayHostname
-            certificateId: '${acaEnvId}/certificates/${tlsCertName}'
-            bindingType: 'SniEnabled'
-          }
-        ]
-      }
-      registries: ghcrRegistries
-      secrets: ghcrSecret
-    }
-    template: {
-      containers: [
-        {
-          name: 'gateway'
-          image: '${ghcrBase}/gateway:${imageTag}'
-          env: [
-            { name: 'ENV_SUFFIX', value: '${env}-sdc' }
-          ]
-          resources: stdResources
-        }
-      ]
-      scale: { minReplicas: 1, maxReplicas: 2 }
-    }
+// ── gateway (front door) ──────────────────────────────────────────────────────
+// Caddy path-router (see gateway.bicep): owns the gateway FQDN and routes /v1
+// (agent inference) plus /admin, /portal, /admin-portal and the /<service>/
+// prefixes to the internal apps over the env DNS. Replaces the earlier nginx
+// front-door (a local-stack artifact). Internal ingress only; the custom-domain
+// binding is asserted but stays inactive until the domain is validated in DNS.
+module gateway 'gateway.bicep' = {
+  name: 'gateway-frontdoor'
+  params: {
+    env: env
+    location: location
+    acaEnvId: acaEnvId
+    tags: tags
+    customDomain: gatewayHostname
+    certificateName: tlsCertName
   }
 }
+
+// ── auth ──────────────────────────────────────────────────────────────────────
 
 resource caAuth 'Microsoft.App/containerApps@2024-03-01' = {
   name: 'ca-auth-${env}-sdc'
@@ -472,6 +441,7 @@ resource caLitellm 'Microsoft.App/containerApps@2024-03-01' = {
       secrets: concat(ghcrSecret, [
         { name: 'litellm-master-key', keyVaultUrl: '${kvUri}secrets/litellm-master-key', identity: uamiId }
         { name: 'postgres-url-litellm', keyVaultUrl: '${kvUri}secrets/postgres-url-litellm', identity: uamiId }
+        { name: 'anthropic-api-key', keyVaultUrl: '${kvUri}secrets/anthropic-api-key', identity: uamiId }
       ])
     }
     template: {
@@ -482,8 +452,10 @@ resource caLitellm 'Microsoft.App/containerApps@2024-03-01' = {
           env: [
             { name: 'LITELLM_MASTER_KEY', secretRef: 'litellm-master-key' }
             { name: 'DATABASE_URL', secretRef: 'postgres-url-litellm' }
-            // Provider API keys: add to KV and reference here when available
-            { name: 'ANTHROPIC_API_KEY', value: '' }
+            // Provider API keys: live keys live in Key Vault and are referenced here.
+            // ANTHROPIC_API_KEY is wired from the 'anthropic-api-key' KV secret; the
+            // rest stay empty until their provider keys are added to KV.
+            { name: 'ANTHROPIC_API_KEY', secretRef: 'anthropic-api-key' }
             { name: 'GEMINI_API_KEY', value: '' }
             { name: 'GITHUB_MODELS_API_KEY', value: '' }
             { name: 'AZURE_API_BASE', value: '' }

@@ -39,8 +39,10 @@ var sbConnStr = sbAuthRule.listKeys('2022-10-01-preview').primaryConnectionStrin
 var postgresUrl = 'postgresql+asyncpg://${postgresAdminLogin}:${postgresAdminPassword}@${postgresFqdn}/aigateway?sslmode=require'
 // Raw asyncpg format for memory service (asyncpg.create_pool rejects the +asyncpg prefix)
 var postgresUrlRaw = 'postgresql://${postgresAdminLogin}:${postgresAdminPassword}@${postgresFqdn}/aigateway?sslmode=require'
-// Separate database for litellm spend logs
-var postgresUrlLitellm = 'postgresql+asyncpg://${postgresAdminLogin}:${postgresAdminPassword}@${postgresFqdn}/litellm?sslmode=require'
+// Separate database for litellm spend logs. LiteLLM uses Prisma, which parses a
+// plain libpq URL — NOT SQLAlchemy's 'postgresql+asyncpg://' scheme (Prisma's
+// engine fails to start on the '+asyncpg' suffix). Keep this driver-less.
+var postgresUrlLitellm = 'postgresql://${postgresAdminLogin}:${postgresAdminPassword}@${postgresFqdn}/litellm?sslmode=require'
 
 resource secretPostgres 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
   parent: kv
