@@ -1,6 +1,19 @@
 {
   "permissions": {
-    "allow": [],
+    "allow": [
+      "Bash(op item get *)",
+      "Bash(op item list *)",
+      "Bash(op whoami)",
+      "Bash(op read *)",
+      "Bash(op account list)",
+      "Bash(mempalace status *)",
+      "Bash(mempalace instructions *)",
+      "mcp__claude_ai_Microsoft_365__read_resource",
+      "mcp__claude_ai_Microsoft_365__sharepoint_search",
+      "Bash(az network vnet subnet update:*)",
+      "Bash(az network vnet subnet create:*)",
+      "Bash(az network vnet update:*)"
+    ],
     "deny": [
       "Read(./.env)",
       "Read(./.env.*)"
