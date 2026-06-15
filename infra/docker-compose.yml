@@ -1,0 +1,379 @@
+name: ai-gateway
+
+services:
+
+  # ── Infrastructure ────────────────────────────────────────────────────────────
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: aigateway
+      POSTGRES_USER: aigateway
+      POSTGRES_PASSWORD: aigateway
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - ../data/postgres:/var/lib/postgresql/data
+      - ./postgres/init-litellm.sql:/docker-entrypoint-initdb.d/00-init-litellm.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aigateway"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis/redis-stack:7.2.0-v14
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  # ── AI Gateway services ───────────────────────────────────────────────────────
+
+  db-migrate:
+    image: ghcr.io/simcorp/ai-gw/admin-api:${IMAGE_TAG:-latest}
+    environment:
+      DATABASE_URL: "postgresql+asyncpg://aigateway:aigateway@postgres:5432/aigateway"
+    command: ["alembic", "-c", "/app/alembic.ini", "upgrade", "head"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  litellm:
+    image: ghcr.io/simcorp/ai-gw/litellm:${IMAGE_TAG:-latest}
+    ports:
+      - "127.0.0.1:8003:8003"
+    env_file: ../.env
+    environment:
+      DATABASE_URL: "postgresql://aigateway:aigateway@postgres:5432/litellm"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8003/health/liveliness')\" 2>/dev/null || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 120s
+    restart: unless-stopped
+
+  auth:
+    image: ghcr.io/simcorp/ai-gw/auth:${IMAGE_TAG:-latest}
+    ports:
+      - "127.0.0.1:8001:8001"
+    env_file: ../.env
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8001/ready')\" 2>/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  cache:
+    image: ghcr.io/simcorp/ai-gw/cache:${IMAGE_TAG:-latest}
+    ports:
+      - "127.0.0.1:8002:8002"
+    env_file: ../.env
+    environment:
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-change-me-internal-key}
+    depends_on:
+      redis:
+        condition: service_healthy
+      litellm:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8002/ready')\" 2>/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  observability:
+    image: ghcr.io/simcorp/ai-gw/observability:${IMAGE_TAG:-latest}
+    ports:
+      - "127.0.0.1:8004:8004"
+    env_file: ../.env
+    environment:
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-change-me-internal-key}
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8004/health')\" 2>/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  admin:
+    image: ghcr.io/simcorp/ai-gw/admin-api:${IMAGE_TAG:-latest}
+    ports:
+      - "127.0.0.1:8005:8005"
+    env_file: ../.env
+    environment:
+      ENVIRONMENT: development
+      MCP_ALLOW_LOCAL_URLS: "true"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8005/health')\" 2>/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  league:
+    image: ghcr.io/simcorp/ai-gw/league:${IMAGE_TAG:-latest}
+    ports:
+      - "127.0.0.1:8010:8010"
+    env_file: ../.env
+    environment:
+      ENVIRONMENT: development
+      DATABASE_URL: "postgresql+asyncpg://aigateway:aigateway@postgres:5432/aigateway"
+      REDIS_URL: "redis://redis:6379/0"
+      LITELLM_URL: "http://litellm:8003"
+      DEV_BYPASS_AUTH: "true"
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      litellm:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8010/health')\" 2>/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    restart: unless-stopped
+
+  scanner:
+    image: ghcr.io/simcorp/ai-gw/scanner:${IMAGE_TAG:-latest}
+    ports:
+      - "127.0.0.1:8011:8011"
+    env_file: ../.env
+    environment:
+      ENVIRONMENT: development
+      AUTH_URL: http://auth:8001
+      DATABASE_URL: "postgresql+asyncpg://aigateway:aigateway@postgres:5432/aigateway"
+      REDIS_URL: "redis://redis:6379/0"
+      SCANNER_WORKER_SECRET: ${SCANNER_WORKER_SECRET:-dev-worker-secret}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8011/health')\" 2>/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  agent-relay:
+    image: ghcr.io/simcorp/ai-gw/agent-relay:${IMAGE_TAG:-latest}
+    ports:
+      - "127.0.0.1:8007:8007"
+    environment:
+      REDIS_URL: "redis://redis:6379/0"
+      AGENT_RELAY_SECRET: ""
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8007/health')\" 2>/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    restart: unless-stopped
+
+  workflow-worker:
+    image: ghcr.io/simcorp/ai-gw/workflow-worker:${IMAGE_TAG:-latest}
+    environment:
+      DATABASE_URL: "postgresql://aigateway:aigateway@postgres:5432/aigateway"
+      REDIS_URL: "redis://redis:6379/0"
+      WORKER_CONCURRENCY: "5"
+      WORKER_ID: "wf-worker-1"
+      HOST_RUNS_PATH: "/tmp/aigw-runs"
+      AGENT_CONTAINER_NETWORK: "aigateway"
+      AGENT_RELAY_URL: "http://agent-relay:8007"
+      AGENT_RELAY_SECRET: ""
+      ADMIN_INTERNAL_TOKEN: ""
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /tmp/aigw-runs:/worker-runs
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  identity:
+    image: ghcr.io/simcorp/ai-gw/identity:${IMAGE_TAG:-latest}
+    ports:
+      - "127.0.0.1:8006:8006"
+    environment:
+      DATABASE_URL: "postgresql+asyncpg://aigateway:aigateway@postgres:5432/aigateway"
+      REDIS_URL: "redis://redis:6379/0"
+      ADMIN_URL: "http://admin:8005"
+      IDENTITY_SERVICE_TOKEN: ""
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      admin:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8006/health')\" 2>/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  librarian:
+    image: ghcr.io/simcorp/ai-gw/librarian:${IMAGE_TAG:-latest}
+    ports:
+      - "127.0.0.1:8008:8008"
+    environment:
+      DATABASE_URL: "postgresql+asyncpg://aigateway:aigateway@postgres:5432/aigateway"
+      REDIS_URL: "redis://redis:6379/0"
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-${LITELLM_MASTER_KEY:-sk-litellm-local-dev}}
+      EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:-http://litellm:8003/v1}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
+      CACHE_URL: "http://cache:8002"
+      LIBRARIAN_SERVICE_TOKEN: ""
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      litellm:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8008/health')\" 2>/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  memory:
+    image: ghcr.io/simcorp/ai-gw/memory:${IMAGE_TAG:-latest}
+    ports:
+      - "127.0.0.1:8009:8009"
+    environment:
+      DATABASE_URL: "postgresql://aigateway:aigateway@postgres:5432/aigateway"
+      AUTH_URL: "http://auth:8001"
+      ADMIN_URL: "http://admin:8005"
+      EMBEDDING_MODEL: "${EMBEDDING_MODEL:-text-embedding-3-small}"
+      EMBEDDING_API_KEY: "${EMBEDDING_API_KEY:-sk-local-placeholder}"
+      EMBEDDING_BASE_URL: "${EMBEDDING_BASE_URL:-http://litellm:8003/v1}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      auth:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8009/health')\" 2>/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+  admin-portal:
+    image: ghcr.io/simcorp/ai-gw/admin-portal:${IMAGE_TAG:-latest}
+    ports:
+      - "127.0.0.1:3001:3001"
+    environment:
+      NEXT_TELEMETRY_DISABLED: "1"
+      NEXT_PUBLIC_ADMIN_API: "http://localhost:8080/admin"
+    depends_on:
+      admin:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3001/admin-portal/ || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    restart: unless-stopped
+
+  portal:
+    image: ghcr.io/simcorp/ai-gw/portal:${IMAGE_TAG:-latest}
+    ports:
+      - "127.0.0.1:3002:3002"
+    environment:
+      NEXT_TELEMETRY_DISABLED: "1"
+      NEXT_PUBLIC_ADMIN_BASE_URL: "http://localhost:8080/admin"
+      NEXT_PUBLIC_CACHE_BASE_URL: "http://localhost:8080/cache"
+      NEXT_PUBLIC_IDENTITY_BASE_URL: "http://localhost:8080/identity"
+      NEXT_PUBLIC_LIBRARIAN_BASE_URL: "http://localhost:8080/librarian"
+      NEXT_PUBLIC_MEMORY_BASE_URL: "http://localhost:8080/memory"
+      NEXT_PUBLIC_LITELLM_BASE_URL: "http://localhost:8080/litellm"
+      NEXT_PUBLIC_LITELLM_KEY: "sk-litellm-local-dev"
+    depends_on:
+      admin:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3002/portal/ || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    restart: unless-stopped
+
+  hub:
+    image: nginx:alpine
+    ports:
+      - "127.0.0.1:8080:80"
+    volumes:
+      - ./html/:/usr/share/nginx/html/:ro
+      - ./nginx/:/etc/nginx/conf.d/:ro
+    depends_on:
+      auth:
+        condition: service_healthy
+      admin:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+
+networks:
+  default:
+    name: aigateway
