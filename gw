@@ -60,7 +60,7 @@ cmd_up() {
   case "$target" in
     all|services)
       info "Starting backend services…"
-      $DC up -d $CORE_SERVICES dex
+      $DC up -d $CORE_SERVICES
       success "Backend up"
       if [ "$target" = "all" ]; then
         cmd_dev
@@ -127,8 +127,8 @@ cmd_restart() {
       _start_frontend "$target" "$([ "$target" = admin ] && echo 3001 || echo 3002)" "$target"
       ;;
     *)
-      info "Rebuilding and restarting $target…"
-      $DC build "$target"
+      info "Pulling and restarting $target…"
+      $DC pull "$target"
       $DC up -d "$target"
       success "$target restarted"
       ;;
@@ -145,6 +145,18 @@ cmd_build() {
     $DC build "$target"
   fi
   success "Build done"
+}
+
+cmd_pull() {
+  local target=${1:-}
+  if [ -z "$target" ]; then
+    info "Pulling all service images from GHCR…"
+    $DC pull
+  else
+    info "Pulling $target…"
+    $DC pull "$target"
+  fi
+  success "Pull done"
 }
 
 cmd_dev() {
@@ -187,29 +199,10 @@ cmd_ps() {
   printf "  %-20s %s\n" "portal (3002)" "$([ -n "$portal_pid" ] && echo -e "${GREEN}running${NC} (pid $portal_pid)" || echo -e "${RED}stopped${NC}")"
 
   echo ""
-  local sandbox_status
-  sandbox_status=$($DC ps -q claude-sandbox 2>/dev/null | head -1)
-  if [ -n "$sandbox_status" ] && docker inspect --format '{{.State.Running}}' "$sandbox_status" 2>/dev/null | grep -q true; then
-    printf "  %-20s %s\n" "claude-sandbox (2222)" "${GREEN}running${NC}"
-  else
-    printf "  %-20s %s\n" "claude-sandbox (2222)" "${YELLOW}stopped${NC} — ./gw up sandbox"
-  fi
-  echo ""
 }
 
 cmd_sandbox() {
-  local sandbox_id sandbox_running
-  sandbox_id=$($DC ps -q claude-sandbox 2>/dev/null | head -1)
-  sandbox_running=$([ -n "$sandbox_id" ] && docker inspect --format '{{.State.Running}}' "$sandbox_id" 2>/dev/null || echo "false")
-
-  if [ "$sandbox_running" != "true" ]; then
-    info "Sandbox not running — starting it…"
-    $DC_SANDBOX up -d claude-sandbox
-    sleep 2
-  fi
-
-  info "Connecting to claude-sandbox (password: gateway)…"
-  ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p 2222 claude@localhost
+  die "claude-sandbox is not part of this deployment. Use ./gw help for available commands."
 }
 
 cmd_test() {
@@ -257,15 +250,17 @@ ${CYAN}USAGE${NC}
 
 ${CYAN}COMMANDS${NC}
   ${BOLD}up${NC} [target]          Start services
-                     targets: all (default), services, sandbox, admin, portal, <service>
+                     targets: all (default), services, admin, portal, <service>
 
   ${BOLD}down${NC} [target]        Stop services
-                     targets: all (default), services, sandbox, admin, portal, <service>
+                     targets: all (default), services, admin, portal, <service>
 
   ${BOLD}restart${NC} [target]     Rebuild + restart a service (or all)
                      targets: all, admin, portal, <service>
 
   ${BOLD}build${NC} [service]      Build Docker image(s); omit service to build all
+
+  ${BOLD}pull${NC} [service]       Pull latest images from GHCR (omit service to pull all)
 
   ${BOLD}dev${NC}                  Start Next.js dev servers (admin :3001, portal :3002)
 
@@ -273,8 +268,6 @@ ${CYAN}COMMANDS${NC}
                      targets: <service>, admin-fe, portal-fe (omit for all)
 
   ${BOLD}ps${NC}                   Show status of all services + frontends
-
-  ${BOLD}sandbox${NC}              Start (if needed) and SSH into the Claude Code sandbox
 
   ${BOLD}test${NC} [service]       Run pytest for services/ (or a specific service)
 
@@ -284,20 +277,20 @@ ${CYAN}COMMANDS${NC}
 
 ${CYAN}EXAMPLES${NC}
   ./gw up                     # start everything
-  ./gw up sandbox             # start the Claude Code sandbox container
-  ./gw sandbox                # SSH into the sandbox (starts it if stopped)
-  ./gw restart admin          # rebuild + restart the admin API container
+  ./gw pull                   # pull latest images from GHCR
+  ./gw restart admin          # pull + restart the admin API container
   ./gw logs admin             # tail admin container logs
   ./gw logs admin-fe          # tail admin Next.js dev server logs
   ./gw down                   # stop everything
   ./gw ps                     # show what's running
+  IMAGE_TAG=sha-abc1234 ./gw up   # start with a pinned image tag
 
 ${CYAN}SERVICE PORTS${NC}
   admin API     http://localhost:8005   auth         http://localhost:8001
   admin portal  http://localhost:3001   cache        http://localhost:8002
   dev portal    http://localhost:3002   litellm      http://localhost:8003
-  sandbox SSH   localhost:2222          observability http://localhost:8004
-  postgres      localhost:5432          redis         localhost:6379
+  postgres      localhost:5432          observability http://localhost:8004
+  redis         localhost:6379
 
 EOF
 }
@@ -312,6 +305,7 @@ case "$CMD" in
   down)     cmd_down "$@" ;;
   restart)  cmd_restart "$@" ;;
   build)    cmd_build "$@" ;;
+  pull)     cmd_pull "$@" ;;
   dev)      cmd_dev ;;
   logs)     cmd_logs "$@" ;;
   ps|status) cmd_ps ;;
