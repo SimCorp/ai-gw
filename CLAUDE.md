@@ -1,46 +1,46 @@
 # AI Gateway — SimCorp Developer Platform
 
-Enterprise AI gateway for ~2000 engineers. FastAPI services sharing managed Azure PaaS (Cache for Redis + Database for PostgreSQL), deployed to **Azure Container Apps** in the SimCorp Landing Zone (Sweden Central). There is no local stack.
+Enterprise AI gateway for ~2000 engineers. FastAPI services deployed as Docker Compose on a VM in the SimCorp Landing Zone (Sweden Central).
 
 ## Deploying
 
+The gateway runs as Docker Compose on `vm-aigw-dev-sdc` in the PlatformAITooling Dev spoke VNet
+(Sweden Central), reachable from the SimCorp VPN at `http://aigw-dev.lab.cloud.scdom.net:8080`.
+
+CI (`.github/workflows/deploy.yml`) deploys automatically on every `master` push via a
+self-hosted GitHub Actions runner (`vnet-aigw-dev` label) registered on the VM:
+
 ```bash
-az deployment group create \
-  --resource-group rg-aigw-dev-sdc \
-  --template-file infra/bicep/environments/dev/main.bicep \
-  --parameters infra/bicep/environments/dev/main.bicepparam \
-  --parameters imageTag=sha-<git-sha>
+# On the VM — CI does this automatically
+IMAGE_TAG=sha-<git-sha> docker compose -f infra/docker-compose.yml pull
+IMAGE_TAG=sha-<git-sha> docker compose -f infra/docker-compose.yml up -d
+docker compose -f infra/docker-compose.yml run --rm db-migrate
 ```
 
-CI builds and pushes service images; `deploy.yml` deploys them on a `master` push.
+**First-time VM setup:** Run `infra/vm/bootstrap.sh` on the VM, then fill in `/opt/aigw/.env`
+with real API keys, then register the GitHub Actions runner (see instructions in
+`infra/vm/bootstrap.sh`).
+
+**Local dev:** `./gw up` starts all services via the same compose stack.
 
 ## Services
 
-Each service is a Container App named `ca-<service>-dev-sdc` with **internal** ingress
-(the ACA environment is `internal: true` — VNet-only, reached over corp VPN). Services
-discover each other via the environment's internal DNS (`http://ca-<service>-dev-sdc`).
-The `auth` app fronts the inference request path and is exposed on the gateway FQDN
-`https://aigw-dev.lab.cloud.scdom.net`.
-
-| Service | Container App | Internal port | Purpose |
-|---|---|---|---|
-| admin-portal | `ca-admin-portal-dev-sdc` | 3001 | Admin Next.js app |
-| portal | `ca-portal-dev-sdc` | 3002 | Developer Next.js app |
-| auth | `ca-auth-dev-sdc` | 8001 | JWT / API key validation, rate limiting; inference entry point |
-| cache | `ca-cache-dev-sdc` | 8002 | Semantic + exact cache proxy |
-| litellm | `ca-litellm-dev-sdc` | 8003 | Provider routing (OpenAI-compatible) |
-| observability | `ca-observability-dev-sdc` | 8004 | Async event ingestion |
-| admin | `ca-admin-dev-sdc` | 8005 | Team management, API keys, dashboards |
-| identity | `ca-identity-dev-sdc` | 8006 | Agent registry — DNS-style resolve, heartbeat TTL |
-| agent-relay | `ca-agent-relay-dev-sdc` | 8007 | WebSocket relay bus for agentic workflows |
-| librarian | `ca-librarian-dev-sdc` | 8008 | Knowledge ingestion, chunking, semantic search |
-| memory | `ca-memory-dev-sdc` | 8009 | Persistent agent memory scoped to user/team |
-| league | `ca-league-dev-sdc` | 8010 | AI-League gamified challenge platform |
-| scanner | `ca-scanner-dev-sdc` | — | Security scanning worker (background) |
-| workflow-worker | `ca-workflow-worker-dev-sdc` | — | Agentic workflow runner (background) |
-
-Managed PaaS (PostgreSQL, Redis, Key Vault, Service Bus) is reached over private
-endpoints; connection strings are injected from Key Vault via each app's managed identity.
+| Service | Port | Purpose |
+|---|---|---|
+| admin-portal | 3001 | Admin Next.js app |
+| portal | 3002 | Developer Next.js app |
+| auth | 8001 | JWT / API key validation, rate limiting; inference entry point |
+| cache | 8002 | Semantic + exact cache proxy |
+| litellm | 8003 | Provider routing (OpenAI-compatible) |
+| observability | 8004 | Async event ingestion |
+| admin | 8005 | Team management, API keys, dashboards |
+| identity | 8006 | Agent registry — DNS-style resolve, heartbeat TTL |
+| agent-relay | 8007 | WebSocket relay bus for agentic workflows |
+| librarian | 8008 | Knowledge ingestion, chunking, semantic search |
+| memory | 8009 | Persistent agent memory scoped to user/team |
+| league | 8010 | AI-League gamified challenge platform |
+| scanner | — | Security scanning worker (background) |
+| workflow-worker | — | Agentic workflow runner (background) |
 
 ## Running tests
 
