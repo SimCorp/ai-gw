@@ -159,7 +159,7 @@ services:
       redis:
         condition: service_healthy
       litellm:
-        condition: service_started
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8010/health')\" 2>/dev/null || exit 1"]
       interval: 10s
@@ -298,6 +298,8 @@ services:
       EMBEDDING_API_KEY: "${EMBEDDING_API_KEY:-sk-local-placeholder}"
       EMBEDDING_BASE_URL: "${EMBEDDING_BASE_URL:-http://litellm:8003/v1}"
     depends_on:
+      db-migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       auth:
@@ -370,9 +372,6 @@ services:
       retries: 5
       start_period: 5s
     restart: unless-stopped
-
-volumes:
-  postgres_data:
 
 networks:
   default:
