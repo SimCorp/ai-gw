@@ -1,0 +1,1621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Enterprise AI Gateway — SimCorp · June 2026</title>
+<style>
+@page { size: 297mm 167.2mm; margin: 0; }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+  background: #08080F;
+  font-family: Inter, system-ui, sans-serif;
+  color: #F2F3F8;
+}
+:root {
+  --bg: #08080F; --surface: #0F0F1A; --surface-2: #161624; --rule: #232336;
+  --sc-blue: #818CF8; --sc-purple: #C084FC; --sc-teal: #2DD4BF; --sc-magenta: #F472B6;
+  --good: #34D399; --warn: #FBBF24; --bad: #FB7185;
+  --fg-1: #F2F3F8; --fg-2: #A6A9BD; --fg-3: #6F7388;
+}
+.slide {
+  break-after: page;
+  page-break-after: always;
+  width: 297mm;
+  height: 167.2mm;
+  overflow: hidden;
+  padding: 20px 28px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  background:
+    radial-gradient(ellipse 700px 400px at 8% -20%, rgba(129,140,248,0.13) 0%, transparent 60%),
+    radial-gradient(ellipse 600px 350px at 92% 5%,  rgba(192,132,252,0.11) 0%, transparent 60%),
+    radial-gradient(ellipse 750px 450px at 80% 100%, rgba(45,212,191,0.08) 0%, transparent 60%),
+    #08080F;
+}
+.slide:last-child { break-after: auto; page-break-after: avoid; }
+
+/* typography */
+.slide-label {
+  font-size: 9px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--sc-blue); margin-bottom: 4px;
+}
+.slide-title {
+  font-size: 24px; font-weight: 800; color: var(--fg-1);
+  letter-spacing: -0.5px; line-height: 1.15; margin-bottom: 14px;
+}
+.slide-title-lg {
+  font-size: 34px; font-weight: 900; color: var(--fg-1);
+  letter-spacing: -1px; line-height: 1.1;
+}
+.slide-title-sm {
+  font-size: 18px; font-weight: 700; color: var(--fg-1);
+  letter-spacing: -0.3px; margin-bottom: 12px;
+}
+h3 { font-size: 11px; font-weight: 700; color: var(--fg-2); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+p, li { font-size: 11.5px; color: var(--fg-2); line-height: 1.55; }
+ul { list-style: none; padding: 0; }
+
+/* layout */
+.cols2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; flex: 1; }
+.cols3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; flex: 1; }
+.cols4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; flex: 1; }
+.row { display: flex; gap: 10px; align-items: flex-start; }
+.flex1 { flex: 1; }
+.flex-col { display: flex; flex-direction: column; }
+.gap8 { gap: 8px; }
+.gap6 { gap: 6px; }
+.mt8 { margin-top: 8px; }
+.mt6 { margin-top: 6px; }
+.mb4 { margin-bottom: 4px; }
+
+/* surfaces */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  padding: 13px 16px;
+}
+.card-sm {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  padding: 10px 13px;
+}
+.card-2 {
+  background: var(--surface-2);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  padding: 10px 13px;
+}
+
+/* pills */
+.pill {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.6;
+}
+.pill-blue   { background: rgba(129,140,248,0.18); color: var(--sc-blue); border: 1px solid rgba(129,140,248,0.3); }
+.pill-purple { background: rgba(192,132,252,0.18); color: var(--sc-purple); border: 1px solid rgba(192,132,252,0.3); }
+.pill-teal   { background: rgba(45,212,191,0.18);  color: var(--sc-teal);   border: 1px solid rgba(45,212,191,0.3); }
+.pill-magenta{ background: rgba(244,114,182,0.18); color: var(--sc-magenta);border: 1px solid rgba(244,114,182,0.3); }
+.pill-good   { background: rgba(52,211,153,0.18);  color: var(--good);      border: 1px solid rgba(52,211,153,0.3); }
+.pill-warn   { background: rgba(251,191,36,0.18);  color: var(--warn);      border: 1px solid rgba(251,191,36,0.3); }
+.pill-bad    { background: rgba(251,113,133,0.18); color: var(--bad);       border: 1px solid rgba(251,113,133,0.3); }
+.pill-ghost  { background: rgba(242,243,248,0.07); color: var(--fg-2);      border: 1px solid rgba(242,243,248,0.12); }
+
+/* stat blocks */
+.stat-val { font-size: 22px; font-weight: 800; color: var(--sc-blue); letter-spacing: -0.5px; line-height: 1; }
+.stat-label { font-size: 9.5px; color: var(--fg-3); margin-top: 2px; line-height: 1.4; }
+
+/* table */
+table { border-collapse: collapse; width: 100%; }
+th {
+  font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--fg-3); padding: 5px 10px; text-align: left;
+  border-bottom: 1px solid var(--rule);
+}
+td {
+  font-size: 10.5px; color: var(--fg-2); padding: 5px 10px;
+  border-bottom: 1px solid rgba(35,35,54,0.6);
+  vertical-align: middle;
+}
+tr:last-child td { border-bottom: none; }
+
+/* rule divider */
+.rule { border: none; border-top: 1px solid var(--rule); margin: 8px 0; }
+
+/* dot */
+.dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
+.dot-good { background: var(--good); }
+.dot-blue { background: var(--sc-blue); }
+.dot-purple { background: var(--sc-purple); }
+.dot-teal  { background: var(--sc-teal); }
+.dot-warn  { background: var(--warn); }
+
+/* bullet list */
+.blist li { display: flex; gap: 6px; align-items: flex-start; margin-bottom: 5px; font-size: 11px; }
+.blist li::before { content: '›'; color: var(--sc-blue); font-size: 13px; line-height: 1.3; flex-shrink: 0; }
+
+/* service pill strip */
+.svc-strip { display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto; padding-top: 10px; }
+
+/* number highlight */
+.num { color: var(--sc-teal); font-weight: 700; }
+.num-b { color: var(--sc-blue); font-weight: 700; }
+.num-p { color: var(--sc-purple); font-weight: 700; }
+
+/* watermark footer */
+.wm {
+  margin-top: auto;
+  padding-top: 6px;
+  font-size: 8px;
+  color: var(--fg-3);
+  border-top: 1px solid rgba(35,35,54,0.6);
+  flex-shrink: 0;
+}
+
+/* cover accent */
+.cover-glow {
+  position: absolute; inset: 0; pointer-events: none;
+  background:
+    radial-gradient(ellipse 900px 500px at 50% -10%, rgba(129,140,248,0.18) 0%, transparent 60%),
+    radial-gradient(ellipse 400px 300px at 15% 80%,  rgba(45,212,191,0.10) 0%, transparent 60%),
+    radial-gradient(ellipse 300px 250px at 90% 90%,  rgba(192,132,252,0.12) 0%, transparent 60%);
+}
+
+/* arch diagram */
+.arch-box {
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surface); border: 1px solid var(--rule);
+  border-radius: 8px; padding: 6px 12px;
+  font-size: 10.5px; font-weight: 600; color: var(--fg-1);
+  text-align: center; white-space: nowrap;
+}
+.arch-arrow { color: var(--fg-3); font-size: 14px; align-self: center; flex-shrink: 0; }
+
+/* badge */
+.badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: var(--surface-2); border: 1px solid var(--rule);
+  border-radius: 8px; padding: 7px 11px;
+  font-size: 10px; font-weight: 600; color: var(--fg-2);
+}
+.badge-icon { font-size: 14px; }
+
+/* grid 2x3 or similar */
+.grid22 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.grid33 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+</style>
+</head>
+<body>
+
+<!-- Slide 1 -->
+<div class="slide">
+  <div class="cover-glow"></div>
+  <div style="flex:1;display:flex;flex-direction:column;justify-content:center;position:relative;z-index:1;">
+    <div class="slide-label" style="font-size:10px;margin-bottom:10px;">SimCorp · Internal Platform Engineering</div>
+    <div class="slide-title-lg" style="margin-bottom:8px;">Enterprise AI Gateway</div>
+    <div style="font-size:16px;color:var(--fg-2);font-weight:400;margin-bottom:6px;">~2,000 Engineers &nbsp;·&nbsp; Unified AI Platform &nbsp;·&nbsp; 11 Services</div>
+    <div style="font-size:12px;color:var(--fg-3);margin-bottom:18px;">June 2026 &nbsp;&nbsp;|&nbsp;&nbsp; Prepared for <span style="color:var(--sc-blue);font-weight:600;">Merry Reddy</span></div>
+    <!-- Key commitments strip on cover -->
+    <div style="display:flex;gap:8px;margin-bottom:18px;">
+      <div style="flex:1;background:rgba(129,140,248,0.08);border:1px solid rgba(129,140,248,0.2);border-radius:8px;padding:9px 12px;">
+        <div style="font-size:13px;font-weight:800;color:var(--sc-blue);">&lt;50ms p99</div>
+        <div style="font-size:9px;color:var(--fg-3);margin-top:1px;">gateway overhead</div>
+      </div>
+      <div style="flex:1;background:rgba(45,212,191,0.08);border:1px solid rgba(45,212,191,0.2);border-radius:8px;padding:9px 12px;">
+        <div style="font-size:13px;font-weight:800;color:var(--sc-teal);">WORM · 7yr</div>
+        <div style="font-size:9px;color:var(--fg-3);margin-top:1px;">audit retention</div>
+      </div>
+      <div style="flex:1;background:rgba(52,211,153,0.08);border:1px solid rgba(52,211,153,0.2);border-radius:8px;padding:9px 12px;">
+        <div style="font-size:13px;font-weight:800;color:var(--good);">Fail-open</div>
+        <div style="font-size:9px;color:var(--fg-3);margin-top:1px;">on infra failure</div>
+      </div>
+      <div style="flex:1;background:rgba(192,132,252,0.08);border:1px solid rgba(192,132,252,0.2);border-radius:8px;padding:9px 12px;">
+        <div style="font-size:13px;font-weight:800;color:var(--sc-purple);">OpenAI-compat</div>
+        <div style="font-size:9px;color:var(--fg-3);margin-top:1px;">API interface</div>
+      </div>
+    </div>
+    <div style="margin-bottom:6px;">
+      <div style="font-size:9px;color:var(--fg-3);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;">Platform Services</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;">
+        <span class="pill pill-blue">Auth</span>
+        <span class="pill pill-blue">Cache</span>
+        <span class="pill pill-blue">LiteLLM</span>
+        <span class="pill pill-blue">Identity</span>
+        <span class="pill pill-blue">Relay</span>
+        <span class="pill pill-blue">Memory</span>
+        <span class="pill pill-purple">League</span>
+        <span class="pill pill-purple">Librarian</span>
+        <span class="pill pill-purple">Observability</span>
+        <span class="pill pill-purple">Admin</span>
+        <span class="pill pill-purple">Portal</span>
+      </div>
+    </div>
+  </div>
+  <div class="wm">SimCorp AI Gateway · June 2026 · Sample figures — illustrative except where noted</div>
+</div>
+
+<!-- Slide 2 -->
+<div class="slide">
+  <div class="slide-label">Context</div>
+  <div class="slide-title">The Problem We Solve</div>
+  <div class="cols2" style="flex:1;align-items:stretch;">
+    <!-- Before -->
+    <div class="card" style="border-color:rgba(251,113,133,0.3);">
+      <div style="font-size:10px;font-weight:700;color:var(--bad);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px;">Before</div>
+      <ul class="flex-col gap8">
+        <li class="pill pill-bad" style="display:block;margin-bottom:5px;">API keys scattered across teams</li>
+        <li class="pill pill-bad" style="display:block;margin-bottom:5px;">No cost visibility or budget enforcement</li>
+        <li class="pill pill-bad" style="display:block;margin-bottom:5px;">No guardrails on AI output</li>
+        <li class="pill pill-bad" style="display:block;margin-bottom:5px;">No adoption data or agentic usage insight</li>
+        <li class="pill pill-bad" style="display:block;margin-bottom:5px;">Laptop agents cannot reach internal servers</li>
+        <li class="pill pill-bad" style="display:block;">No shared memory across workflows</li>
+      </ul>
+    </div>
+    <!-- After -->
+    <div class="card" style="border-color:rgba(45,212,191,0.3);">
+      <div style="font-size:10px;font-weight:700;color:var(--sc-teal);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px;">After — AI Gateway</div>
+      <ul class="flex-col gap8">
+        <li class="pill pill-teal" style="display:block;margin-bottom:5px;">Centralised JWT + API key auth with scope enforcement</li>
+        <li class="pill pill-teal" style="display:block;margin-bottom:5px;">Three-tier budget: per-key → per-team → per-org</li>
+        <li class="pill pill-teal" style="display:block;margin-bottom:5px;">Input + output guardrails: block, redact, rewrite, route</li>
+        <li class="pill pill-teal" style="display:block;margin-bottom:5px;">Nightly agentic classifier, badges, team leaderboards</li>
+        <li class="pill pill-teal" style="display:block;margin-bottom:5px;">WebSocket relay — no inbound firewall rules needed</li>
+        <li class="pill pill-teal" style="display:block;">Memory Palace MCP server per developer, persistent</li>
+      </ul>
+    </div>
+  </div>
+  <div class="wm">SimCorp AI Gateway · June 2026 · Sample figures — illustrative except where noted</div>
+</div>
+
+<!-- Slide 3 -->
+<div class="slide">
+  <div class="slide-label">Architecture</div>
+  <div class="slide-title">System Overview</div>
+  <div style="flex:1;display:flex;flex-direction:column;gap:8px;">
+    <!-- Full SVG architecture -->
+    <svg viewBox="0 0 820 320" width="100%" style="flex:1;max-height:290px;" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arr" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto">
+          <polygon points="0 0, 7 3.5, 0 7" fill="#6F7388"/>
+        </marker>
+        <marker id="arr-blue" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto">
+          <polygon points="0 0, 7 3.5, 0 7" fill="#818CF8"/>
+        </marker>
+      </defs>
+      <!-- REQUEST PATH LABEL -->
+      <text x="10" y="22" font-size="8" fill="#6F7388" font-family="Inter,system-ui,sans-serif" font-weight="600" letter-spacing="1.5">REQUEST PATH</text>
+      <!-- Caller -->
+      <rect x="10" y="30" width="80" height="36" rx="7" fill="rgba(129,140,248,0.12)" stroke="rgba(129,140,248,0.4)" stroke-width="1"/>
+      <text x="50" y="51" font-size="11" fill="#F2F3F8" font-family="Inter,system-ui,sans-serif" font-weight="600" text-anchor="middle">Caller</text>
+      <!-- Arrow -->
+      <line x1="90" y1="48" x2="118" y2="48" stroke="#6F7388" stroke-width="1.5" marker-end="url(#arr)"/>
+      <!-- Auth -->
+      <rect x="120" y="30" width="90" height="36" rx="7" fill="rgba(129,140,248,0.14)" stroke="rgba(129,140,248,0.5)" stroke-width="1.5"/>
+      <text x="165" y="46" font-size="11" fill="#F2F3F8" font-family="Inter,system-ui,sans-serif" font-weight="700" text-anchor="middle">Auth</text>
+      <text x="165" y="59" font-size="8.5" fill="#818CF8" font-family="Inter,system-ui,sans-serif" text-anchor="middle">:8001</text>
+      <!-- Arrow -->
+      <line x1="210" y1="48" x2="238" y2="48" stroke="#6F7388" stroke-width="1.5" marker-end="url(#arr)"/>
+      <!-- Cache -->
+      <rect x="240" y="30" width="90" height="36" rx="7" fill="rgba(45,212,191,0.12)" stroke="rgba(45,212,191,0.5)" stroke-width="1.5"/>
+      <text x="285" y="46" font-size="11" fill="#F2F3F8" font-family="Inter,system-ui,sans-serif" font-weight="700" text-anchor="middle">Cache</text>
+      <text x="285" y="59" font-size="8.5" fill="#2DD4BF" font-family="Inter,system-ui,sans-serif" text-anchor="middle">:8002</text>
+      <!-- Arrow -->
+      <line x1="330" y1="48" x2="358" y2="48" stroke="#6F7388" stroke-width="1.5" marker-end="url(#arr)"/>
+      <!-- LiteLLM -->
+      <rect x="360" y="30" width="90" height="36" rx="7" fill="rgba(192,132,252,0.12)" stroke="rgba(192,132,252,0.5)" stroke-width="1.5"/>
+      <text x="405" y="46" font-size="11" fill="#F2F3F8" font-family="Inter,system-ui,sans-serif" font-weight="700" text-anchor="middle">LiteLLM</text>
+      <text x="405" y="59" font-size="8.5" fill="#C084FC" font-family="Inter,system-ui,sans-serif" text-anchor="middle">:8003</text>
+      <!-- Arrow -->
+      <line x1="450" y1="48" x2="478" y2="48" stroke="#6F7388" stroke-width="1.5" marker-end="url(#arr)"/>
+      <!-- Providers group -->
+      <rect x="480" y="16" width="330" height="64" rx="7" fill="rgba(35,35,54,0.5)" stroke="#232336" stroke-width="1"/>
+      <text x="645" y="27" font-size="8" fill="#6F7388" font-family="Inter,system-ui,sans-serif" text-anchor="middle" font-weight="600" letter-spacing="1.2">PROVIDERS</text>
+      <rect x="490" y="32" width="68" height="26" rx="5" fill="rgba(15,15,26,0.9)" stroke="#232336" stroke-width="1"/>
+      <text x="524" y="49" font-size="9.5" fill="#A6A9BD" font-family="Inter,system-ui,sans-serif" text-anchor="middle">OpenAI</text>
+      <rect x="566" y="32" width="68" height="26" rx="5" fill="rgba(15,15,26,0.9)" stroke="#232336" stroke-width="1"/>
+      <text x="600" y="49" font-size="9.5" fill="#A6A9BD" font-family="Inter,system-ui,sans-serif" text-anchor="middle">Anthropic</text>
+      <rect x="642" y="32" width="68" height="26" rx="5" fill="rgba(15,15,26,0.9)" stroke="#232336" stroke-width="1"/>
+      <text x="676" y="49" font-size="9.5" fill="#A6A9BD" font-family="Inter,system-ui,sans-serif" text-anchor="middle">Azure</text>
+      <rect x="718" y="32" width="82" height="26" rx="5" fill="rgba(15,15,26,0.9)" stroke="#232336" stroke-width="1"/>
+      <text x="759" y="49" font-size="9.5" fill="#A6A9BD" font-family="Inter,system-ui,sans-serif" text-anchor="middle">Google/GitHub</text>
+
+      <!-- PORTALS SECTION LABEL -->
+      <text x="10" y="108" font-size="8" fill="#6F7388" font-family="Inter,system-ui,sans-serif" font-weight="600" letter-spacing="1.5">PORTALS → ADMIN API</text>
+      <!-- Admin Portal -->
+      <rect x="10" y="116" width="110" height="32" rx="6" fill="rgba(244,114,182,0.10)" stroke="rgba(244,114,182,0.4)" stroke-width="1"/>
+      <text x="65" y="130" font-size="10" fill="#F472B6" font-family="Inter,system-ui,sans-serif" font-weight="600" text-anchor="middle">Admin Portal</text>
+      <text x="65" y="142" font-size="8" fill="#6F7388" font-family="Inter,system-ui,sans-serif" text-anchor="middle">:3001</text>
+      <!-- Dev Portal -->
+      <rect x="130" y="116" width="120" height="32" rx="6" fill="rgba(244,114,182,0.10)" stroke="rgba(244,114,182,0.4)" stroke-width="1"/>
+      <text x="190" y="130" font-size="10" fill="#F472B6" font-family="Inter,system-ui,sans-serif" font-weight="600" text-anchor="middle">Developer Portal</text>
+      <text x="190" y="142" font-size="8" fill="#6F7388" font-family="Inter,system-ui,sans-serif" text-anchor="middle">:3002</text>
+      <!-- Arrows to Admin API -->
+      <line x1="65" y1="148" x2="65" y2="168" stroke="rgba(244,114,182,0.4)" stroke-width="1.2" marker-end="url(#arr)"/>
+      <line x1="190" y1="148" x2="115" y2="168" stroke="rgba(244,114,182,0.4)" stroke-width="1.2" marker-end="url(#arr)"/>
+      <!-- Admin API -->
+      <rect x="30" y="170" width="140" height="32" rx="6" fill="rgba(244,114,182,0.14)" stroke="rgba(244,114,182,0.5)" stroke-width="1.5"/>
+      <text x="100" y="184" font-size="10.5" fill="#F2F3F8" font-family="Inter,system-ui,sans-serif" font-weight="700" text-anchor="middle">Admin API</text>
+      <text x="100" y="196" font-size="8.5" fill="#F472B6" font-family="Inter,system-ui,sans-serif" text-anchor="middle">:8005</text>
+
+      <!-- SUPPORTING SERVICES LABEL -->
+      <text x="290" y="108" font-size="8" fill="#6F7388" font-family="Inter,system-ui,sans-serif" font-weight="600" letter-spacing="1.5">SUPPORTING SERVICES</text>
+      <!-- Identity -->
+      <rect x="290" y="116" width="90" height="32" rx="6" fill="rgba(15,15,26,0.9)" stroke="#232336" stroke-width="1"/>
+      <text x="335" y="130" font-size="10" fill="#818CF8" font-family="Inter,system-ui,sans-serif" font-weight="600" text-anchor="middle">Identity</text>
+      <text x="335" y="142" font-size="8" fill="#6F7388" font-family="Inter,system-ui,sans-serif" text-anchor="middle">:8006</text>
+      <!-- Relay -->
+      <rect x="390" y="116" width="90" height="32" rx="6" fill="rgba(15,15,26,0.9)" stroke="#232336" stroke-width="1"/>
+      <text x="435" y="130" font-size="10" fill="#2DD4BF" font-family="Inter,system-ui,sans-serif" font-weight="600" text-anchor="middle">Relay</text>
+      <text x="435" y="142" font-size="8" fill="#6F7388" font-family="Inter,system-ui,sans-serif" text-anchor="middle">:8007</text>
+      <!-- Librarian -->
+      <rect x="490" y="116" width="90" height="32" rx="6" fill="rgba(15,15,26,0.9)" stroke="#232336" stroke-width="1"/>
+      <text x="535" y="130" font-size="10" fill="#C084FC" font-family="Inter,system-ui,sans-serif" font-weight="600" text-anchor="middle">Librarian</text>
+      <text x="535" y="142" font-size="8" fill="#6F7388" font-family="Inter,system-ui,sans-serif" text-anchor="middle">:8008</text>
+      <!-- Memory -->
+      <rect x="590" y="116" width="80" height="32" rx="6" fill="rgba(15,15,26,0.9)" stroke="#232336" stroke-width="1"/>
+      <text x="630" y="130" font-size="10" fill="#818CF8" font-family="Inter,system-ui,sans-serif" font-weight="600" text-anchor="middle">Memory</text>
+      <text x="630" y="142" font-size="8" fill="#6F7388" font-family="Inter,system-ui,sans-serif" text-anchor="middle">:8009</text>
+      <!-- League -->
+      <rect x="290" y="160" width="80" height="32" rx="6" fill="rgba(15,15,26,0.9)" stroke="#232336" stroke-width="1"/>
+      <text x="330" y="174" font-size="10" fill="#F472B6" font-family="Inter,system-ui,sans-serif" font-weight="600" text-anchor="middle">League</text>
+      <text x="330" y="186" font-size="8" fill="#6F7388" font-family="Inter,system-ui,sans-serif" text-anchor="middle">:8010</text>
+      <!-- Observability -->
+      <rect x="380" y="160" width="110" height="32" rx="6" fill="rgba(15,15,26,0.9)" stroke="#232336" stroke-width="1"/>
+      <text x="435" y="174" font-size="10" fill="#FBBF24" font-family="Inter,system-ui,sans-serif" font-weight="600" text-anchor="middle">Observability</text>
+      <text x="435" y="186" font-size="8" fill="#6F7388" font-family="Inter,system-ui,sans-serif" text-anchor="middle">:8004</text>
+
+      <!-- INFRA LABEL -->
+      <text x="680" y="108" font-size="8" fill="#6F7388" font-family="Inter,system-ui,sans-serif" font-weight="600" letter-spacing="1.5">INFRA</text>
+      <rect x="680" y="116" width="130" height="32" rx="6" fill="rgba(52,211,153,0.10)" stroke="rgba(52,211,153,0.3)" stroke-width="1"/>
+      <text x="745" y="130" font-size="10" fill="#34D399" font-family="Inter,system-ui,sans-serif" font-weight="600" text-anchor="middle">Redis</text>
+      <text x="745" y="142" font-size="8" fill="#6F7388" font-family="Inter,system-ui,sans-serif" text-anchor="middle">cache + rate limits</text>
+      <rect x="680" y="158" width="130" height="32" rx="6" fill="rgba(129,140,248,0.10)" stroke="rgba(129,140,248,0.3)" stroke-width="1"/>
+      <text x="745" y="172" font-size="10" fill="#818CF8" font-family="Inter,system-ui,sans-serif" font-weight="600" text-anchor="middle">PostgreSQL</text>
+      <text x="745" y="184" font-size="8" fill="#6F7388" font-family="Inter,system-ui,sans-serif" text-anchor="middle">teams · policies · cost</text>
+
+      <!-- nginx bottom bar -->
+      <rect x="10" y="216" width="800" height="26" rx="6" fill="rgba(35,35,54,0.6)" stroke="#232336" stroke-width="1"/>
+      <text x="414" y="231" font-size="9" fill="#6F7388" font-family="Inter,system-ui,sans-serif" text-anchor="middle" letter-spacing="1">nginx · unified ingress · :8080</text>
+
+      <!-- Auth writes to Redis arrow -->
+      <line x1="165" y1="66" x2="165" y2="108" stroke="rgba(129,140,248,0.2)" stroke-width="1" stroke-dasharray="3,3"/>
+      <line x1="285" y1="66" x2="285" y2="108" stroke="rgba(45,212,191,0.2)" stroke-width="1" stroke-dasharray="3,3"/>
+    </svg>
+  </div>
+  <div class="wm">SimCorp AI Gateway · June 2026 · Sample figures — illustrative except where noted</div>
+</div>
+
+<!-- Slide 4 -->
+<div class="slide">
+  <div class="slide-label">Security</div>
+  <div class="slide-title">Authentication &amp; Access Control</div>
+  <div class="cols3" style="flex:1;gap:10px;">
+    <div class="card flex-col gap8">
+      <h3>Identity &amp; Tokens</h3>
+      <ul class="blist">
+        <li>JWT via Entra ID OIDC + API key (<code style="font-size:10px;color:var(--sc-teal);">sk-*</code>) — both validated on every request</li>
+        <li>Scope enforcement: <code style="font-size:9.5px;color:var(--sc-blue);">ai-gw:inference:claude-sonnet:execute</code></li>
+        <li>Identity cached for <span class="num">45s</span> — survives rolling deploys</li>
+        <li>SCIM sync + Entra group → gateway role mappings</li>
+      </ul>
+      <div class="card-2 mt6">
+        <div style="font-size:9px;color:var(--fg-3);margin-bottom:4px;">ROLE HIERARCHY</div>
+        <div style="font-size:10px;color:var(--fg-2);line-height:1.9;">
+          <span style="color:var(--sc-purple);">platform_admin</span> → <span style="color:var(--sc-blue);">area_owner</span><br>
+          → <span style="color:var(--sc-teal);">team_owner</span> → <span style="color:var(--fg-2);">team_member</span>
+        </div>
+      </div>
+    </div>
+    <div class="card flex-col gap8">
+      <h3>Rate Limiting</h3>
+      <div style="text-align:center;padding:8px 0;">
+        <div class="stat-val" style="font-size:28px;">1,000</div>
+        <div class="stat-label">req / min per team<br>(60s sliding window)</div>
+      </div>
+      <ul class="blist">
+        <li>Redis-backed — sub-millisecond enforcement</li>
+        <li>Fail-open on Redis outage: agents never blocked by infrastructure failure (configurable)</li>
+        <li>Per-team + per-key granularity</li>
+      </ul>
+    </div>
+    <div class="card flex-col gap8">
+      <h3>Budget Enforcement</h3>
+      <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px;">
+        <div class="card-2" style="display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-size:10.5px;color:var(--fg-2);">Per API Key</span>
+          <span class="pill pill-blue" style="font-size:9px;">monthly cap</span>
+        </div>
+        <div style="text-align:center;font-size:11px;color:var(--fg-3);">↓</div>
+        <div class="card-2" style="display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-size:10.5px;color:var(--fg-2);">Per Team</span>
+          <span class="pill pill-purple" style="font-size:9px;">monthly cap</span>
+        </div>
+        <div style="text-align:center;font-size:11px;color:var(--fg-3);">↓</div>
+        <div class="card-2" style="display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-size:10.5px;color:var(--fg-2);">Per Org</span>
+          <span class="pill pill-teal" style="font-size:9px;">monthly cap</span>
+        </div>
+      </div>
+      <div style="font-size:10.5px;color:var(--fg-2);">Actions: <span style="color:var(--bad);">block</span> (HTTP 429) or <span style="color:var(--warn);">alert</span> (log + proceed)</div>
+    </div>
+  </div>
+  <div class="wm">SimCorp AI Gateway · June 2026 · Sample figures — illustrative except where noted</div>
+</div>
+
+<!-- Slide 5 -->
+<div class="slide">
+  <div class="slide-label">Performance</div>
+  <div class="slide-title">Semantic Caching</div>
+  <div class="cols3" style="flex:1;gap:10px;">
+    <div class="card flex-col gap8">
+      <h3>Dual-Mode Matching</h3>
+      <div class="card-2" style="margin-bottom:6px;">
+        <div style="font-size:10px;font-weight:700;color:var(--sc-blue);margin-bottom:3px;">Exact Match</div>
+        <div style="font-size:10px;color:var(--fg-2);">SHA-256 hash — instant O(1) lookup via Redis</div>
+      </div>
+      <div class="card-2">
+        <div style="font-size:10px;font-weight:700;color:var(--sc-purple);margin-bottom:3px;">Semantic Match</div>
+        <div style="font-size:10px;color:var(--fg-2);">Cosine similarity on request embeddings</div>
+        <div style="margin-top:4px;">
+          <span style="font-size:9px;color:var(--fg-3);">threshold: </span>
+          <span class="num" style="font-size:13px;">0.95</span>
+          <span style="font-size:9px;color:var(--fg-3);margin-left:8px;">TTL: </span>
+          <span class="num" style="font-size:13px;">3,600s</span>
+        </div>
+      </div>
+      <ul class="blist mt6">
+        <li>Cache hits replayed as SSE — transparent to streaming clients</li>
+      </ul>
+    </div>
+    <div class="card flex-col gap8">
+      <h3>Circuit Breaker</h3>
+      <div style="text-align:center;padding:6px 0;">
+        <div class="stat-val" style="font-size:24px;color:var(--sc-purple);">5 failures</div>
+        <div style="font-size:10px;color:var(--fg-3);margin:3px 0;">triggers cooldown of</div>
+        <div class="stat-val" style="font-size:24px;">120s</div>
+        <div class="stat-label">then auto-reset</div>
+      </div>
+      <ul class="blist">
+        <li>Embedding service failure isolated — cache falls back to exact-match only</li>
+        <li>Zero impact on request path throughput</li>
+      </ul>
+    </div>
+    <div class="card flex-col gap8">
+      <h3>Cache Bypass Conditions</h3>
+      <ul class="blist">
+        <li>PII patterns detected (5+ regex patterns checked)</li>
+        <li>Conversation exceeds <span class="num">3 turns</span></li>
+        <li>Team policy opt-out flag set</li>
+        <li>Streaming requests with output guardrails active</li>
+      </ul>
+      <hr class="rule">
+      <h3 class="mt6">Auto-Drive</h3>
+      <ul class="blist">
+        <li><code style="font-size:9.5px;color:var(--sc-teal);">POST /v1/chat/completions/auto</code></li>
+        <li>Model selected from rolling latency + error stats</li>
+        <li>Zero consumer code change required</li>
+      </ul>
+    </div>
+  </div>
+  <div class="wm">SimCorp AI Gateway · June 2026 · Sample figures — illustrative except where noted</div>
+</div>
+
+<!-- Slide 6 -->
+<div class="slide">
+  <div class="slide-label">Safety</div>
+  <div class="slide-title">Guardrails</div>
+  <div class="cols2" style="flex:1;gap:12px;">
+    <div class="flex-col gap8">
+      <div class="card">
+        <h3 style="margin-bottom:8px;">6 Action Types</h3>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;">
+          <span class="pill pill-bad">block</span>
+          <span class="pill pill-warn">flag</span>
+          <span class="pill pill-purple">redact</span>
+          <span class="pill pill-blue">rewrite</span>
+          <span class="pill pill-ghost">truncate</span>
+          <span class="pill pill-teal">route</span>
+        </div>
+      </div>
+      <div class="card flex-col gap6">
+        <h3>Enforcement Stages</h3>
+        <div class="card-2" style="display:flex;gap:10px;align-items:center;">
+          <span class="pill pill-blue" style="flex-shrink:0;">Input</span>
+          <span style="font-size:10.5px;color:var(--fg-2);">Applied before forwarding to provider — blocks bad prompts, redacts PII</span>
+        </div>
+        <div class="card-2" style="display:flex;gap:10px;align-items:center;">
+          <span class="pill pill-purple" style="flex-shrink:0;">Output</span>
+          <span style="font-size:10.5px;color:var(--fg-2);">Applied after provider responds — rewrites or blocks unsafe completions</span>
+        </div>
+        <div style="font-size:9.5px;color:var(--warn);margin-top:2px;">Note: streaming + output enforcement → HTTP 400 (known limitation)</div>
+      </div>
+    </div>
+    <div class="flex-col gap8">
+      <div class="card">
+        <h3 style="margin-bottom:8px;">Hit Tracking (per event)</h3>
+        <table>
+          <thead><tr><th>Field</th><th>Example</th></tr></thead>
+          <tbody>
+            <tr><td>Rule</td><td style="color:var(--sc-blue);">pii-redact-email</td></tr>
+            <tr><td>Team</td><td style="color:var(--fg-1);">platform-engineering</td></tr>
+            <tr><td>Model</td><td>claude-sonnet</td></tr>
+            <tr><td>Action taken</td><td style="color:var(--sc-purple);">redact</td></tr>
+            <tr><td>Severity</td><td style="color:var(--warn);">warning</td></tr>
+            <tr><td>Timestamp</td><td>2026-06-08T14:32:07Z</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h3 style="margin-bottom:6px;">Admin Dashboard Counts</h3>
+        <div style="display:flex;gap:12px;">
+          <div class="card-2" style="flex:1;text-align:center;padding:8px;">
+            <div style="font-size:18px;font-weight:800;color:var(--sc-blue);">(illustrative)</div>
+            <div class="stat-label">Hits — 24h</div>
+          </div>
+          <div class="card-2" style="flex:1;text-align:center;padding:8px;">
+            <div style="font-size:18px;font-weight:800;color:var(--bad);">(illustrative)</div>
+            <div class="stat-label">Blocked — 24h</div>
+          </div>
+        </div>
+        <div style="font-size:10px;color:var(--fg-3);margin-top:6px;">Sync'd to Redis for zero-latency enforcement</div>
+      </div>
+    </div>
+  </div>
+  <div class="wm">SimCorp AI Gateway · June 2026 · Sample figures — illustrative except where noted</div>
+</div>
+
+<!-- Slide 7 -->
+<div class="slide">
+  <div class="slide-label">Cost Governance</div>
+  <div class="slide-title">Budget &amp; Spend Control</div>
+  <div class="cols3" style="flex:1;gap:10px;">
+    <div class="card flex-col gap8">
+      <h3>Three-Tier Hierarchy</h3>
+      <div class="flex-col gap6">
+        <div class="card-2">
+          <div style="font-size:10px;font-weight:700;color:var(--sc-blue);">1 · Per API Key</div>
+          <div style="font-size:10px;color:var(--fg-2);margin-top:2px;">Monthly spend cap, alert threshold %</div>
+        </div>
+        <div style="font-size:11px;color:var(--fg-3);text-align:center;">↓ rolls up to</div>
+        <div class="card-2">
+          <div style="font-size:10px;font-weight:700;color:var(--sc-purple);">2 · Per Team</div>
+          <div style="font-size:10px;color:var(--fg-2);margin-top:2px;">Monthly cap, configurable alert %</div>
+        </div>
+        <div style="font-size:11px;color:var(--fg-3);text-align:center;">↓ rolls up to</div>
+        <div class="card-2">
+          <div style="font-size:10px;font-weight:700;color:var(--sc-teal);">3 · Per Org</div>
+          <div style="font-size:10px;color:var(--fg-2);margin-top:2px;">Platform-wide ceiling</div>
+        </div>
+      </div>
+    </div>
+    <div class="card flex-col gap8">
+      <h3>Enforcement &amp; Alerts</h3>
+      <div class="card-2" style="margin-bottom:6px;">
+        <div style="font-size:10px;font-weight:700;color:var(--bad);margin-bottom:3px;">block action</div>
+        <div style="font-size:10px;color:var(--fg-2);">Returns HTTP 429 immediately — zero tokens spent over cap</div>
+      </div>
+      <div class="card-2" style="margin-bottom:6px;">
+        <div style="font-size:10px;font-weight:700;color:var(--warn);margin-bottom:3px;">alert action</div>
+        <div style="font-size:10px;color:var(--fg-2);">Log + proceed — Slack / PagerDuty / email notification</div>
+      </div>
+      <ul class="blist">
+        <li>Alert threshold % configurable per tier (e.g., 80% → Slack)</li>
+        <li>All budget state Redis-cached — <span class="num">&lt;1ms</span> enforcement check</li>
+      </ul>
+    </div>
+    <div class="card flex-col gap8">
+      <h3>Admin Spend View</h3>
+      <table>
+        <thead><tr><th>Metric</th><th>Value</th></tr></thead>
+        <tbody>
+          <tr><td>MTD Cost</td><td style="color:var(--sc-teal);">(illustrative)</td></tr>
+          <tr><td>Projected EOM</td><td style="color:var(--sc-blue);">(illustrative)</td></tr>
+          <tr><td>Budget %</td><td style="color:var(--warn);">(illustrative)</td></tr>
+          <tr><td>Over-alert flag</td><td><span class="pill pill-warn" style="font-size:9px;">⚠ alert</span></td></tr>
+        </tbody>
+      </table>
+      <hr class="rule">
+      <div style="font-size:10px;color:var(--fg-3);">Per-team spend visible to team owners and platform admins. Developer portal shows personal MTD + CSV export.</div>
+    </div>
+  </div>
+  <div class="wm">SimCorp AI Gateway · June 2026 · Sample figures — illustrative except where noted</div>
+</div>
+
+<!-- Slide 8 -->
+<div class="slide">
+  <div class="slide-label">Visibility</div>
+  <div class="slide-title">Observability &amp; Audit</div>
+  <div class="cols3" style="flex:1;gap:10px;">
+    <div class="card flex-col gap8">
+      <h3>Live Monitoring</h3>
+      <ul class="blist">
+        <li>Auto-refresh every <span class="num">10s</span> — expandable trace per request</li>
+        <li>Reports: group by area / team / model</li>
+        <li>Time ranges: 1h / 24h / 7d / 30d / 90d / MTD</li>
+        <li>Alert channels: Slack, PagerDuty, email</li>
+        <li>Severity levels: critical / warning / info</li>
+      </ul>
+      <div class="card-2 mt6">
+        <div style="font-size:9px;color:var(--fg-3);margin-bottom:4px;">LATENCY TARGET</div>
+        <div style="font-size:20px;font-weight:800;color:var(--good);">&lt;50ms</div>
+        <div style="font-size:9.5px;color:var(--fg-3);">p99 gateway overhead (excluding provider)</div>
+      </div>
+      <div class="card-2">
+        <div style="font-size:9px;color:var(--fg-3);margin-bottom:5px;">SAMPLE ALERT RULE (illustrative)</div>
+        <div style="font-size:9.5px;color:var(--fg-2);line-height:1.7;">
+          Name: <span style="color:var(--sc-blue);">high-cost-spike</span><br>
+          Condition: spend &gt; 80% budget in 24h<br>
+          Channel: <span style="color:var(--warn);">Slack #ai-platform-alerts</span><br>
+          Severity: <span style="color:var(--bad);">critical</span>
+        </div>
+      </div>
+    </div>
+    <div class="card flex-col gap8">
+      <h3>Audit Log</h3>
+      <div class="card-2" style="text-align:center;padding:10px 8px;margin-bottom:6px;">
+        <div style="font-size:11px;font-weight:700;color:var(--sc-blue);margin-bottom:2px;">WORM Storage</div>
+        <div style="font-size:22px;font-weight:800;color:var(--sc-teal);">7-year</div>
+        <div style="font-size:9.5px;color:var(--fg-3);">retention with integrity hash</div>
+      </div>
+      <ul class="blist">
+        <li>Tamper-evident — integrity hash per record</li>
+        <li>Write-Once, Read-Many — no deletions allowed</li>
+        <li>Every request, auth event, guardrail hit, budget action logged</li>
+        <li>Full audit trail for compliance and forensics</li>
+      </ul>
+      <div class="card-2" style="margin-top:4px;">
+        <div style="font-size:9px;color:var(--fg-3);margin-bottom:3px;">AUDIT EVENT FIELDS</div>
+        <div style="font-size:9.5px;color:var(--fg-2);line-height:1.7;">timestamp · team · model · tokens · cost · guardrail_hits · latency_ms · cache_hit · user_id</div>
+      </div>
+    </div>
+    <div class="card flex-col gap8">
+      <h3>AI-Powered Insights</h3>
+      <ul class="blist">
+        <li>Auto-generated optimization findings surfaced daily</li>
+        <li>Manually triggerable analysis runs from admin portal</li>
+        <li>Conversational DevOps agent — natural language queries over live data</li>
+      </ul>
+      <div class="card-2 mt6">
+        <div style="font-size:9px;color:var(--fg-3);margin-bottom:5px;">EXAMPLE QUERIES</div>
+        <div style="font-size:10px;color:var(--sc-blue);margin-bottom:4px;">"Full health check"</div>
+        <div style="font-size:10px;color:var(--sc-blue);margin-bottom:4px;">"Top spending teams this month"</div>
+        <div style="font-size:10px;color:var(--sc-blue);margin-bottom:4px;">"Guardrail hits by model — 7d"</div>
+        <div style="font-size:10px;color:var(--sc-blue);">"Cache hit rate by area — 30d"</div>
+      </div>
+    </div>
+  </div>
+  <div class="wm">SimCorp AI Gateway · June 2026 · Sample figures — illustrative except where noted</div>
+</div>
+
+<!-- Slide 9 -->
+<div class="slide">
+  <div class="slide-label">Organisation</div>
+  <div class="slide-title">Organisation &amp; Access Management</div>
+  <div class="cols2" style="flex:1;gap:12px;">
+    <div class="flex-col gap8">
+      <div class="card">
+        <h3 style="margin-bottom:8px;">Hierarchy (unlimited depth)</h3>
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          <div class="arch-box" style="justify-content:flex-start;padding:6px 12px;background:rgba(129,140,248,0.1);border-color:rgba(129,140,248,0.3);">
+            <span style="font-size:10px;color:var(--fg-3);margin-right:8px;">L1</span> Area — e.g. "Technology" or "Trading"
+          </div>
+          <div style="padding-left:20px;display:flex;flex-direction:column;gap:4px;">
+            <div class="arch-box" style="justify-content:flex-start;padding:6px 12px;background:rgba(192,132,252,0.1);border-color:rgba(192,132,252,0.3);">
+              <span style="font-size:10px;color:var(--fg-3);margin-right:8px;">L2</span> Unit — e.g. "Platform Engineering"
+            </div>
+            <div style="padding-left:20px;">
+              <div class="arch-box" style="justify-content:flex-start;padding:6px 12px;background:rgba(45,212,191,0.1);border-color:rgba(45,212,191,0.3);">
+                <span style="font-size:10px;color:var(--fg-3);margin-right:8px;">L3</span> Team — e.g. "AI Gateway"
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style="font-size:9.5px;color:var(--fg-3);margin-top:8px;">Hierarchy can extend to L4+ for large divisions. All policy inheritance flows unchanged.</div>
+      </div>
+      <div class="card">
+        <h3 style="margin-bottom:8px;">Policy Inheritance</h3>
+        <ul class="blist">
+          <li>Cache TTL, rate limit, allowed models — all flow down the tree</li>
+          <li>Child node can override parent policy where permitted</li>
+          <li>Admin can lock nodes to prevent child override</li>
+          <li>Per-node policy change triggers audit log event</li>
+        </ul>
+      </div>
+    </div>
+    <div class="flex-col gap8">
+      <div class="card">
+        <h3 style="margin-bottom:8px;">Role Hierarchy</h3>
+        <table>
+          <thead><tr><th>Role</th><th>Scope</th><th>Key Permissions</th></tr></thead>
+          <tbody>
+            <tr><td style="color:var(--sc-purple);font-weight:600;">platform_admin</td><td>Platform-wide</td><td>Everything</td></tr>
+            <tr><td style="color:var(--sc-blue);font-weight:600;">area_owner</td><td>Area + all units</td><td>Budget, guardrails, models</td></tr>
+            <tr><td style="color:var(--sc-teal);font-weight:600;">team_owner</td><td>Team only</td><td>Keys, members, spend view</td></tr>
+            <tr><td style="color:var(--fg-2);">team_member</td><td>Self only</td><td>Self-service API keys</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h3 style="margin-bottom:8px;">Enterprise Identity</h3>
+        <ul class="blist">
+          <li>SCIM bulk user sync from Entra ID / Azure AD — automated provisioning</li>
+          <li>Entra group Object ID → gateway role mappings — no manual assignment at scale</li>
+          <li>Approval workflow for scope upgrades + budget raises — tracked in audit log</li>
+          <li>All auth via Entra OIDC — no gateway-local passwords or secrets</li>
+          <li>Deprovisioning via SCIM — access revoked automatically on offboarding</li>
+        </ul>
+        <div class="card-2 mt6">
+          <div style="font-size:9px;color:var(--fg-3);margin-bottom:4px;">COMPLIANCE NOTE</div>
+          <div style="font-size:9.5px;color:var(--fg-2);line-height:1.6;">All role assignments, scope grants, and budget changes generate immutable audit events with actor, timestamp, before/after state — queryable by compliance and security teams.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="wm">SimCorp AI Gateway · June 2026 · Sample figures — illustrative except where noted</div>
+</div>
+
+<!-- Slide 10 -->
+<div class="slide">
+  <div class="slide-label">Agents</div>
+  <div class="slide-title">Identity Pool — Agent Registry</div>
+  <div class="cols3" style="flex:1;gap:10px;">
+    <div class="card flex-col gap8">
+      <h3>DNS-Style Registry</h3>
+      <ul class="blist">
+        <li>Agents register with <code style="color:var(--sc-teal);font-size:10px;">slug</code>, capabilities, endpoint, team</li>
+        <li>Lookup: exact slug / capability tag / partial name — ranked results</li>
+        <li>Optional DID-style identity JWT (RS256 JWKS)</li>
+      </ul>
+      <div class="card-2 mt6">
+        <div style="font-size:9px;color:var(--fg-3);margin-bottom:4px;">HEARTBEAT TTL</div>
+        <div style="font-size:26px;font-weight:800;color:var(--sc-teal);">60s</div>
+        <div style="font-size:9.5px;color:var(--fg-3);">agent goes offline automatically on disconnect</div>
+      </div>
+    </div>
+    <div class="card flex-col gap8">
+      <h3>Agent Types</h3>
+      <div class="flex-col gap6">
+        <div class="card-2">
+          <div style="font-size:10px;font-weight:700;color:var(--sc-blue);margin-bottom:2px;">Managed</div>
+          <div style="font-size:10px;color:var(--fg-2);">Platform-seeded, always available</div>
+        </div>
+        <div class="card-2">
+          <div style="font-size:10px;font-weight:700;color:var(--sc-purple);margin-bottom:2px;">Relay</div>
+          <div style="font-size:10px;color:var(--fg-2);">Connected via WebSocket tunnel</div>
+        </div>
+        <div class="card-2">
+          <div style="font-size:10px;font-weight:700;color:var(--sc-teal);margin-bottom:2px;">External</div>
+          <div style="font-size:10px;color:var(--fg-2);">Reachable via HTTP endpoint</div>
+        </div>
+      </div>
+    </div>
+    <div class="card flex-col gap8">
+      <h3>Discovery Flow</h3>
+      <div style="font-size:10px;color:var(--fg-2);line-height:1.7;">
+        <div class="card-2" style="margin-bottom:5px;">1 · Caller queries Identity Pool by slug or capability tag</div>
+        <div style="text-align:center;color:var(--fg-3);">↓</div>
+        <div class="card-2" style="margin:5px 0;">2 · Registry returns ranked candidate list</div>
+        <div style="text-align:center;color:var(--fg-3);">↓</div>
+        <div class="card-2" style="margin-bottom:5px;">3 · Caller invokes via relay token or direct HTTP</div>
+        <div style="text-align:center;color:var(--fg-3);">↓</div>
+        <div class="card-2">4 · Heartbeat TTL keeps list live — stale agents auto-removed</div>
+      </div>
+    </div>
+  </div>
+  <div class="wm">SimCorp AI Gateway · June 2026 · Sample figures — illustrative except where noted</div>
+</div>
+
+<!-- Slide 11 -->
+<div class="slide">
+  <div class="slide-label">Connectivity</div>
+  <div class="slide-title">Agent Relay — WebSocket Tunnel</div>
+  <div class="cols2" style="flex:1;gap:12px;">
+    <div class="flex-col gap8">
+      <div class="card">
+        <h3 style="margin-bottom:8px;">The Problem It Solves</h3>
+        <p style="font-size:12px;color:var(--fg-2);line-height:1.6;">Laptop-hosted agents cannot accept inbound connections from internal servers. The relay bridges the gap — the agent dials out, holds a WebSocket open, and the gateway forwards invocations through that connection.</p>
+        <div style="margin-top:10px;padding:8px;background:rgba(45,212,191,0.08);border-radius:6px;border:1px solid rgba(45,212,191,0.2);">
+          <div style="font-size:10px;font-weight:600;color:var(--sc-teal);">Result: Zero inbound firewall rules needed</div>
+        </div>
+      </div>
+      <div class="card">
+        <h3 style="margin-bottom:6px;">Invocation Timeout</h3>
+        <div style="font-size:30px;font-weight:800;color:var(--sc-blue);">300s</div>
+        <div style="font-size:10px;color:var(--fg-3);">max per relay invocation before timeout</div>
+      </div>
+    </div>
+    <div class="card flex-col gap8">
+      <h3>Protocol Flow</h3>
+      <div style="font-size:10.5px;color:var(--fg-2);display:flex;flex-direction:column;gap:6px;">
+        <div class="card-2" style="display:flex;gap:8px;align-items:center;">
+          <span class="pill pill-blue" style="flex-shrink:0;font-size:9px;">1</span>
+          <span>Agent registers with Identity Pool — receives <code style="color:var(--sc-teal);font-size:9.5px;">relay_token</code></span>
+        </div>
+        <div class="card-2" style="display:flex;gap:8px;align-items:center;">
+          <span class="pill pill-blue" style="flex-shrink:0;font-size:9px;">2</span>
+          <span>Agent opens persistent WebSocket to relay service</span>
+        </div>
+        <div class="card-2" style="display:flex;gap:8px;align-items:center;">
+          <span class="pill pill-blue" style="flex-shrink:0;font-size:9px;">3</span>
+          <span>Relay token mapped to Redis for cross-service auth</span>
+        </div>
+        <div class="card-2" style="display:flex;gap:8px;align-items:center;">
+          <span class="pill pill-blue" style="flex-shrink:0;font-size:9px;">4</span>
+          <span>Caller invokes agent — relay forwards over WebSocket</span>
+        </div>
+        <div class="card-2" style="display:flex;gap:8px;align-items:center;">
+          <span class="pill pill-warn" style="flex-shrink:0;font-size:9px;">5</span>
+          <span>On disconnect: agent auto-unregistered, token cleaned up</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="wm">SimCorp AI Gateway · June 2026 · Sample figures — illustrative except where noted</div>
+</div>
+
+<!-- Slide 12 -->
+<div class="slide">
+  <div class="slide-label">Orchestration</div>
+  <div class="slide-title">Agentic Workflows</div>
+  <div class="cols2" style="flex:1;gap:12px;">
+    <div class="flex-col gap8">
+      <div class="card">
+        <h3 style="margin-bottom:8px;">DAG Execution Engine</h3>
+        <ul class="blist">
+          <li>Directed acyclic graph — nodes are agents, conditionals, or parallel forks</li>
+          <li>Managed, relay, and external agent nodes all supported</li>
+          <li>Streaming results (SSE) + cancellation supported</li>
+          <li>Run via REST API or Developer Portal "Runs" view</li>
+          <li>Agents discoverable from Identity Pool directly in visual designer</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3 style="margin-bottom:8px;">Node Types</h3>
+        <div class="flex-col" style="gap:6px;">
+          <div class="card-2" style="display:flex;align-items:center;gap:8px;">
+            <span class="pill pill-blue" style="font-size:9px;flex-shrink:0;">agent</span>
+            <span style="font-size:10.5px;color:var(--fg-2);">managed / relay / external — any registered identity</span>
+          </div>
+          <div class="card-2" style="display:flex;align-items:center;gap:8px;">
+            <span class="pill pill-purple" style="font-size:9px;flex-shrink:0;">conditional</span>
+            <span style="font-size:10.5px;color:var(--fg-2);">branch on output value or tool result</span>
+          </div>
+          <div class="card-2" style="display:flex;align-items:center;gap:8px;">
+            <span class="pill pill-teal" style="font-size:9px;flex-shrink:0;">parallel fork</span>
+            <span style="font-size:10.5px;color:var(--fg-2);">fan-out to N agents simultaneously, join on all-done</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Example workflow SVG -->
+    <div class="card flex-col gap8">
+      <h3>Example Workflow (illustrative)</h3>
+      <svg viewBox="0 0 340 200" width="100%" height="180" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="wa" markerWidth="6" markerHeight="6" refX="4.5" refY="3" orient="auto">
+            <polygon points="0 0, 6 3, 0 6" fill="#6F7388"/>
+          </marker>
+        </defs>
+        <!-- Start node -->
+        <rect x="130" y="8" width="80" height="26" rx="5" fill="rgba(52,211,153,0.15)" stroke="rgba(52,211,153,0.5)" stroke-width="1.2"/>
+        <text x="170" y="24" font-size="9.5" fill="#34D399" font-family="Inter,system-ui,sans-serif" font-weight="600" text-anchor="middle">Trigger / API call</text>
+        <line x1="170" y1="34" x2="170" y2="50" stroke="#6F7388" stroke-width="1.2" marker-end="url(#wa)"/>
+        <!-- Agent 1 -->
+        <rect x="110" y="52" width="120" height="26" rx="5" fill="rgba(129,140,248,0.15)" stroke="rgba(129,140,248,0.4)" stroke-width="1.2"/>
+        <text x="170" y="64" font-size="9" fill="#818CF8" font-family="Inter,system-ui,sans-serif" font-weight="600" text-anchor="middle">Research Agent</text>
+        <text x="170" y="73" font-size="7.5" fill="#6F7388" font-family="Inter,system-ui,sans-serif" text-anchor="middle">(relay — laptop)</text>
+        <!-- Fork lines -->
+        <line x1="170" y1="78" x2="170" y2="95" stroke="#6F7388" stroke-width="1.2"/>
+        <line x1="170" y1="95" x2="70" y2="95" stroke="#6F7388" stroke-width="1.2"/>
+        <line x1="170" y1="95" x2="270" y2="95" stroke="#6F7388" stroke-width="1.2"/>
+        <line x1="70" y1="95" x2="70" y2="108" stroke="#6F7388" stroke-width="1.2" marker-end="url(#wa)"/>
+        <line x1="270" y1="95" x2="270" y2="108" stroke="#6F7388" stroke-width="1.2" marker-end="url(#wa)"/>
+        <!-- Parallel agents -->
+        <rect x="15" y="110" width="110" height="26" rx="5" fill="rgba(45,212,191,0.12)" stroke="rgba(45,212,191,0.35)" stroke-width="1.2"/>
+        <text x="70" y="122" font-size="9" fill="#2DD4BF" font-family="Inter,system-ui,sans-serif" font-weight="600" text-anchor="middle">Librarian Search</text>
+        <text x="70" y="131" font-size="7.5" fill="#6F7388" font-family="Inter,system-ui,sans-serif" text-anchor="middle">(managed)</text>
+        <rect x="215" y="110" width="110" height="26" rx="5" fill="rgba(192,132,252,0.12)" stroke="rgba(192,132,252,0.35)" stroke-width="1.2"/>
+        <text x="270" y="122" font-size="9" fill="#C084FC" font-family="Inter,system-ui,sans-serif" font-weight="600" text-anchor="middle">Memory Recall</text>
+        <text x="270" y="131" font-size="7.5" fill="#6F7388" font-family="Inter,system-ui,sans-serif" text-anchor="middle">(managed)</text>
+        <!-- Join -->
+        <line x1="70" y1="136" x2="70" y2="158" stroke="#6F7388" stroke-width="1.2"/>
+        <line x1="270" y1="136" x2="270" y2="158" stroke="#6F7388" stroke-width="1.2"/>
+        <line x1="70" y1="158" x2="170" y2="158" stroke="#6F7388" stroke-width="1.2"/>
+        <line x1="270" y1="158" x2="170" y2="158" stroke="#6F7388" stroke-width="1.2"/>
+        <line x1="170" y1="158" x2="170" y2="168" stroke="#6F7388" stroke-width="1.2" marker-end="url(#wa)"/>
+        <!-- Synthesiser -->
+        <rect x="105" y="170" width="130" height="26" rx="5" fill="rgba(244,114,182,0.12)" stroke="rgba(244,114,182,0.35)" stroke-width="1.2"/>
+        <text x="170" y="186" font-size="9" fill="#F472B6" font-family="Inter,system-ui,sans-serif" font-weight="600" text-anchor="middle">Synthesis Agent → response</text>
+        <!-- Fork label -->
+        <text x="170" y="103" font-size="7.5" fill="#6F7388" font-family="Inter,system-ui,sans-serif" text-anchor="middle">parallel fork</text>
+      </svg>
+    </div>
+  </div>
+  <div class="wm">SimCorp AI Gateway · June 2026 · Sample figures — illustrative except where noted</div>
+</div>
+
+<!-- Slide 13 -->
+<div class="slide">
+  <div class="slide-label">Memory</div>
+  <div class="slide-title">Memory Palace — Per-Developer Persistent Memory</div>
+  <div class="cols3" style="flex:1;gap:10px;">
+    <div class="card flex-col gap8">
+      <h3>Drawers</h3>
+      <ul class="blist">
+        <li>CRUD items with semantic search</li>
+        <li>Search threshold: <span class="num">0.7</span> — balances recall vs noise</li>
+        <li>Dedup check threshold: <span class="num">0.95</span> — prevents near-duplicate storage</li>
+        <li>Per-developer isolated namespace — no cross-user leakage</li>
+      </ul>
+      <hr class="rule">
+      <h3>Knowledge Graph</h3>
+      <ul class="blist">
+        <li>Nodes + typed edges, validity timestamps on edges</li>
+        <li>Timeline queries — full history of entity changes</li>
+        <li>Full graph traversal depth: <span class="num">5</span> hops</li>
+        <li>Add/invalidate nodes; kg_stats for graph health</li>
+      </ul>
+    </div>
+    <div class="card flex-col gap8">
+      <h3>Tunnels &amp; Diary</h3>
+      <div class="card-2" style="margin-bottom:6px;">
+        <div style="font-size:10px;font-weight:700;color:var(--sc-purple);margin-bottom:3px;">Tunnels</div>
+        <div style="font-size:10px;color:var(--fg-2);">Cross-wing connections between isolated memory spaces. BFS traversal depth <span class="num">3</span>. Create, follow, list, delete.</div>
+      </div>
+      <div class="card-2" style="margin-bottom:6px;">
+        <div style="font-size:10px;font-weight:700;color:var(--sc-teal);margin-bottom:3px;">Diary</div>
+        <div style="font-size:10px;color:var(--fg-2);">Date-indexed narrative entries. Default read window: 7 days. Write daily, query by date range.</div>
+      </div>
+      <div class="card-2">
+        <div style="font-size:9px;color:var(--fg-3);margin-bottom:4px;">NAMESPACE ISOLATION</div>
+        <div style="font-size:9.5px;color:var(--fg-2);">Each developer's palace is fully isolated. Tunnels are the only sanctioned bridge — explicit, auditable.</div>
+      </div>
+    </div>
+    <div class="card flex-col gap8">
+      <h3>Access &amp; Integration</h3>
+      <ul class="blist">
+        <li>MCP server — JSON-RPC 2.0 protocol</li>
+        <li>Pre-authorized in Developer Portal catalog — zero setup</li>
+        <li>Config JSON one-click copy for <code style="font-size:9.5px;color:var(--sc-teal);">~/.claude/settings.json</code></li>
+        <li>Agents call Memory Palace tools directly via function calls</li>
+        <li>Internal services bypass HTTP — direct function call path</li>
+      </ul>
+      <hr class="rule">
+      <h3>MCP Tools Available</h3>
+      <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:2px;">
+        <span class="pill pill-ghost" style="font-size:8.5px;">drawer_create</span>
+        <span class="pill pill-ghost" style="font-size:8.5px;">drawer_search</span>
+        <span class="pill pill-ghost" style="font-size:8.5px;">kg_add</span>
+        <span class="pill pill-ghost" style="font-size:8.5px;">kg_query</span>
+        <span class="pill pill-ghost" style="font-size:8.5px;">kg_timeline</span>
+        <span class="pill pill-ghost" style="font-size:8.5px;">diary_write</span>
+        <span class="pill pill-ghost" style="font-size:8.5px;">diary_read</span>
+        <span class="pill pill-ghost" style="font-size:8.5px;">tunnel_follow</span>
+      </div>
+    </div>
+  </div>
+  <div class="wm">SimCorp AI Gateway · June 2026 · Sample figures — illustrative except where noted</div>
+</div>
+
+<!-- Slide 14 -->
+<div class="slide">
+  <div class="slide-label">Knowledge</div>
+  <div class="slide-title">Knowledge Library — Librarian</div>
+  <div class="cols3" style="flex:1;gap:10px;">
+    <div class="card flex-col gap8">
+      <h3>Shared Knowledge Base</h3>
+      <ul class="blist">
+        <li>Org-wide: engineering patterns, AI best practices, platform docs</li>
+        <li>Ingest: max <span class="num">50KB</span> per doc, <span class="num">20</span> tags max</li>
+        <li>Source URL required for every document — provenance always tracked</li>
+        <li>Semantic search + topic browsing in Developer Portal</li>
+        <li>Tag-based faceted filtering; newest + most-accessed surfaced</li>
+      </ul>
+      <hr class="rule">
+      <h3>Document Lifecycle</h3>
+      <ul class="blist">
+        <li>Ingest → embed → index — available to all immediately</li>
+        <li>Update: re-ingest re-indexes; old embeddings replaced</li>
+        <li>Deletion logged to audit trail</li>
+      </ul>
+    </div>
+    <div class="card flex-col gap8">
+      <h3>Agent Access</h3>
+      <ul class="blist">
+        <li>MCP server: AI Librarian pre-authorized in Developer Portal</li>
+        <li>Internal research agents use direct function call — no HTTP loopback latency</li>
+        <li>Agents can search, retrieve, and ingest documents via tool calls</li>
+        <li>Results include source URL + relevance score for transparency</li>
+      </ul>
+      <div class="card-2 mt6">
+        <div style="font-size:9px;color:var(--fg-3);margin-bottom:4px;">ACCESS PATH</div>
+        <div style="font-size:10px;color:var(--sc-blue);">Developer Portal → Catalog → MCP Servers → AI Librarian</div>
+      </div>
+      <div class="card-2">
+        <div style="font-size:9px;color:var(--fg-3);margin-bottom:4px;">MCP TOOLS</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;">
+          <span class="pill pill-ghost" style="font-size:8.5px;">librarian_search</span>
+          <span class="pill pill-ghost" style="font-size:8.5px;">librarian_get</span>
+          <span class="pill pill-ghost" style="font-size:8.5px;">librarian_ingest</span>
+          <span class="pill pill-ghost" style="font-size:8.5px;">librarian_list_tags</span>
+        </div>
+      </div>
+    </div>
+    <div class="card flex-col gap8">
+      <h3>Why It Matters</h3>
+      <p style="font-size:11px;color:var(--fg-2);line-height:1.6;">Without a shared knowledge base, each developer and agent re-discovers the same patterns independently. Librarian eliminates that duplication — a best practice written once is instantly available to every agent and developer on the platform.</p>
+      <hr class="rule">
+      <h3>Typical Content</h3>
+      <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:2px;">
+        <span class="pill pill-blue" style="font-size:9px;">API integration guides</span>
+        <span class="pill pill-purple" style="font-size:9px;">Prompt engineering tips</span>
+        <span class="pill pill-teal" style="font-size:9px;">Agent design patterns</span>
+        <span class="pill pill-ghost" style="font-size:9px;">Platform runbooks</span>
+        <span class="pill pill-ghost" style="font-size:9px;">Cost optimisation tips</span>
+        <span class="pill pill-ghost" style="font-size:9px;">Tool recipes</span>
+      </div>
+    </div>
+  </div>
+  <div class="wm">SimCorp AI Gateway · June 2026 · Sample figures — illustrative except where noted</div>
+</div>
+
+<!-- Slide 15 -->
+<div class="slide">
+  <div class="slide-label">Transformation Tracking</div>
+  <div class="slide-title">AI Transformation Tracking</div>
+  <div class="cols2" style="flex:1;gap:12px;">
+    <div class="flex-col gap8">
+      <div class="card">
+        <h3 style="margin-bottom:8px;">Nightly Classifier</h3>
+        <table>
+          <thead><tr><th>Class</th><th>Criteria</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><span class="pill pill-ghost" style="font-size:9px;">interactive</span></td>
+              <td>Standard prompt-response</td>
+            </tr>
+            <tr>
+              <td><span class="pill pill-blue" style="font-size:9px;">agentic</span></td>
+              <td>&gt;<span class="num-b">30%</span> tool invoc/turn OR (&gt;<span class="num-b">8</span> turns + &lt;<span class="num-b">20s</span> inter-req avg)</td>
+            </tr>
+            <tr>
+              <td><span class="pill pill-purple" style="font-size:9px;">autonomous</span></td>
+              <td>&gt;<span class="num-p">15</span> turns + &lt;<span class="num-p">8s</span> inter-req + &gt;<span class="num-p">80%</span> tool invoc/turn</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h3 style="margin-bottom:8px;">8 Achievement Badges</h3>
+        <div style="display:flex;flex-wrap:wrap;gap:5px;">
+          <span class="pill pill-teal" style="font-size:9px;">First Step</span>
+          <span class="pill pill-blue" style="font-size:9px;">Tool User</span>
+          <span class="pill pill-blue" style="font-size:9px;">Going Agentic</span>
+          <span class="pill pill-purple" style="font-size:9px;">Autonomous</span>
+          <span class="pill pill-purple" style="font-size:9px;">Agentic Majority</span>
+          <span class="pill pill-teal" style="font-size:9px;">10 Agent Commits</span>
+          <span class="pill pill-magenta" style="font-size:9px;">Deep Thinker</span>
+          <span class="pill pill-good" style="font-size:9px;">Consistent</span>
+        </div>
+        <div style="font-size:9px;color:var(--fg-3);margin-top:5px;">Deep Thinker: &gt;100 tools/session · Consistent: 5 agentic days streak</div>
+      </div>
+    </div>
+    <div class="card flex-col gap8">
+      <h3>Dashboards</h3>
+      <div class="cols2" style="gap:8px;">
+        <div class="card-2">
+          <div style="font-size:10px;font-weight:700;color:var(--sc-purple);margin-bottom:4px;">Admin Portal</div>
+          <ul class="blist">
+            <li style="font-size:10px;">Team table with laggard flags</li>
+            <li style="font-size:10px;">Per-developer drill-down</li>
+            <li style="font-size:10px;">Org adoption curve (illustrative)</li>
+          </ul>
+        </div>
+        <div class="card-2">
+          <div style="font-size:10px;font-weight:700;color:var(--sc-blue);margin-bottom:4px;">Developer Portal</div>
+          <ul class="blist">
+            <li style="font-size:10px;">Personal agentic score 0–100</li>
+            <li style="font-size:10px;">Journey chart</li>
+            <li style="font-size:10px;">Opt-in leaderboard</li>
+          </ul>
+        </div>
+      </div>
+      <div class="card-2 mt6">
+        <div style="font-size:9px;color:var(--fg-3);margin-bottom:4px;">ADOPTION CURVE — illustrative</div>
+        <svg viewBox="0 0 240 50" width="100%" height="50">
+          <polyline points="0,48 30,44 60,38 90,28 120,18 150,10 180,6 210,4 240,3" fill="none" stroke="rgba(129,140,248,0.5)" stroke-width="2"/>
+          <polyline points="0,48 30,46 60,44 90,40 120,34 150,24 180,16 210,12 240,10" fill="none" stroke="rgba(45,212,191,0.5)" stroke-width="1.5" stroke-dasharray="4,3"/>
+          <text x="2" y="48" font-size="7" fill="#6F7388">Q1</text>
+          <text x="115" y="48" font-size="7" fill="#6F7388">Q3</text>
+          <text x="230" y="48" font-size="7" fill="#6F7388">Q5</text>
+          <text x="195" y="9" font-size="7" fill="rgba(129,140,248,0.8)">agentic</text>
+          <text x="195" y="14" font-size="7" fill="rgba(45,212,191,0.8)">autonomous</text>
+        </svg>
+      </div>
+    </div>
+  </div>
+  <div class="wm">SimCorp AI Gateway · June 2026 · Sample figures — illustrative except where noted</div>
+</div>
+
+<!-- Slide 16 -->
+<div class="slide">
+  <div class="slide-label">Engagement</div>
+  <div class="slide-title">League — Gamified AI Challenge Platform</div>
+  <div class="cols3" style="flex:1;gap:10px;">
+    <div class="card flex-col gap8">
+      <h3>Challenge Rules</h3>
+      <div class="cols2" style="gap:8px;margin-bottom:6px;">
+        <div class="card-2" style="text-align:center;padding:10px 6px;">
+          <div style="font-size:22px;font-weight:800;color:var(--sc-blue);">3</div>
+          <div class="stat-label">attempts per developer per challenge</div>
+        </div>
+        <div class="card-2" style="text-align:center;padding:10px 6px;">
+          <div style="font-size:22px;font-weight:800;color:var(--sc-teal);">4,096</div>
+          <div class="stat-label">token budget per attempt</div>
+        </div>
+      </div>
+      <ul class="blist">
+        <li>Seasonal format — challenges rotate on schedule</li>
+        <li>Community proposals: engineer → admin review → approved</li>
+        <li>Season multipliers + exclusive rewards for top-N developers</li>
+        <li>Score range: 0–1,000 per submission (composite)</li>
+      </ul>
+    </div>
+    <div class="card flex-col gap8">
+      <h3>7-Dimension Scoring</h3>
+      <!-- bar chart SVG for weights -->
+      <svg viewBox="0 0 220 120" width="100%" height="120" xmlns="http://www.w3.org/2000/svg">
+        <!-- bars -->
+        <rect x="10" y="8"  width="77" height="14" rx="3" fill="rgba(129,140,248,0.7)"/>
+        <text x="90" y="19" font-size="8.5" fill="#818CF8" font-family="Inter,system-ui,sans-serif" font-weight="700">Quality 35%</text>
+        <rect x="10" y="27" width="44" height="14" rx="3" fill="rgba(129,140,248,0.5)"/>
+        <text x="57" y="38" font-size="8.5" fill="#818CF8" font-family="Inter,system-ui,sans-serif">Robustness 20%</text>
+        <rect x="10" y="46" width="33" height="14" rx="3" fill="rgba(45,212,191,0.6)"/>
+        <text x="46" y="57" font-size="8.5" fill="#2DD4BF" font-family="Inter,system-ui,sans-serif">Token efficiency 15%</text>
+        <rect x="10" y="65" width="22" height="14" rx="3" fill="rgba(45,212,191,0.45)"/>
+        <text x="35" y="76" font-size="8.5" fill="#2DD4BF" font-family="Inter,system-ui,sans-serif">Speed 10%</text>
+        <rect x="10" y="84" width="22" height="14" rx="3" fill="rgba(192,132,252,0.5)"/>
+        <text x="35" y="95" font-size="8.5" fill="#C084FC" font-family="Inter,system-ui,sans-serif">Cost efficiency 10%</text>
+        <rect x="10" y="103" width="11" height="10" rx="3" fill="rgba(166,169,189,0.35)"/>
+        <text x="24" y="112" font-size="8" fill="#6F7388" font-family="Inter,system-ui,sans-serif">Improvement 5%</text>
+        <text x="110" y="112" font-size="8" fill="#6F7388" font-family="Inter,system-ui,sans-serif">Creativity 5%</text>
+      </svg>
+    </div>
+    <div class="card flex-col gap8">
+      <h3>Rewards &amp; Community</h3>
+      <div class="card-2" style="margin-bottom:6px;">
+        <div style="font-size:10px;font-weight:700;color:var(--sc-blue);margin-bottom:4px;">Points Store</div>
+        <div style="display:flex;flex-wrap:wrap;gap:5px;">
+          <span class="pill pill-ghost" style="font-size:9px;">Badges</span>
+          <span class="pill pill-ghost" style="font-size:9px;">Card borders</span>
+          <span class="pill pill-ghost" style="font-size:9px;">Avatar frames</span>
+          <span class="pill pill-ghost" style="font-size:9px;">Titles</span>
+        </div>
+      </div>
+      <ul class="blist">
+        <li>Season multipliers boost points in final weeks</li>
+        <li>Exclusive rewards locked to top-N finishers per season</li>
+      </ul>
+      <hr class="rule">
+      <h3>Why It Works</h3>
+      <p style="font-size:10.5px;color:var(--fg-2);line-height:1.55;">Engineers compete to build the most efficient agent configs — capability development becomes visible, rewarding, and org-measurable rather than invisible upskilling.</p>
+    </div>
+  </div>
+  <div class="wm">SimCorp AI Gateway · June 2026 · Sample figures — illustrative except where noted</div>
+</div>
+
+<!-- Slide 17 -->
+<div class="slide">
+  <div class="slide-label">Community</div>
+  <div class="slide-title">Champions Program</div>
+  <div class="cols3" style="flex:1;gap:10px;">
+    <div class="card flex-col gap8">
+      <h3>Champion Elevation</h3>
+      <ul class="blist">
+        <li>Nominated AI Champions get elevated visibility in Developer Portal</li>
+        <li>Champion badge displayed on contributions and public profile</li>
+        <li>Admin activity dashboard: contributions, asks resolved, bookings completed</li>
+        <li>Champions can promote content org-wide</li>
+      </ul>
+      <div class="card-2 mt6" style="text-align:center;padding:10px;">
+        <div style="font-size:11px;font-weight:700;color:var(--sc-blue);margin-bottom:2px;">AI Champion</div>
+        <div style="font-size:9.5px;color:var(--fg-2);line-height:1.6;">Nominated by area owner · Elevated portal access · Admin tracks activity KPIs</div>
+      </div>
+      <div class="card-2" style="margin-top:0;">
+        <div style="font-size:9px;color:var(--fg-3);margin-bottom:4px;">ADMIN DASHBOARD METRICS</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">
+          <div style="font-size:9.5px;color:var(--fg-2);">Contributions</div>
+          <div style="font-size:9.5px;color:var(--sc-blue);text-align:right;">(illustrative)</div>
+          <div style="font-size:9.5px;color:var(--fg-2);">Asks resolved</div>
+          <div style="font-size:9.5px;color:var(--sc-teal);text-align:right;">(illustrative)</div>
+          <div style="font-size:9.5px;color:var(--fg-2);">Bookings done</div>
+          <div style="font-size:9.5px;color:var(--sc-purple);text-align:right;">(illustrative)</div>
+        </div>
+      </div>
+    </div>
+    <div class="card flex-col gap8">
+      <h3>Community Content Feed</h3>
+      <ul class="blist">
+        <li>Posts, patterns, guides — authored by any engineer</li>
+        <li>Upvote / flag moderation pipeline</li>
+        <li>Admin review queue for flagged content</li>
+        <li>Bookmarking and full-text search across all content</li>
+        <li>Champion-promoted content surfaced at top of feed</li>
+      </ul>
+      <hr class="rule">
+      <h3>Content Types</h3>
+      <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:4px;">
+        <span class="pill pill-blue" style="font-size:9px;">Engineering pattern</span>
+        <span class="pill pill-purple" style="font-size:9px;">AI guide</span>
+        <span class="pill pill-teal" style="font-size:9px;">Tool recipe</span>
+        <span class="pill pill-ghost" style="font-size:9px;">Platform tip</span>
+        <span class="pill pill-ghost" style="font-size:9px;">Case study</span>
+      </div>
+    </div>
+    <div class="card flex-col gap8">
+      <h3>Asks Board</h3>
+      <ul class="blist">
+        <li>Developers post questions; champions respond publicly</li>
+        <li>Open asks visible to all — crowdsourced answers</li>
+        <li>Best answer flagging, close-when-resolved flow</li>
+      </ul>
+      <hr class="rule">
+      <h3>Bookings</h3>
+      <ul class="blist">
+        <li>Schedule champion office-hours sessions</li>
+        <li>Calendar integration — champion sets availability slots</li>
+        <li>Admin tracks session completion rate</li>
+        <li>Booking history searchable for async follow-up</li>
+      </ul>
+    </div>
+  </div>
+  <div class="wm">SimCorp AI Gateway · June 2026 · Sample figures — illustrative except where noted</div>
+</div>
+
+<!-- Slide 18 -->
+<div class="slide">
+  <div class="slide-label">Developer Portal — Build</div>
+  <div class="slide-title">Developer Portal: Build &amp; Access</div>
+  <div class="cols3" style="flex:1;gap:10px;">
+    <div class="card flex-col gap8">
+      <h3>Playground</h3>
+      <ul class="blist">
+        <li>Browser-based model testing with streaming</li>
+        <li>System prompt + tool definitions editor</li>
+        <li>Cache toggle + side-by-side model comparison</li>
+      </ul>
+      <hr class="rule">
+      <h3>API Keys</h3>
+      <ul class="blist">
+        <li>Self-service create / revoke, one-time secret display</li>
+        <li>Per-key budget enforcement</li>
+        <li>Code samples: curl, Python, TypeScript, Anthropic SDK</li>
+        <li>Built-in test harness</li>
+      </ul>
+    </div>
+    <div class="card flex-col gap8">
+      <h3>Model Catalog</h3>
+      <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;">
+        <span class="pill pill-blue" style="font-size:9px;">Anthropic</span>
+        <span class="pill pill-blue" style="font-size:9px;">OpenAI</span>
+        <span class="pill pill-blue" style="font-size:9px;">Azure</span>
+        <span class="pill pill-blue" style="font-size:9px;">Google</span>
+        <span class="pill pill-ghost" style="font-size:9px;">GitHub</span>
+        <span class="pill pill-ghost" style="font-size:9px;">Self-hosted</span>
+      </div>
+      <ul class="blist">
+        <li>All providers in single catalog</li>
+        <li>Try directly in Playground from catalog</li>
+      </ul>
+      <hr class="rule">
+      <h3>Prompt Library</h3>
+      <ul class="blist">
+        <li>Shared templates with versioning + tags</li>
+        <li>Usage counter — surface high-value prompts</li>
+        <li>Launch directly into Playground</li>
+      </ul>
+    </div>
+    <div class="card flex-col gap8">
+      <h3>Skills</h3>
+      <ul class="blist">
+        <li>System prompt + tool bundle packages</li>
+        <li>Org-wide or team-scoped visibility</li>
+        <li>Publish / promote workflow (admin review)</li>
+      </ul>
+      <hr class="rule">
+      <h3>Usage &amp; Spend</h3>
+      <ul class="blist">
+        <li>Personal + team MTD spend, requests, tokens</li>
+        <li>Cache hit rate visibility</li>
+        <li>CSV export for finance reporting</li>
+      </ul>
+    </div>
+  </div>
+  <div class="wm">SimCorp AI Gateway · June 2026 · Sample figures — illustrative except where noted</div>
+</div>
+
+<!-- Slide 19 -->
+<div class="slide">
+  <div class="slide-label">Developer Portal — Discover</div>
+  <div class="slide-title">Developer Portal: Catalog &amp; Monitor</div>
+  <div class="cols3" style="flex:1;gap:10px;">
+    <div class="card flex-col gap8">
+      <h3>MCP Servers</h3>
+      <ul class="blist">
+        <li>Memory Palace — pre-authorized, zero setup</li>
+        <li>AI Librarian — pre-authorized, zero setup</li>
+        <li>Team MCP servers with access gating</li>
+        <li>Config JSON one-click copy for <code style="font-size:9.5px;color:var(--sc-teal);">~/.claude/settings.json</code></li>
+      </ul>
+      <hr class="rule">
+      <h3>Plugins &amp; Copilot Catalog</h3>
+      <ul class="blist">
+        <li>First-party + third-party plugins</li>
+        <li>Browsable by category, scopes, GitHub link</li>
+      </ul>
+    </div>
+    <div class="card flex-col gap8">
+      <h3>Knowledge Library</h3>
+      <ul class="blist">
+        <li>Semantic search over shared knowledge base</li>
+        <li>Topic browsing — filter by tag or area</li>
+        <li>Submit new documents directly from portal</li>
+      </ul>
+      <hr class="rule">
+      <h3>Tools</h3>
+      <ul class="blist">
+        <li>Utility tools by category</li>
+        <li>Crypto, conversion, web, images, dev</li>
+        <li>Embedded in portal — no external dependencies</li>
+      </ul>
+    </div>
+    <div class="card flex-col gap8">
+      <h3>Security Scanning</h3>
+      <ul class="blist">
+        <li>Register scan targets: label, URL, optional OpenAPI spec</li>
+        <li>Scan types: AI / API / network</li>
+        <li>Admin approval gate before any scan runs</li>
+        <li>View approval status and scan history</li>
+      </ul>
+      <hr class="rule">
+      <h3>Workflow &amp; Agent Runs</h3>
+      <ul class="blist">
+        <li>Visual DAG designer — drag-and-drop nodes</li>
+        <li>Live run monitor: status, logs, cancel</li>
+      </ul>
+    </div>
+  </div>
+  <div class="wm">SimCorp AI Gateway · June 2026 · Sample figures — illustrative except where noted</div>
+</div>
+
+<!-- Slide 20 -->
+<div class="slide">
+  <div class="slide-label">Security Operations</div>
+  <div class="slide-title">Security Scanning</div>
+  <div class="cols3" style="flex:1;gap:10px;">
+    <div class="card flex-col gap8">
+      <h3>Target Registration</h3>
+      <ul class="blist">
+        <li>Label, URL, optional OpenAPI spec per target</li>
+        <li>Scan types: AI surface, API, network</li>
+        <li>Team registers targets in Developer Portal self-service</li>
+        <li>Admin approval gate before any scan runs — no unilateral scans</li>
+        <li>Per-scan result stored with timestamp and team attribution</li>
+      </ul>
+      <div class="card-2 mt6" style="display:flex;align-items:center;gap:8px;border-color:rgba(251,113,133,0.35);">
+        <span class="pill pill-bad" style="font-size:9px;flex-shrink:0;">Global Kill Switch</span>
+        <span style="font-size:10px;color:var(--fg-2);">Disable all scanning instantly — one-button emergency stop</span>
+      </div>
+    </div>
+    <div class="card flex-col gap8">
+      <h3>Quotas &amp; Tiers</h3>
+      <table>
+        <thead><tr><th>Control</th><th>Detail</th></tr></thead>
+        <tbody>
+          <tr><td>Daily scan limit</td><td>Per-team, admin-configurable</td></tr>
+          <tr><td>Max tier</td><td>Enum — controls scan depth + aggression</td></tr>
+          <tr><td>External targets</td><td>Separate flag — requires explicit approval</td></tr>
+          <tr><td>Approval gate</td><td>Admin must approve each target before first scan</td></tr>
+          <tr><td>Queue priority</td><td>Admin can reprioritise queued jobs</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="card flex-col gap8">
+      <h3>Job Queue States</h3>
+      <div class="flex-col gap6">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span class="dot" style="background:var(--fg-3);"></span>
+          <span style="font-size:10.5px;color:var(--fg-2);">queued — waiting for worker slot</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span class="dot dot-blue"></span>
+          <span style="font-size:10.5px;color:var(--fg-2);">running — scan in progress + elapsed duration</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span class="dot dot-good"></span>
+          <span style="font-size:10.5px;color:var(--fg-2);">completed — results available for review</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span class="dot" style="background:var(--bad);"></span>
+          <span style="font-size:10.5px;color:var(--fg-2);">failed — error details shown inline</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span class="dot dot-warn"></span>
+          <span style="font-size:10.5px;color:var(--fg-2);">cancelled — cancel button visible in running state</span>
+        </div>
+      </div>
+      <div class="card-2 mt6">
+        <div style="font-size:9px;color:var(--fg-3);margin-bottom:3px;">AUDIT TRAIL</div>
+        <div style="font-size:9.5px;color:var(--fg-2);">Every scan start/stop/result logged to WORM audit — 7-year retention applies</div>
+      </div>
+    </div>
+  </div>
+  <div class="wm">SimCorp AI Gateway · June 2026 · Sample figures — illustrative except where noted</div>
+</div>
+
+<!-- Slide 21 -->
+<div class="slide">
+  <div class="slide-label">Admin Operations</div>
+  <div class="slide-title">Admin Catalog Management</div>
+  <div class="cols3" style="flex:1;gap:10px;">
+    <div class="card flex-col gap8">
+      <h3>Providers &amp; Models</h3>
+      <ul class="blist">
+        <li>Credentials per provider, model discovery</li>
+        <li>Enable / disable models per team</li>
+      </ul>
+      <hr class="rule">
+      <h3>Auto-Drive</h3>
+      <ul class="blist">
+        <li>Candidate model list management</li>
+        <li>Rolling scores: latency + error rate</li>
+        <li>Enable / disable per model</li>
+      </ul>
+      <hr class="rule">
+      <h3>Cache Config</h3>
+      <ul class="blist">
+        <li>Default policy + per-team overrides</li>
+        <li>Threshold, TTL, embedding model selection</li>
+      </ul>
+    </div>
+    <div class="card flex-col gap8">
+      <h3>MCP Registry</h3>
+      <ul class="blist">
+        <li>Register MCP servers with endpoint + auth config</li>
+        <li>Per-team access grants</li>
+        <li>Tool testing sandbox — test tools before publishing</li>
+      </ul>
+      <hr class="rule">
+      <h3>Plugins</h3>
+      <ul class="blist">
+        <li>Org-level plugin registration</li>
+        <li>Team-level overrides: enable / disable per team</li>
+        <li>Scope management per plugin</li>
+      </ul>
+    </div>
+    <div class="card flex-col gap8">
+      <h3>Skills Management</h3>
+      <ul class="blist">
+        <li>Org-wide system prompt bundles</li>
+        <li>Publish / promote workflow with admin review</li>
+        <li>Version history maintained</li>
+      </ul>
+      <hr class="rule">
+      <h3>Guardrail Management</h3>
+      <ul class="blist">
+        <li>Rule creation: pattern, action, severity, stage</li>
+        <li>Team assignment and inheritance</li>
+        <li>Hit analytics — which rules fire most</li>
+        <li>Real-time Redis sync — changes effective immediately</li>
+      </ul>
+    </div>
+  </div>
+  <div class="wm">SimCorp AI Gateway · June 2026 · Sample figures — illustrative except where noted</div>
+</div>
+
+<!-- Slide 22 -->
+<div class="slide">
+  <div class="slide-label">Summary</div>
+  <div class="slide-title">What We've Built</div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:7px;flex:1;align-content:start;">
+    <div class="card-sm" style="border-color:rgba(129,140,248,0.3);">
+      <div style="font-size:9px;font-weight:700;color:var(--sc-blue);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:3px;">Auth</div>
+      <div style="font-size:10px;color:var(--fg-2);">JWT + API key, scopes, 3-tier budget</div>
+    </div>
+    <div class="card-sm" style="border-color:rgba(45,212,191,0.3);">
+      <div style="font-size:9px;font-weight:700;color:var(--sc-teal);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:3px;">Cache</div>
+      <div style="font-size:10px;color:var(--fg-2);">Semantic + exact match, circuit breaker</div>
+    </div>
+    <div class="card-sm" style="border-color:rgba(192,132,252,0.3);">
+      <div style="font-size:9px;font-weight:700;color:var(--sc-purple);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:3px;">LiteLLM</div>
+      <div style="font-size:10px;color:var(--fg-2);">Provider routing, Auto-Drive, streaming</div>
+    </div>
+    <div class="card-sm" style="border-color:rgba(244,114,182,0.3);">
+      <div style="font-size:9px;font-weight:700;color:var(--sc-magenta);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:3px;">Observability</div>
+      <div style="font-size:10px;color:var(--fg-2);">Live monitor, WORM audit, AI insights</div>
+    </div>
+    <div class="card-sm" style="border-color:rgba(129,140,248,0.3);">
+      <div style="font-size:9px;font-weight:700;color:var(--sc-blue);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:3px;">Identity</div>
+      <div style="font-size:10px;color:var(--fg-2);">DNS-style agent registry, 60s heartbeat TTL</div>
+    </div>
+    <div class="card-sm" style="border-color:rgba(45,212,191,0.3);">
+      <div style="font-size:9px;font-weight:700;color:var(--sc-teal);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:3px;">Agent Relay</div>
+      <div style="font-size:10px;color:var(--fg-2);">WebSocket tunnel, no inbound firewall</div>
+    </div>
+    <div class="card-sm" style="border-color:rgba(192,132,252,0.3);">
+      <div style="font-size:9px;font-weight:700;color:var(--sc-purple);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:3px;">Memory</div>
+      <div style="font-size:10px;color:var(--fg-2);">Per-dev MCP, drawers, graph, diary</div>
+    </div>
+    <div class="card-sm" style="border-color:rgba(244,114,182,0.3);">
+      <div style="font-size:9px;font-weight:700;color:var(--sc-magenta);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:3px;">Librarian</div>
+      <div style="font-size:10px;color:var(--fg-2);">Shared org knowledge, semantic search</div>
+    </div>
+    <div class="card-sm" style="border-color:rgba(129,140,248,0.3);">
+      <div style="font-size:9px;font-weight:700;color:var(--sc-blue);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:3px;">Admin</div>
+      <div style="font-size:10px;color:var(--fg-2);">Org hierarchy, SCIM, policy inheritance</div>
+    </div>
+    <div class="card-sm" style="border-color:rgba(45,212,191,0.3);">
+      <div style="font-size:9px;font-weight:700;color:var(--sc-teal);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:3px;">League</div>
+      <div style="font-size:10px;color:var(--fg-2);">Seasonal challenges, 7-dim scoring</div>
+    </div>
+    <div class="card-sm" style="border-color:rgba(192,132,252,0.3);">
+      <div style="font-size:9px;font-weight:700;color:var(--sc-purple);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:3px;">Developer Portal</div>
+      <div style="font-size:10px;color:var(--fg-2);">Playground, keys, catalog, spending</div>
+    </div>
+    <div class="card-sm">
+      <div style="font-size:9px;font-weight:700;color:var(--fg-2);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:3px;">Champions</div>
+      <div style="font-size:10px;color:var(--fg-2);">Community feed, asks board, bookings</div>
+    </div>
+  </div>
+  <!-- Key commitments -->
+  <div style="display:flex;gap:7px;margin-top:8px;">
+    <div class="card-2" style="flex:1;text-align:center;padding:7px 6px;">
+      <div style="font-size:11px;font-weight:700;color:var(--sc-teal);">&lt;50ms p99</div>
+      <div style="font-size:9px;color:var(--fg-3);">gateway overhead</div>
+    </div>
+    <div class="card-2" style="flex:1;text-align:center;padding:7px 6px;">
+      <div style="font-size:11px;font-weight:700;color:var(--sc-blue);">WORM · 7yr</div>
+      <div style="font-size:9px;color:var(--fg-3);">audit retention</div>
+    </div>
+    <div class="card-2" style="flex:1;text-align:center;padding:7px 6px;">
+      <div style="font-size:11px;font-weight:700;color:var(--good);">Fail-open</div>
+      <div style="font-size:9px;color:var(--fg-3);">on infra failure</div>
+    </div>
+    <div class="card-2" style="flex:1;text-align:center;padding:7px 6px;">
+      <div style="font-size:11px;font-weight:700;color:var(--sc-purple);">OpenAI-compat</div>
+      <div style="font-size:9px;color:var(--fg-3);">API interface</div>
+    </div>
+  </div>
+  <!-- Key platform commitments table -->
+  <div class="card-2" style="margin-top:7px;padding:8px 12px;">
+    <div style="font-size:9px;color:var(--fg-3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:5px;">Platform Commitments — sourced from code</div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;">
+      <div style="font-size:9.5px;color:var(--fg-2);"><span style="color:var(--sc-teal);font-weight:700;">&lt;50ms p99</span> gateway overhead (excl. provider)</div>
+      <div style="font-size:9.5px;color:var(--fg-2);"><span style="color:var(--sc-blue);font-weight:700;">WORM · 7yr</span> audit retention, integrity hash</div>
+      <div style="font-size:9.5px;color:var(--fg-2);"><span style="color:var(--good);font-weight:700;">Fail-open</span> on Redis/infra outage — agents unblocked</div>
+      <div style="font-size:9.5px;color:var(--fg-2);"><span style="color:var(--sc-purple);font-weight:700;">OpenAI-compat</span> API — zero client SDK changes</div>
+    </div>
+  </div>
+  <!-- CTA -->
+  <div style="margin-top:7px;padding:10px 18px;background:linear-gradient(90deg,rgba(129,140,248,0.15),rgba(192,132,252,0.12));border:1px solid rgba(129,140,248,0.3);border-radius:10px;display:flex;align-items:center;justify-content:space-between;">
+    <div>
+      <div style="font-size:11px;font-weight:700;color:var(--fg-1);">Next: Production Rollout</div>
+      <div style="font-size:10px;color:var(--fg-3);">50 teams · Q3 target · ~2,000 engineers on platform</div>
+    </div>
+    <div style="font-size:13px;font-weight:800;color:var(--sc-blue);">→</div>
+  </div>
+  <div class="wm">SimCorp AI Gateway · June 2026 · Sample figures — illustrative except where noted</div>
+</div>
+
+</body>
+</html>
