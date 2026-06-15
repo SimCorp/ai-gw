@@ -1,0 +1,1535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Gateway Feature Explorer — SimCorp</title>
+<style>
+:root {
+  --bg: #08080F; --surface: #0F0F1A; --surface-2: #161624; --rule: #232336;
+  --sc-blue: #818CF8; --sc-purple: #C084FC; --sc-teal: #2DD4BF; --sc-magenta: #F472B6;
+  --good: #34D399; --warn: #FBBF24; --bad: #FB7185;
+  --fg-1: #F2F3F8; --fg-2: #A6A9BD; --fg-3: #6F7388;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  font-family: Inter, system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--fg-1);
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ─── Header ─── */
+#header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  height: 52px;
+  min-height: 52px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--rule);
+  flex-shrink: 0;
+  gap: 16px;
+}
+#header-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+#header-logo {
+  width: 28px;
+  height: 28px;
+  background: linear-gradient(135deg, var(--sc-blue) 0%, var(--sc-purple) 100%);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: -0.5px;
+  flex-shrink: 0;
+}
+#header-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fg-1);
+  white-space: nowrap;
+}
+#header-title span {
+  color: var(--fg-3);
+  font-weight: 400;
+}
+.header-tabs {
+  display: flex;
+  gap: 2px;
+  background: var(--bg);
+  border-radius: 8px;
+  padding: 3px;
+  border: 1px solid var(--rule);
+}
+.header-tab {
+  padding: 5px 14px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--fg-3);
+  transition: background 0.15s, color 0.15s;
+  border: none;
+  background: transparent;
+  white-space: nowrap;
+}
+.header-tab.active {
+  background: var(--surface-2);
+  color: var(--fg-1);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+}
+
+/* ─── Main layout ─── */
+#main {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ─── Left panel ─── */
+#left {
+  width: 264px;
+  min-width: 264px;
+  background: var(--surface);
+  border-right: 1px solid var(--rule);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+#left-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--rule);
+  flex-shrink: 0;
+}
+.left-tab {
+  flex: 1;
+  padding: 10px 0;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  cursor: pointer;
+  color: var(--fg-3);
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+  background: transparent;
+  border-top: none;
+  border-left: none;
+  border-right: none;
+}
+.left-tab.active {
+  color: var(--sc-blue);
+  border-bottom-color: var(--sc-blue);
+}
+#nav-scroll {
+  overflow-y: auto;
+  flex: 1;
+  padding: 8px 0 16px;
+}
+#nav-scroll::-webkit-scrollbar { width: 4px; }
+#nav-scroll::-webkit-scrollbar-track { background: transparent; }
+#nav-scroll::-webkit-scrollbar-thumb { background: var(--rule); border-radius: 2px; }
+
+.nav-section-label {
+  padding: 14px 16px 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--fg-3);
+  text-transform: uppercase;
+}
+.nav-item {
+  display: flex;
+  align-items: center;
+  padding: 7px 16px 7px 20px;
+  font-size: 13px;
+  color: var(--fg-2);
+  cursor: pointer;
+  border-radius: 0;
+  transition: background 0.1s, color 0.1s;
+  user-select: none;
+  border-left: 2px solid transparent;
+}
+.nav-item:hover {
+  background: var(--surface-2);
+  color: var(--fg-1);
+}
+.nav-item.active {
+  background: color-mix(in srgb, var(--sc-blue) 12%, transparent);
+  color: var(--sc-blue);
+  border-left-color: var(--sc-blue);
+}
+
+/* ─── Right panel ─── */
+#right {
+  flex: 1;
+  overflow-y: auto;
+  padding: 40px 48px;
+  display: flex;
+  flex-direction: column;
+}
+#right::-webkit-scrollbar { width: 6px; }
+#right::-webkit-scrollbar-track { background: transparent; }
+#right::-webkit-scrollbar-thumb { background: var(--rule); border-radius: 3px; }
+
+/* ─── Welcome screen ─── */
+#welcome {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 16px;
+  opacity: 1;
+  transition: opacity 0.2s;
+}
+#welcome-logo {
+  width: 64px;
+  height: 64px;
+  background: linear-gradient(135deg, var(--sc-blue) 0%, var(--sc-purple) 100%);
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  font-weight: 800;
+  color: #fff;
+  margin-bottom: 4px;
+}
+#welcome h1 {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--fg-1);
+}
+#welcome p {
+  font-size: 15px;
+  color: var(--fg-2);
+  max-width: 380px;
+  line-height: 1.6;
+}
+.welcome-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  background: var(--surface-2);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--fg-3);
+  margin-top: 8px;
+}
+
+/* ─── Feature card ─── */
+#detail-card {
+  display: none;
+  flex-direction: column;
+  gap: 24px;
+  opacity: 0;
+  transition: opacity 0.2s;
+  max-width: 760px;
+}
+#detail-card.visible {
+  display: flex;
+}
+.card-header {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.card-section-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: color-mix(in srgb, var(--sc-purple) 15%, transparent);
+  color: var(--sc-purple);
+  border: 1px solid color-mix(in srgb, var(--sc-purple) 30%, transparent);
+  width: fit-content;
+}
+.card-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--fg-1);
+  line-height: 1.2;
+}
+.card-route {
+  font-family: 'SFMono-Regular', 'Consolas', 'Liberation Mono', monospace;
+  font-size: 12px;
+  color: var(--sc-teal);
+  background: color-mix(in srgb, var(--sc-teal) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--sc-teal) 25%, transparent);
+  padding: 3px 10px;
+  border-radius: 5px;
+  display: inline-block;
+  width: fit-content;
+}
+.card-divider {
+  height: 1px;
+  background: var(--rule);
+}
+.card-description {
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--fg-2);
+}
+.card-section-heading {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--fg-3);
+  margin-bottom: 10px;
+}
+.card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-left: 0;
+  list-style: none;
+}
+.card-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--fg-2);
+  line-height: 1.5;
+}
+.card-list li::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--sc-blue);
+  margin-top: 7px;
+  flex-shrink: 0;
+}
+.card-actions-list li::before {
+  background: var(--sc-teal);
+}
+.card-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+@media (max-width: 700px) {
+  .card-two-col { grid-template-columns: 1fr; }
+}
+.card-col {}
+.tech-callout {
+  background: color-mix(in srgb, var(--sc-blue) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--sc-blue) 25%, transparent);
+  border-radius: 8px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.tech-callout-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--sc-blue);
+  margin-bottom: 2px;
+}
+.tech-callout p {
+  font-family: 'SFMono-Regular', 'Consolas', 'Liberation Mono', monospace;
+  font-size: 12.5px;
+  color: var(--fg-2);
+  line-height: 1.6;
+}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div id="header">
+  <div id="header-brand">
+    <div id="header-logo">SC</div>
+    <div id="header-title">AI Gateway Feature Explorer <span>— SimCorp</span></div>
+  </div>
+  <div class="header-tabs">
+    <button class="header-tab active" onclick="switchPortal('admin', this)">Admin Portal</button>
+    <button class="header-tab" onclick="switchPortal('dev', this)">Developer Portal</button>
+  </div>
+</div>
+
+<!-- Main -->
+<div id="main">
+
+  <!-- Left panel -->
+  <div id="left">
+    <div id="left-tabs">
+      <button class="left-tab active" onclick="switchPortal('admin', null, this)">Admin Portal</button>
+      <button class="left-tab" onclick="switchPortal('dev', null, this)">Developer Portal</button>
+    </div>
+    <div id="nav-scroll">
+      <!-- rendered by JS -->
+    </div>
+  </div>
+
+  <!-- Right panel -->
+  <div id="right">
+    <div id="welcome">
+      <div id="welcome-logo">AI</div>
+      <h1>Click any feature to explore it</h1>
+      <p>Select a nav item from either portal to see a detailed explanation of what that feature does, what's on the page, and what actions it supports.</p>
+      <div class="welcome-hint">55 features across Admin Portal and Developer Portal</div>
+    </div>
+    <div id="detail-card">
+      <!-- rendered by JS -->
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── Data ────────────────────────────────────────────────────────────────────
+// Each key is `portal-slug` to avoid cross-portal name collisions.
+const FEATURES = {
+
+  // ── Admin / MONITOR ───────────────────────────────────────────────────────
+  "admin-dashboard": {
+    title: "Dashboard",
+    route: "/admin/dashboard",
+    section: "MONITOR",
+    portal: "admin",
+    description: "Central operations view for the AI Gateway. Shows real-time KPIs: total spend, cache hit rate, request volume, tokens, Redis health, and Postgres status. Includes request/cache chart, top teams spend, model mix chart, provider health indicators, and active alerts.",
+    keySections: [
+      "KPI strip: spend, cache hit rate, request volume, tokens",
+      "Request/cache volume chart with time-range selector",
+      "Top teams spend breakdown",
+      "Model mix chart and provider health indicators",
+      "System performance gauges: Cache hit rate, Auto-Drive, Workflow runs",
+      "Infrastructure status: Redis and Postgres health",
+      "Recent activity feed and active alerts panel"
+    ],
+    actions: [
+      "Range selector: 1h / 24h / 7d / 30d / 90d",
+      "Export CSV of current view"
+    ]
+  },
+  "admin-requests": {
+    title: "Requests",
+    route: "/admin/requests",
+    section: "MONITOR",
+    portal: "admin",
+    description: "Live-streaming request monitor showing real-time API traffic across the gateway. Each row shows time, team, model, cache hit/miss badge, tokens, latency, cost, and request ID. Rows are expandable to show a full trace timing breakdown.",
+    keySections: [
+      "Live request stream table: time, team, model, cache badge, tokens, latency, cost, request ID",
+      "Expandable rows with full trace timing breakdown",
+      "Auto-refresh every 10 seconds"
+    ],
+    actions: [
+      "Auto-refresh toggle",
+      "Manual refresh",
+      "Expand individual request row to view trace"
+    ]
+  },
+  "admin-reports": {
+    title: "Reports",
+    route: "/admin/reports",
+    section: "MONITOR",
+    portal: "admin",
+    description: "Aggregated cost and usage reporting across the organisation. Filter by time period and group by area, team, or model. Shows a KPI strip and a dynamic breakdown table with cost, request, token, cache, and share metrics.",
+    keySections: [
+      "Period filter: 7d / 30d / 90d / MTD / All",
+      "Group-by selector: area / team / model",
+      "KPI strip: total cost, requests, tokens, avg cache hit %",
+      "Breakdown table: cost, requests, tokens, cache hit %, share %"
+    ],
+    actions: [
+      "Filter by period",
+      "Change group-by dimension",
+      "Export CSV"
+    ]
+  },
+  "admin-alerts": {
+    title: "Alerts",
+    route: "/admin/alerts",
+    section: "MONITOR",
+    portal: "admin",
+    description: "Alert management for the AI Gateway. Shows currently firing alerts, warnings, system status, and the full rule count. Provides management of cost spike alerts, rule definitions, and notification channels.",
+    keySections: [
+      "Status bar: firing alerts, warning alerts, system status, rules count",
+      "Cost spike alerts and active alerts table: severity, rule, triggered time, owner, status",
+      "Rule index: all rules with scope and severity",
+      "Channels panel: Slack, PagerDuty, email configuration"
+    ],
+    actions: [
+      "Alert action buttons (acknowledge, resolve)",
+      "Configure notification channels"
+    ]
+  },
+  "admin-insights": {
+    title: "AI Insights",
+    route: "/admin/insights",
+    section: "MONITOR",
+    portal: "admin",
+    description: "Auto-generated gateway optimisation findings produced by analysing traffic, costs, and security patterns. Each finding includes a severity level, description, and optional action link to address the issue.",
+    keySections: [
+      "Findings feed: severity pill (critical/warning/info), title, description, timestamp",
+      "Optional action link per finding",
+      "Categories: cost, cache, security, performance"
+    ],
+    actions: [
+      "Run now — trigger analysis on demand",
+      "Dismiss a finding",
+      "Filter by category",
+      "Filter by severity"
+    ]
+  },
+  "admin-devops": {
+    title: "DevOps Agent",
+    route: "/admin/devops",
+    section: "MONITOR",
+    portal: "admin",
+    description: "Conversational AI agent for gateway management tasks. Pre-loaded suggested tasks let operators quickly perform health checks, error analysis, and budget reviews without writing queries manually. Shows a tool call visualisation with elapsed time for transparency.",
+    keySections: [
+      "Suggested tasks: Full health check, Error analysis, Budget overview, Top spending teams, Model usage, Optimisation tips",
+      "Conversation message thread",
+      "Tool call visualisation: which API tools were invoked and elapsed time"
+    ],
+    actions: [
+      "Send message (Enter or button)",
+      "Multiline input (Shift+Enter)",
+      "Select suggested task"
+    ]
+  },
+
+  // ── Admin / ORGANISATION ──────────────────────────────────────────────────
+  "admin-org": {
+    title: "Org Structure",
+    route: "/admin/org",
+    section: "ORGANISATION",
+    portal: "admin",
+    description: "Hierarchical organisation editor for managing areas, units, and teams. Each node is expandable and collapsible, with roles inherited downward through the hierarchy.",
+    keySections: [
+      "Tree view: areas → units → teams",
+      "Node detail: name, type, description, location, parent",
+      "Role inheritance indicator"
+    ],
+    actions: [
+      "Expand all / Collapse all",
+      "Add node (modal: name, type, description, location, parent)"
+    ]
+  },
+  "admin-users": {
+    title: "Users & Access",
+    route: "/admin/users",
+    section: "ORGANISATION",
+    portal: "admin",
+    description: "Comprehensive user and access management across the gateway. Three tabs cover human users, pending invitations, and service accounts used by automated systems.",
+    keySections: [
+      "Users tab: avatar, name, roles, status, last login, action buttons",
+      "Invitations tab: email, role, expiry, status, invite link",
+      "Service Accounts tab: name, key prefix, team, last used"
+    ],
+    actions: [
+      "Invite user",
+      "Suspend / Activate / Force reset for user accounts",
+      "Copy invite link",
+      "Revoke service account"
+    ]
+  },
+
+  // ── Admin / AI TRANSFORMATION ─────────────────────────────────────────────
+  "admin-genai-adoption": {
+    title: "GenAI Adoption",
+    route: "/admin/genai-adoption",
+    section: "AI TRANSFORMATION",
+    portal: "admin",
+    description: "Multi-tab analytics suite for tracking AI adoption across the engineering organisation. Covers adoption breadth, productivity metrics, and code quality signals with live and historical comparisons.",
+    keySections: [
+      "Adoption tab: tool adoption breakdown, trend chart, team ranking, heatmap, model mix",
+      "Productivity tab: PR cycle time, DORA metrics, throughput, hours-saved estimate",
+      "Quality tab: error rate, test coverage, code durability, revert rate, live API cohort comparison"
+    ],
+    actions: [
+      "Period selector",
+      "Live data toggle",
+      "Chart type selector"
+    ]
+  },
+  "admin-transformation": {
+    title: "Agentic Tracker",
+    route: "/admin/transformation",
+    section: "AI TRANSFORMATION",
+    portal: "admin",
+    description: "Organisation-wide view of agentic AI adoption. Tracks autonomous and agentic developer sessions over time, identifies laggard teams, and surfaces per-developer breakdowns. Classifier runs on session telemetry using defined thresholds.",
+    keySections: [
+      "KPI cards: Agentic adoption %, Agentic developers count, Laggard teams count, Active this week",
+      "Stacked bar chart: agentic vs non-agentic usage over time",
+      "Teams table with expandable per-developer rows: sessions, agentic %, achievements"
+    ],
+    actions: [
+      "Run classifier now",
+      "Expand team row to see per-developer data"
+    ],
+    techDetail: "Autonomous session: >15 turns + <8s inter-request gap + >80% tool/turn.\nAgentic session: >30% tool/turn OR (>8 turns + <20s inter-request gap)."
+  },
+  "admin-champions": {
+    title: "Champions",
+    route: "/admin/champions",
+    section: "AI TRANSFORMATION",
+    portal: "admin",
+    description: "AI Champion programme management. Administrators nominate developers as champions with a bio and focus areas, and can retire them. Includes an activity sub-page with org-wide and per-champion metrics, and a flags sub-page for moderating community content.",
+    keySections: [
+      "Champion roster: active champions with bio and focus areas",
+      "Activity sub-page: org KPIs (active champions, contributions, asks, bookings) and per-champion metrics",
+      "Flags sub-page: review flagged community content"
+    ],
+    actions: [
+      "Nominate champion (Developer ID, bio, focus areas)",
+      "Retire champion",
+      "Dismiss or Remove flagged content"
+    ]
+  },
+
+  // ── Admin / GOVERN ────────────────────────────────────────────────────────
+  "admin-guardrails": {
+    title: "Guardrails",
+    route: "/admin/guardrails",
+    section: "GOVERN",
+    portal: "admin",
+    description: "Input and output safety rule management for the AI Gateway. Each guardrail defines a stage (input or output), an action type, and a severity. Live KPIs show total active rules and recent hit/block counts.",
+    keySections: [
+      "KPI strip: active rules, hits in last 24h, blocked in last 24h",
+      "Guardrails table: priority, name, stage (input/output), action (block/flag/redact/rewrite/truncate/route), severity, hits 24h, status toggle",
+      "Coverage breakdown: input/output progress bars, action type distribution",
+      "Recent hits card"
+    ],
+    actions: [
+      "New guardrail (name, stage, action, severity, priority)",
+      "On/Off toggle per rule",
+      "Delete rule",
+      "Edit rule via modal"
+    ]
+  },
+  "admin-policies": {
+    title: "Policies",
+    route: "/admin/policies",
+    section: "GOVERN",
+    portal: "admin",
+    description: "Team-level cache and rate-limit configuration. Shows all 13 teams with their current policy settings, distinguishing between custom and default policies.",
+    keySections: [
+      "Policy table: cache TTL, similarity threshold, cache opt-out flag, rate limit RPM, allowed models, policy type (custom/default)",
+      "Edit policy modal per team"
+    ],
+    actions: [
+      "Edit policy per team: TTL, similarity threshold slider, rate limit RPM, embedding model, allowed models, opt-out checkbox"
+    ]
+  },
+  "admin-quotas": {
+    title: "Quotas & Budgets",
+    route: "/admin/quotas",
+    section: "GOVERN",
+    portal: "admin",
+    description: "Budget enforcement across the organisation. Manages org-level and per-team monthly budgets with alert thresholds and enforcement actions. A forecast chart projects end-of-month spend against budget caps.",
+    keySections: [
+      "KPI strip: Org spend MTD, Projected EOM, teams over alert %, teams count",
+      "Org-level editor: monthly budget, alert threshold %, enforcement action (block/alert)",
+      "Per-team budgets table with spend progress bars",
+      "Forecast chart: cap line vs spend trend"
+    ],
+    actions: [
+      "Adjust per-team budget",
+      "Save org-level settings"
+    ],
+    techDetail: "Three-tier budget system: per-key → per-team → per-org.\nBudget checks are Redis-cached for <1ms enforcement latency."
+  },
+  "admin-approvals": {
+    title: "Approvals",
+    route: "/admin/approvals",
+    section: "GOVERN",
+    portal: "admin",
+    description: "Approval workflow for sensitive operations such as scope changes, budget raises, and deployments. Administrators can review, approve, or reject requests with reviewer notes.",
+    keySections: [
+      "Approval queue filtered by status: pending / approved / rejected",
+      "Expandable request rows: detail view + review form",
+      "Review form: notes textarea, Approve / Reject / Cancel buttons"
+    ],
+    actions: [
+      "Approve request",
+      "Reject request",
+      "Add reviewer notes",
+      "Filter by status"
+    ]
+  },
+  "admin-audit": {
+    title: "Audit Log",
+    route: "/admin/audit",
+    section: "GOVERN",
+    portal: "admin",
+    description: "Tamper-evident audit log of all admin mutations on the gateway. Uses WORM storage with 7-year retention and per-record integrity hashes for compliance purposes.",
+    keySections: [
+      "Event table: timestamp, actor, action (colour-coded pill), resource type and ID",
+      "Total event count and integrity hash in footer",
+      "WORM storage, 7-year retention, integrity hash per record"
+    ],
+    actions: [
+      "Search by actor, action, or resource",
+      "Export CSV",
+      "Refresh"
+    ]
+  },
+
+  // ── Admin / CATALOG ───────────────────────────────────────────────────────
+  "admin-models": {
+    title: "Models",
+    route: "/admin/models",
+    section: "CATALOG",
+    portal: "admin",
+    description: "Model registry for all AI models available on the gateway. Allows administrators to register new models, enable or disable them, and filter by provider.",
+    keySections: [
+      "Model table: name, model ID, provider (colour dot), status toggle, registered date",
+      "Provider filter buttons",
+      "Search box"
+    ],
+    actions: [
+      "Register model",
+      "Enable / Disable toggle per model",
+      "Edit model via modal"
+    ]
+  },
+  "admin-providers": {
+    title: "Providers",
+    route: "/admin/providers",
+    section: "CATALOG",
+    portal: "admin",
+    description: "Multi-provider credential management. Configure API keys for each AI provider, test connectivity, and discover available models. Auto-Drive selects the best-performing model automatically based on rolling performance scores.",
+    keySections: [
+      "Per-provider panel: API key input, extra env fields, Save/Test buttons, Fetch models",
+      "Model discovery panel: enable/disable individual models per provider",
+      "Auto-Drive panel: candidate model list, rolling perf scores (latency/error rate), enable toggle"
+    ],
+    actions: [
+      "Save API key",
+      "Test connection (Chat and Embedding results)",
+      "Fetch models from provider",
+      "Apply model enable/disable changes",
+      "Enable Auto-Drive"
+    ]
+  },
+  "admin-tools": {
+    title: "Tools",
+    route: "/admin/tools",
+    section: "CATALOG",
+    portal: "admin",
+    description: "Controls which developer utility tools are visible in the Developer Portal. Administrators can enable or disable tools by category without redeployment.",
+    keySections: [
+      "KPI strip: total tools, enabled, disabled",
+      "Tool cards grid with On/Off toggle",
+      "Search and category filter"
+    ],
+    actions: [
+      "Search tools",
+      "Filter by category",
+      "Toggle tool on/off"
+    ]
+  },
+  "admin-skills": {
+    title: "Skills",
+    route: "/admin/skills",
+    section: "CATALOG",
+    portal: "admin",
+    description: "Reusable AI skill management. Skills bundle a system prompt with a set of tools and can be scoped to the organisation, a team, or kept in draft. Administrators manage visibility, versioning, and publication.",
+    keySections: [
+      "Skills table: name, version, model, tags, visibility (org/team/draft), uses, stars, author",
+      "New skill form and edit modal"
+    ],
+    actions: [
+      "New skill (name, model, description, system prompt, tags, visibility)",
+      "Publish skill",
+      "Promote to higher visibility",
+      "Delete skill"
+    ]
+  },
+  "admin-plugins": {
+    title: "Plugins",
+    route: "/admin/plugins",
+    section: "CATALOG",
+    portal: "admin",
+    description: "Plugin registration and team-level override management. Administrators register plugins with scope declarations and can grant per-team overrides that differ from the default configuration.",
+    keySections: [
+      "Plugins table: name/slug, category, version, author, scopes, enabled toggle, override count",
+      "Expandable rows: team override table, add override form"
+    ],
+    actions: [
+      "Register plugin (modal with all fields)",
+      "Edit / Delete plugin",
+      "Add or remove team override"
+    ]
+  },
+  "admin-mcp": {
+    title: "MCP Servers",
+    route: "/admin/mcp",
+    section: "CATALOG",
+    portal: "admin",
+    description: "Model Context Protocol server management. Register external MCP servers, monitor their health, inspect their tools, and control which teams have access.",
+    keySections: [
+      "Servers table: name, URL, auth type, status, tool count, last ping",
+      "Expandable rows: tool list with Try button and JSON args runner",
+      "Team access section: grant/revoke per team"
+    ],
+    actions: [
+      "Register server",
+      "Ping server",
+      "Edit / Delete server",
+      "Try individual tool with JSON args",
+      "Grant / Revoke team access"
+    ]
+  },
+  "admin-cache": {
+    title: "Cache",
+    route: "/admin/cache",
+    section: "CATALOG",
+    portal: "admin",
+    description: "Semantic vector cache monitoring and configuration. Displays live Redis metrics, hit rate trends, similarity distribution, and the top cached prompts. Policies can be tuned at the default level or overridden per team.",
+    keySections: [
+      "Header: Redis version, index name, status",
+      "Mini-metrics: hit rate (60s), requests (60s), Redis ping, memory, clients",
+      "Hit rate chart (7 days)",
+      "Similarity distribution histogram with threshold line",
+      "Default policy card: TTL, threshold, embedding model",
+      "Per-team overrides table",
+      "Top cached prompts: fingerprint, team, model, hits, avg similarity, tokens saved"
+    ],
+    actions: [
+      "Configure default policy",
+      "Edit per-team policy overrides"
+    ]
+  },
+  "admin-memory": {
+    title: "Memory Inspector",
+    route: "/admin/memory",
+    section: "CATALOG",
+    portal: "admin",
+    description: "Read-only inspection view of developer memory storage. Administrators can browse any developer's memory palace structure, knowledge graph, diary entries, and tunnels for support and compliance purposes.",
+    keySections: [
+      "KPI strip: developers with memory, memory items, KG nodes, KG edges, diary entries, tunnels",
+      "Developer table: email, display_name, drawer count, KG nodes/edges, diary entries, tunnels, last activity",
+      "Expandable rows: taxonomy breakdown (wing / room / count)"
+    ],
+    actions: [
+      "Expand developer row to inspect memory taxonomy"
+    ]
+  },
+
+  // ── Admin / SECURITY ──────────────────────────────────────────────────────
+  "admin-scan-targets": {
+    title: "Scan Targets",
+    route: "/admin/security/targets",
+    section: "SECURITY",
+    portal: "admin",
+    description: "Security scan target approval. Teams submit scan targets and administrators review them, selecting which scan types are permitted before approval.",
+    keySections: [
+      "Targets table: label/URL, team, status (pending/approved/revoked), scan types (AI/API/network checkboxes)"
+    ],
+    actions: [
+      "Approve target with selected scan types",
+      "Revoke previously approved target"
+    ]
+  },
+  "admin-scan-jobs": {
+    title: "Scan Jobs",
+    route: "/admin/security/jobs",
+    section: "SECURITY",
+    portal: "admin",
+    description: "Scan job queue and history. Shows all scan jobs with their current status and allows operators to cancel jobs that are queued or running.",
+    keySections: [
+      "Jobs table: job ID, team, tier, status (queued/running/completed/failed/cancelled), trigger, duration"
+    ],
+    actions: [
+      "Cancel queued or running jobs"
+    ]
+  },
+  "admin-scan-quotas": {
+    title: "Scan Quotas",
+    route: "/admin/security/quotas",
+    section: "SECURITY",
+    portal: "admin",
+    description: "Per-team scan limits and a global kill switch for all scanning. Administrators set daily scan limits, maximum tier, and external target permissions per team.",
+    keySections: [
+      "Global kill switch: disable/enable all scanning org-wide",
+      "Per-team limits: daily limit input, max tier dropdown, external targets checkbox"
+    ],
+    actions: [
+      "Toggle global kill switch",
+      "Edit per-team daily limit",
+      "Set max tier per team",
+      "Toggle external targets permission"
+    ]
+  },
+
+  // ── Admin / CONFIGURE ─────────────────────────────────────────────────────
+  "admin-entra": {
+    title: "Entra ID Mapping",
+    route: "/admin/settings/entra",
+    section: "CONFIGURE",
+    portal: "admin",
+    description: "Maps Azure Entra ID groups to gateway roles and scopes. Allows SSO group membership to automatically grant the correct access level without per-user manual assignment.",
+    keySections: [
+      "Add mapping form: Entra group Object ID, display name, gateway role, scope type (global/area/unit/team), scope selector",
+      "Mappings table: group name + Object ID, role pill, scope, created by, delete button"
+    ],
+    actions: [
+      "Add new Entra mapping",
+      "Save mapping",
+      "Remove existing mapping"
+    ]
+  },
+  "admin-sessions": {
+    title: "Sessions",
+    route: "/admin/settings/sessions",
+    section: "CONFIGURE",
+    portal: "admin",
+    description: "Admin session management. Lists all active sessions for the current admin account with timestamps, allowing targeted revocation or a full sign-out of all other sessions.",
+    keySections: [
+      "Sessions table: session ID, issued timestamp, revoke button",
+      "Sign out all other sessions button"
+    ],
+    actions: [
+      "Revoke individual session",
+      "Sign out all other sessions"
+    ]
+  },
+
+  // ── Admin / LEAGUE ────────────────────────────────────────────────────────
+  "admin-seasons": {
+    title: "Seasons",
+    route: "/admin/league/seasons",
+    section: "LEAGUE",
+    portal: "admin",
+    description: "AI League season lifecycle management. Seasons progress through a one-way status flow and can be configured with date ranges and score multipliers.",
+    keySections: [
+      "Season cards: name, date range, multiplier, status badge",
+      "Edit modal with status transition buttons",
+      "Status flow: upcoming → active → closed (one-way)"
+    ],
+    actions: [
+      "New season",
+      "Edit season details",
+      "Transition season status"
+    ]
+  },
+  "admin-proposals": {
+    title: "Proposals",
+    route: "/admin/league/proposals",
+    section: "LEAGUE",
+    portal: "admin",
+    description: "Community challenge proposals review workflow. Developers submit challenge ideas and administrators review, approve, or reject them with notes.",
+    keySections: [
+      "Proposal cards: title, goal, submitter, submission date, reviewer notes",
+      "Review modal with notes textarea",
+      "Status filter: pending / approved / rejected"
+    ],
+    actions: [
+      "Review proposal",
+      "Approve proposal",
+      "Reject proposal with notes",
+      "Filter by status"
+    ]
+  },
+  "admin-challenges": {
+    title: "Challenges",
+    route: "/admin/league/challenges",
+    section: "LEAGUE",
+    portal: "admin",
+    description: "Challenge builder for the AI League. Administrators create challenges with goals, attempt limits, and token budgets, then publish them for developers to attempt.",
+    keySections: [
+      "Challenge cards: icon, title, status badge, goal, attempts count",
+      "Challenge fields: season, title, goal, max attempts (default 3), token budget (default 4,096), allowed models",
+      "Status flow: draft → active → closed"
+    ],
+    actions: [
+      "New challenge",
+      "Edit challenge",
+      "Publish (draft challenges only)",
+      "Filter by season"
+    ]
+  },
+  "admin-store": {
+    title: "Store",
+    route: "/admin/league/store",
+    section: "LEAGUE",
+    portal: "admin",
+    description: "Cosmetic reward store editor. Administrators create and manage store items redeemable with AI League points, including exclusive items for top performers.",
+    keySections: [
+      "Summary bar: item count per type (badge, card_border, avatar_frame, title)",
+      "Store item cards: type, name, point cost, exclusive indicator",
+      "Edit modal: name, cost, asset URL, active checkbox"
+    ],
+    actions: [
+      "New store item",
+      "Edit item details",
+      "Toggle item active/inactive",
+      "Filter by item type"
+    ]
+  },
+
+  // ── Developer / ungrouped ─────────────────────────────────────────────────
+  "dev-home": {
+    title: "Home",
+    route: "/portal",
+    section: null,
+    portal: "dev",
+    description: "Welcome dashboard for developers. Shows team context, membership, key stats, and AI-generated recommendations. Provides quick access to the most common actions.",
+    keySections: [
+      "Team context and membership list",
+      "Stat strip: team spend MTD, requests, cache hit rate, tokens",
+      "AI Recommendations feed (refreshed every 6 hours)",
+      "Getting-started checklist: create key → try playground",
+      "Quick action cards: Playground, Agents, Docs"
+    ],
+    actions: [
+      "Create API key",
+      "Open Playground",
+      "Select team"
+    ]
+  },
+  "dev-quickstart": {
+    title: "Quickstart",
+    route: "/portal/docs",
+    section: null,
+    portal: "dev",
+    description: "Five-minute tutorial covering everything needed to make a first API call. Covers SDK installation, API key creation, streaming, tool use, cache hints, and error codes with copy-ready code blocks.",
+    keySections: [
+      "SDK installation: Python / TypeScript / Go",
+      "API key creation walkthrough",
+      "First API call and streaming examples",
+      "Tool use and cache hints",
+      "Error codes reference",
+      "Environment toggle: Local dev / Production"
+    ],
+    actions: [
+      "Switch SDK language",
+      "Copy code snippets"
+    ]
+  },
+
+  // ── Developer / BUILD ─────────────────────────────────────────────────────
+  "dev-playground": {
+    title: "Playground",
+    route: "/portal/playground",
+    section: "BUILD",
+    portal: "dev",
+    description: "Browser-based model testing sandbox. Supports model switching, parameter tuning, cache toggling, and tool configuration. Can be pre-loaded via query params with a skill, prompt, or challenge.",
+    keySections: [
+      "Top bar: model selector, cache toggle, clear conversation",
+      "Message thread with syntax highlighting",
+      "Params panel: API key, model, system prompt, temperature, top-p, max tokens, cache toggle",
+      "Tools panel: configure tools for the session",
+      "Context panel: endpoint, model, turn count"
+    ],
+    actions: [
+      "Send message (Cmd+Enter or button)",
+      "Change model mid-session",
+      "Adjust parameters",
+      "Toggle cache on/off",
+      "Pre-load skill, prompt, or challenge via query params"
+    ]
+  },
+  "dev-agents": {
+    title: "Agents",
+    route: "/portal/agents",
+    section: "BUILD",
+    portal: "dev",
+    description: "Browse registered agent images in the Identity service. Developers can search by slug, capability, or name to find available agents for use in workflows.",
+    keySections: [
+      "Agent grid: name, image, category, description, online/offline status",
+      "Search by slug, capability, or name",
+      "Filter: managed vs custom agents"
+    ],
+    actions: [
+      "Search agents",
+      "Filter by managed vs custom",
+      "Inspect agent capabilities"
+    ]
+  },
+  "dev-workflows": {
+    title: "Workflows",
+    route: "/portal/workflows",
+    section: "BUILD",
+    portal: "dev",
+    description: "Team workflow definitions browser. Lists all workflows with metadata and links to the workflow designer and run history.",
+    keySections: [
+      "Workflow list: name, slug, version, description, created date",
+      "Links to workflow designer and runs view"
+    ],
+    actions: [
+      "Open workflow designer",
+      "View workflow runs",
+      "Browse all workflows"
+    ]
+  },
+  "dev-prompts": {
+    title: "Prompts",
+    route: "/portal/prompts",
+    section: "BUILD",
+    portal: "dev",
+    description: "Shared prompt template library. Developers browse, search, and preview shared prompts, then launch them directly into the Playground.",
+    keySections: [
+      "Prompt cards: title, version, visibility (org-wide), description, model, uses, author, tags",
+      "Search by title, description, or tags",
+      "Expandable preview of prompt content"
+    ],
+    actions: [
+      "Search prompts",
+      "Preview prompt content",
+      "Copy prompt to clipboard",
+      "Launch prompt in Playground"
+    ]
+  },
+
+  // ── Developer / ACCESS ────────────────────────────────────────────────────
+  "dev-models": {
+    title: "Models",
+    route: "/portal/models",
+    section: "ACCESS",
+    portal: "dev",
+    description: "Available model catalog grouped by provider. Developers can see which models are available for use and request approval for models not yet configured.",
+    keySections: [
+      "Models grouped by provider with branded logos",
+      "Status: available (try in Playground) or not yet configured (request approval)",
+      "Provider filter"
+    ],
+    actions: [
+      "Filter by provider",
+      "Try available model in Playground",
+      "Request approval for unconfigured model"
+    ]
+  },
+  "dev-apikeys": {
+    title: "API Keys",
+    route: "/portal/keys",
+    section: "ACCESS",
+    portal: "dev",
+    description: "API key self-service for developers. Create and manage keys scoped to your team, with a one-time secret display and a built-in test harness. Includes ready-to-copy code samples.",
+    keySections: [
+      "Keys table: name, key prefix, budget, created, status, revoke button",
+      "Create key with one-time secret display and copy button",
+      "Test harness: paste key → run test → see latency and response",
+      "Code samples: curl, Python, TypeScript, Anthropic SDK"
+    ],
+    actions: [
+      "Create key",
+      "Copy secret (one time only)",
+      "Copy key prefix",
+      "Revoke key",
+      "Test key with live request",
+      "Copy code samples"
+    ]
+  },
+
+  // ── Developer / CATALOG ───────────────────────────────────────────────────
+  "dev-library": {
+    title: "Library",
+    route: "/portal/library",
+    section: "CATALOG",
+    portal: "dev",
+    description: "Semantic search over the shared knowledge base. Combines full-text and vector similarity search to find relevant documents. Browseable by topic with detail views.",
+    keySections: [
+      "Stats: document count, topic count",
+      "Search bar: full-text + vector similarity, top 12 results",
+      "Topic sidebar with document counts",
+      "Topic detail view"
+    ],
+    actions: [
+      "Semantic search",
+      "Browse by topic",
+      "View item details",
+      "Filter by relevance"
+    ]
+  },
+  "dev-mcp": {
+    title: "MCP Servers",
+    route: "/portal/mcp",
+    section: "CATALOG",
+    portal: "dev",
+    description: "Browse available Model Context Protocol servers. Gateway-managed servers are pre-authorised and include the Memory Palace and AI Librarian. Team servers require explicit access grants.",
+    keySections: [
+      "Gateway-managed servers: Memory Palace (persistent developer memory with semantic search), AI Librarian (knowledge base search tool)",
+      "Team servers: require explicit access grant",
+      "Setup instructions and config JSON for ~/.claude/settings.json",
+      "Test connection button"
+    ],
+    actions: [
+      "Expand server for details",
+      "Copy config JSON for settings.json",
+      "Test connection",
+      "Browse tools and view tool schemas"
+    ]
+  },
+  "dev-plugins": {
+    title: "Plugins",
+    route: "/portal/plugins",
+    section: "CATALOG",
+    portal: "dev",
+    description: "Plugin and copilot catalog. Developers browse available plugins and a Copilot Catalog of agents, instructions, and recipes sourced from GitHub.",
+    keySections: [
+      "Plugins tab: filter by category (tool/integration/data/security/workflow), expandable detail with scopes and homepage",
+      "Copilot Catalog tab: Agents / Instructions / Recipes from GitHub"
+    ],
+    actions: [
+      "Filter plugins by category",
+      "Search plugins",
+      "View plugin details and scopes",
+      "Open GitHub links",
+      "Copy catalog item content"
+    ]
+  },
+  "dev-skills": {
+    title: "Skills",
+    route: "/portal/skills",
+    section: "CATALOG",
+    portal: "dev",
+    description: "AI skill catalog for developers. Skills bundle a system prompt with tools and can be discovered, previewed, and launched directly into the Playground.",
+    keySections: [
+      "Skill cards: name, version, visibility, description, model, tool count, use counter, tags",
+      "Search by name, description, or tags",
+      "Expandable system prompt preview"
+    ],
+    actions: [
+      "Search skills",
+      "Preview system prompt",
+      "Launch skill in Playground"
+    ]
+  },
+  "dev-tools": {
+    title: "Tools",
+    route: "/portal/tools",
+    section: "CATALOG",
+    portal: "dev",
+    description: "Developer utility tools categorised for quick access. Tools cover cryptography, format conversion, web utilities, image processing, and developer helpers.",
+    keySections: [
+      "Tool grid with emoji icons",
+      "Categories: crypto, conversion, web, images, dev",
+      "Search and category filter"
+    ],
+    actions: [
+      "Search tools",
+      "Filter by category",
+      "Navigate to tool"
+    ]
+  },
+
+  // ── Developer / MONITOR ───────────────────────────────────────────────────
+  "dev-usage": {
+    title: "Usage & Spend",
+    route: "/portal/usage",
+    section: "MONITOR",
+    portal: "dev",
+    description: "Team spending dashboard. Developers monitor their team's API usage, costs, and cache performance across selectable time ranges with a model breakdown chart.",
+    keySections: [
+      "Range selector: 24h / 7d / 30d / MTD",
+      "Stats: spend, requests, tokens, cache hit rate",
+      "Stacked bar chart: usage by model",
+      "Team summary table"
+    ],
+    actions: [
+      "Change time range",
+      "Export CSV"
+    ]
+  },
+  "dev-security": {
+    title: "Security",
+    route: "/portal/security/targets",
+    section: "MONITOR",
+    portal: "dev",
+    description: "Self-service security scan target registration. Developers register APIs and services for security scanning and track the approval status of their submissions.",
+    keySections: [
+      "Registration form: label, URL, OpenAPI spec URL (optional), scan types (AI/API/network)",
+      "Target list with approval status: pending / approved / revoked"
+    ],
+    actions: [
+      "Register scan target",
+      "Select scan types",
+      "View approval status"
+    ]
+  },
+
+  // ── Developer / GROW ──────────────────────────────────────────────────────
+  "dev-champions": {
+    title: "Champions",
+    route: "/portal/champions",
+    section: "GROW",
+    portal: "dev",
+    description: "AI Champions directory and community content hub. Developers can browse champions, view community-contributed content, upvote posts, and flag inappropriate content.",
+    keySections: [
+      "Champions grid: avatar, Developer ID, bio, focus areas",
+      "Recent content feed: title, type, summary, tags, upvotes, views"
+    ],
+    actions: [
+      "Browse champion profiles",
+      "Go to Asks board",
+      "Share community content",
+      "Upvote content",
+      "Flag content"
+    ]
+  },
+  "dev-transformation": {
+    title: "AI Transformation",
+    route: "/portal/transformation",
+    section: "GROW",
+    portal: "dev",
+    description: "Personal agentic journey tracker. Developers see their Agentic Score, session statistics, achievement badges, and leaderboard standing. The Setup tab provides Claude Code hook configuration.",
+    keySections: [
+      "My Journey tab: Agentic Score ring (0–100), stat cards (sessions, agentic sessions, agentic spend %, agent commits)",
+      "Weekly activity chart",
+      "Champion recommendations",
+      "8 achievement badges",
+      "Leaderboard opt-in (team and company)",
+      "Setup tab: Claude Code hook config and classification methodology"
+    ],
+    actions: [
+      "View Agentic Score",
+      "Opt in/out of leaderboard",
+      "View achievement badges",
+      "Configure Claude Code hook"
+    ]
+  },
+
+  // ── Developer / LEAGUE ────────────────────────────────────────────────────
+  "dev-challenges": {
+    title: "Challenges",
+    route: "/portal/league",
+    section: "LEAGUE",
+    portal: "dev",
+    description: "AI League challenge browser. Developers browse active and past challenges by season and attempt them directly in the Playground.",
+    keySections: [
+      "Season selector",
+      "Active challenges grid: title, goal, status, max attempts, CTA button",
+      "Past challenges list",
+      "Links to leaderboard, results, and store"
+    ],
+    actions: [
+      "Attempt challenge (opens Playground)",
+      "View past challenges",
+      "Navigate to leaderboard, results, store"
+    ]
+  },
+  "dev-leaderboard": {
+    title: "Leaderboard",
+    route: "/portal/league/leaderboard",
+    section: "LEAGUE",
+    portal: "dev",
+    description: "Season rankings by composite score (0–1,000). Rankings are anonymous unless developers opt in. Scores combine seven weighted dimensions.",
+    keySections: [
+      "Developer rankings by composite score",
+      "Anonymous by default (opt-in to display name)",
+      "Score breakdown per developer"
+    ],
+    actions: [
+      "View full rankings",
+      "See score dimension breakdown"
+    ],
+    techDetail: "Composite score (0–1,000) weights:\n  Quality 35% · Robustness 20% · Token efficiency 15%\n  Speed 10% · Cost efficiency 10% · Improvement 5% · Creativity 5%"
+  },
+  "dev-results": {
+    title: "My Results",
+    route: "/portal/league/results",
+    section: "LEAGUE",
+    portal: "dev",
+    description: "Personal challenge history. Developers review their score breakdown across all seven dimensions for each challenge attempt.",
+    keySections: [
+      "Per-challenge panel: score breakdown across 7 dimensions, attempt count, final rank"
+    ],
+    actions: [
+      "View attempt details",
+      "See score dimension breakdown"
+    ]
+  },
+  "dev-store": {
+    title: "Store",
+    route: "/portal/league/store",
+    section: "LEAGUE",
+    portal: "dev",
+    description: "Cosmetic reward store. Developers spend earned AI League points on badges, card borders, avatar frames, and titles. Some items are exclusive to top performers or season champions.",
+    keySections: [
+      "Store items: badge, card_border, avatar_frame, title",
+      "Item cards: type, name, point cost, exclusive indicator",
+      "Collection view of owned items"
+    ],
+    actions: [
+      "Browse store items",
+      "Purchase item with points",
+      "View your collection"
+    ]
+  },
+
+  // ── Developer / Account ───────────────────────────────────────────────────
+  "dev-settings": {
+    title: "Settings",
+    route: "/portal/settings",
+    section: "Account",
+    portal: "dev",
+    description: "Profile and account settings. Developers edit their display name and view read-only account information including Developer ID, active team, and API base URL.",
+    keySections: [
+      "Edit display name",
+      "Account info: Developer ID, active team, API base URL (read-only)",
+      "Danger zone: Sign out"
+    ],
+    actions: [
+      "Edit display name",
+      "Save changes",
+      "Copy Developer ID",
+      "Sign out"
+    ]
+  }
+};
+
+// ─── Navigation structure ────────────────────────────────────────────────────
+const ADMIN_NAV = [
+  { section: "MONITOR", items: ["admin-dashboard","admin-requests","admin-reports","admin-alerts","admin-insights","admin-devops"] },
+  { section: "ORGANISATION", items: ["admin-org","admin-users"] },
+  { section: "AI TRANSFORMATION", items: ["admin-genai-adoption","admin-transformation","admin-champions"] },
+  { section: "GOVERN", items: ["admin-guardrails","admin-policies","admin-quotas","admin-approvals","admin-audit"] },
+  { section: "CATALOG", items: ["admin-models","admin-providers","admin-tools","admin-skills","admin-plugins","admin-mcp","admin-cache","admin-memory"] },
+  { section: "SECURITY", items: ["admin-scan-targets","admin-scan-jobs","admin-scan-quotas"] },
+  { section: "CONFIGURE", items: ["admin-entra","admin-sessions"] },
+  { section: "LEAGUE", items: ["admin-seasons","admin-proposals","admin-challenges","admin-store"] }
+];
+const DEV_NAV = [
+  { section: null, items: ["dev-home","dev-quickstart"] },
+  { section: "BUILD", items: ["dev-playground","dev-agents","dev-workflows","dev-prompts"] },
+  { section: "ACCESS", items: ["dev-models","dev-apikeys"] },
+  { section: "CATALOG", items: ["dev-library","dev-mcp","dev-plugins","dev-skills","dev-tools"] },
+  { section: "MONITOR", items: ["dev-usage","dev-security"] },
+  { section: "GROW", items: ["dev-champions","dev-transformation"] },
+  { section: "LEAGUE", items: ["dev-challenges","dev-leaderboard","dev-results","dev-store"] },
+  { section: "Account", items: ["dev-settings"] }
+];
+
+// ─── State ────────────────────────────────────────────────────────────────────
+let currentPortal = "admin";
+let activeKey = null;
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+function labelFor(key) {
+  const d = FEATURES[key];
+  return d ? d.title : key;
+}
+
+function renderNav(portal) {
+  const nav = portal === "admin" ? ADMIN_NAV : DEV_NAV;
+  let html = "";
+  for (const group of nav) {
+    if (group.section) {
+      html += `<div class="nav-section-label">${group.section}</div>`;
+    }
+    for (const key of group.items) {
+      const isActive = key === activeKey ? " active" : "";
+      html += `<div class="nav-item${isActive}" data-key="${key}" onclick="selectFeature('${key}')">${labelFor(key)}</div>`;
+    }
+  }
+  document.getElementById("nav-scroll").innerHTML = html;
+}
+
+function selectFeature(key) {
+  activeKey = key;
+  renderNav(currentPortal);
+
+  const d = FEATURES[key];
+  const card = document.getElementById("detail-card");
+  const welcome = document.getElementById("welcome");
+
+  // Fade out
+  card.style.opacity = "0";
+  welcome.style.opacity = "0";
+
+  requestAnimationFrame(() => {
+    // Build card HTML
+    let sectionPill = d.section
+      ? `<div class="card-section-pill">${d.section}</div>`
+      : "";
+
+    let techBlock = "";
+    if (d.techDetail) {
+      techBlock = `<div class="tech-callout"><div class="tech-callout-label">Technical Detail</div><p>${d.techDetail.replace(/\n/g, "<br>")}</p></div>`;
+    }
+
+    const keyItems = d.keySections.map(s => `<li>${s}</li>`).join("");
+    const actItems = d.actions.map(s => `<li>${s}</li>`).join("");
+    const actLabel = d.portal === "admin" ? "Admin Actions" : "Developer Actions";
+
+    card.innerHTML = `
+      <div class="card-header">
+        ${sectionPill}
+        <div class="card-title">${d.title}</div>
+        <div class="card-route">${d.route}</div>
+      </div>
+      <div class="card-divider"></div>
+      <p class="card-description">${d.description}</p>
+      <div class="card-two-col">
+        <div class="card-col">
+          <div class="card-section-heading">Key Sections</div>
+          <ul class="card-list">${keyItems}</ul>
+        </div>
+        <div class="card-col">
+          <div class="card-section-heading">${actLabel}</div>
+          <ul class="card-list card-actions-list">${actItems}</ul>
+        </div>
+      </div>
+      ${techBlock}
+    `;
+
+    welcome.style.display = "none";
+    card.classList.add("visible");
+
+    // Fade in on next frame
+    requestAnimationFrame(() => {
+      card.style.opacity = "1";
+    });
+  });
+}
+
+function switchPortal(portal, headerTabEl, leftTabEl) {
+  currentPortal = portal;
+  activeKey = null;
+
+  // Sync header tabs
+  document.querySelectorAll(".header-tab").forEach(t => t.classList.remove("active"));
+  const headerTabs = document.querySelectorAll(".header-tab");
+  if (portal === "admin") headerTabs[0].classList.add("active");
+  else headerTabs[1].classList.add("active");
+
+  // Sync left tabs
+  document.querySelectorAll(".left-tab").forEach(t => t.classList.remove("active"));
+  const leftTabs = document.querySelectorAll(".left-tab");
+  if (portal === "admin") leftTabs[0].classList.add("active");
+  else leftTabs[1].classList.add("active");
+
+  renderNav(portal);
+
+  // Show welcome, hide detail
+  const card = document.getElementById("detail-card");
+  const welcome = document.getElementById("welcome");
+  card.classList.remove("visible");
+  card.style.opacity = "0";
+  welcome.style.display = "flex";
+  welcome.style.opacity = "1";
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+renderNav("admin");
+</script>
+</body>
+</html>

@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Gateway Demo — Review Session</title>
+<style>
+:root {
+  --bg: #08080F;
+  --surface: #0F0F1A;
+  --surface-2: #161624;
+  --rule: #232336;
+  --sc-blue: #818CF8;
+  --sc-purple: #C084FC;
+  --sc-teal: #2DD4BF;
+  --sc-magenta: #F472B6;
+  --good: #34D399;
+  --warn: #FBBF24;
+  --bad: #FB7185;
+  --fg-1: #F2F3F8;
+  --fg-2: #A6A9BD;
+  --fg-3: #6F7388;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--fg-1);
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 14px;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Header ── */
+.header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--rule);
+  padding: 16px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.header-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--fg-1);
+}
+
+.header-title span {
+  color: var(--sc-blue);
+}
+
+.header-meta {
+  font-size: 12px;
+  color: var(--fg-3);
+}
+
+/* ── Layout ── */
+.layout {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  height: calc(100vh - 57px);
+}
+
+/* ── Left column: demo viewer ── */
+.viewer {
+  flex: 0 0 60%;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--rule);
+  overflow: hidden;
+}
+
+.demo-tabs {
+  display: flex;
+  background: var(--surface);
+  border-bottom: 1px solid var(--rule);
+  flex-shrink: 0;
+}
+
+.demo-tab {
+  flex: 1;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 12px 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg-3);
+  cursor: pointer;
+  font-family: inherit;
+  transition: color .15s, border-color .15s;
+}
+
+.demo-tab:hover { color: var(--fg-2); }
+.demo-tab.active { color: var(--sc-blue); border-bottom-color: var(--sc-blue); }
+
+.demo-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.demo-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--rule);
+  flex-shrink: 0;
+  gap: 12px;
+}
+
+.demo-desc {
+  font-size: 12px;
+  color: var(--fg-3);
+  flex: 1;
+}
+
+.open-btn {
+  background: var(--surface);
+  color: var(--sc-blue);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background .15s, color .15s;
+  flex-shrink: 0;
+}
+
+.open-btn:hover { background: var(--sc-blue); color: #fff; }
+
+.iframe-wrap {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+.iframe-wrap iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
+}
+
+.no-demo {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--fg-3);
+  text-align: center;
+  padding: 48px;
+}
+
+.no-demo-icon { font-size: 48px; }
+.no-demo h3 { font-size: 16px; color: var(--fg-2); }
+.no-demo p { font-size: 13px; max-width: 320px; }
+.no-demo .badge {
+  background: var(--surface-2);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--warn);
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+/* ── Right column: feedback panel ── */
+.feedback-panel {
+  flex: 0 0 40%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.panel-header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--rule);
+  padding: 14px 16px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.panel-header h2 {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--fg-1);
+}
+
+.panel-live-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--good);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: .5; transform: scale(.8); }
+}
+
+.panel-body {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* Quick entry form */
+.quick-form {
+  padding: 16px;
+  border-bottom: 1px solid var(--rule);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.form-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.form-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--fg-3);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  flex-shrink: 0;
+  min-width: 60px;
+}
+
+.form-input {
+  flex: 1;
+  background: var(--surface-2);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  color: var(--fg-1);
+  font-size: 13px;
+  font-family: inherit;
+  padding: 6px 10px;
+  outline: none;
+}
+
+.form-input:focus { border-color: var(--sc-blue); }
+
+.stars-row { display: flex; gap: 4px; }
+.star-btn {
+  font-size: 20px;
+  cursor: pointer;
+  color: var(--surface-2);
+  background: none;
+  border: none;
+  padding: 0 2px;
+  transition: color .1s;
+  user-select: none;
+}
+.star-btn.lit { color: var(--warn); }
+
+textarea.form-input { resize: vertical; rows: 3; }
+
+.submit-btn {
+  background: var(--sc-blue);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background .15s;
+  width: 100%;
+}
+
+.submit-btn:hover { background: #6366F1; }
+
+/* Stats bar */
+.stats-bar {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--rule);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.stat-item { display: flex; flex-direction: column; gap: 2px; }
+.stat-val { font-size: 18px; font-weight: 700; color: var(--warn); }
+.stat-val.good { color: var(--good); }
+.stat-lbl { font-size: 10px; color: var(--fg-3); text-transform: uppercase; letter-spacing: .06em; }
+
+/* Feedback log */
+.fb-log {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fb-entry {
+  background: var(--surface-2);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.fb-entry-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.fb-entry-slide {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--sc-blue);
+}
+
+.fb-entry-stars {
+  font-size: 12px;
+  color: var(--warn);
+  white-space: nowrap;
+}
+
+.fb-entry-note {
+  font-size: 12px;
+  color: var(--fg-2);
+  word-break: break-word;
+}
+
+.fb-entry-time {
+  font-size: 10px;
+  color: var(--fg-3);
+}
+
+.fb-empty {
+  color: var(--fg-3);
+  font-size: 13px;
+  text-align: center;
+  padding: 32px 0;
+}
+
+/* Export bar */
+.export-bar {
+  padding: 12px 16px;
+  border-top: 1px solid var(--rule);
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.export-btn {
+  flex: 1;
+  background: var(--surface-2);
+  color: var(--fg-2);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background .15s, color .15s;
+}
+
+.export-btn:hover { background: var(--rule); color: var(--fg-1); }
+
+.export-btn.danger { color: var(--bad); }
+.export-btn.danger:hover { background: #2a1020; }
+
+/* Toast */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 2000;
+  background: var(--good);
+  color: #08080F;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 10px 18px;
+  border-radius: 8px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .2s;
+}
+.toast.show { opacity: 1; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--surface); }
+::-webkit-scrollbar-thumb { background: var(--rule); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-title">AI Gateway Demo — <span>Review Session</span></div>
+  <div class="header-meta">Feedback persists across tabs via localStorage</div>
+</div>
+
+<div class="layout">
+  <!-- ── Left: Demo viewer ── -->
+  <div class="viewer">
+    <div class="demo-tabs" id="demoTabs">
+      <button class="demo-tab active" data-demo="presentation">Presentation v2</button>
+      <button class="demo-tab" data-demo="prototype">Prototype</button>
+      <button class="demo-tab" data-demo="video-tour">Video Tour</button>
+      <button class="demo-tab" data-demo="feature-explorer">Feature Explorer</button>
+    </div>
+    <div class="demo-content" id="demoContent"></div>
+  </div>
+
+  <!-- ── Right: Feedback panel ── -->
+  <div class="feedback-panel">
+    <div class="panel-header">
+      <h2>Session Feedback</h2>
+      <div class="panel-live-dot" title="Live — updates as you submit"></div>
+    </div>
+    <div class="panel-body">
+
+      <!-- Quick entry form -->
+      <div class="quick-form" id="quickForm">
+        <div class="form-row">
+          <span class="form-label">Context</span>
+          <input class="form-input" id="fbContext" type="text" placeholder="Slide / tab / topic…" />
+        </div>
+        <div class="form-row">
+          <span class="form-label">Rating</span>
+          <div class="stars-row" id="fbStars"></div>
+        </div>
+        <div class="form-row" style="align-items:flex-start">
+          <span class="form-label" style="padding-top:7px">Notes</span>
+          <textarea class="form-input" id="fbNote" rows="3" placeholder="What could be better?"></textarea>
+        </div>
+        <button class="submit-btn" id="fbSubmit">Add Feedback</button>
+      </div>
+
+      <!-- Stats -->
+      <div class="stats-bar" id="statsBar"></div>
+
+      <!-- Log -->
+      <div class="fb-log" id="fbLog"></div>
+    </div>
+
+    <!-- Export bar -->
+    <div class="export-bar">
+      <button class="export-btn" id="exportBtn">Export session notes (JSON)</button>
+      <button class="export-btn danger" id="clearBtn">Clear all</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function() {
+  var LS_KEY = 'aigw-feedback-v1';
+
+  // ── Demo tab config ──
+  var DEMOS = {
+    'presentation': {
+      file: 'presentation.html',
+      label: 'Presentation v2',
+      desc: 'Full slide deck — 12 slides covering architecture, cost, guardrails, and roadmap.'
+    },
+    'prototype': {
+      file: 'prototype.html',
+      label: 'Prototype',
+      desc: 'Interactive prototype with 6 tabs: Dashboard, Cost Savings, Guardrails, AI Transformation, League, Playground.'
+    },
+    'video-tour': {
+      file: 'video-tour.html',
+      label: 'Video Tour',
+      desc: 'Animated 9-segment tour with narration: Architecture through Developer Playground.'
+    },
+    'feature-explorer': {
+      file: null,
+      label: 'Feature Explorer',
+      desc: 'Click any menu item to see what it does — click-through explorer of every platform feature.'
+    }
+  };
+
+  var activeDemo = 'presentation';
+
+  // ── Storage ──
+  function load() {
+    try { return JSON.parse(localStorage.getItem(LS_KEY) || '[]'); } catch(e) { return []; }
+  }
+  function save(arr) { localStorage.setItem(LS_KEY, JSON.stringify(arr)); }
+
+  // ── Toast ──
+  var toastEl = document.getElementById('toast');
+  var toastTimer;
+  function showToast(msg, color) {
+    toastEl.textContent = msg;
+    toastEl.style.background = color || '#34D399';
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function() { toastEl.classList.remove('show'); }, 2200);
+  }
+
+  // ── Demo viewer ──
+  function renderDemoContent() {
+    var cfg = DEMOS[activeDemo];
+    var content = document.getElementById('demoContent');
+    content.innerHTML = '';
+
+    // Toolbar
+    var toolbar = document.createElement('div');
+    toolbar.className = 'demo-toolbar';
+
+    var desc = document.createElement('div');
+    desc.className = 'demo-desc';
+    desc.textContent = cfg.desc;
+    toolbar.appendChild(desc);
+
+    if (cfg.file) {
+      var link = document.createElement('a');
+      link.className = 'open-btn';
+      link.href = cfg.file;
+      link.target = '_blank';
+      link.rel = 'noopener';
+      link.textContent = 'Open in new tab →';
+      toolbar.appendChild(link);
+    }
+
+    content.appendChild(toolbar);
+
+    if (cfg.file) {
+      var wrap = document.createElement('div');
+      wrap.className = 'iframe-wrap';
+      var iframe = document.createElement('iframe');
+      iframe.src = cfg.file;
+      iframe.title = cfg.label;
+      iframe.setAttribute('loading', 'lazy');
+      wrap.appendChild(iframe);
+      content.appendChild(wrap);
+    } else {
+      // Feature explorer coming soon
+      var noDemo = document.createElement('div');
+      noDemo.className = 'no-demo';
+      var icon = document.createElement('div'); icon.className = 'no-demo-icon'; icon.textContent = '🗺️';
+      var badge = document.createElement('div'); badge.className = 'badge'; badge.textContent = 'Coming Soon';
+      var h3 = document.createElement('h3'); h3.textContent = 'Feature Explorer';
+      var p = document.createElement('p'); p.textContent = cfg.desc + ' This demo is currently in development.';
+      noDemo.appendChild(icon);
+      noDemo.appendChild(badge);
+      noDemo.appendChild(h3);
+      noDemo.appendChild(p);
+      content.appendChild(noDemo);
+    }
+  }
+
+  // Tab switching
+  document.querySelectorAll('[data-demo]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      activeDemo = btn.dataset.demo;
+      document.querySelectorAll('[data-demo]').forEach(function(b) {
+        b.classList.toggle('active', b.dataset.demo === activeDemo);
+      });
+      renderDemoContent();
+    });
+  });
+
+  renderDemoContent();
+
+  // ── Star rating ──
+  var chosenRating = 0;
+  var starEls = [];
+  var starsWrap = document.getElementById('fbStars');
+  for (var i = 1; i <= 5; i++) {
+    (function(n) {
+      var s = document.createElement('button');
+      s.className = 'star-btn';
+      s.textContent = '★';
+      s.type = 'button';
+      s.addEventListener('click', function() {
+        chosenRating = n;
+        starEls.forEach(function(x, idx) { x.classList.toggle('lit', idx < n); });
+      });
+      starsWrap.appendChild(s); starEls.push(s);
+    })(i);
+  }
+
+  // ── Submit ──
+  document.getElementById('fbSubmit').addEventListener('click', function() {
+    var context = document.getElementById('fbContext').value.trim();
+    var note = document.getElementById('fbNote').value.trim();
+    var entry = {
+      slide: context || (DEMOS[activeDemo].label),
+      rating: chosenRating,
+      note: note,
+      ts: Date.now()
+    };
+    var arr = load(); arr.push(entry); save(arr);
+    document.getElementById('fbContext').value = '';
+    document.getElementById('fbNote').value = '';
+    chosenRating = 0; starEls.forEach(function(x) { x.classList.remove('lit'); });
+    showToast('Saved ✓');
+    renderFeedback();
+  });
+
+  // ── Render feedback panel ──
+  function renderFeedback() {
+    var arr = load();
+    renderStats(arr);
+    renderLog(arr);
+  }
+
+  function renderStats(arr) {
+    var bar = document.getElementById('statsBar');
+    bar.innerHTML = '';
+    var total = arr.length;
+    var rated = arr.filter(function(x) { return x.rating > 0; });
+    var avg = rated.length ? (rated.reduce(function(s, x) { return s + x.rating; }, 0) / rated.length) : 0;
+
+    function stat(val, lbl, cls) {
+      var item = document.createElement('div'); item.className = 'stat-item';
+      var v = document.createElement('div'); v.className = 'stat-val' + (cls ? ' ' + cls : ''); v.textContent = val; item.appendChild(v);
+      var l = document.createElement('div'); l.className = 'stat-lbl'; l.textContent = lbl; item.appendChild(l);
+      bar.appendChild(item);
+    }
+
+    stat(total, 'Entries', total > 0 ? 'good' : '');
+    if (rated.length) {
+      stat('★ ' + avg.toFixed(1), 'Avg Rating', '');
+    }
+    stat(rated.length, 'Rated', '');
+  }
+
+  function renderLog(arr) {
+    var log = document.getElementById('fbLog');
+    log.innerHTML = '';
+    if (!arr.length) {
+      var empty = document.createElement('div'); empty.className = 'fb-empty'; empty.textContent = 'No feedback yet. Submit a note above.'; log.appendChild(empty);
+      return;
+    }
+    arr.slice().reverse().forEach(function(e) {
+      var card = document.createElement('div'); card.className = 'fb-entry';
+
+      var top = document.createElement('div'); top.className = 'fb-entry-top';
+      var sl = document.createElement('div'); sl.className = 'fb-entry-slide'; sl.textContent = e.slide; top.appendChild(sl);
+      var st = document.createElement('div'); st.className = 'fb-entry-stars';
+      st.textContent = e.rating ? '★'.repeat(e.rating) + '☆'.repeat(5 - e.rating) : '—'; top.appendChild(st);
+      card.appendChild(top);
+
+      if (e.note) {
+        var nt = document.createElement('div'); nt.className = 'fb-entry-note'; nt.textContent = e.note; card.appendChild(nt);
+      }
+
+      var ts = document.createElement('div'); ts.className = 'fb-entry-time';
+      ts.textContent = new Date(e.ts).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); card.appendChild(ts);
+
+      log.appendChild(card);
+    });
+  }
+
+  // ── Export ──
+  document.getElementById('exportBtn').addEventListener('click', function() {
+    var arr = load();
+    if (!arr.length) { showToast('No feedback to export', '#FBBF24'); return; }
+    var json = JSON.stringify(arr, null, 2);
+    var blob = 'data:application/json;charset=utf-8,' + encodeURIComponent(json);
+    var a = document.createElement('a');
+    a.href = blob;
+    a.download = 'aigw-feedback-' + new Date().toISOString().slice(0,10) + '.json';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    showToast('Downloaded ✓', '#818CF8');
+  });
+
+  // ── Clear ──
+  document.getElementById('clearBtn').addEventListener('click', function() {
+    if (confirm('Clear all feedback? This cannot be undone.')) {
+      save([]); renderFeedback(); showToast('Cleared', '#FB7185');
+    }
+  });
+
+  // ── Initial render + poll for cross-tab updates ──
+  renderFeedback();
+  window.addEventListener('storage', function(e) {
+    if (e.key === LS_KEY) renderFeedback();
+  });
+})();
+</script>
+</body>
+</html>
