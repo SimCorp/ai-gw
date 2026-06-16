@@ -37,8 +37,18 @@ services:
 
   db-migrate:
     image: ghcr.io/simcorp/ai-gw/admin-api:${IMAGE_TAG:-latest}
+    env_file: ../.env
     environment:
       DATABASE_URL: "postgresql+asyncpg://aigateway:aigateway@postgres:5432/aigateway"
+      REDIS_URL: "redis://redis:6379/0"
+      AUTH_URL: "http://auth:8001"
+      CACHE_URL: "http://cache:8002"
+      LITELLM_URL: "http://litellm:8003"
+      OBSERVABILITY_URL: "http://observability:8004"
+      LEAGUE_URL: "http://league:8010"
+      LIBRARIAN_URL: "http://librarian:8008"
+      OIDC_ISSUER: "https://login.microsoftonline.com/common/v2.0"
+      CORS_ORIGINS: '["http://aigw-dev.lab.cloud.scdom.net:8080","http://localhost:8080"]'
     command: ["alembic", "-c", "/app/alembic.ini", "upgrade", "head"]
     depends_on:
       postgres:
@@ -127,6 +137,16 @@ services:
     environment:
       ENVIRONMENT: development
       MCP_ALLOW_LOCAL_URLS: "true"
+      DATABASE_URL: "postgresql+asyncpg://aigateway:aigateway@postgres:5432/aigateway"
+      REDIS_URL: "redis://redis:6379/0"
+      AUTH_URL: "http://auth:8001"
+      CACHE_URL: "http://cache:8002"
+      LITELLM_URL: "http://litellm:8003"
+      OBSERVABILITY_URL: "http://observability:8004"
+      LEAGUE_URL: "http://league:8010"
+      LIBRARIAN_URL: "http://librarian:8008"
+      OIDC_ISSUER: "https://login.microsoftonline.com/common/v2.0"
+      CORS_ORIGINS: '["http://aigw-dev.lab.cloud.scdom.net:8080","http://localhost:8080"]'
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
