@@ -78,6 +78,14 @@ services:
     ports:
       - "127.0.0.1:8001:8001"
     env_file: ../.env
+    environment:
+      DATABASE_URL: "postgresql+asyncpg://aigateway:aigateway@postgres:5432/aigateway"
+      REDIS_URL: "redis://redis:6379/0"
+      ADMIN_URL: "http://admin:8005"
+      # TODO: create Entra app registration and replace placeholder with real client ID
+      JWKS_URI: "https://login.microsoftonline.com/aa81b43f-3969-4fd4-80c9-84c411508d82/discovery/v2.0/keys"
+      ENTRA_TENANT_ID: "aa81b43f-3969-4fd4-80c9-84c411508d82"
+      ENTRA_CLIENT_ID: "placeholder-create-app-registration"
     depends_on:
       db-migrate:
         condition: service_completed_successfully
@@ -97,7 +105,11 @@ services:
       - "127.0.0.1:8002:8002"
     env_file: ../.env
     environment:
-      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-change-me-internal-key}
+      REDIS_URL: "redis://redis:6379/0"
+      LITELLM_URL: "http://litellm:8003"
+      AUTH_URL: "http://auth:8001"
+      OBSERVABILITY_URL: "http://observability:8004"
+      EMBEDDING_BASE_URL: "http://litellm:8003/v1"
     depends_on:
       redis:
         condition: service_healthy
@@ -117,7 +129,8 @@ services:
       - "127.0.0.1:8004:8004"
     env_file: ../.env
     environment:
-      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-change-me-internal-key}
+      DATABASE_URL: "postgresql+asyncpg://aigateway:aigateway@postgres:5432/aigateway"
+      REDIS_URL: "redis://redis:6379/0"
     depends_on:
       db-migrate:
         condition: service_completed_successfully
@@ -173,6 +186,7 @@ services:
       REDIS_URL: "redis://redis:6379/0"
       LITELLM_URL: "http://litellm:8003"
       DEV_BYPASS_AUTH: "true"
+      CORS_ORIGINS: '["http://aigw-dev.lab.cloud.scdom.net:8080","http://localhost:8080"]'
     depends_on:
       db-migrate:
         condition: service_completed_successfully
@@ -219,9 +233,10 @@ services:
     image: ghcr.io/simcorp/ai-gw/agent-relay:${IMAGE_TAG:-latest}
     ports:
       - "127.0.0.1:8007:8007"
+    env_file: ../.env
     environment:
       REDIS_URL: "redis://redis:6379/0"
-      AGENT_RELAY_SECRET: ""
+      RELAY_SECRET: ""
     depends_on:
       redis:
         condition: service_healthy
@@ -244,6 +259,7 @@ services:
       AGENT_CONTAINER_NETWORK: "aigateway"
       AGENT_RELAY_URL: "http://agent-relay:8007"
       AGENT_RELAY_SECRET: ""
+      ADMIN_URL: "http://admin:8005"
       ADMIN_INTERNAL_TOKEN: ""
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
@@ -290,6 +306,8 @@ services:
       EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:-http://litellm:8003/v1}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
       CACHE_URL: "http://cache:8002"
+      AUTH_URL: "http://auth:8001"
+      CORS_ORIGINS: '["http://aigw-dev.lab.cloud.scdom.net:8080","http://localhost:8080"]'
       LIBRARIAN_SERVICE_TOKEN: ""
     depends_on:
       db-migrate:
