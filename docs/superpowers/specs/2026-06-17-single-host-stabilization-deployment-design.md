@@ -53,7 +53,7 @@ A single Linux VM in the dev spoke VNet runs everything as one Compose project. 
 is exposed (TCP 443); every other container is reachable only on the Compose network.
 
 ```
-ZPA ──443──▶ [ VM  dev.aigw.scdom.net · private IP only · NSG: 443 in (ZPA), 22 in (mgmt) ]
+ZPA ──443/80/22──▶ [ VM  dev.aigw.scdom.net · private IP only · NSG: 443+80 in (ZPA), 22 in (ZPA/mgmt) ]
                  │
                  ▼  docker compose
             caddy  :443  — terminates TLS with *.aigw.scdom.net, path-routes to:
@@ -74,7 +74,7 @@ ZPA ──443──▶ [ VM  dev.aigw.scdom.net · private IP only · NSG: 443 i
 
 | Unit | What it is | Notes for this deployment |
 |---|---|---|
-| **VM** | Ubuntu 24.04 LTS, ~`D4as_v5`, **no public IP**, dev spoke VNet | NSG inbound: `443` from ZPA connector range, `22` from mgmt. Created by the user (`az vm create` is classifier-blocked for the agent). |
+| **VM** | Ubuntu 24.04 LTS, ~`D4as_v5`, **no public IP**, dev spoke VNet | NSG inbound: `443` + `80` from the ZPA connector range, `22` from ZPA/mgmt. Port 80 is HTTP→HTTPS redirect + headroom for future config (e.g. ACME); SSH/22 is for ongoing host config over ZPA. Created by the user (`az vm create` is classifier-blocked for the agent). |
 | **Caddy** | New front-door container, replaces the old `infra/nginx/default.conf` | Listens `:443`, `tls /etc/caddy/cert.pem /etc/caddy/key.pem`. Routes mirror `infra/bicep/modules/gateway.bicep`'s Caddyfile, but target Compose service names and **omit the `header_up Host` rewrites** (those existed only because ACA's envoy routes by Host — plain containers don't need it). |
 | **Services** | The 14 FastAPI / Next.js services | FastAPI services build from `services/*/Dockerfile`; the Next.js apps use `Dockerfile.portal` / `Dockerfile.admin` (root) — or the restored compose's `node:20-alpine` dev-server pattern. Implementation chooses; both are in the repo. |
 | **postgres** | `pgvector/pgvector:pg16` | Local volume. `init-litellm.sql` creates the separate `litellm` DB. Schema applied by the `db-migrate` (Alembic) one-shot service. |
@@ -115,7 +115,8 @@ internal zone, internal resolution only.
 
 **③ Request Zscaler Private Access** — **New** resource, Hostname/IP
 `dev.aigw.scdom.net` / `<VM_PRIVATE_IP>`, authorized AAD group = dev team, Services
-**HTTPS / TCP 443**, note: **TLS passthrough, do not TLS-inspect** this segment.
+**HTTPS / TCP 443**, **HTTP / TCP 80**, and **SSH / TCP 22** (22 for host administration),
+note: **TLS passthrough, do not TLS-inspect** this segment.
 
 ## Phasing
 

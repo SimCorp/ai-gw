@@ -20,7 +20,7 @@
 The agent cannot create the VM (`az vm create` is blocked by the safety classifier). The user provisions this first, then hands the agent an SSH session on the VM with the repo cloned:
 
 - VM: Ubuntu 24.04 LTS, ~`Standard_D4as_v5`, **no public IP**, in the dev spoke VNet.
-- NSG inbound: `TCP 443` from the ZPA App Connector range; `TCP 22` from the mgmt range. Deny all other inbound.
+- NSG inbound: `TCP 443` + `TCP 80` from the ZPA App Connector range; `TCP 22` from the ZPA/mgmt range (SSH for ongoing host config). Deny all other inbound. (Port 80 = HTTP→HTTPS redirect + headroom for future config such as ACME.)
 - Install Docker Engine + compose plugin; add the working user to the `docker` group.
 - `git clone` the repo to `~/ai-gw` (the agent works from there).
 - Record the VM's **private IP** — needed for the DNS and ZPA forms in Task 11.
@@ -77,6 +77,11 @@ Routing mirrors `infra/bicep/modules/gateway.bicep`, but targets Compose service
 {
 	admin off
 	auto_https off
+}
+
+# Plain HTTP -> redirect to HTTPS (port 80 is open for this + future config needs).
+:80 {
+	redir https://{host}{uri} permanent
 }
 
 :443 {
@@ -167,6 +172,7 @@ services:
     image: caddy:2.8-alpine
     ports:
       - "443:443"
+      - "80:80"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./certs/cert.pem:/etc/caddy/cert.pem:ro
@@ -351,8 +357,9 @@ Expected: `ok`; subject `*.aigw.scdom.net` (or the self-signed stand-in until th
 ```bash
 curl -sk -o /dev/null -w "litellm:%{http_code}\n" https://localhost/litellm/health/liveliness
 curl -sk -o /dev/null -w "root:%{http_code}\n" https://localhost/
+curl -s  -o /dev/null -w "http80:%{http_code} -> %{redirect_url}\n" http://localhost/healthz
 ```
-Expected: `litellm:200`; `root:302` (redirect to `/portal/`).
+Expected: `litellm:200`; `root:302` (redirect to `/portal/`); `http80:301 -> https://localhost/healthz` (port-80 redirect working).
 
 ---
 
@@ -434,14 +441,17 @@ git commit -m "feat(host): wire portals to the Caddy gateway origin"
 
 ## Task 11: Submit the three access requests and verify via ZPA
 
-> This is the external dependency. Field values are fully specified in
-> [`docs/access/2026-06-17-git-network-access-request.md`](../../access/2026-06-17-git-network-access-request.md).
+> This is the external dependency. The form values below are self-contained and correct for
+> the **VM path** — target the VM's private IP, no public `asuid` TXT, no policy exemption.
+> (The earlier [`docs/access/2026-06-17-git-network-access-request.md`](../../access/2026-06-17-git-network-access-request.md)
+> describes the *ACA-native* alternative — it targets the ACA LB `10.179.231.6` and adds a public
+> TXT + policy waiver; **do not use those values for this VM deployment**.)
 
 - [ ] **Step 1: Submit cert form ①** — New / Internal / SAN `*.aigw.scdom.net`. (Can be submitted first; feeds Task 5.)
 
 - [ ] **Step 2: Submit DNS form ②** — A Record / New / Uncoordinated: `dev.aigw.scdom.net` → A → `<VM_PRIVATE_IP>` in the internal zone.
 
-- [ ] **Step 3: Submit ZPA form ③** — New resource; Hostname/IP `dev.aigw.scdom.net` / `<VM_PRIVATE_IP>`; authorized AAD group = dev team; Services HTTPS / TCP 443; note "TLS passthrough, do not inspect".
+- [ ] **Step 3: Submit ZPA form ③** — New resource; Hostname/IP `dev.aigw.scdom.net` / `<VM_PRIVATE_IP>`; authorized AAD group = dev team; Services **HTTPS / TCP 443**, **HTTP / TCP 80**, and **SSH / TCP 22** (22 for host administration); note "TLS passthrough, do not inspect".
 
 - [ ] **Step 4: Verify end-to-end from a corp workstation (after all three fulfilled)**
 
