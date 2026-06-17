@@ -14,9 +14,15 @@ and AI agent a single, governed entry point to large language models: one OpenAI
 API endpoint and a web portal, with **authentication, rate limiting, caching, provider
 routing, observability, and guardrails** applied centrally instead of in every app.
 
-It is a set of small **FastAPI** (Python) microservices plus two **Next.js** web apps, all
-running as **Azure Container Apps (ACA)** in SimCorp's Landing Zone (Sweden Central). There
-is no local stack — everything runs on managed Azure PaaS reached over a private VNet.
+It is a set of small **FastAPI** (Python) microservices plus two **Next.js** web apps.
+
+**Current deployment (dev / stabilisation phase):** Docker Compose on a single Linux VM
+(`vm-aigw-dev-sdc`, `10.179.231.68`) in the dev Landing Zone spoke VNet — no ACA, no managed
+PaaS. See [`dev-environment.md`](dev-environment.md) for the full deployment picture.
+
+**Target deployment (Phase 2):** Azure Container Apps (ACA) in the SimCorp Landing Zone
+(Sweden Central), with managed PostgreSQL, Redis, Key Vault, and Service Bus reached over
+private endpoints.
 
 ---
 
@@ -24,20 +30,18 @@ is no local stack — everything runs on managed Azure PaaS reached over a priva
 
 | Layer | Technology | Role |
 |---|---|---|
-| Front-door / router | **Caddy** | Single reverse proxy; path-based routing, rewrites `Host` per upstream |
-| Backend services | **FastAPI** (Python, async) | The 12 request-path + 2 worker services |
+| Layer | Technology | Role |
+|---|---|---|
+| Front-door / router | **Caddy** | TLS termination + path-based reverse proxy |
+| Backend services | **FastAPI** (Python, async) | 12 request-path + 2 worker services |
 | Web apps | **Next.js** | Developer portal + admin portal |
-| Provider routing | **LiteLLM** | OpenAI-compatible facade over Anthropic et al. |
-| Hosting | **Azure Container Apps** | Serverless containers, internal env, scale-to-N |
-| Datastore | **Azure Database for PostgreSQL** (Flexible Server) | Teams, API keys, registries, memory |
-| Cache | **Azure Cache for Redis** | Exact + semantic response cache, rate-limit counters |
-| Secrets | **Azure Key Vault** | Connection strings + provider keys, injected via Managed Identity |
-| Async bus | **Azure Service Bus** | Event ingestion for observability + background workers |
-| Images | **Azure Container Registry** | Service container images |
-| Telemetry | **OpenTelemetry → Application Insights** | Traces/metrics from request-path services |
-| Identity | **Managed Identity** | Apps authenticate to Key Vault/PaaS with no stored secrets |
-| Edge access | **Zscaler ZPA** | Brokers corp clients to the internal VNet (no public internet) |
-| Governance | **Azure Policy** | Landing-Zone guardrails (deny public endpoints, enforce TLS) |
+| Provider routing | **LiteLLM** | OpenAI-compatible facade over Anthropic, Azure OpenAI, Gemini, GitHub Models |
+| **Dev hosting** | **Docker Compose on Linux VM** | Single-host stabilisation; `vm-aigw-dev-sdc` (10.179.231.68) |
+| **Target hosting** | **Azure Container Apps** | Serverless containers, internal ACA env, scale-to-N |
+| Datastore | **PostgreSQL** (pgvector:pg16) | Teams, API keys, registries, memory; Docker volume in dev, Flexible Server in prod |
+| Cache | **Redis** (redis-stack) | Exact + semantic response cache, rate-limit counters; Docker volume in dev |
+| Secrets | **`.env` file** (dev) / **Azure Key Vault** (prod) | Provider keys + service config |
+| Edge access | **Zscaler ZPA** | Brokers corp clients to the VNet (no public internet) |
 | IaC / CI | **Bicep** + **GitHub Actions** | Declarative infra; build/push images; deploy on `master` |
 
 ---
@@ -96,12 +100,11 @@ flowchart TB
   SVC -. "OTel traces" .-> appi
 ```
 
-**Reading it:** corp clients never touch the public internet — Zscaler ZPA brokers them into
-the VNet to the ACA environment's single internal load-balancer IP (`10.179.231.6`). Only the
-**Caddy gateway** is reachable there; every other service is `external:false` (VNet-internal,
-app-to-app only). The gateway path-routes to services, which share managed PaaS over private
-endpoints and pull their secrets from Key Vault using each app's **managed identity** (no
-secrets on disk).
+**Reading it (dev):** corp clients never touch the public internet — Zscaler ZPA brokers them
+into the VNet to `10.179.231.68`. Only **Caddy** is exposed (ports 443 and 80); every other
+container is bound to `127.0.0.1` and reachable only inside the VM. Data lives in local Docker
+volumes; secrets come from `.env`. See [`dev-environment.md`](dev-environment.md) for the
+full container inventory and deployment guide.
 
 ---
 
@@ -126,8 +129,8 @@ sequenceDiagram
   participant P as LLM provider
 
   C->>G: POST /v1/chat/completions  (Bearer sk-…)
-  G->>Ca: route /v1/* (Host rewritten)
-  Ca->>A: GET /validate (key hash)
+  G->>Ca: route /v1/*  (Caddy handle /v1/*)
+  Ca->>A: POST /validate  {token, model}
   A-->>Ca: identity OK (or 401 → reject)
   Note over Ca: guardrails + rate-limit check
   Ca->>R: exact + semantic cache lookup
@@ -144,69 +147,69 @@ sequenceDiagram
   end
 ```
 
-Other paths are simpler: `/portal*` and `/admin-portal*` go to the Next.js apps; `/admin`,
-`/identity`, `/librarian`, `/memory`, `/league`, `/observability`, `/litellm`, `/agent-relay`
-each strip their prefix and go to the matching service. Because ACA's internal ingress routes
-by **HTTP Host header**, Caddy rewrites `Host` to the target service name on every hop.
+Other paths are simpler: `/portal*` and `/admin-portal*` use `handle` (prefix kept, required
+by Next.js `basePath`); `/admin`, `/identity`, `/librarian`, `/memory`, `/league`,
+`/observability`, `/litellm`, `/agent-relay` use `handle_path` (prefix stripped, FastAPI
+services see their root). Full routing table: [`dev-environment.md#caddy-routing-table`](dev-environment.md#caddy-routing-table).
 
 ---
 
 ## 5. The access edge (how you reach it)
 
-This is the layer designed in the
-[GIT network-access request](../access/2026-06-17-git-network-access-request.md). It's
-**internal-only** — there is no public endpoint. Four mechanisms cooperate:
+**Internal-only** — there is no public endpoint. Three mechanisms cooperate in the current
+single-host deployment. See [`dev-environment.md#access-edge`](dev-environment.md#access-edge----pending-it-forms) for the pending IT forms.
 
 ![Access edge](diagrams/03-access-edge.png)
 
 ```mermaid
 flowchart LR
-  dev["Developer workstation<br/>https://dev.aigw.scdom.net/portal/"]
+  dev["Developer workstation\nhttps://dev.aigw.scdom.net/portal/"]
 
-  subgraph DNSZ["DNS — split-horizon"]
-    pub["PUBLIC scdom.net<br/>asuid.dev.aigw.scdom.net TXT<br/>ownership proof only (no IP)"]
-    int["INTERNAL view<br/>dev.aigw.scdom.net A → 10.179.231.6"]
+  subgraph DNSZ["DNS — internal SimCorp zone"]
+    int["dev.aigw.scdom.net A → 10.179.231.68\nmanaged by SimCorp IT (scdom.net)"]
   end
 
-  zpa["Zscaler ZPA app segment<br/>dev.aigw.scdom.net<br/>TCP 443 · TLS passthrough"]
-  lb["ACA env LB<br/>10.179.231.6"]
-  gw["ca-gateway (Caddy)<br/>external:true"]
-  cert["TLS cert *.aigw.scdom.net<br/>SimCorp internal CA<br/>bound in ACA, served via SNI"]
-  pol["Azure Policy<br/>Deny-Public-Network-Access<br/>→ scoped Waiver"]
+  subgraph ZPA["Zscaler ZPA"]
+    zcc["ZPA Client Connector\n(dev workstation)"]
+    zac["ZPA App Connector\ndev.aigw.scdom.net · TCP 443+80+22\nTLS passthrough"]
+  end
 
-  dev -. "1 resolve name" .-> int
-  dev -->|"2 TCP 443"| zpa --> lb --> gw
-  cert -. "3 presented at SNI handshake" .-> lb
-  pub -. "validates" .-> cert
-  pol -. "4 exemption enables external:true" .-> gw
+  subgraph NSG["NSG nsg-aigw-vm-dev"]
+    nsg["inbound: 443 · 80 · 22\nfrom ZPA connector range only"]
+  end
+
+  vm["vm-aigw-dev-sdc\n10.179.231.68 (static private IP)\nno public IP"]
+  caddy["Caddy :443\ntls cert.pem key.pem\n*.aigw.scdom.net"]
+  cert_issued["TLS cert *.aigw.scdom.net\nSimCorp Internal CA\n⚠ pending GIT form ①"]
+  cert_interim["Self-signed stand-in\nCN=*.aigw.scdom.net\n30-day, on VM at infra/certs/"]
+
+  dev -. "1 resolve" .-> int
+  dev --> zcc
+  int --> zac
+  zcc -->|"2 ZPA tunnel"| zac -->|"3 TCP 443"| nsg --> vm --> caddy
+  cert_issued -. "swap in when issued" .-> caddy
+  cert_interim -. "in use now" .-> caddy
 ```
 
-1. **DNS (split-horizon):** the internal view resolves `dev.aigw.scdom.net` to the VNet LB
-   IP; a single **public** `asuid` TXT record exists only so Azure can prove we own the name
-   and issue/bind the certificate. No public A record, no public exposure.
-2. **Zscaler ZPA** brokers the corp client into the VNet over TCP 443 with TLS passthrough
-   (no inspection), so the browser completes TLS end-to-end with the backend.
-3. **TLS certificate** — a wildcard `*.aigw.scdom.net` from the SimCorp internal CA, bound in
-   ACA and presented by envoy via SNI; trusted automatically on corp-managed devices.
-4. **Azure Policy** normally denies public network access on Container Apps; a scoped
-   *Waiver* exemption lets only the gateway be `external:true`, which on an internal
-   environment means **VNet-visible, not internet-exposed**.
+1. **DNS** — the internal scdom.net zone resolves `dev.aigw.scdom.net` to `10.179.231.68`
+   (static private IP). No public A record; no asuid TXT needed because we're not using ACA
+   domain binding.
+2. **Zscaler ZPA** brokers the corp client into the VNet with TLS passthrough (no inspection).
+   The VM has no public IP — ZPA is the only path in.
+3. **NSG `nsg-aigw-vm-dev`** allows 443, 80, and 22 inbound from the ZPA connector range only.
+   TLS terminates at **Caddy** on the VM; all services behind it are on `127.0.0.1`.
 
 ---
 
-## 6. Shared platform services (PaaS)
+## 6. Shared platform services
 
-All managed services sit behind **private endpoints** in `snet-pe-aigw-dev`
-(`10.179.231.64/26`); nothing is publicly reachable. Apps connect using connection strings
-**injected from Key Vault via managed identity** at startup — no secrets are committed or
-written to disk.
+**Dev (current):** all data services run as Docker containers on the same VM with local volumes.
 
-- **PostgreSQL Flexible Server** — the system of record: teams/organization nodes, API keys,
-  the agent registry, persistent memory, league data. Most services use SQLAlchemy + asyncpg;
-  litellm uses Prisma (note: it needs a plain `postgresql://…?sslmode=require` URL).
-- **Cache for Redis** — exact + semantic response cache and rate-limit/budget counters.
-- **Service Bus** — async event ingestion for observability and the background workers.
-- **Container Registry** — holds the service images that CI builds and ACA pulls.
+- **postgres** (`pgvector/pgvector:pg16`) — the system of record: organization nodes, API keys, agent registry, persistent memory, league data. Most services use SQLAlchemy + asyncpg; litellm uses Prisma (note: it needs a plain `postgresql://` URL — no `+asyncpg` driver prefix).
+- **redis** (`redis/redis-stack:7.2.0-v14`) — exact + semantic response cache, rate-limit counters, developer session tokens.
+- **dex** (`dexidp/dex:v2.40.0`) — local OIDC provider for portal/admin dev authentication.
+
+**Target (Phase 2 — Azure managed PaaS):** PostgreSQL Flexible Server, Cache for Redis, and Service Bus, all behind private endpoints. Connection strings injected from Key Vault via managed identity — no secrets on disk.
 
 ---
 

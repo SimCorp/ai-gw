@@ -1,0 +1,102 @@
+flowchart TB
+  dev["Developer / AI agent\nbrowser  ·  sk- API key"]
+
+  subgraph CORP["Corporate network — Zscaler ZPA  ·  pending IT forms"]
+    zcc["Zscaler Client Connector"]
+    zpa["ZPA App Connector\n(pending: dev.aigw.scdom.net / 10.179.231.68)"]
+  end
+
+  subgraph VM["vm-aigw-dev-sdc  ·  10.179.231.68 (static)  ·  Ubuntu 24.04\nrg-spoke-platformaitooling-dev-sdc-001  ·  Sweden Central"]
+    subgraph EDGE["NSG nsg-aigw-vm-dev\n443 in · 80 in · 22 in  (from ZPA connector range)"]
+      caddy["Caddy 2.8\n:443 TLS-terminate\n:80 → redirect HTTPS\ncerts/cert.pem (self-signed, stand-in)"]
+    end
+
+    subgraph INFERENCE["Inference path  /v1/*"]
+      cache["cache :8002\nexact + semantic cache\nguardrails · rate-limit"]
+      auth["auth :8001\nsk- / JWT validate\nbudget check"]
+      litellm["litellm :8003\nLiteLLM proxy\nprovider routing"]
+    end
+
+    subgraph APPS["Web apps  /portal*  /admin-portal*"]
+      portal["portal :3002\nDeveloper Next.js app\nbuilt from Dockerfile.portal"]
+      adminportal["admin-portal :3001\nAdmin Next.js app\nbuilt from Dockerfile.admin"]
+    end
+
+    subgraph API["API services  /&lt;name&gt;/*  (prefix stripped)"]
+      admin["admin :8005\nteams · API keys · dashboards\nX-Admin-Token auth"]
+      identity["identity :8006\nagent DNS registry\nheartbeat TTL"]
+      librarian["librarian :8008\nknowledge ingestion\nsemantic search"]
+      memory["memory :8009\npersistent agent memory\nuser/team scoped"]
+      league["league :8010\nAI-League gamification\nchallenges · leaderboard"]
+      observability["observability :8004\nasync event ingestion\ncost/latency records"]
+      agentrelay["agent-relay :8007\nWebSocket relay bus\nagentic workflows"]
+    end
+
+    subgraph BG["Background workers  (no ingress)"]
+      scanner["scanner :8011\nsecurity scanning\nDocker-sock access"]
+      worker["workflow-worker\nagentic task runner"]
+    end
+
+    subgraph DATA["Data layer  —  Docker volumes"]
+      pg[("postgres\npgvector:pg16\nport 5432")]
+      redis[("redis-stack 7.2\nport 6379\nexact+semantic cache\nrate-limit counters")]
+      dex["dex v2.40\nOIDC provider\ndev auth only"]
+    end
+  end
+
+  ext["External LLM providers\nAnthropic  ·  Azure OpenAI\nGemini  ·  GitHub Models"]
+  cert_pending["*.aigw.scdom.net cert\nSimCorp Internal CA\n⚠ pending IT form ①"]
+  dns_pending["DNS A record\ndev.aigw.scdom.net → 10.179.231.68\n⚠ pending IT form ②"]
+
+  dev --> zcc --> zpa -->|"TCP 443"| caddy
+  dns_pending -. "resolves" .-> zpa
+  cert_pending -. "replaces self-signed" .-> caddy
+
+  caddy -->|"/v1/*"| cache
+  caddy -->|"/portal*"| portal
+  caddy -->|"/admin-portal*"| adminportal
+  caddy -->|"/admin/* (strip)"| admin
+  caddy -->|"/identity/* (strip)"| identity
+  caddy -->|"/librarian/* (strip)"| librarian
+  caddy -->|"/memory/* (strip)"| memory
+  caddy -->|"/league/* (strip)"| league
+  caddy -->|"/observability/* (strip)"| observability
+  caddy -->|"/agent-relay/*"| agentrelay
+  caddy -->|"/auth/*"| admin
+
+  cache -->|"POST /validate\n{token, model}"| auth
+  cache -->|"exact+semantic lookup"| redis
+  cache -->|"on MISS — master key"| litellm
+  litellm --> ext
+  auth --> pg
+  auth --> redis
+
+  admin --> pg
+  admin --> redis
+  identity --> pg & redis
+  librarian --> pg & redis
+  memory --> pg & redis
+  league --> pg & redis
+  observability --> pg
+  agentrelay --> redis
+  worker --> pg & redis
+  scanner --> pg
+
+  portal -. "NEXT_PUBLIC_* → https://dev.aigw.scdom.net" .-> caddy
+  adminportal -. "NEXT_PUBLIC_* → https://dev.aigw.scdom.net" .-> caddy
+
+  classDef edge fill:#e6f0ff,stroke:#3b6fb0,color:#10243e;
+  classDef infer fill:#eef7ee,stroke:#4a8a4a,color:#1d3a1d;
+  classDef app fill:#e8f4fd,stroke:#2980b9,color:#1a3a4a;
+  classDef api fill:#f0f8f0,stroke:#5d9a5d,color:#1d3a1d;
+  classDef bg fill:#fafafa,stroke:#999,color:#333;
+  classDef data fill:#fff3e0,stroke:#cc8a2e,color:#5a3b0a;
+  classDef pending fill:#fff8e6,stroke:#e6a817,color:#6b4f00;
+
+  class dev,zcc,zpa,caddy edge;
+  class cache,auth,litellm infer;
+  class portal,adminportal app;
+  class admin,identity,librarian,memory,league,observability,agentrelay api;
+  class scanner,worker bg;
+  class pg,redis,dex data;
+  class cert_pending,dns_pending,ext pending;

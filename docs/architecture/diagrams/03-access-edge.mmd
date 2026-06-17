@@ -1,26 +1,37 @@
 flowchart LR
-  dev["Developer workstation<br/>https://dev.aigw.scdom.net/portal/"]
+  dev["Developer workstation\nhttps://dev.aigw.scdom.net/portal/"]
 
-  subgraph DNSZ["DNS — split-horizon"]
-    pub["PUBLIC scdom.net<br/>asuid.dev.aigw.scdom.net TXT<br/>ownership proof only (no IP)"]
-    int["INTERNAL view<br/>dev.aigw.scdom.net A → 10.179.231.6"]
+  subgraph DNSZ["DNS — internal SimCorp zone"]
+    int["dev.aigw.scdom.net A → 10.179.231.68\nmanaged by SimCorp IT (scdom.net)"]
   end
 
-  zpa["Zscaler ZPA app segment<br/>dev.aigw.scdom.net<br/>TCP 443 · TLS passthrough"]
-  lb["ACA env LB<br/>10.179.231.6"]
-  gw["ca-gateway (Caddy)<br/>external:true"]
-  cert["TLS cert *.aigw.scdom.net<br/>SimCorp internal CA<br/>bound in ACA, served via SNI"]
-  pol["Azure Policy<br/>Deny-Public-Network-Access<br/>→ scoped Waiver"]
+  subgraph ZPA["Zscaler ZPA"]
+    zcc["ZPA Client Connector\n(dev workstation)"]
+    zac["ZPA App Connector\ndev.aigw.scdom.net · TCP 443+80+22\nTLS passthrough"]
+  end
 
-  dev -. "1 resolve name" .-> int
-  dev -->|"2 TCP 443"| zpa --> lb --> gw
-  cert -. "3 presented at SNI handshake" .-> lb
-  pub -. "validates" .-> cert
-  pol -. "4 exemption enables external:true" .-> gw
+  subgraph NSG["NSG nsg-aigw-vm-dev"]
+    nsg["inbound: 443 · 80 · 22\nfrom ZPA connector range only"]
+  end
+
+  vm["vm-aigw-dev-sdc\n10.179.231.68 (static private IP)\nno public IP"]
+  caddy["Caddy :443\ntls cert.pem key.pem\n*.aigw.scdom.net"]
+
+  cert_issued["TLS cert *.aigw.scdom.net\nSimCorp Internal CA\n⚠ pending GIT form ①"]
+  cert_interim["Self-signed stand-in\nCN=*.aigw.scdom.net\n30-day, on VM at infra/certs/"]
+
+  dev -. "1 resolve" .-> int
+  dev --> zcc
+  int --> zac
+  zcc -->|"2 ZPA tunnel"| zac -->|"3 TCP 443"| nsg --> vm --> caddy
+  cert_issued -. "swap in when issued (docker compose restart caddy)" .-> caddy
+  cert_interim -. "in use now" .-> caddy
 
   classDef dns fill:#fff3e0,stroke:#cc8a2e,color:#5a3b0a;
   classDef net fill:#e6f0ff,stroke:#3b6fb0,color:#10243e;
-  classDef sec fill:#f3e8ff,stroke:#8a52cc,color:#3a1d5a;
-  class pub,int dns;
-  class dev,zpa,lb,gw net;
-  class cert,pol sec;
+  classDef pending fill:#fff8e6,stroke:#e6a817,color:#6b4f00;
+  classDef active fill:#eef7ee,stroke:#4a8a4a,color:#1d3a1d;
+  class int dns;
+  class dev,zcc,zac,nsg,vm,caddy net;
+  class cert_issued pending;
+  class cert_interim active;

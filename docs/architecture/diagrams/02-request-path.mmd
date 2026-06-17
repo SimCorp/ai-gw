@@ -9,8 +9,8 @@ sequenceDiagram
   participant P as LLM provider
 
   C->>G: POST /v1/chat/completions  (Bearer sk-…)
-  G->>Ca: route /v1/* (Host rewritten)
-  Ca->>A: GET /validate (key hash)
+  G->>Ca: route /v1/*  (Caddy handle /v1/*)
+  Ca->>A: POST /validate  {token, model}
   A-->>Ca: identity OK (or 401 → reject)
   Note over Ca: guardrails + rate-limit check
   Ca->>R: exact + semantic cache lookup
