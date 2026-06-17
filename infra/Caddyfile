@@ -1,0 +1,70 @@
+{
+	admin off
+	auto_https off
+}
+
+# Plain HTTP -> redirect to HTTPS (port 80 is open for this + future config needs).
+:80 {
+	redir https://{host}{uri} permanent
+}
+
+:443 {
+	encode gzip
+	tls /etc/caddy/cert.pem /etc/caddy/key.pem
+
+	# Agent inference (OpenAI-compatible): cache validates the sk- key, then auth -> litellm.
+	handle /v1/* {
+		reverse_proxy cache:8002
+	}
+
+	# Browser apps (Next.js basePath — keep the prefix).
+	handle /portal* {
+		reverse_proxy portal:3002
+	}
+	handle /admin-portal* {
+		reverse_proxy admin-portal:3001
+	}
+
+	# API services (strip the /prefix/ -> service root).
+	handle_path /admin/* {
+		reverse_proxy admin:8005
+	}
+	handle_path /cache/* {
+		reverse_proxy cache:8002
+	}
+	handle_path /litellm/* {
+		reverse_proxy litellm:8003
+	}
+	handle_path /identity/* {
+		reverse_proxy identity:8006
+	}
+	handle_path /librarian/* {
+		reverse_proxy librarian:8008
+	}
+	handle_path /memory/* {
+		reverse_proxy memory:8009
+	}
+	handle_path /league/* {
+		reverse_proxy league:8010
+	}
+	handle_path /observability/* {
+		reverse_proxy observability:8004
+	}
+
+	# WebSocket relay bus for agentic workflows.
+	handle /agent-relay/* {
+		reverse_proxy agent-relay:8007
+	}
+
+	# Direct login convenience — admin serves /auth/* at its root.
+	handle /auth/* {
+		reverse_proxy admin:8005
+	}
+
+	handle / {
+		redir /portal/ 302
+	}
+	handle /healthz {
+		respond "ok" 200
+	}
+}
