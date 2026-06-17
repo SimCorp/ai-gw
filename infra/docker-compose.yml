@@ -295,6 +295,7 @@ services:
       DATABASE_URL: "postgresql+asyncpg://aigateway:aigateway@postgres:5432/aigateway"
       REDIS_URL: "redis://redis:6379/0"
       SCANNER_WORKER_SECRET: ${SCANNER_WORKER_SECRET:-dev-worker-secret}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-change-me-internal-key}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     extra_hosts:
@@ -369,6 +370,7 @@ services:
     environment:
       REDIS_URL: "redis://redis:6379/0"
       AGENT_RELAY_SECRET: ""
+      RELAY_SECRET: ""
     depends_on:
       redis:
         condition: service_healthy
@@ -395,6 +397,7 @@ services:
       AGENT_RELAY_URL: "http://agent-relay:8007"
       AGENT_RELAY_SECRET: ""
       ADMIN_INTERNAL_TOKEN: ""
+      ADMIN_URL: "http://admin:8005"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp/aigw-runs:/worker-runs
@@ -444,8 +447,10 @@ services:
       EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-${LITELLM_MASTER_KEY:-sk-litellm-local-dev}}
       EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:-http://litellm:8003/v1}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
+      AUTH_URL: "http://auth:8001"
       CACHE_URL: "http://cache:8002"
       LIBRARIAN_SERVICE_TOKEN: ""
+      CORS_ORIGINS: "*"
     depends_on:
       db-migrate:
         condition: service_completed_successfully
