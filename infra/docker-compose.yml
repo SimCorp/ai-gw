@@ -313,16 +313,14 @@ services:
     restart: unless-stopped
 
   admin-portal:
-    image: node:20-alpine
-    working_dir: /app/apps/admin
-    command: npm run dev
-    volumes:
-      - ..:/app
+    build:
+      context: ..
+      dockerfile: Dockerfile.admin
     ports:
       - "127.0.0.1:3001:3001"
     environment:
       NEXT_TELEMETRY_DISABLED: "1"
-      NEXT_PUBLIC_ADMIN_API: "http://localhost:8080/admin"
+      NEXT_PUBLIC_ADMIN_API: "https://dev.aigw.scdom.net/admin"
     depends_on:
       admin:
         condition: service_healthy
@@ -331,25 +329,23 @@ services:
       interval: 15s
       timeout: 10s
       retries: 10
-      start_period: 60s
+      start_period: 120s
     restart: unless-stopped
 
   portal:
-    image: node:20-alpine
-    working_dir: /app/apps/portal
-    command: npm run dev
-    volumes:
-      - ..:/app
+    build:
+      context: ..
+      dockerfile: Dockerfile.portal
     ports:
       - "127.0.0.1:3002:3002"
     environment:
       NEXT_TELEMETRY_DISABLED: "1"
-      NEXT_PUBLIC_ADMIN_BASE_URL: "http://localhost:8080/admin"
-      NEXT_PUBLIC_CACHE_BASE_URL: "http://localhost:8080/cache"
-      NEXT_PUBLIC_IDENTITY_BASE_URL: "http://localhost:8080/identity"
-      NEXT_PUBLIC_LIBRARIAN_BASE_URL: "http://localhost:8080/librarian"
-      NEXT_PUBLIC_MEMORY_BASE_URL: "http://localhost:8080/memory"
-      NEXT_PUBLIC_LITELLM_BASE_URL: "http://localhost:8080/litellm"
+      NEXT_PUBLIC_ADMIN_BASE_URL: "https://dev.aigw.scdom.net/admin"
+      NEXT_PUBLIC_CACHE_BASE_URL: "https://dev.aigw.scdom.net/cache"
+      NEXT_PUBLIC_IDENTITY_BASE_URL: "https://dev.aigw.scdom.net/identity"
+      NEXT_PUBLIC_LIBRARIAN_BASE_URL: "https://dev.aigw.scdom.net/librarian"
+      NEXT_PUBLIC_MEMORY_BASE_URL: "https://dev.aigw.scdom.net/memory"
+      NEXT_PUBLIC_LITELLM_BASE_URL: "https://dev.aigw.scdom.net/litellm"
       NEXT_PUBLIC_LITELLM_KEY: "sk-litellm-local-dev"
     depends_on:
       admin:
@@ -359,7 +355,7 @@ services:
       interval: 15s
       timeout: 10s
       retries: 10
-      start_period: 60s
+      start_period: 120s
     restart: unless-stopped
 
   agent-relay:
