@@ -1,0 +1,18 @@
+name: ai-gateway
+
+services:
+  caddy:
+    image: caddy:2.8-alpine
+    ports:
+      - "443:443"
+      - "80:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./certs/cert.pem:/etc/caddy/cert.pem:ro
+      - ./certs/key.pem:/etc/caddy/key.pem:ro
+    depends_on:
+      cache:
+        condition: service_started
+      admin:
+        condition: service_started
+    restart: unless-stopped

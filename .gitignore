@@ -24,6 +24,9 @@ storybook-static/
 
 # Persistent bind-mount data (survives Docker Desktop restarts)
 data/
+
+# TLS certificates (private key — never commit)
+infra/certs/
 .superpowers/
 
 # Ephemeral Claude Code agent worktrees (created/cleaned per-session)
