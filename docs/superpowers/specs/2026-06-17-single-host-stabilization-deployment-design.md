@@ -40,6 +40,10 @@ the broader system is described in
   Policy.
 - Collapse the access asks to exactly the three SimCorp IT Service Desk forms (cert, DNS,
   ZPA) — no public DNS record, no policy exemption.
+- VM gets a **static private IP** (DNS/ZPA stay valid across reboots).
+- **Clean up the Landing Zone** — remove stale artifacts from abandoned approaches (the
+  never-built VM TLS-proxy NSG/KV secret, the 1sh.sh hostname binding + env cert, the
+  temporary Resource Policy Contributor grant on the AZWESU0005 MI).
 
 **Non-goals (explicitly out of scope for this phase)**
 - High availability / multi-AZ (single VM is acceptable for stabilization).

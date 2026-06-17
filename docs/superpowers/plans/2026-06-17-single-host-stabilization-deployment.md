@@ -20,6 +20,9 @@
 The agent cannot create the VM (`az vm create` is blocked by the safety classifier). The user provisions this first, then hands the agent an SSH session on the VM with the repo cloned:
 
 - VM: Ubuntu 24.04 LTS, ~`Standard_D4as_v5`, **no public IP**, in the dev spoke VNet.
+- **Static private IP** on the VM NIC (set the NIC's IP allocation to `Static`) so the DNS A
+  record and ZPA segment stay valid across reboots/redeploys. Record this IP — it is the
+  `<VM_PRIVATE_IP>` used in Task 11.
 - NSG inbound: `TCP 443` + `TCP 80` from the ZPA App Connector range; `TCP 22` from the ZPA/mgmt range (SSH for ongoing host config). Deny all other inbound. (Port 80 = HTTP→HTTPS redirect + headroom for future config such as ACME.)
 - Install Docker Engine + compose plugin; add the working user to the `docker` group.
 - `git clone` the repo to `~/ai-gw` (the agent works from there).
@@ -467,6 +470,61 @@ curl -s https://dev.aigw.scdom.net/v1/chat/completions \
   -o /dev/null -w "%{http_code}\n"       # expect 200
 ```
 Expected: DNS returns the VM IP; all HTTPS calls succeed with the trusted `*.aigw.scdom.net` cert (no `-k` needed). This is the definition of done for Phase 0/1.
+
+---
+
+## Task 12: Clean up the Landing Zone (stale artifacts from abandoned approaches)
+
+> Needs Azure access (the agent's MI login no longer works — run as the user / with creds).
+> **Each item is verify-then-delete:** confirm the resource exists AND is unused before removing
+> it. These were all staged for paths we abandoned (the VM TLS-proxy and the 1sh.sh browser
+> route); none are used by the VM-on-host deployment. RG is `rg-aigw-dev-sdc` unless noted.
+
+- [ ] **Step 1: Inventory what's actually there**
+
+```bash
+az login   # or the user's normal auth
+RG=rg-aigw-dev-sdc
+az network nsg list -g $RG --query "[].name" -o tsv
+az keyvault secret list --vault-name <kv-name> --query "[].name" -o tsv
+az containerapp env certificate list -n cae-aigw-dev-sdc -g $RG --query "[].name" -o tsv
+az containerapp hostname list -n ca-gateway-dev-sdc -g $RG -o table
+```
+
+- [ ] **Step 2: Delete the abandoned VM-TLS-proxy artifacts (if present)**
+
+```bash
+az network nsg delete -g $RG -n nsg-aigw-tlsproxy-dev          # staged for the never-built proxy VM
+az keyvault secret delete --vault-name <kv-name> -n aigw-tlsproxy-pem   # wildcard cert+key staged for it
+```
+
+- [ ] **Step 3: Remove leftover 1sh.sh browser-route artifacts (if present)**
+
+```bash
+# gateway hostname binding + env cert from the weekend 1sh.sh experiment:
+az containerapp hostname delete -n ca-gateway-dev-sdc -g $RG --hostname aigw.1sh.sh
+az containerapp env certificate delete -n cae-aigw-dev-sdc -g $RG --certificate aigw-1sh-sh
+# Cloudflare (user's own 1sh.sh zone) — optional: remove A aigw.1sh.sh and TXT asuid.aigw.1sh.sh.
+```
+
+- [ ] **Step 4: Revoke the temporary elevated RBAC grant**
+
+The AZWESU0005 managed identity was granted **Resource Policy Contributor** on `rg-aigw-dev-sdc`
+solely for the ACA policy-exemption path, which the VM deployment does not use. Remove it:
+```bash
+az role assignment list --assignee <AZWESU0005-MI-principalId> --scope /subscriptions/<sub>/resourceGroups/$RG -o table
+az role assignment delete --assignee <AZWESU0005-MI-principalId> --role "Resource Policy Contributor" --scope /subscriptions/<sub>/resourceGroups/$RG
+```
+(Leave its **Reader** grant. The MI principalId is in [[aigw-invnet-host-rbac]] / decode via IMDS.)
+
+- [ ] **Step 5: (decision, not automatic) ACA cost**
+
+The ACA deployment is now redundant for stabilization. To stop paying for it without deleting,
+scale the apps to zero (`az containerapp update -n <app> -g $RG --min-replicas 0`) — or leave it
+running if you want it as a comparison. **Do not delete the ACA env or shared PaaS** (Postgres/
+Redis/KV) — Phase 2 reuses them. Decide explicitly; don't tear down by reflex.
+
+- [ ] **Step 6: Note what was removed in the issue/PR** so the cleanup is auditable.
 
 ---
 
