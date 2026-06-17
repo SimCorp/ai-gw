@@ -1,0 +1,27 @@
+sequenceDiagram
+  autonumber
+  participant C as Caller (sk- key)
+  participant G as Gateway (Caddy)
+  participant Ca as cache :8002
+  participant A as auth :8001
+  participant R as Redis
+  participant L as litellm :8003
+  participant P as LLM provider
+
+  C->>G: POST /v1/chat/completions  (Bearer sk-…)
+  G->>Ca: route /v1/* (Host rewritten)
+  Ca->>A: GET /validate (key hash)
+  A-->>Ca: identity OK (or 401 → reject)
+  Note over Ca: guardrails + rate-limit check
+  Ca->>R: exact + semantic cache lookup
+  alt cache HIT
+    R-->>Ca: stored completion
+    Ca-->>C: 200  (x-cache: HIT)
+  else cache MISS
+    Ca->>L: forward request (master key)
+    L->>P: provider call (Anthropic claude-haiku)
+    P-->>L: completion
+    L-->>Ca: completion
+    Ca->>R: store result
+    Ca-->>C: 200  (x-cache: MISS)
+  end
