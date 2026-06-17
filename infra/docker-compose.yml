@@ -136,6 +136,7 @@ services:
     # (0001_baseline.py) captures the union of init.sql + _EXTRA_DDL.
     build:
       context: ../services/admin
+    env_file: ../.env
     environment:
       # asyncpg URL because app/db.py creates an async engine at module import time
       # (env.py rewrites to psycopg2 internally for Alembic's sync operations)
