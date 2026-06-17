@@ -1,0 +1,63 @@
+/* ============================================================
+   ai-gw design system — primitives
+   Raw, theme-agnostic scales. Never reference these from pages;
+   pages and components use the semantic tokens in theme.css.
+   ============================================================ */
+:root {
+  /* Neutrals — cool, faint violet cast to harmonize with the brand pair */
+  --n-0:   #FFFFFF;
+  --n-25:  #FCFCFE;
+  --n-50:  #F8F8FC;
+  --n-75:  #F2F2F8;
+  --n-100: #E9E9F2;
+  --n-200: #D9D9E6;
+  --n-300: #B9B9CC;
+  --n-400: #9494AB;
+  --n-500: #75758A;
+  --n-600: #565670;
+  --n-700: #3E3E52;
+  --n-800: #28283A;
+  --n-850: #1D1D2B;
+  --n-900: #15151F;
+  --n-925: #10101A;
+  --n-950: #0B0B14;
+
+  /* Brand pair */
+  --indigo-300:  #A5B4FC;
+  --indigo-400:  #818CF8;
+  --indigo-500:  #6366F1;
+  --indigo-600:  #4F46E5;
+  --indigo-700:  #4338CA;
+  --fuchsia-300: #F0ABFC;
+  --fuchsia-400: #E879F9;
+  --fuchsia-500: #D946EF;
+  --fuchsia-600: #C026D3;
+  --fuchsia-700: #A21CAF;
+
+  /* Status */
+  --green-400: #4ADE80;
+  --green-600: #16A34A;
+  --amber-400: #FBBF24;
+  --amber-600: #D97706;
+  --red-400:   #F87171;
+  --red-600:   #DC2626;
+
+  /* Categorical (charts, chips) — light values; dark overridden in theme.css */
+  --cat-coral:   #E11D48;
+  --cat-orange:  #EA580C;
+  --cat-yellow:  #CA8A04;
+  --cat-teal:    #0D9488;
+  --cat-purple:  #7C3AED;
+  --cat-magenta: #C026D3;
+
+  /* Radii */
+  --r-1: 4px;
+  --r-2: 6px;
+  --r-3: 8px;
+  --r-pill: 999px;
+
+  /* Motion */
+  --speed-1: 100ms;
+  --speed-2: 150ms;
+  --ease-1: cubic-bezier(.2,.7,.2,1);
+}

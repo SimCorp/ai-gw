@@ -18,8 +18,8 @@ interface Booking {
 
 const STATUS_COLOR: Record<string, string> = {
   requested: "var(--fg-3)",
-  confirmed: "var(--sc-blue)",
-  done: "var(--good, #1F8A5B)",
+  confirmed: "var(--accent)",
+  done: "var(--good)",
   cancelled: "var(--bad)",
 };
 
@@ -150,7 +150,7 @@ export default function BookingsPage() {
       )}
 
       <div style={{ marginTop: 16, fontSize: 12, color: "var(--fg-3)" }}>
-        <Link href="/portal/champions" style={{ color: "var(--sc-link, var(--sc-blue))" }}>← Back to champions</Link>
+        <Link href="/portal/champions" style={{ color: "var(--accent-text)" }}>← Back to champions</Link>
       </div>
     </main>
   );

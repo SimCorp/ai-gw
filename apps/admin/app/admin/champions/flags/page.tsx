@@ -81,10 +81,10 @@ export default function AdminChampionsFlagsPage() {
       {error && (
         <div
           style={{
-            color: 'var(--bad, #EF3E4A)',
+            color: 'var(--bad)',
             fontSize: 12,
-            background: 'rgba(239,62,74,0.06)',
-            border: '1px solid rgba(239,62,74,0.2)',
+            background: 'var(--bad-soft)',
+            border: '1px solid var(--bad)',
             padding: '8px 12px',
             borderRadius: 6,
             marginBottom: 14,
@@ -96,8 +96,8 @@ export default function AdminChampionsFlagsPage() {
 
       <div
         style={{
-          background: 'var(--surface, #161A33)',
-          border: '1px solid var(--side-rule, #232950)',
+          background: 'var(--surface-2)',
+          border: '1px solid var(--panel-rule)',
           borderRadius: 10,
           overflow: 'hidden',
         }}
@@ -105,31 +105,31 @@ export default function AdminChampionsFlagsPage() {
         <div
           style={{
             padding: '16px 22px',
-            borderBottom: '1px solid var(--side-rule)',
+            borderBottom: '1px solid var(--panel-rule)',
             fontSize: 13,
             fontWeight: 600,
-            color: 'var(--side-fg)',
+            color: 'var(--panel-fg)',
           }}
         >
           Open flags
         </div>
         {loading ? (
-          <div style={{ padding: 22, color: 'var(--side-fg-mute)', fontSize: 13 }}>Loading…</div>
+          <div style={{ padding: 22, color: 'var(--panel-fg-mute)', fontSize: 13 }}>Loading…</div>
         ) : flags.length === 0 ? (
-          <div style={{ padding: 22, color: 'var(--side-fg-mute)', fontSize: 13 }}>
+          <div style={{ padding: 22, color: 'var(--panel-fg-mute)', fontSize: 13 }}>
             No open flags. Nice and quiet.
           </div>
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
-              <tr style={{ borderBottom: '1px solid var(--side-rule)' }}>
+              <tr style={{ borderBottom: '1px solid var(--panel-rule)' }}>
                 {['Contribution', 'Reason', 'Flagged by', 'When', ''].map((h) => (
                   <th
                     key={h}
                     style={{
                       padding: '10px 16px',
                       textAlign: 'left',
-                      color: 'var(--side-fg-mute)',
+                      color: 'var(--panel-fg-mute)',
                       fontWeight: 500,
                       fontSize: 12,
                     }}
@@ -141,13 +141,13 @@ export default function AdminChampionsFlagsPage() {
             </thead>
             <tbody>
               {flags.map((f) => (
-                <tr key={f.id} style={{ borderBottom: '1px solid var(--side-rule)' }}>
-                  <td style={{ padding: '12px 16px', color: 'var(--fg-inv)' }}>
+                <tr key={f.id} style={{ borderBottom: '1px solid var(--panel-rule)' }}>
+                  <td style={{ padding: '12px 16px', color: 'var(--fg-1)' }}>
                     <div style={{ fontWeight: 600 }}>{f.contribution_title ?? '—'}</div>
                     <div
                       style={{
                         fontSize: 11,
-                        color: 'var(--side-fg-mute)',
+                        color: 'var(--panel-fg-mute)',
                         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
                         marginTop: 2,
                       }}
@@ -155,24 +155,24 @@ export default function AdminChampionsFlagsPage() {
                       {f.contribution_id.slice(0, 8)}…
                     </div>
                   </td>
-                  <td style={{ padding: '12px 16px', color: 'var(--side-fg)', maxWidth: 320 }}>
+                  <td style={{ padding: '12px 16px', color: 'var(--panel-fg)', maxWidth: 320 }}>
                     {f.reason ? (
                       <span style={{ whiteSpace: 'pre-wrap' }}>{f.reason}</span>
                     ) : (
-                      <span style={{ color: 'var(--side-fg-mute)' }}>(no reason given)</span>
+                      <span style={{ color: 'var(--panel-fg-mute)' }}>(no reason given)</span>
                     )}
                   </td>
                   <td
                     style={{
                       padding: '12px 16px',
-                      color: 'var(--side-fg)',
+                      color: 'var(--panel-fg)',
                       fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
                       fontSize: 12,
                     }}
                   >
                     {f.flagged_by.slice(0, 8)}…
                   </td>
-                  <td style={{ padding: '12px 16px', color: 'var(--side-fg-mute)', fontSize: 12 }}>
+                  <td style={{ padding: '12px 16px', color: 'var(--panel-fg-mute)', fontSize: 12 }}>
                     {f.created_at ? new Date(f.created_at).toLocaleString() : '—'}
                   </td>
                   <td style={{ padding: '12px 16px', textAlign: 'right', whiteSpace: 'nowrap' }}>
@@ -181,9 +181,9 @@ export default function AdminChampionsFlagsPage() {
                       disabled={busyId === f.id}
                       style={{
                         background: 'none',
-                        border: '1px solid var(--side-rule, #232950)',
+                        border: '1px solid var(--panel-rule)',
                         borderRadius: 6,
-                        color: 'var(--side-fg)',
+                        color: 'var(--panel-fg)',
                         cursor: busyId === f.id ? 'not-allowed' : 'pointer',
                         fontSize: 12,
                         fontFamily: 'inherit',
@@ -199,9 +199,9 @@ export default function AdminChampionsFlagsPage() {
                       disabled={busyId === f.id}
                       style={{
                         background: 'none',
-                        border: '1px solid var(--side-rule, #232950)',
+                        border: '1px solid var(--panel-rule)',
                         borderRadius: 6,
-                        color: 'var(--bad, #EF3E4A)',
+                        color: 'var(--bad)',
                         cursor: busyId === f.id ? 'not-allowed' : 'pointer',
                         fontSize: 12,
                         fontFamily: 'inherit',

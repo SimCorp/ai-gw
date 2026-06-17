@@ -1,13 +1,9 @@
 # services/league/tests/test_challenges.py
-import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi.testclient import TestClient
 
-os.environ.setdefault("DEV_BYPASS_AUTH", "true")
-os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
-os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
-
+from app.auth import require_dev_auth
 from app.db import get_session
 from app.main import app
 
@@ -17,6 +13,10 @@ def _make_session_override(mock_session):
         yield mock_session
 
     return _override
+
+
+async def _fake_dev_auth():
+    return {"user_id": "00000000-0000-0000-0000-000000000001", "email": "dev@simcorp.com"}
 
 
 def _mock_redis():
@@ -50,12 +50,13 @@ def test_list_challenges_for_season():
     mock_session.execute = AsyncMock(return_value=mock_result)
 
     app.dependency_overrides[get_session] = _make_session_override(mock_session)
+    app.dependency_overrides[require_dev_auth] = _fake_dev_auth
     try:
         with patch("app.main.aioredis.from_url", return_value=_mock_redis()):
             with TestClient(app) as client:
                 resp = client.get("/seasons/11111111-1111-1111-1111-111111111111/challenges")
     finally:
-        app.dependency_overrides.pop(get_session, None)
+        app.dependency_overrides.clear()
 
     assert resp.status_code == 200
     assert len(resp.json()) == 1
@@ -71,12 +72,13 @@ def test_challenge_detail_hides_hidden_test_suite():
     mock_session.execute = AsyncMock(return_value=mock_result)
 
     app.dependency_overrides[get_session] = _make_session_override(mock_session)
+    app.dependency_overrides[require_dev_auth] = _fake_dev_auth
     try:
         with patch("app.main.aioredis.from_url", return_value=_mock_redis()):
             with TestClient(app) as client:
                 resp = client.get("/challenges/22222222-2222-2222-2222-222222222222")
     finally:
-        app.dependency_overrides.pop(get_session, None)
+        app.dependency_overrides.clear()
 
     assert resp.status_code == 200
     assert "hidden_test_suite" not in resp.json()
@@ -84,13 +86,8 @@ def test_challenge_detail_hides_hidden_test_suite():
 
 
 def test_create_challenge_requires_admin():
-    """Without DEV_BYPASS_AUTH, creating a challenge should require admin."""
-    import app.config as cfg_mod
-
-    cfg_mod.settings.dev_bypass_auth = False
-
+    """With no admin credentials, creating a challenge should require admin."""
     mock_session = AsyncMock()
-
     app.dependency_overrides[get_session] = _make_session_override(mock_session)
     try:
         with patch("app.main.aioredis.from_url", return_value=_mock_redis()):
@@ -100,7 +97,6 @@ def test_create_challenge_requires_admin():
                     json={"title": "Test", "goal": "Classify"},
                 )
     finally:
-        app.dependency_overrides.pop(get_session, None)
-        cfg_mod.settings.dev_bypass_auth = True
+        app.dependency_overrides.clear()
 
     assert resp.status_code == 403

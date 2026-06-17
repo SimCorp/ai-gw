@@ -1,16 +1,11 @@
 # services/league/tests/test_creativity.py
 """Tests for POST /challenges/{challenge_id}/score-creativity endpoint."""
 
-import os
 import uuid
 from contextlib import asynccontextmanager
 from unittest.mock import patch
 
 import pytest
-
-os.environ.setdefault("DEV_BYPASS_AUTH", "false")
-os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
-os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
 
 from app.scoring import centroid, cosine_distance, score_creativity  # noqa: E402
 
@@ -41,9 +36,7 @@ async def _app_client(db_session, mock_redis, *, admin_token="test-admin-token")
         yield db_session
 
     app.dependency_overrides[get_session] = override_get_session
-    original_bypass = settings.dev_bypass_auth
     original_token = settings.admin_token
-    settings.dev_bypass_auth = False
     settings.admin_token = admin_token
 
     try:
@@ -51,7 +44,6 @@ async def _app_client(db_session, mock_redis, *, admin_token="test-admin-token")
             async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
                 yield c
     finally:
-        settings.dev_bypass_auth = original_bypass
         settings.admin_token = original_token
         app.dependency_overrides.clear()
 

@@ -45,10 +45,6 @@ _SESSION_TTL_REMEMBER = int(timedelta(days=30).total_seconds())
 
 
 def _rate_limit_key(request: Request) -> str:
-    if settings.dev_bypass_auth:
-        test_id = request.headers.get("X-Test-Client-ID")
-        if test_id:
-            return f"test:{test_id}"
     forwarded = request.headers.get("X-Forwarded-For")
     if forwarded:
         return forwarded.split(",")[0].strip()

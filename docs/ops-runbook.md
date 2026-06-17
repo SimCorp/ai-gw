@@ -2,27 +2,28 @@
 
 **Audience:** Platform engineers and on-call responders  
 **System:** Enterprise AI gateway serving ~2,000 SimCorp engineers  
-**Last updated:** 2026-05-09
+**Deployment:** Azure Container Apps (ACA), SimCorp Landing Zone, resource group `rg-aigw-dev-sdc`, Sweden Central  
+**Last updated:** 2026-06-10
 
 ---
 
 ## Table of Contents
 
 1. [Architecture Overview](#1-architecture-overview)
-2. [Starting and Stopping](#2-starting-and-stopping)
+2. [Deploy, Rollback, and Revisions](#2-deploy-rollback-and-revisions)
 3. [Health Monitoring](#3-health-monitoring)
 4. [Common Failure Modes](#4-common-failure-modes)
 5. [Database Maintenance](#5-database-maintenance)
 6. [Adding a New AI Provider](#6-adding-a-new-ai-provider)
 7. [Managing Teams and Rate Limits](#7-managing-teams-and-rate-limits)
 8. [Log Locations and What to Look For](#8-log-locations-and-what-to-look-for)
-9. [Environment Variables Reference](#9-environment-variables-reference)
+9. [Configuration and Secrets Reference](#9-configuration-and-secrets-reference)
 
 ---
 
 ## 0. Security Configuration
 
-The following environment variables must be set in production. They have no insecure defaults — omitting them disables the corresponding protection or causes the service to refuse to start.
+The following secrets must be present for each service. They have no insecure defaults — omitting them disables the corresponding protection or causes the service to refuse to start. In ACA they are stored in **Azure Key Vault** and injected into each Container App as secrets via the app's **managed identity** (see `infra/bicep`).
 
 | Variable | Service(s) | Purpose |
 |----------|------------|---------|
@@ -32,48 +33,54 @@ The following environment variables must be set in production. They have no inse
 | `IDENTITY_SERVICE_TOKEN` | `identity` | Bearer token that gates the `POST /agents/register` endpoint. Without this, any process on the internal network can register arbitrary agent identities. |
 | `LIBRARIAN_SERVICE_TOKEN` | `librarian` | Bearer token that gates the `POST /ingest` and `POST /research/topics` endpoints. Without this, any process on the internal network can inject arbitrary documents into the knowledge base. |
 
-### Generating secrets
+### Rotating secrets
 
-```bash
-# Generate a suitable 32-byte random secret (base64-encoded)
-python3 -c "import secrets, base64; print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())"
-```
-
-Set each value in `.env` before starting the stack. All five variables should be treated as credentials — do not commit them to version control.
+Each value is treated as a credential and lives in Azure Key Vault. To rotate one, update the secret version in Key Vault; the Container App picks up the new value on its next revision. Trigger a new revision by redeploying (see §2). Never store these values in source control or pass them as plaintext deployment parameters.
 
 ---
 
 ## 1. Architecture Overview
 
+### Deployment topology
+
+All services run as **Azure Container Apps** named `ca-<service>-dev-sdc` in the ACA environment `cae-aigw-dev-sdc` (resource group `rg-aigw-dev-sdc`, Sweden Central). The environment is `internal: true` — VNet-only, reachable from the corporate VPN, not the public internet. It has a static internal IP `10.179.231.6` and an env default domain such as `calmbush-e5f546e4.swedencentral.azurecontainerapps.io`. The developer-facing gateway entry point is **https://aigw-dev.lab.cloud.scdom.net**.
+
+Services reach each other over ACA internal DNS at `http://ca-<service>-dev-sdc`.
+
 ### Service Map
 
 ```
-Caller (developer tool / IDE extension)
+Caller (developer tool / IDE extension)  →  https://aigw-dev.lab.cloud.scdom.net
     |
     v
-auth  :8001  — JWT / API key validation, per-team rate limiting (Redis fixed-window)
+auth  (ca-auth-dev-sdc:8001)  — JWT / API key validation, per-team rate limiting (Redis fixed-window)
     |
     v
-cache :8002  — Semantic + exact cache (Redis), embedding via Ollama or OpenAI
+cache (ca-cache-dev-sdc:8002)  — Semantic + exact cache (Redis), embedding via the gateway (litellm)
     |
     v
-litellm :8003 — Provider routing, OpenAI-compatible API (Anthropic / OpenAI / Google / GitHub Models)
+litellm (ca-litellm-dev-sdc:8003) — Provider routing, OpenAI-compatible API (Anthropic / OpenAI / Google / GitHub Models)
     |
     v
 Provider APIs  (anthropic.com, api.openai.com, generativelanguage.googleapis.com, …)
 
-observability :8004  — Async event ingestion, writes cost_records + audit_log to Postgres
-admin         :8005  — Team management, API keys, provider key config, system health dashboard
+observability (ca-observability-dev-sdc:8004)  — Async event ingestion, writes cost_records + audit_log to Postgres
+admin         (ca-admin-dev-sdc:8005)          — Team management, API keys, provider key config, system health dashboard
 ```
 
-### Shared Infrastructure
+Background workers run as Container Apps with **no ingress**: `ca-scanner-dev-sdc` (security scanning) and `ca-workflow-worker-dev-sdc`. Portals run as `ca-admin-portal-dev-sdc:3001` and `ca-portal-dev-sdc:3002`.
 
-| Component | Port | Role |
-|-----------|------|------|
-| PostgreSQL 16 | 5432 | Teams, API keys, policies, cost records, audit log, developers |
-| Redis Stack 7.2 | 6379 | Rate limit counters, semantic cache, admin portal sessions |
-| Dex (mock OIDC) | 5556 | Local Entra ID substitute for admin portal login |
-| Ollama (optional) | 11434 | Local model serving and embedding generation |
+### Shared Infrastructure (Azure PaaS)
+
+All PaaS services are reached over **private endpoints** in `snet-pe-aigw-dev`. Their secrets/connection strings are stored in Azure Key Vault and injected into each Container App via its managed identity.
+
+| Component | Azure resource | Role |
+|-----------|----------------|------|
+| PostgreSQL | Azure Database for PostgreSQL Flexible Server (databases `aigateway` + `litellm`) | Teams, API keys, policies, cost records, audit log, developers; LiteLLM state |
+| Redis | Azure Cache for Redis Premium P1 | Rate limit counters, semantic cache, admin portal sessions |
+| Secrets | Azure Key Vault | All service secrets and connection strings |
+| Event bus | Azure Service Bus (queue `observability-events`) | Async observability event delivery |
+| Telemetry | Application Insights + Log Analytics workspace `law-aca-dev-sdc` | Metrics, traces, container logs |
 
 ### Key Data Flows
 
@@ -87,39 +94,81 @@ admin         :8005  — Team management, API keys, provider key config, system 
 
 ---
 
-## 2. Starting and Stopping
+## 2. Deploy, Rollback, and Revisions
 
-### Start Everything
+Deployments are driven by Bicep against the dev resource group. Each deploy builds an immutable
+revision per Container App; rollback is a redeploy of a previous image tag. Run these commands from
+a VNet-connected host (corp VPN) authenticated to the SimCorp Landing Zone.
+
+### Deploy
 
 ```bash
-cd /home/bntp/repos/ai-gw
-
-# First time: copy and edit environment variables
-cp .env.example .env
-# edit .env with real provider keys if needed
-
-# Build and start all services
-docker compose -f infra/docker-compose.yml up --build
-
-# Background (detached)
-docker compose -f infra/docker-compose.yml up --build -d
+az deployment group create \
+  --resource-group rg-aigw-dev-sdc \
+  --template-file infra/bicep/environments/dev/main.bicep \
+  --parameters infra/bicep/environments/dev/main.bicepparam \
+  --parameters imageTag=sha-<git-sha>
 ```
 
-The `db-migrate` container runs all Alembic migrations (0001 → latest) before any app services start. LiteLLM has a 120-second `start_period` — allow 2–3 minutes for full cluster readiness.
+`imageTag` is the short git SHA of the built images. CI (`deploy.yml`) normally runs this on merge;
+the manual form above is for ad-hoc or recovery deploys.
 
-**Scanner migrations note:** Migrations 0025–0030 are safe for fresh deployments. All conditional checks (e.g. renaming columns that may not exist) guard against errors on clean databases. `docker compose up --build` works reliably even on a brand-new Postgres instance.
+### Run database migrations
+
+Migrations run as an ACA job, not inline in a service. Trigger it explicitly:
+
+```bash
+az containerapp job start \
+  --name job-db-migrate-dev-sdc \
+  --resource-group rg-aigw-dev-sdc
+```
+
+The job applies all Alembic migrations (0001 → latest). Migrations 0025–0030 are safe for fresh
+databases — conditional checks (e.g. renaming columns that may not exist) guard against errors on a
+clean database.
+
+### Inspect revisions
+
+```bash
+az containerapp revision list -n ca-<service>-dev-sdc -g rg-aigw-dev-sdc
+```
+
+Each ACA revision is atomic: it is created with a specific image tag and either becomes active or
+not. There is no partial/in-place mutation of a running revision.
+
+### Rollback
+
+Redeploy with the previous `imageTag`:
+
+```bash
+az deployment group create \
+  --resource-group rg-aigw-dev-sdc \
+  --template-file infra/bicep/environments/dev/main.bicep \
+  --parameters infra/bicep/environments/dev/main.bicepparam \
+  --parameters imageTag=sha-<previous-git-sha>
+```
+
+Because revisions are atomic per revision, this cleanly reverts the affected apps to the prior
+image. Confirm with `az containerapp revision list` that the expected revision is active.
+
+### Inspect the environment
+
+```bash
+az containerapp env show -n cae-aigw-dev-sdc -g rg-aigw-dev-sdc
+```
 
 ### First login (admin portal)
 
-The default admin account is seeded automatically on first boot in `development` mode:
+The default admin account is seeded automatically on first boot when `ENVIRONMENT=development`:
 
 | Field | Value |
 |-------|-------|
-| URL | http://localhost:3001 |
+| URL | https://aigw-dev.lab.cloud.scdom.net/admin-portal/ |
 | Email | `admin@simcorp.com` |
 | Password | set by the `_default_hash` in `services/admin/app/main.py` |
 
-The plaintext password is not stored in the repo. If you don't know it (e.g. after a fresh install), reset it:
+The plaintext password is not stored in the repo. If you don't know it (e.g. on a freshly
+provisioned environment), reset it directly against the Flexible Server from a VNet-connected host:
 
 ```bash
 python3 - <<'EOF'
@@ -127,94 +176,29 @@ import bcrypt, subprocess
 NEW_PASSWORD = "SimCorp1!"   # change to whatever you want
 h = bcrypt.hashpw(NEW_PASSWORD.encode(), bcrypt.gensalt(12)).decode()
 sql = f"UPDATE users SET password_hash = '{h}', must_change_password = false WHERE email = 'admin@simcorp.com';"
-subprocess.run(["docker", "exec", "ai-gateway-postgres-1", "psql", "-U", "aigateway", "-d", "aigateway", "-c", sql])
+subprocess.run(["psql", "-h", "<flexible-server-fqdn>", "-U", "aigateway", "-d", "aigateway", "-c", sql])
 print(f"Password reset to: {NEW_PASSWORD}")
 EOF
 ```
 
 ### Seed the SimCorp org structure
 
-After a fresh install the areas/units/teams tables are empty. Populate the real org hierarchy:
+On a freshly provisioned environment the areas/units/teams tables are empty. Populate the real org
+hierarchy:
 
 ```bash
-# 1. Log in at http://localhost:3001, then in the browser console:
+# 1. Log in at https://aigw-dev.lab.cloud.scdom.net/admin-portal/, then in the browser console:
 #    sessionStorage.getItem('admin_session_token')
-# 2. Copy the token and run:
+# 2. Copy the token and run (from a VNet-connected host):
 ADMIN_TOKEN=<token> python3 scripts/seed_simcorp_org.py
 ```
 
 The script is idempotent — safe to run again if partially applied.
 
-### Start with Ollama (local model serving)
+### Restart a single service
 
-```bash
-docker compose -f infra/docker-compose.yml --profile ollama up --build -d
-```
-
-### Stop Everything
-
-```bash
-docker compose -f infra/docker-compose.yml down
-```
-
-### Stop and Wipe Persistent Data
-
-Postgres data is stored in a bind mount at `data/postgres/` (not a named Docker volume) so it
-survives Docker Desktop restarts on WSL2. To fully wipe:
-
-```bash
-docker compose -f infra/docker-compose.yml down
-sudo rm -rf data/postgres && mkdir -p data/postgres
-# Redis data (named volume):
-docker volume rm ai-gateway_redis_master_data 2>/dev/null || true
-```
-
-On next `up`, `db-migrate` will re-apply all migrations from scratch.
-
-### Restart a Single Service
-
-```bash
-docker compose -f infra/docker-compose.yml restart auth
-docker compose -f infra/docker-compose.yml restart cache
-docker compose -f infra/docker-compose.yml restart litellm
-docker compose -f infra/docker-compose.yml restart observability
-docker compose -f infra/docker-compose.yml restart admin
-```
-
-### Rebuild a Single Service After Code Change
-
-```bash
-docker compose -f infra/docker-compose.yml up --build auth -d
-```
-
-### Check Service Status
-
-```bash
-docker compose -f infra/docker-compose.yml ps
-```
-
-### Makefile Shortcuts
-
-```bash
-# Bring the full stack up and wait for all health checks
-make up
-
-# Tear down (keeps volumes)
-make down
-
-# Tail all service logs
-make logs
-
-# Run the full integration test suite (requires stack to be running)
-DEV_BYPASS_AUTH=true make test
-
-# Start the SSH Claude sandbox
-make sandbox        # → ssh claude@localhost -p 2222, password: gateway
-make sandbox-stop   # stop it
-
-# Run smoke tests only
-DEV_BYPASS_AUTH=true make test-smoke
-```
+A Container App is restarted by creating a fresh revision — redeploy that app's image tag (see
+Deploy). Confirm the new revision is active with `az containerapp revision list`.
 
 ---
 
@@ -222,14 +206,14 @@ DEV_BYPASS_AUTH=true make test-smoke
 
 ### System Health Dashboard
 
-The admin portal exposes a built-in health dashboard:
+The admin portal exposes a built-in health dashboard (reachable over the corp VPN via the gateway FQDN):
 
 | URL | Format | Notes |
 |-----|--------|-------|
-| `http://localhost:3001/admin/dashboard` | HTML | Auto-refreshes every 10 seconds |
-| `http://localhost:8005/system/health` | JSON | Suitable for external monitoring/alerting |
+| `https://aigw-dev.lab.cloud.scdom.net/admin-portal/admin/dashboard` | HTML | Auto-refreshes every 10 seconds |
+| `https://aigw-dev.lab.cloud.scdom.net/admin/system/health` | JSON | Suitable for external monitoring/alerting |
 
-**Visual dashboard:** The JSON endpoint is also rendered as a rich visual dashboard at `http://localhost:3001/admin/dashboard`. It polls every 10 seconds and shows: service status dots with latency bars, Redis memory, Postgres active connections, LiteLLM model count, gateway requests/minute, cache hit rate, and recent error events.
+**Visual dashboard:** The JSON endpoint is also rendered as a rich visual dashboard at the admin-portal dashboard URL above. It polls every 10 seconds and shows: service status dots with latency bars, Redis memory, Postgres active connections, LiteLLM model count, gateway requests/minute, cache hit rate, and recent error events.
 
 The dashboard checks all of the following simultaneously:
 
@@ -246,32 +230,42 @@ Overall status is `ok` only when every sub-check is `ok`; otherwise `degraded`.
 
 ### Individual Service Health Endpoints
 
+Each service exposes `/health`, `/ready`, and `/liveliness`. These are reachable internally
+(`http://ca-<service>-dev-sdc/...`) and via the gateway FQDN over the corp VPN. ACA also uses these
+as the apps' configured liveness/readiness probes.
+
 ```
-GET http://localhost:8001/health   — auth
-GET http://localhost:8002/health   — cache
-GET http://localhost:8003/health/liveliness  — litellm
-GET http://localhost:8004/health   — observability
-GET http://localhost:8005/health   — admin
+GET http://ca-auth-dev-sdc/health           — auth
+GET http://ca-cache-dev-sdc/health           — cache
+GET http://ca-litellm-dev-sdc/health/liveliness — litellm
+GET http://ca-observability-dev-sdc/health   — observability
+GET http://ca-admin-dev-sdc/health           — admin
 ```
 
-### Redis Health Check (CLI)
+### Redis Health Check
+
+From a VNet-connected host, against the Azure Cache for Redis Premium endpoint:
 
 ```bash
-docker compose -f infra/docker-compose.yml exec redis redis-cli ping
+redis-cli -h <redis-premium-host> --tls ping
 # Expected: PONG
 
-docker compose -f infra/docker-compose.yml exec redis redis-cli info memory | grep used_memory_human
-docker compose -f infra/docker-compose.yml exec redis redis-cli info clients | grep connected_clients
+redis-cli -h <redis-premium-host> --tls info memory | grep used_memory_human
+redis-cli -h <redis-premium-host> --tls info clients | grep connected_clients
 ```
 
-### PostgreSQL Health Check (CLI)
+### PostgreSQL Health Check
+
+From a VNet-connected host, against the Flexible Server:
 
 ```bash
-docker compose -f infra/docker-compose.yml exec postgres \
-  psql -U aigateway -c "SELECT count(*) FROM pg_stat_activity WHERE state = 'active';"
+psql -h <flexible-server-fqdn> -U aigateway -d aigateway \
+  -c "SELECT count(*) FROM pg_stat_activity WHERE state = 'active';"
 ```
 
 ### Key Metrics to Watch
+
+Metrics and traces are in Application Insights; the gateway dashboard surfaces the same signals.
 
 | Metric | Where | Alert threshold (suggested) |
 |--------|-------|-----------------------------|
@@ -282,60 +276,34 @@ docker compose -f infra/docker-compose.yml exec postgres \
 | cache_hit_rate_last_60s | `/system/health` > gateway | Sustained drop below 0.20 |
 | models_available | `/system/health` > litellm | 0 models available |
 
----
+### Configured Alerts
 
-## 3a. Integration Test Suite
+These fire from `infra/bicep/.../monitoring.bicep` and post to a Microsoft Teams webhook:
 
-The repo ships a pytest suite in `tests/` that validates all five services end-to-end.
-
-### Running
-
-```bash
-# Requires stack to be running first
-DEV_BYPASS_AUTH=true make test
-```
-
-### What's Covered
-
-| File | Tests | What it checks |
-|---|---|---|
-| test_smoke.py | 5 | All services return 200 on /health |
-| test_auth.py | 6 | Valid key accepted, invalid rejected, revoked rejected |
-| test_cache.py | 5 | Exact cache hit, semantic hit, streaming miss |
-| test_proxy.py | 7 | Chat completions shape, streaming, unknown model |
-| test_admin.py | 9 | Team CRUD, key lifecycle, revoked key at gateway |
-| test_portal.py | 11 | Signup, login, session, key creation |
-
-### DB Tables Required
-
-The test fixture creates a throwaway team and tears it down after each run. If `POST /teams` returns 500, the gateway tables are missing — re-run init.sql:
-
-```bash
-docker run --rm --network aigateway -e PGPASSWORD=aigateway \
-  -v "$(pwd)/infra/postgres/init.sql:/init.sql:ro" \
-  postgres:16 psql -h postgres -U aigateway -d aigateway -f /init.sql
-```
+| Alert | Condition |
+|-------|-----------|
+| Gateway latency | p99 > 500ms over 5 min |
+| Error rate | > 5% over 5 min |
+| Redis evictions | Eviction events on the Redis cache |
+| PostgreSQL CPU | > 80% over 5 min |
+| Container App restarts | > 3 restarts over 5 min |
 
 ---
 
-## 3b. Claude Sandbox
+## 3a. Tests
 
-A Docker container with Claude Code CLI pre-installed for interactive testing.
+**Fast tests (local, no deployed environment):**
 
 ```bash
-# Start (detached, port 2222)
-make sandbox
-
-# Connect
-ssh claude@localhost -p 2222   # password: gateway
-
-# Inside — interactive setup wizard
-go
+pytest services/ -v
 ```
 
-The `go` script checks gateway connectivity, prompts for an API key (or creates one), optionally selects a model, then launches `claude`. The container is on the `aigateway` Docker network so it reaches all internal services by hostname.
+The `identity` and `admin` suites use `testcontainers[postgres]` and need a running Docker daemon
+on the developer's machine; the rest run without it.
 
-To stop: `make sandbox-stop`
+**End-to-end smoke tests** run against the deployed dev environment from a VNet-connected CI runner
+as part of `deploy.yml` after a successful deploy. They exercise the gateway FQDN and confirm each
+service responds on `/health` and that the auth → cache → litellm path works end-to-end.
 
 ---
 
@@ -343,28 +311,32 @@ To stop: `make sandbox-stop`
 
 ### 4.1 Service Unreachable
 
-**Symptoms:** Health dashboard shows `unreachable` for one or more services. HTTP calls to that service return connection refused.
+**Symptoms:** Health dashboard shows `unreachable` for one or more services. Calls to that service via the gateway return 5xx or time out.
 
 **Diagnosis:**
 
 ```bash
-# Check if the container is running
-docker compose -f infra/docker-compose.yml ps
+# Check the app's revisions and which is active
+az containerapp revision list -n ca-auth-dev-sdc -g rg-aigw-dev-sdc
 
-# Check recent logs for the failing service
-docker compose -f infra/docker-compose.yml logs --tail=100 auth
-docker compose -f infra/docker-compose.yml logs --tail=100 cache
-docker compose -f infra/docker-compose.yml logs --tail=100 litellm
+# Stream recent logs for the failing service
+az containerapp logs show -n ca-auth-dev-sdc -g rg-aigw-dev-sdc --follow
+az containerapp logs show -n ca-cache-dev-sdc -g rg-aigw-dev-sdc --follow
+az containerapp logs show -n ca-litellm-dev-sdc -g rg-aigw-dev-sdc --follow
 ```
+
+For history beyond the live stream, query Log Analytics (`law-aca-dev-sdc`) with KQL over
+`ContainerAppConsoleLogs_CL` (application stdout/stderr) and `ContainerAppSystemLogs_CL` (platform
+events such as scaling and restarts).
 
 **Common causes and fixes:**
 
 | Cause | Fix |
 |-------|-----|
-| Container exited (crash loop) | Check logs for Python traceback. Fix the root cause, then `docker compose up -d <service>` |
-| Dependency not ready (e.g. litellm waiting on postgres) | Wait for `db-migrate` to complete; `docker compose ps` should show it as `exited 0` |
-| Port conflict on host | Check `ss -tlnp | grep 800` and kill conflicting processes |
-| Build failure | Run `docker compose build <service>` standalone to see the full error |
+| Revision in crash loop | Check `ContainerAppConsoleLogs_CL` for a Python traceback. Fix the root cause and redeploy; if it was a bad image, roll back to the previous `imageTag` (§2). |
+| Dependency not ready (e.g. litellm before migrations) | Confirm the `job-db-migrate-dev-sdc` job completed successfully before app revisions started. |
+| Restart storm | `ContainerAppSystemLogs_CL` shows restart events; the ">3 restarts/5min" alert fires to Teams. |
+| Bad config / missing secret | A missing Key Vault secret blocks startup — confirm the app's managed identity has access and the secret exists. |
 
 ---
 
@@ -377,31 +349,23 @@ docker compose -f infra/docker-compose.yml logs --tail=100 litellm
 - For **gateway callers** (`sk-` keys): the key may be revoked, expired, or the team may not exist.
 
 ```sql
--- Check key status in Postgres
-docker compose -f infra/docker-compose.yml exec postgres \
-  psql -U aigateway -c "
+-- Check key status in Postgres (psql from a VNet-connected host)
+psql -h <flexible-server-fqdn> -U aigateway -d aigateway -c "
     SELECT ak.name, ak.created_at, ak.revoked_at, t.name AS team
     FROM api_keys ak JOIN teams t ON ak.team_id = t.id
     WHERE ak.revoked_at IS NOT NULL
     ORDER BY ak.revoked_at DESC LIMIT 10;"
 ```
 
-- For **admin portal** (`X-Admin-Token` header): confirm the `ADMIN_TOKEN` env var is set and matches what the client is sending.
-
-```bash
-# Is dev bypass enabled?
-docker compose -f infra/docker-compose.yml exec admin \
-  printenv DEV_BYPASS_AUTH ADMIN_TOKEN
-```
+- For **admin portal** (`X-Admin-Token` header): confirm the `ADMIN_TOKEN` secret is set and matches what the client is sending. Inspect the admin app's effective config via its logs (`az containerapp logs show -n ca-admin-dev-sdc -g rg-aigw-dev-sdc`).
 
 **Common causes and fixes:**
 
 | Cause | Fix |
 |-------|-----|
 | API key revoked | Issue a new key via Admin > Teams > API Keys |
-| `ADMIN_TOKEN` not set | Set `ADMIN_TOKEN` in `.env` and restart the admin service |
-| `DEV_BYPASS_AUTH=false` with empty `ADMIN_TOKEN` | Admin will return 500 — set `ADMIN_TOKEN` |
-| JWT from Dex expired | Re-authenticate through the OIDC flow |
+| `ADMIN_TOKEN` not set | Admin will return 500 — set the `ADMIN_TOKEN` secret in Key Vault and redeploy the admin app |
+| Entra ID JWT expired | Re-authenticate through the OIDC flow |
 
 ---
 
@@ -414,17 +378,14 @@ docker compose -f infra/docker-compose.yml exec admin \
 **Diagnosis:**
 
 ```bash
-# Check current counter for a team+model combination
-docker compose -f infra/docker-compose.yml exec redis \
-  redis-cli get "ratelimit:<team_id>:<model>"
+# Check current counter for a team+model combination (redis-cli from a VNet-connected host)
+redis-cli -h <redis-premium-host> --tls get "ratelimit:<team_id>:<model>"
 
 # See all active rate limit keys
-docker compose -f infra/docker-compose.yml exec redis \
-  redis-cli keys "ratelimit:*"
+redis-cli -h <redis-premium-host> --tls keys "ratelimit:*"
 
-# Check the team's configured limit
-docker compose -f infra/docker-compose.yml exec postgres \
-  psql -U aigateway -c "
+# Check the team's configured limit (psql from a VNet-connected host)
+psql -h <flexible-server-fqdn> -U aigateway -d aigateway -c "
     SELECT t.name, p.rate_limit_rpm
     FROM policies p JOIN teams t ON p.team_id = t.id;"
 ```
@@ -436,32 +397,30 @@ docker compose -f infra/docker-compose.yml exec postgres \
 3. **Clear the counter manually (emergency only):**
 
 ```bash
-docker compose -f infra/docker-compose.yml exec redis \
-  redis-cli del "ratelimit:<team_id>:<model>"
+redis-cli -h <redis-premium-host> --tls del "ratelimit:<team_id>:<model>"
 ```
 
 ---
 
 ### 4.4 Provider API Key Missing
 
-**Symptoms:** LiteLLM returns `AuthenticationError` or `APIError`. The system health dashboard shows `models_available: 0` or a low count. The settings page at `http://localhost:3001/admin/dashboard` shows a provider as "not configured".
+**Symptoms:** LiteLLM returns `AuthenticationError` or `APIError`. The system health dashboard shows `models_available: 0` or a low count. The settings page on the admin portal shows a provider as "not configured".
 
 **Diagnosis:**
 
 ```bash
-# Check what keys are stored in the database
-docker compose -f infra/docker-compose.yml exec postgres \
-  psql -U aigateway -c "
+# Check what keys are stored in the database (psql from a VNet-connected host)
+psql -h <flexible-server-fqdn> -U aigateway -d aigateway -c "
     SELECT env_var, updated_at FROM provider_keys;"
 
-# Check LiteLLM model list (should list configured models)
-curl -s -H "Authorization: Bearer sk-litellm-local-dev" \
-  http://localhost:8003/v1/models | python3 -m json.tool
+# Check LiteLLM model list (should list configured models), via the gateway over VPN
+curl -s -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
+  https://aigw-dev.lab.cloud.scdom.net/litellm/v1/models | python3 -m json.tool
 ```
 
 **Fix:**
 
-1. Navigate to `http://localhost:3001/admin/dashboard`.
+1. Open the admin portal settings page at `https://aigw-dev.lab.cloud.scdom.net/admin-portal/admin/dashboard`.
 2. Enter the API key for the failing provider in the appropriate field.
 3. Click **Save**. The portal stores the key in `provider_keys` and immediately calls `PATCH /model/update` on LiteLLM — no restart required.
 4. Use the **Test** button on the settings page to verify connectivity. It fires a 1-token completion and reports latency.
@@ -483,52 +442,46 @@ curl -s -H "Authorization: Bearer sk-litellm-local-dev" \
 
 **Diagnosis:**
 
+Run redis-cli from a VNet-connected host against the Azure Cache for Redis Premium endpoint:
+
 ```bash
 # Ping
-docker compose -f infra/docker-compose.yml exec redis redis-cli ping
+redis-cli -h <redis-premium-host> --tls ping
 
 # Memory info
-docker compose -f infra/docker-compose.yml exec redis redis-cli info memory
+redis-cli -h <redis-premium-host> --tls info memory
 
 # Key count and type breakdown
-docker compose -f infra/docker-compose.yml exec redis redis-cli dbsize
-docker compose -f infra/docker-compose.yml exec redis redis-cli info keyspace
+redis-cli -h <redis-premium-host> --tls dbsize
+redis-cli -h <redis-premium-host> --tls info keyspace
 ```
 
-**Redis disconnected — fix:**
-
-```bash
-docker compose -f infra/docker-compose.yml restart redis
-```
-
-All services reconnect automatically. Rate limit windows will reset (acceptable as a recovery side-effect).
+**Redis unreachable — fix:** Azure Cache for Redis is a managed PaaS resource. Check its health in
+the Azure portal / Application Insights; raise a platform ticket if the instance itself is degraded.
+Services reconnect automatically once it recovers. Rate limit windows will reset (acceptable as a
+recovery side-effect).
 
 **Redis memory full — fix options:**
 
-1. **Flush expired keys** (Redis does this lazily; trigger it):
-
-```bash
-docker compose -f infra/docker-compose.yml exec redis redis-cli debug sleep 0
-```
-
-2. **Flush semantic cache only** (safe, cache will rebuild on demand):
+1. **Flush semantic cache only** (safe, cache will rebuild on demand):
 
 ```bash
 # Semantic cache keys typically follow a pattern — inspect first
-docker compose -f infra/docker-compose.yml exec redis redis-cli keys "cache:*"
+redis-cli -h <redis-premium-host> --tls keys "cache:*"
 # Then delete matching keys
-docker compose -f infra/docker-compose.yml exec redis redis-cli --scan --pattern "cache:*" \
-  | xargs redis-cli del
+redis-cli -h <redis-premium-host> --tls --scan --pattern "cache:*" \
+  | xargs redis-cli -h <redis-premium-host> --tls del
 ```
 
-3. **Flush portal sessions** (users will need to re-login):
+2. **Flush portal sessions** (users will need to re-login):
 
 ```bash
-docker compose -f infra/docker-compose.yml exec redis redis-cli --scan --pattern "portal_session:*" \
-  | xargs redis-cli del
+redis-cli -h <redis-premium-host> --tls --scan --pattern "portal_session:*" \
+  | xargs redis-cli -h <redis-premium-host> --tls del
 ```
 
-4. **Set a `maxmemory` policy** in `.env` if not already present to enable automatic eviction.
+3. **Review the `maxmemory` / eviction policy** on the Premium P1 instance to ensure automatic
+   eviction is enabled. The "Redis evictions" alert (§3) fires when eviction events occur.
 
 ---
 
@@ -539,13 +492,11 @@ docker compose -f infra/docker-compose.yml exec redis redis-cli --scan --pattern
 **Diagnosis:**
 
 ```bash
-docker compose -f infra/docker-compose.yml exec postgres \
-  psql -U aigateway -c "
+psql -h <flexible-server-fqdn> -U aigateway -d aigateway -c "
     SELECT state, count(*) FROM pg_stat_activity
     GROUP BY state ORDER BY count DESC;"
 
-docker compose -f infra/docker-compose.yml exec postgres \
-  psql -U aigateway -c "
+psql -h <flexible-server-fqdn> -U aigateway -d aigateway -c "
     SELECT pid, state, application_name, query_start, query
     FROM pg_stat_activity
     WHERE state != 'idle'
@@ -557,17 +508,16 @@ docker compose -f infra/docker-compose.yml exec postgres \
 1. **Terminate idle connections** (safe):
 
 ```bash
-docker compose -f infra/docker-compose.yml exec postgres \
-  psql -U aigateway -c "
+psql -h <flexible-server-fqdn> -U aigateway -d aigateway -c "
     SELECT pg_terminate_backend(pid)
     FROM pg_stat_activity
     WHERE state = 'idle'
       AND query_start < NOW() - INTERVAL '10 minutes';"
 ```
 
-2. **Restart the service with the leak** if a specific service is holding too many connections.
+2. **Restart the service with the leak** (redeploy that app, §2) if a specific service is holding too many connections.
 
-3. **Longer term:** add `pool_size` and `max_overflow` settings to each service's SQLAlchemy engine configuration, or use PgBouncer as a connection pooler.
+3. **Longer term:** add `pool_size` and `max_overflow` settings to each service's SQLAlchemy engine configuration, or front the Flexible Server with PgBouncer.
 
 ---
 
@@ -594,18 +544,16 @@ FROM pg_catalog.pg_statio_user_tables
 ORDER BY pg_total_relation_size(relid) DESC;
 ```
 
-Run via:
+Run via (psql from a VNet-connected host):
 
 ```bash
-docker compose -f infra/docker-compose.yml exec postgres \
-  psql -U aigateway -c "<SQL above>"
+psql -h <flexible-server-fqdn> -U aigateway -d aigateway -c "<SQL above>"
 ```
 
 ### Prune cost_records (older than 90 days)
 
 ```bash
-docker compose -f infra/docker-compose.yml exec postgres \
-  psql -U aigateway -c "
+psql -h <flexible-server-fqdn> -U aigateway -d aigateway -c "
     DELETE FROM cost_records
     WHERE created_at < NOW() - INTERVAL '90 days';"
 ```
@@ -613,8 +561,7 @@ docker compose -f infra/docker-compose.yml exec postgres \
 ### Prune audit_log (older than 90 days)
 
 ```bash
-docker compose -f infra/docker-compose.yml exec postgres \
-  psql -U aigateway -c "
+psql -h <flexible-server-fqdn> -U aigateway -d aigateway -c "
     DELETE FROM audit_log
     WHERE timestamp < NOW() - INTERVAL '90 days';"
 ```
@@ -622,8 +569,7 @@ docker compose -f infra/docker-compose.yml exec postgres \
 ### Prune revoked API keys (older than 1 year)
 
 ```bash
-docker compose -f infra/docker-compose.yml exec postgres \
-  psql -U aigateway -c "
+psql -h <flexible-server-fqdn> -U aigateway -d aigateway -c "
     DELETE FROM api_keys
     WHERE revoked_at IS NOT NULL
       AND revoked_at < NOW() - INTERVAL '1 year';"
@@ -632,15 +578,17 @@ docker compose -f infra/docker-compose.yml exec postgres \
 ### Vacuum After Large Deletes
 
 ```bash
-docker compose -f infra/docker-compose.yml exec postgres \
-  psql -U aigateway -c "VACUUM ANALYZE cost_records; VACUUM ANALYZE audit_log;"
+psql -h <flexible-server-fqdn> -U aigateway -d aigateway \
+  -c "VACUUM ANALYZE cost_records; VACUUM ANALYZE audit_log;"
 ```
 
 ### Back Up the Database
 
+Azure Database for PostgreSQL Flexible Server takes automated backups; use point-in-time restore in
+the Azure portal for routine recovery. For an ad-hoc logical dump from a VNet-connected host:
+
 ```bash
-docker compose -f infra/docker-compose.yml exec postgres \
-  pg_dump -U aigateway aigateway | gzip > aigateway-$(date +%Y%m%d).sql.gz
+pg_dump -h <flexible-server-fqdn> -U aigateway aigateway | gzip > aigateway-$(date +%Y%m%d).sql.gz
 ```
 
 ---
@@ -649,8 +597,8 @@ docker compose -f infra/docker-compose.yml exec postgres \
 
 ### Via the Admin UI (preferred)
 
-1. Open the admin portal at `http://localhost:3001/admin/dashboard`.
-2. Navigate to **Settings** (or go directly to `http://localhost:3001/admin/dashboard`).
+1. Open the admin portal at `https://aigw-dev.lab.cloud.scdom.net/admin-portal/admin/dashboard`.
+2. Navigate to **Settings** (or go directly to the dashboard URL above).
 3. Find the provider row (Anthropic, OpenAI, Google, or GitHub Models).
 4. Enter the API key in the text field for that provider.
 5. Click **Save**. The portal:
@@ -662,8 +610,8 @@ docker compose -f infra/docker-compose.yml exec postgres \
 ### Verify LiteLLM Received the Key
 
 ```bash
-curl -s -H "Authorization: Bearer sk-litellm-local-dev" \
-  http://localhost:8003/v1/models | python3 -c "
+curl -s -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
+  https://aigw-dev.lab.cloud.scdom.net/litellm/v1/models | python3 -c "
 import json, sys
 models = json.load(sys.stdin)
 for m in models.get('data', []):
@@ -680,7 +628,7 @@ If the provider is not yet in the `PROVIDERS` list in `services/admin/app/router
 1. Add an entry to the `PROVIDERS` list with `name`, `icon`, `env_var`, `models`, `litellm_model_names`, and `test_model`.
 2. Add the corresponding model rows to `model_registry` and `model_pricing` in `infra/postgres/init.sql`.
 3. Add the model to LiteLLM's config file (`services/litellm/config.yaml` or equivalent).
-4. Rebuild and restart: `docker compose -f infra/docker-compose.yml up --build admin litellm -d`.
+4. Build new images, then redeploy the admin and litellm apps with the new `imageTag` (§2).
 
 ---
 
@@ -703,11 +651,10 @@ If the provider is not yet in the `PROVIDERS` list in `services/admin/app/router
 1. Admin portal > **Teams** > select team > **API Keys** > click **Revoke** next to the key.
 2. The `revoked_at` timestamp is set immediately. Auth will reject the key on the next request.
 
-Or via SQL (emergency revocation):
+Or via SQL (emergency revocation, from a VNet-connected host):
 
 ```bash
-docker compose -f infra/docker-compose.yml exec postgres \
-  psql -U aigateway -c "
+psql -h <flexible-server-fqdn> -U aigateway -d aigateway -c "
     UPDATE api_keys SET revoked_at = NOW()
     WHERE name = '<key name>';"
 ```
@@ -718,11 +665,10 @@ docker compose -f infra/docker-compose.yml exec postgres \
 2. Modify `rate_limit_rpm` (requests per minute per model, fixed 60-second window).
 3. Save. The change takes effect on the next rate limit window (up to 60 seconds).
 
-Or via SQL:
+Or via SQL (from a VNet-connected host):
 
 ```bash
-docker compose -f infra/docker-compose.yml exec postgres \
-  psql -U aigateway -c "
+psql -h <flexible-server-fqdn> -U aigateway -d aigateway -c "
     UPDATE policies SET rate_limit_rpm = 2000, updated_at = NOW()
     WHERE team_id = (SELECT id FROM teams WHERE slug = '<team-slug>');"
 ```
@@ -732,8 +678,7 @@ docker compose -f infra/docker-compose.yml exec postgres \
 In the `policies` table, `allowed_models` is a `TEXT[]` column. An empty array means all models are allowed.
 
 ```bash
-docker compose -f infra/docker-compose.yml exec postgres \
-  psql -U aigateway -c "
+psql -h <flexible-server-fqdn> -U aigateway -d aigateway -c "
     UPDATE policies
     SET allowed_models = ARRAY['gpt-4o-mini', 'claude-haiku-4-5'], updated_at = NOW()
     WHERE team_id = (SELECT id FROM teams WHERE slug = '<team-slug>');"
@@ -742,8 +687,7 @@ docker compose -f infra/docker-compose.yml exec postgres \
 ### View Cost Data for a Team
 
 ```bash
-docker compose -f infra/docker-compose.yml exec postgres \
-  psql -U aigateway -c "
+psql -h <flexible-server-fqdn> -U aigateway -d aigateway -c "
     SELECT
         model,
         SUM(tokens_input) AS total_input_tokens,
@@ -764,17 +708,23 @@ docker compose -f infra/docker-compose.yml exec postgres \
 
 ### Viewing Logs
 
-```bash
-# All services, last 200 lines, follow
-docker compose -f infra/docker-compose.yml logs -f --tail=200
+Stream live logs for a single Container App:
 
-# Single service
-docker compose -f infra/docker-compose.yml logs -f --tail=200 auth
-docker compose -f infra/docker-compose.yml logs -f --tail=200 cache
-docker compose -f infra/docker-compose.yml logs -f --tail=200 litellm
-docker compose -f infra/docker-compose.yml logs -f --tail=200 observability
-docker compose -f infra/docker-compose.yml logs -f --tail=200 admin
+```bash
+az containerapp logs show -n ca-auth-dev-sdc -g rg-aigw-dev-sdc --follow
+az containerapp logs show -n ca-cache-dev-sdc -g rg-aigw-dev-sdc --follow
+az containerapp logs show -n ca-litellm-dev-sdc -g rg-aigw-dev-sdc --follow
+az containerapp logs show -n ca-observability-dev-sdc -g rg-aigw-dev-sdc --follow
+az containerapp logs show -n ca-admin-dev-sdc -g rg-aigw-dev-sdc --follow
 ```
+
+For historical search, cross-service correlation, or alerting, query Log Analytics workspace
+`law-aca-dev-sdc` with KQL:
+
+- `ContainerAppConsoleLogs_CL` — application stdout/stderr (filter by container app name)
+- `ContainerAppSystemLogs_CL` — platform events (scaling, restarts, probe failures)
+
+Metrics and distributed traces are in Application Insights.
 
 ### What to Look For by Service
 
@@ -791,7 +741,7 @@ docker compose -f infra/docker-compose.yml logs -f --tail=200 admin
 
 | Pattern | Meaning |
 |---------|---------|
-| `embedding` error | Embedding model (Ollama/OpenAI) unreachable — cache bypassed, still functional |
+| `embedding` error | Embedding endpoint (via litellm) unreachable — cache bypassed, still functional |
 | `Redis` error | Cache read/write failures — requests pass through to LiteLLM |
 | `litellm` / upstream error | Provider call failed after cache miss |
 
@@ -824,8 +774,7 @@ docker compose -f infra/docker-compose.yml logs -f --tail=200 admin
 The `audit_log` table records key administrative actions. Query it directly or view the last 8 error entries on the system health dashboard.
 
 ```bash
-docker compose -f infra/docker-compose.yml exec postgres \
-  psql -U aigateway -c "
+psql -h <flexible-server-fqdn> -U aigateway -d aigateway -c "
     SELECT timestamp, actor, action, resource_type, resource_id
     FROM audit_log
     ORDER BY timestamp DESC
@@ -834,72 +783,74 @@ docker compose -f infra/docker-compose.yml exec postgres \
 
 ---
 
-## 9. Environment Variables Reference
+## 9. Configuration and Secrets Reference
 
-All services read from the `.env` file at the project root via `env_file: ../.env` in docker-compose. Values in the table below are the defaults when the `.env` file is absent.
+Configuration is delivered to each Container App as environment variables and secrets. Secrets and
+connection strings are stored in Azure Key Vault and injected via each app's managed identity; the
+PaaS endpoints below are reached over private endpoints in `snet-pe-aigw-dev`. The "Value / source"
+column describes what each variable points at in the dev environment.
 
 ### Infrastructure
 
-| Variable | Default | Used by | Description |
-|----------|---------|---------|-------------|
-| `DATABASE_URL` | `postgresql+asyncpg://aigateway:aigateway@localhost:5432/aigateway` | auth, observability, admin | SQLAlchemy async connection string. LiteLLM uses a separate `postgresql://` (no `+asyncpg`) form set in docker-compose directly. |
-| `REDIS_URL` | `redis://localhost:6379/0` | auth, cache, admin | Redis connection string |
+| Variable | Value / source | Used by | Description |
+|----------|----------------|---------|-------------|
+| `DATABASE_URL` | Flexible Server, database `aigateway` (from Key Vault) | auth, observability, admin | SQLAlchemy async connection string (`postgresql+asyncpg://...`). LiteLLM uses a separate `postgresql://` (no `+asyncpg`) form pointing at the `litellm` database. |
+| `REDIS_URL` | Azure Cache for Redis Premium P1 (from Key Vault) | auth, cache, admin | Redis connection string (TLS) |
 
-### Auth Service (:8001)
+### Auth Service (`ca-auth-dev-sdc`, :8001)
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `REDIS_URL` | `redis://localhost:6379/0` | Redis for rate limit counters |
+| Variable | Value / source | Description |
+|----------|----------------|-------------|
+| `REDIS_URL` | Redis Premium (from Key Vault) | Redis for rate limit counters |
 | `DATABASE_URL` | see above | Postgres for API key lookup |
-| `JWKS_URI` | `http://dex:5556/dex/keys` | OIDC public key endpoint for JWT validation |
-| `ENTRA_TENANT_ID` | `local` | Azure Entra tenant ID (or `local` for Dex) |
-| `ENTRA_CLIENT_ID` | `ai-gateway-admin` | Expected `aud` claim in JWTs |
+| `JWKS_URI` | Entra ID JWKS endpoint | OIDC public key endpoint for JWT validation |
+| `ENTRA_TENANT_ID` | SimCorp Entra tenant ID | Azure Entra tenant ID |
+| `ENTRA_CLIENT_ID` | app registration client ID | Expected `aud` claim in JWTs |
 | `RATE_LIMIT_DEFAULT_RPM` | `1000` | Fallback RPM when no policy row exists for a team |
 
-### Cache Service (:8002)
+### Cache Service (`ca-cache-dev-sdc`, :8002)
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `REDIS_URL` | `redis://localhost:6379/0` | Redis for semantic cache storage |
-| `LITELLM_URL` | `http://litellm:8003` | Upstream for cache misses |
-| `LITELLM_MASTER_KEY` | `sk-litellm-local-dev` | Bearer token for LiteLLM API |
-| `AUTH_URL` | `http://auth:8001` | Auth service for upstream validation |
-| `OBSERVABILITY_URL` | `http://observability:8004` | Async event posting |
+| Variable | Value / source | Description |
+|----------|----------------|-------------|
+| `REDIS_URL` | Redis Premium (from Key Vault) | Redis for semantic cache storage |
+| `LITELLM_URL` | `http://ca-litellm-dev-sdc:8003` | Upstream for cache misses |
+| `LITELLM_MASTER_KEY` | from Key Vault | Bearer token for LiteLLM API |
+| `AUTH_URL` | `http://ca-auth-dev-sdc:8001` | Auth service for upstream validation |
+| `OBSERVABILITY_URL` | `http://ca-observability-dev-sdc:8004` | Async event posting |
 | `EMBEDDING_MODEL` | `text-embedding-3-small` | Model used for semantic similarity |
-| `EMBEDDING_API_KEY` | `sk-placeholder` | API key for embedding calls |
-| `EMBEDDING_BASE_URL` | `http://ollama:11434/v1` | Base URL for embedding API (Ollama or OpenAI) |
+| `EMBEDDING_API_KEY` | from Key Vault | API key for embedding calls |
+| `EMBEDDING_BASE_URL` | `http://ca-litellm-dev-sdc:8003/v1` | Base URL for embedding API (embeddings go via the gateway / litellm) |
 | `DEFAULT_SIMILARITY_THRESHOLD` | `0.95` | Cosine similarity threshold for cache hits |
 | `DEFAULT_TTL_SECONDS` | `3600` | Cache entry TTL (1 hour) |
 
-### Observability Service (:8004)
+### Observability Service (`ca-observability-dev-sdc`, :8004)
 
-| Variable | Default | Description |
-|----------|---------|-------------|
+| Variable | Value / source | Description |
+|----------|----------------|-------------|
 | `DATABASE_URL` | see above | Postgres for cost_records and audit_log writes |
-| `BUS_PROVIDER` | `memory` | Event bus: `memory` (local) or `azure` |
-| `AZURE_SERVICE_BUS_CONNECTION_STRING` | _(empty)_ | Required if `BUS_PROVIDER=azure` |
-| `AZURE_SERVICE_BUS_TOPIC` | `gateway-events` | Topic name on Azure Service Bus |
+| `BUS_PROVIDER` | `servicebus` | Event bus provider (Azure Service Bus in ACA; `memory` for local) |
+| `AZURE_SERVICE_BUS_CONNECTION_STRING` | from Key Vault | Service Bus connection string |
+| `AZURE_SERVICE_BUS_TOPIC` | `observability-events` | Service Bus entity name (the dev environment provisions the queue `observability-events`) |
 | `AZURE_SERVICE_BUS_SUBSCRIPTION` | `gateway-workers` | Subscription name |
-| `APPINSIGHTS_CONNECTION_STRING` | _(empty)_ | Azure Application Insights (optional) |
+| `APPINSIGHTS_CONNECTION_STRING` | from Key Vault | Application Insights connection string |
 
-### Admin Portal (:8005)
+### Admin Portal (`ca-admin-dev-sdc`, :8005)
 
-| Variable | Default | Description |
-|----------|---------|-------------|
+| Variable | Value / source | Description |
+|----------|----------------|-------------|
 | `DATABASE_URL` | see above | Postgres for all admin data |
-| `REDIS_URL` | `redis://localhost:6379/0` | Redis for portal sessions (`portal_session:{token}`) |
-| `SECRET_KEY` | `change-me-in-production` | Session signing key — **must be changed in production** |
-| `ADMIN_TOKEN` | _(empty)_ | Required `X-Admin-Token` header value when `DEV_BYPASS_AUTH=false` |
-| `DEV_BYPASS_AUTH` | `false` | Set `true` in local dev to skip admin token checks |
-| `OIDC_ISSUER` | `http://dex:5556/dex` | OIDC issuer URL for admin portal login |
-| `OIDC_CLIENT_ID` | `ai-gateway-admin` | OIDC client ID |
-| `OIDC_CLIENT_SECRET` | `ai-gateway-admin-secret` | OIDC client secret — **change in production** |
-| `LITELLM_MASTER_KEY` | `sk-litellm-local-dev` | Bearer token for LiteLLM management API |
-| `AUTH_URL` | `http://auth:8001` | Auth service URL (for health checks) |
-| `CACHE_URL` | `http://cache:8002` | Cache service URL (for health checks) |
-| `LITELLM_URL` | `http://litellm:8003` | LiteLLM URL (for health checks and key push) |
-| `OBSERVABILITY_URL` | `http://observability:8004` | Observability service URL (for health checks) |
-| `GITHUB_WEBHOOK_SECRET` | _(empty)_ | HMAC secret for validating `X-Hub-Signature-256` on `POST /webhooks/github`. Set to match the secret configured in your GitHub repository or organisation webhook settings. Required for GitHub commit-to-session attribution. |
+| `REDIS_URL` | Redis Premium (from Key Vault) | Redis for portal sessions (`portal_session:{token}`) |
+| `SECRET_KEY` | from Key Vault | Session signing key |
+| `ADMIN_TOKEN` | from Key Vault | Required `X-Admin-Token` header value for admin/automation requests (always enforced) |
+| `OIDC_ISSUER` | Entra ID issuer URL | OIDC issuer URL for admin portal login |
+| `OIDC_CLIENT_ID` | app registration client ID | OIDC client ID |
+| `OIDC_CLIENT_SECRET` | from Key Vault | OIDC client secret |
+| `LITELLM_MASTER_KEY` | from Key Vault | Bearer token for LiteLLM management API |
+| `AUTH_URL` | `http://ca-auth-dev-sdc:8001` | Auth service URL (for health checks) |
+| `CACHE_URL` | `http://ca-cache-dev-sdc:8002` | Cache service URL (for health checks) |
+| `LITELLM_URL` | `http://ca-litellm-dev-sdc:8003` | LiteLLM URL (for health checks and key push) |
+| `OBSERVABILITY_URL` | `http://ca-observability-dev-sdc:8004` | Observability service URL (for health checks) |
+| `GITHUB_WEBHOOK_SECRET` | from Key Vault | HMAC secret for validating `X-Hub-Signature-256` on `POST /webhooks/github`. Set to match the secret configured in your GitHub repository or organisation webhook settings. Required for GitHub commit-to-session attribution. |
 
 ### Provider API Keys (stored in DB, also readable from env)
 

@@ -6,9 +6,9 @@ now managed via /nodes/{id}/members in app/routers/nodes.py:
     POST   /nodes/{id}/members            {"user_id": ...}
     DELETE /nodes/{id}/members/{user_id}
 
-These endpoints authenticate via unified_auth.get_current_user (which does NOT
-honour DEV_BYPASS_AUTH), so we override it with a platform_admin fake scoped to
-root "/" — a prefix of every node path — so can_access() passes.
+These endpoints authenticate via unified_auth.get_current_user, so we override
+it with a platform_admin fake scoped to root "/" — a prefix of every node
+path — so can_access() passes.
 """
 
 import uuid

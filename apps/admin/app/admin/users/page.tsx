@@ -56,7 +56,7 @@ function formatDateTime(iso: string | null | undefined) {
   return new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
-const AVATAR_COLORS = ['#083EA7', '#1D958E', '#4B17B6', '#FB9B2A', '#0A7BD7', '#1A7A3C', '#EF3E4A'];
+const AVATAR_COLORS = ['var(--accent)', 'var(--cat-teal)', 'var(--cat-purple)', 'var(--cat-orange)', 'var(--accent)', 'var(--good)', 'var(--cat-coral)'];
 function avatarColor(seed: string) {
   let h = 0;
   for (const c of seed) h = (h * 31 + c.charCodeAt(0)) >>> 0;
@@ -69,20 +69,20 @@ function avatarInitials(u: User) {
 }
 
 const ROLE_META: Record<string, { label: string; color: string }> = {
-  platform_admin: { label: 'Platform Admin', color: '#4B17B6' },
-  area_owner:     { label: 'Area Owner',     color: '#083EA7' },
-  team_admin:     { label: 'Team Admin',     color: '#1D958E' },
-  developer:      { label: 'Developer',      color: '#1A7A3C' },
-  viewer:         { label: 'Viewer',         color: '#6B7280' },
-  service_account:{ label: 'Service Acct',  color: '#FB9B2A' },
+  platform_admin: { label: 'Platform Admin', color: 'var(--cat-purple)' },
+  area_owner:     { label: 'Area Owner',     color: 'var(--accent)' },
+  team_admin:     { label: 'Team Admin',     color: 'var(--cat-teal)' },
+  developer:      { label: 'Developer',      color: 'var(--good)' },
+  viewer:         { label: 'Viewer',         color: 'var(--fg-2)' },
+  service_account:{ label: 'Service Acct',  color: 'var(--cat-orange)' },
 };
 
 function RoleBadge({ role }: { role: string }) {
-  const meta = ROLE_META[role] ?? { label: role, color: '#6B7280' };
+  const meta = ROLE_META[role] ?? { label: role, color: 'var(--fg-2)' };
   return (
     <span style={{
       display: 'inline-block', padding: '2px 7px', borderRadius: 4, fontSize: 11, fontWeight: 600,
-      background: `${meta.color}22`, color: meta.color, marginRight: 4,
+      background: `color-mix(in srgb, ${meta.color} 13%, transparent)`, color: meta.color, marginRight: 4,
     }}>{meta.label}</span>
   );
 }
@@ -134,7 +134,7 @@ function InviteModal({ onClose }: { onClose: () => void }) {
   const modal: React.CSSProperties = {
     background: 'var(--surface)', border: '1px solid var(--rule)',
     borderRadius: 12, padding: 28, width: 460, maxWidth: '90vw',
-    boxShadow: '0 24px 64px rgba(0,0,0,0.4)',
+    boxShadow: 'var(--shadow-pop)',
   };
 
   return (
@@ -148,7 +148,7 @@ function InviteModal({ onClose }: { onClose: () => void }) {
         {result ? (
           <div>
             <div style={{
-              background: 'rgba(26,122,60,0.12)', border: '1px solid rgba(26,122,60,0.3)',
+              background: 'var(--good-soft)', border: '1px solid var(--good)',
               borderRadius: 8, padding: '12px 14px', marginBottom: 16, fontSize: 13,
             }}>
               <div style={{ fontWeight: 600, marginBottom: 4, color: 'var(--good)' }}>Invitation created</div>
@@ -171,8 +171,8 @@ function InviteModal({ onClose }: { onClose: () => void }) {
           <form onSubmit={e => { e.preventDefault(); setError(null); inviteMut.mutate(); }}>
             {error && (
               <div style={{
-                background: 'rgba(220,38,38,0.1)', border: '1px solid rgba(220,38,38,0.3)',
-                borderRadius: 6, padding: '8px 12px', marginBottom: 14, fontSize: 13, color: '#FCA5A5',
+                background: 'var(--bad-soft)', border: '1px solid var(--bad)',
+                borderRadius: 6, padding: '8px 12px', marginBottom: 14, fontSize: 13, color: 'var(--bad)',
               }}>{error}</div>
             )}
             <div style={{ marginBottom: 14 }}>
@@ -382,7 +382,7 @@ export default function UsersPage() {
                             <span style={{
                               display: 'inline-block', padding: '2px 7px', borderRadius: 4,
                               fontSize: 11, fontWeight: 600, marginRight: 4,
-                              background: 'rgba(251,155,42,0.15)', color: '#FB9B2A',
+                              background: 'var(--warn-soft)', color: 'var(--warn)',
                             }}>Contractor</span>
                           )}
                           {u.must_change_password && (

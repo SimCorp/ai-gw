@@ -68,9 +68,9 @@ export default function TargetsPage() {
   });
 
   const STATUS_COLOR: Record<string, string> = {
-    pending_approval: 'bg-yellow-100 text-yellow-800',
-    approved: 'bg-green-100 text-green-800',
-    revoked: 'bg-red-100 text-red-800',
+    pending_approval: 'bg-[var(--warn-soft)] text-[var(--warn)]',
+    approved: 'bg-[var(--good-soft)] text-[var(--good)]',
+    revoked: 'bg-[var(--bad-soft)] text-[var(--bad)]',
   };
 
   return (
@@ -79,14 +79,14 @@ export default function TargetsPage() {
         <h1 className="text-2xl font-semibold">Security — Targets</h1>
         <button
           onClick={() => setShowForm(!showForm)}
-          className="px-4 py-2 bg-blue-600 text-white rounded text-sm"
+          className="px-4 py-2 bg-[var(--accent)] text-[var(--accent-fg)] rounded text-sm"
         >
           + Register target
         </button>
       </div>
 
       {showForm && (
-        <div className="border rounded p-4 mb-4 bg-gray-50">
+        <div className="border rounded p-4 mb-4 bg-[var(--surface-2)]">
           <h2 className="font-medium mb-3">Register new target</h2>
           <div className="grid grid-cols-2 gap-3">
             <input
@@ -129,11 +129,11 @@ export default function TargetsPage() {
             <button
               onClick={() => register.mutate({ ...form, team_id: teamId ?? '', created_by: developer?.developer_id ?? '' })}
               disabled={!form.url || !form.label}
-              className="px-4 py-2 bg-blue-600 text-white rounded text-sm disabled:opacity-50"
+              className="px-4 py-2 bg-[var(--accent)] text-[var(--accent-fg)] rounded text-sm disabled:opacity-50"
             >
               Submit for approval
             </button>
-            <button onClick={() => setShowForm(false)} className="px-4 py-2 bg-gray-200 rounded text-sm">
+            <button onClick={() => setShowForm(false)} className="px-4 py-2 bg-[var(--surface-soft)] rounded text-sm">
               Cancel
             </button>
           </div>
@@ -145,12 +145,12 @@ export default function TargetsPage() {
           <div key={t.id} className="border rounded p-4 flex items-start justify-between">
             <div>
               <div className="font-medium">{t.label}</div>
-              <div className="text-gray-500 text-sm">{t.url}</div>
-              <div className="text-gray-400 text-xs mt-1">
+              <div className="text-[var(--fg-2)] text-sm">{t.url}</div>
+              <div className="text-[var(--fg-3)] text-xs mt-1">
                 Types: {t.allowed_scan_types.join(', ')}
               </div>
             </div>
-            <span className={`px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLOR[t.status] ?? 'bg-gray-100 text-gray-700'}`}>
+            <span className={`px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLOR[t.status] ?? 'bg-[var(--surface-soft)] text-[var(--fg-3)]'}`}>
               {t.status}
             </span>
           </div>

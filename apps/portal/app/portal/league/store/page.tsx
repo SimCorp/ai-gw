@@ -3,6 +3,10 @@
 import React, { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
+import LevelBadge from "../_components/LevelBadge";
+import XPBar from "../_components/XPBar";
+import { levelFor } from "../_components/level";
+import { celebrate } from "../_components/confetti";
 
 const LEAGUE = process.env.NEXT_PUBLIC_LEAGUE_API ?? "http://localhost:8080/league";
 
@@ -72,6 +76,7 @@ export default function StorePage() {
 
   const items = Array.isArray(storeData) ? storeData : storeData?.items ?? [];
   const balance = balanceData?.balance ?? 0;
+  const level = levelFor(balanceData?.lifetime_earned ?? 0);
   const ownedIds = new Set(
     Array.isArray(purchasesData)
       ? purchasesData.map(p => p.id)
@@ -93,6 +98,7 @@ export default function StorePage() {
       }
       qc.invalidateQueries({ queryKey: ["portal-purchases"] });
       qc.invalidateQueries({ queryKey: ["portal-balance"] });
+      void celebrate();
     } catch (e: unknown) {
       setBuyError(e instanceof Error ? e.message : "Purchase failed");
     } finally {
@@ -124,71 +130,76 @@ export default function StorePage() {
 
   return (
     <div className="page">
-      <div className="page__header">
+      <div className="page__head">
         <div>
-          <h1 className="page__title">Store & Profile</h1>
+          <h1 className="page__title">Reward shop</h1>
           <p className="page__sub">Spend your League points on cosmetic rewards</p>
         </div>
-        <Link href="/portal/league" style={{
-          padding: "7px 14px", borderRadius: 6, border: "1px solid var(--rule)",
-          background: "transparent", color: "var(--fg-2)", textDecoration: "none", fontSize: 13,
-        }}>← Challenges</Link>
+        <div className="page__actions">
+          <Link href="/portal/league" className="btn">
+            ← Quest board
+          </Link>
+        </div>
       </div>
 
-      {/* Balance card */}
-      <div style={{
-        background: "linear-gradient(135deg, rgba(180,83,9,0.2) 0%, rgba(8,62,167,0.12) 100%)",
-        border: "1px solid rgba(180,83,9,0.3)",
-        borderRadius: 12, padding: "20px 24px", marginBottom: 24,
-        display: "flex", alignItems: "center", gap: 24,
-      }}>
+      {/* Wallet */}
+      <div className="lg-wallet">
+        <LevelBadge level={level.level} />
         <div>
-          <div style={{ fontSize: 11.5, fontWeight: 600, color: "var(--warn, #B45309)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>
-            Point balance
-          </div>
-          <div style={{ fontSize: 36, fontWeight: 800, fontFamily: "var(--font-mono)", color: "var(--fg-1)" }}>
-            ★ {balance.toLocaleString()}
-          </div>
+          <div className="microlabel" style={{ marginBottom: 2 }}>POINT_BALANCE</div>
+          <div className="lg-wallet__balance">★ {balance.toLocaleString()}</div>
+        </div>
+        <div style={{ minWidth: 200, flex: 1, maxWidth: 320 }}>
+          <XPBar info={level} />
         </div>
         {balanceData && (
-          <div style={{ borderLeft: "1px solid var(--rule)", paddingLeft: 24, display: "flex", gap: 24 }}>
-            <div>
-              <div style={{ fontSize: 11, color: "var(--fg-3)", marginBottom: 2 }}>Lifetime earned</div>
-              <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "var(--font-mono)", color: "var(--good, #1F8A5B)" }}>
+          <>
+            <div className="lg-wallet__stat">
+              <div className="microlabel">EARNED</div>
+              <div className="v" style={{ color: "var(--good)" }}>
                 +{(balanceData.lifetime_earned ?? 0).toLocaleString()}
               </div>
             </div>
-            <div>
-              <div style={{ fontSize: 11, color: "var(--fg-3)", marginBottom: 2 }}>Lifetime spent</div>
-              <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "var(--font-mono)", color: "var(--bad, #DC2626)" }}>
+            <div className="lg-wallet__stat">
+              <div className="microlabel">SPENT</div>
+              <div className="v" style={{ color: "var(--bad)" }}>
                 -{(balanceData.lifetime_spent ?? 0).toLocaleString()}
               </div>
             </div>
-          </div>
+          </>
         )}
       </div>
 
       {equippedData && equippedData.length > 0 && (
         <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 11.5, fontWeight: 600, textTransform: "uppercase" as const, letterSpacing: "0.06em", color: "var(--fg-3)", marginBottom: 10 }}>
-            Currently equipped
-          </div>
+          <div className="microlabel" style={{ marginBottom: 10 }}>CURRENTLY_EQUIPPED</div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             {equippedData.map(item => (
-              <div key={item.id} style={{
-                display: "flex", alignItems: "center", gap: 8,
-                padding: "8px 14px", borderRadius: 8,
-                background: "rgba(31,138,91,0.08)", border: "1px solid rgba(31,138,91,0.25)",
-              }}>
+              <div
+                key={item.id}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "8px 14px",
+                  borderRadius: 8,
+                  background: "var(--good-soft)",
+                  border: "1px solid var(--good)",
+                }}
+              >
                 <span style={{ fontSize: 16 }}>{TYPE_ICONS[item.type as ItemType] ?? "✨"}</span>
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 600, color: "var(--fg-1)" }}>{item.name}</div>
-                  <div style={{ fontSize: 11, color: "var(--fg-3)" }}>{TYPE_LABELS[item.type as ItemType] ?? item.type} · equipped</div>
+                  <div style={{ fontSize: 11, color: "var(--fg-3)" }}>
+                    {TYPE_LABELS[item.type as ItemType] ?? item.type} · equipped
+                  </div>
                 </div>
                 <button
+                  type="button"
+                  className="btn btn--sm"
                   onClick={() => handleUnequip(item.id)}
                   disabled={equipping === item.id}
-                  style={{ marginLeft: 4, padding: "3px 8px", fontSize: 11.5, borderRadius: 4, border: "1px solid rgba(31,138,91,0.3)", background: "transparent", color: "var(--good, #1F8A5B)", cursor: "pointer" }}
+                  style={{ marginLeft: 4 }}
                 >
                   {equipping === item.id ? "…" : "Unequip"}
                 </button>
@@ -199,43 +210,53 @@ export default function StorePage() {
       )}
 
       {buyError && (
-        <div style={{
-          marginBottom: 16, padding: "10px 14px", borderRadius: 8, fontSize: 13,
-          background: "rgba(220,38,38,0.1)", border: "1px solid rgba(220,38,38,0.3)", color: "#FCA5A5",
-        }}>{buyError}</div>
+        <div
+          style={{
+            marginBottom: 16,
+            padding: "10px 14px",
+            borderRadius: 8,
+            fontSize: 13,
+            background: "var(--bad-soft)",
+            border: "1px solid var(--bad)",
+            color: "var(--bad)",
+          }}
+        >
+          {buyError}
+        </div>
       )}
 
       {/* Filter tabs */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+      <div className="lg-seasons">
         {(["all", "badge", "card_border", "avatar_frame", "title"] as const).map(f => (
-          <button key={f} onClick={() => setFilterType(f)} style={{
-            padding: "6px 14px", borderRadius: 20, fontSize: 12.5, fontWeight: 500,
-            border: "1px solid var(--rule)", cursor: "pointer",
-            background: filterType === f ? "var(--sc-blue, #083EA7)" : "transparent",
-            color: filterType === f ? "#fff" : "var(--fg-2)",
-          }}>
+          <button
+            key={f}
+            type="button"
+            className={`lg-season${filterType === f ? " is-active" : ""}`}
+            onClick={() => setFilterType(f)}
+          >
             {f === "all" ? "All" : TYPE_LABELS[f] + "s"}
           </button>
         ))}
       </div>
 
       {isLoading ? (
-        <div style={{ textAlign: "center", padding: "60px", color: "var(--fg-3)" }}>Loading store…</div>
+        <div style={{ textAlign: "center", padding: 60, color: "var(--fg-3)" }}>Loading shop…</div>
       ) : filtered.length === 0 ? (
-        <div style={{
-          textAlign: "center", padding: "60px 20px",
-          border: "1px dashed var(--rule)", borderRadius: 10, color: "var(--fg-3)",
-        }}>
+        <div
+          style={{
+            textAlign: "center",
+            padding: "60px 20px",
+            border: "1px dashed var(--rule)",
+            borderRadius: 10,
+            color: "var(--fg-3)",
+          }}
+        >
           <div style={{ fontSize: 36, marginBottom: 12 }}>🛒</div>
-          <div style={{ fontWeight: 600, marginBottom: 6 }}>Nothing here yet</div>
+          <div style={{ fontWeight: 600, marginBottom: 6, color: "var(--fg-1)" }}>Nothing here yet</div>
           <div style={{ fontSize: 13 }}>Check back when new items are added</div>
         </div>
       ) : (
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
-          gap: 14,
-        }}>
+        <div className="lg-rewards">
           {filtered.map(item => {
             const owned = ownedIds.has(item.id);
             const canAfford = balance >= item.point_cost;
@@ -243,49 +264,32 @@ export default function StorePage() {
             const isBuying = buying === item.id;
 
             return (
-              <div key={item.id} style={{
-                background: "var(--surface)", border: `1px solid ${owned ? "var(--good, #1F8A5B)" : "var(--rule)"}`,
-                borderRadius: 10, padding: "18px 14px", textAlign: "center",
-                display: "flex", flexDirection: "column", gap: 10,
-                opacity: isExclusive ? 0.7 : 1,
-                position: "relative", overflow: "hidden",
-              }}>
-                {owned && (
-                  <div style={{
-                    position: "absolute", top: 8, right: 8,
-                    fontSize: 10, fontWeight: 700, color: "var(--good, #1F8A5B)",
-                    background: "rgba(31,138,91,0.15)", padding: "2px 6px", borderRadius: 4,
-                  }}>OWNED</div>
-                )}
-                {isExclusive && (
-                  <div style={{
-                    position: "absolute", top: 8, left: 8,
-                    fontSize: 10, fontWeight: 700, color: "var(--warn, #B45309)",
-                    background: "rgba(180,83,9,0.15)", padding: "2px 6px", borderRadius: 4,
-                  }}>EXCLUSIVE</div>
-                )}
-                <div style={{ fontSize: 40 }}>{TYPE_ICONS[item.type]}</div>
-                <div style={{ fontWeight: 600, fontSize: 13 }}>{item.name}</div>
-                <div style={{ fontSize: 11.5, color: "var(--fg-3)" }}>{TYPE_LABELS[item.type]}</div>
-                <div style={{
-                  marginTop: "auto", paddingTop: 12, borderTop: "1px solid var(--rule)",
-                  display: "flex", flexDirection: "column", gap: 8,
-                }}>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: "var(--warn, #B45309)" }}>
+              <div key={item.id} className={`lg-reward${owned ? " lg-reward--owned" : ""}`}>
+                {owned && <div className="lg-reward__flag lg-reward__flag--owned">OWNED</div>}
+                {isExclusive && <div className="lg-reward__flag lg-reward__flag--exclusive">EXCLUSIVE</div>}
+                <div className="lg-reward__icon">{TYPE_ICONS[item.type]}</div>
+                <div className="lg-reward__name">{item.name}</div>
+                <div className="lg-reward__type">{TYPE_LABELS[item.type]}</div>
+                <div
+                  style={{
+                    marginTop: "auto",
+                    paddingTop: 12,
+                    borderTop: "1px dashed var(--rule)",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 8,
+                  }}
+                >
+                  <div className="lg-reward__price">
                     {isExclusive ? "Exclusive" : `★ ${item.point_cost.toLocaleString()}`}
                   </div>
                   {!isExclusive && !owned && (
                     <button
+                      type="button"
+                      className="lg-btn-gold"
+                      style={{ justifyContent: "center" }}
                       onClick={() => handleBuy(item)}
                       disabled={!canAfford || isBuying}
-                      style={{
-                        padding: "7px 12px", borderRadius: 6, border: "none",
-                        background: canAfford ? "var(--sc-blue, #083EA7)" : "var(--rule)",
-                        color: canAfford ? "#fff" : "var(--fg-3)",
-                        cursor: canAfford && !isBuying ? "pointer" : "not-allowed",
-                        fontSize: 12.5, fontWeight: 600,
-                        opacity: isBuying ? 0.7 : 1,
-                      }}
                     >
                       {isBuying ? "Buying…" : canAfford ? "Buy" : "Not enough points"}
                     </button>
@@ -294,17 +298,21 @@ export default function StorePage() {
                     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                       {equippedIds.has(item.id) ? (
                         <button
+                          type="button"
+                          className="btn btn--sm"
+                          style={{ justifyContent: "center", color: "var(--good)", borderColor: "var(--good)" }}
                           onClick={() => handleUnequip(item.id)}
                           disabled={equipping === item.id}
-                          style={{ padding: "7px 12px", borderRadius: 6, border: "1px solid rgba(31,138,91,0.4)", background: "rgba(31,138,91,0.1)", color: "var(--good, #1F8A5B)", cursor: "pointer", fontSize: 12.5, fontWeight: 600 }}
                         >
                           {equipping === item.id ? "…" : "✓ Equipped · Unequip"}
                         </button>
                       ) : (
                         <button
+                          type="button"
+                          className="btn btn--sm"
+                          style={{ justifyContent: "center" }}
                           onClick={() => handleEquip(item.id)}
                           disabled={equipping === item.id}
-                          style={{ padding: "7px 12px", borderRadius: 6, border: "1px solid var(--rule)", background: "var(--surface)", color: "var(--fg-2)", cursor: "pointer", fontSize: 12.5, fontWeight: 500 }}
                         >
                           {equipping === item.id ? "…" : "Equip"}
                         </button>

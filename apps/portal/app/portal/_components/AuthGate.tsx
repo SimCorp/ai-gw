@@ -1,7 +1,22 @@
 "use client";
 
 import React, { useState } from "react";
+import { BrandMark } from "@aigw/ui";
 import { useAuth } from "../_lib/authContext";
+
+function Brand() {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 32 }}>
+      <BrandMark size={38} />
+      <div>
+        <div style={{ fontWeight: 650, fontSize: 18, color: "var(--fg-1)", letterSpacing: "-0.02em" }}>
+          ai-gw <span className="mono" style={{ fontSize: 12, color: "var(--fg-3)" }}>/dev</span>
+        </div>
+        <div style={{ fontSize: 12, color: "var(--fg-3)" }}>Developer Portal</div>
+      </div>
+    </div>
+  );
+}
 
 export default function AuthGate({ children }: { children: React.ReactNode }) {
   const { developer, loading, mustChangePassword } = useAuth();
@@ -60,33 +75,21 @@ function ChangePasswordPage() {
       background: "var(--bg)",
       padding: "24px 16px",
     }}>
-      {/* Brand */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 36 }}>
-        <div style={{
-          width: 40, height: 40, borderRadius: 10,
-          background: "linear-gradient(135deg, var(--sc-blue), var(--sc-purple))",
-          display: "grid", placeItems: "center",
-          fontWeight: 800, fontSize: 16, color: "#fff",
-        }}>AI</div>
-        <div>
-          <div style={{ fontWeight: 700, fontSize: 18, color: "var(--fg-1)" }}>AI Gateway</div>
-          <div style={{ fontSize: 12, color: "var(--fg-3)" }}>Developer Portal</div>
-        </div>
-      </div>
+      <Brand />
 
-      <div style={{
-        width: "100%", maxWidth: 400,
-        background: "var(--surface)",
-        border: "1px solid var(--rule)",
-        borderRadius: 12,
-        overflow: "hidden",
-      }}>
+      <div
+        className="card card--trace"
+        style={{
+          width: "100%", maxWidth: 400,
+          overflow: "hidden",
+        }}
+      >
         <div style={{ padding: "20px 24px 0" }}>
           <div style={{
-            background: "rgba(8, 62, 167, 0.12)",
-            border: "1px solid rgba(8, 62, 167, 0.35)",
-            borderRadius: 6, padding: "10px 12px",
-            fontSize: 13, color: "var(--sc-link, #60A5FA)", lineHeight: 1.5,
+            background: "var(--accent-soft)",
+            border: "1px solid var(--accent)",
+            borderRadius: "var(--r-2)", padding: "10px 12px",
+            fontSize: 13, color: "var(--accent-text)", lineHeight: 1.5,
           }}>
             Your account requires a password change before you can continue.
             Choose a password that is at least 12 characters and includes uppercase,
@@ -131,7 +134,7 @@ function ChangePasswordPage() {
           {error && (
             <div style={{
               padding: "10px 12px", borderRadius: 6,
-              background: "rgba(239,62,74,0.1)", border: "1px solid var(--bad)",
+              background: "var(--bad-soft)", border: "1px solid var(--bad)",
               color: "var(--bad)", fontSize: 13,
             }}>
               {error}
@@ -199,28 +202,16 @@ function LoginPage() {
       background: "var(--bg)",
       padding: "24px 16px",
     }}>
-      {/* Brand */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 36 }}>
-        <div style={{
-          width: 40, height: 40, borderRadius: 10,
-          background: "linear-gradient(135deg, var(--sc-blue), var(--sc-purple))",
-          display: "grid", placeItems: "center",
-          fontWeight: 800, fontSize: 16, color: "#fff",
-        }}>AI</div>
-        <div>
-          <div style={{ fontWeight: 700, fontSize: 18, color: "var(--fg-1)" }}>AI Gateway</div>
-          <div style={{ fontSize: 12, color: "var(--fg-3)" }}>Developer Portal</div>
-        </div>
-      </div>
+      <Brand />
 
       {/* Card */}
-      <div style={{
-        width: "100%", maxWidth: 400,
-        background: "var(--surface)",
-        border: "1px solid var(--rule)",
-        borderRadius: 12,
-        overflow: "hidden",
-      }}>
+      <div
+        className="card card--trace"
+        style={{
+          width: "100%", maxWidth: 400,
+          overflow: "hidden",
+        }}
+      >
         {/* Tabs */}
         <div style={{ display: "flex", borderBottom: "1px solid var(--rule)" }}>
           {(["login", "register"] as const).map(t => (
@@ -232,7 +223,7 @@ function LoginPage() {
                 border: 0, background: tab === t ? "var(--surface)" : "var(--surface-soft, rgba(0,0,0,0.03))",
                 color: tab === t ? "var(--fg-1)" : "var(--fg-3)",
                 cursor: "pointer", fontFamily: "inherit",
-                borderBottom: tab === t ? "2px solid var(--sc-blue)" : "2px solid transparent",
+                borderBottom: tab === t ? "2px solid var(--accent)" : "2px solid transparent",
               }}
             >
               {t === "login" ? "Sign in" : "Create account"}
@@ -299,7 +290,7 @@ function LoginPage() {
                 type="checkbox"
                 checked={rememberMe}
                 onChange={e => setRememberMe(e.target.checked)}
-                style={{ cursor: "pointer", accentColor: "var(--sc-blue)" }}
+                style={{ cursor: "pointer", accentColor: "var(--accent)" }}
               />
               <label htmlFor="dev-remember" style={{ fontSize: 12.5, color: "var(--fg-3)", cursor: "pointer" }}>
                 Stay signed in for 30 days
@@ -310,7 +301,7 @@ function LoginPage() {
           {error && (
             <div style={{
               padding: "10px 12px", borderRadius: 6,
-              background: "rgba(239,62,74,0.1)", border: "1px solid var(--bad)",
+              background: "var(--bad-soft)", border: "1px solid var(--bad)",
               color: "var(--bad)", fontSize: 13,
             }}>
               {error}
@@ -332,9 +323,9 @@ function LoginPage() {
         {tab === "login" && (
           <>
             <div style={{ padding: "12px 24px 0", display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ flex: 1, height: 1, background: "var(--rule, #232950)" }} />
+              <div style={{ flex: 1, height: 1, background: "var(--rule)" }} />
               <span style={{ fontSize: 11, color: "var(--fg-3)", whiteSpace: "nowrap" }}>or</span>
-              <div style={{ flex: 1, height: 1, background: "var(--rule, #232950)" }} />
+              <div style={{ flex: 1, height: 1, background: "var(--rule)" }} />
             </div>
             <div style={{ padding: "12px 24px 0" }}>
               <a
@@ -343,7 +334,7 @@ function LoginPage() {
                   display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
                   width: "100%", padding: "9px 16px", fontSize: 13, fontWeight: 600,
                   background: "transparent", color: "var(--fg-1)",
-                  border: "1px solid var(--rule, #232950)", borderRadius: 8,
+                  border: "1px solid var(--rule)", borderRadius: 8,
                   cursor: "pointer", textDecoration: "none",
                 }}
               >
@@ -357,7 +348,7 @@ function LoginPage() {
               No account?{" "}
               <button
                 onClick={() => setTab("register")}
-                style={{ background: "none", border: 0, color: "var(--sc-link, var(--sc-blue))", cursor: "pointer", fontSize: 12, fontFamily: "inherit", padding: 0 }}
+                style={{ background: "none", border: 0, color: "var(--accent-text)", cursor: "pointer", fontSize: 12, fontFamily: "inherit", padding: 0 }}
               >
                 Create one →
               </button>
@@ -369,8 +360,8 @@ function LoginPage() {
         )}
       </div>
 
-      <div style={{ marginTop: 24, fontSize: 12, color: "var(--fg-3)", textAlign: "center" }}>
-        AI Gateway · SimCorp developer platform
+      <div className="microlabel" style={{ marginTop: 24, textAlign: "center" }}>
+        ai-gw · SimCorp developer platform
       </div>
     </div>
   );

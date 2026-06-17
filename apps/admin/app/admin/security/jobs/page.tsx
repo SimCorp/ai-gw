@@ -84,7 +84,7 @@ export default function JobsPage() {
                 </span>
               </td>
               <td className="p-3 border text-gray-600">{j.trigger}</td>
-              <td className="p-3 border">{duration(j)}</td>
+              <td className="p-3 border num">{duration(j)}</td>
               <td className="p-3 border">
                 {['queued', 'running'].includes(j.status) && (
                   <button

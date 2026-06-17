@@ -67,7 +67,7 @@ export default function SettingsPage() {
                 padding: '8px 12px',
                 border: '1px solid var(--rule)',
                 borderRadius: 7,
-                background: 'var(--surface-soft, rgba(0,0,0,0.03))',
+                background: 'var(--surface-soft)',
                 fontSize: 13,
                 color: 'var(--fg-2)',
                 fontFamily: 'var(--font-mono)',
@@ -104,7 +104,7 @@ export default function SettingsPage() {
             </div>
 
             {error && (
-              <div style={{ fontSize: 12.5, color: 'var(--bad, #EF3E4A)', padding: '8px 12px', background: 'var(--bad-soft, rgba(239,62,74,0.08))', borderRadius: 6 }}>
+              <div style={{ fontSize: 12.5, color: 'var(--bad)', padding: '8px 12px', background: 'var(--bad-soft)', borderRadius: 6 }}>
                 {error}
               </div>
             )}
@@ -118,7 +118,7 @@ export default function SettingsPage() {
                 {saving ? 'Saving…' : 'Save changes'}
               </button>
               {savedMsg && (
-                <span style={{ fontSize: 12.5, color: 'var(--good, #1F8A5B)' }}>{savedMsg}</span>
+                <span style={{ fontSize: 12.5, color: 'var(--good)' }}>{savedMsg}</span>
               )}
             </div>
           </div>
@@ -158,7 +158,7 @@ export default function SettingsPage() {
 
       {/* Danger zone */}
       <section style={{ maxWidth: 560, marginTop: 28 }}>
-        <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 16, color: 'var(--bad, #EF3E4A)' }}>Sign out</h2>
+        <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 16, color: 'var(--bad)' }}>Sign out</h2>
         <div className="card">
           <div className="card__body" style={{ padding: '16px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
@@ -169,7 +169,7 @@ export default function SettingsPage() {
             </div>
             <button
               className="btn"
-              style={{ color: 'var(--bad, #EF3E4A)', borderColor: 'var(--bad, #EF3E4A)', flexShrink: 0 }}
+              style={{ color: 'var(--bad)', borderColor: 'var(--bad)', flexShrink: 0 }}
               onClick={logout}
             >
               Sign out

@@ -30,6 +30,11 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="AI Gateway — Auth Service", lifespan=lifespan)
+
+from app.observability import init_observability  # noqa: E402
+
+init_observability(app, service_name="auth")
+
 app.include_router(router)
 
 

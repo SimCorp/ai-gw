@@ -59,14 +59,11 @@ def _validate_jwks_uri(uri: str) -> None:
         if "JWKS URI" in str(exc):
             raise
         # Not an IP literal — resolve hostname
-        import os
-
         try:
             resolved = socket.gethostbyname(host)
             addr = ipaddress.ip_address(resolved)
-            if os.getenv("ENVIRONMENT", "development") not in ("development", "test", "ci"):
-                if any(addr in net for net in _PRIVATE_NETS):
-                    raise ValueError(f"JWKS URI resolves to private address {resolved}")
+            if any(addr in net for net in _PRIVATE_NETS):
+                raise ValueError(f"JWKS URI resolves to private address {resolved}")
         except socket.gaierror:
             pass
 

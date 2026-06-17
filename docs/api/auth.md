@@ -14,7 +14,6 @@ The Auth service manages:
 Session tokens are stored in Redis with TTLs:
 - Standard user: 7 days
 - Admin (platform_admin): 8 hours (or 30 days if "remember me")
-- Development: 7 days
 
 ## Core Concepts
 
@@ -116,8 +115,7 @@ Authenticate with email and password. Supports "remember me" for extended sessio
 - `429 Too Many Requests`: Rate limited (10 attempts per 60 seconds per IP)
 
 **Notes:**
-- Development mode (`ENVIRONMENT=development`) issues synthetic `platform_admin` role
-- Production: bcrypt-authenticated users have no roles until granted via Entra group assignment
+- bcrypt-authenticated users have no roles until granted via Entra group assignment
 - OIDC users load roles from Entra group membership (see OIDC callback)
 
 ---
@@ -278,15 +276,6 @@ Initiate password reset flow. Sends reset email to the user. Always returns 200 
 ```
 
 **Status Code:** 200 OK (always, regardless of email existence)
-
-**Dev Mode Response** (when `DEV_BYPASS_AUTH=true`):
-```json
-{
-  "message": "Reset link sent (dev mode)",
-  "token": "raw-reset-token",
-  "reset_url": "http://portal-url/reset-password?token=raw-reset-token"
-}
-```
 
 **Notes:**
 - Reset token is valid for 1 hour
@@ -790,7 +779,7 @@ bob@simcorp.com,team_admin,team,12345678-1234-1234-1234-123456789012
 GET /auth/oidc/login
 ```
 
-Redirect to the configured OIDC provider (Dex in dev, Entra ID in production).
+Redirect to the configured OIDC provider (Azure Entra ID).
 
 **Response:** HTTP 302 Redirect to `{oidc_issuer}/auth?client_id=...&scope=...&state=...&redirect_uri=...`
 

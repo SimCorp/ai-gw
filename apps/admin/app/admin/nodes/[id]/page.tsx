@@ -60,18 +60,18 @@ function AddChildForm({ parentId, onDone }: { parentId: string; onDone: () => vo
       borderRadius: 8,
       marginTop: 16,
     }}>
-      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)', marginBottom: 12 }}>Add child node</div>
+      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg-1)', marginBottom: 12 }}>Add child node</div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
         <input
           placeholder="Name"
           value={name}
           onChange={e => setName(e.target.value)}
-          style={{ flex: '2 1 200px', padding: '7px 10px', fontSize: 13, background: 'var(--surface)', border: '1px solid var(--rule)', borderRadius: 5, color: 'var(--fg)' }}
+          style={{ flex: '2 1 200px', padding: '7px 10px', fontSize: 13, background: 'var(--surface)', border: '1px solid var(--rule)', borderRadius: 5, color: 'var(--fg-1)' }}
         />
         <select
           value={type}
           onChange={e => setType(e.target.value)}
-          style={{ flex: '1 1 120px', padding: '7px 10px', fontSize: 13, background: 'var(--surface)', border: '1px solid var(--rule)', borderRadius: 5, color: 'var(--fg)' }}
+          style={{ flex: '1 1 120px', padding: '7px 10px', fontSize: 13, background: 'var(--surface)', border: '1px solid var(--rule)', borderRadius: 5, color: 'var(--fg-1)' }}
         >
           <option value="area">Area</option>
           <option value="unit">Unit</option>
@@ -90,7 +90,7 @@ function AddChildForm({ parentId, onDone }: { parentId: string; onDone: () => vo
         <button
           onClick={() => createMutation.mutate()}
           disabled={!name.trim() || createMutation.isPending}
-          style={{ padding: '7px 14px', fontSize: 13, background: 'var(--sc-blue)', color: '#fff', border: 'none', borderRadius: 5, cursor: 'pointer' }}
+          style={{ padding: '7px 14px', fontSize: 13, background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 5, cursor: 'pointer' }}
         >
           {createMutation.isPending ? 'Creating…' : 'Create'}
         </button>
@@ -102,7 +102,7 @@ function AddChildForm({ parentId, onDone }: { parentId: string; onDone: () => vo
         </button>
       </div>
       {createMutation.isError && (
-        <div style={{ marginTop: 8, fontSize: 12, color: '#EF3E4A' }}>
+        <div style={{ marginTop: 8, fontSize: 12, color: 'var(--bad)' }}>
           {(createMutation.error as Error).message}
         </div>
       )}
@@ -142,7 +142,7 @@ function OverviewTab({ node }: { node: OrgNode }) {
       {/* Child nodes */}
       {childCount > 0 && (
         <section>
-          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)', marginBottom: 10 }}>Child nodes</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg-1)', marginBottom: 10 }}>Child nodes</div>
           <ResourceTable
             nodes={children}
             onNavigate={n => router.push(`/admin/nodes/${n.id}`)}
@@ -159,7 +159,7 @@ function OverviewTab({ node }: { node: OrgNode }) {
           style={{
             padding: '7px 14px', fontSize: 13, width: 'fit-content',
             background: 'var(--surface-2)', border: '1px solid var(--rule)',
-            borderRadius: 5, color: 'var(--fg)', cursor: 'pointer',
+            borderRadius: 5, color: 'var(--fg-1)', cursor: 'pointer',
           }}
         >
           + Add child node
@@ -169,14 +169,14 @@ function OverviewTab({ node }: { node: OrgNode }) {
       {/* Members preview */}
       {members && members.items.length > 0 && (
         <section>
-          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)', marginBottom: 10 }}>Members</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg-1)', marginBottom: 10 }}>Members</div>
           <div style={{ background: 'var(--surface)', border: '1px solid var(--rule)', borderRadius: 8, overflow: 'hidden' }}>
             {members.items.map((m, i) => (
               <div key={m.id} style={{
                 display: 'flex', alignItems: 'center', gap: 10,
                 padding: '8px 14px',
                 borderBottom: i < Math.min(members.items.length, 5) - 1 ? '1px solid var(--rule)' : 'none',
-                fontSize: 13, color: 'var(--fg)',
+                fontSize: 13, color: 'var(--fg-1)',
               }}>
                 <div style={{
                   width: 26, height: 26, borderRadius: '50%', flexShrink: 0,
@@ -194,7 +194,7 @@ function OverviewTab({ node }: { node: OrgNode }) {
             ))}
           </div>
           {members.total > 5 && (
-            <div style={{ marginTop: 8, fontSize: 12, color: 'var(--sc-blue)', cursor: 'pointer' }}>
+            <div style={{ marginTop: 8, fontSize: 12, color: 'var(--accent)', cursor: 'pointer' }}>
               + {members.total - 5} more members
             </div>
           )}
@@ -214,15 +214,15 @@ function KpiCard({ label, value }: { label: string; value: string }) {
       border: '1px solid var(--rule)',
       borderRadius: 8,
     }}>
-      <div style={{ fontSize: 11, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>
+      <div className="microlabel" style={{ marginBottom: 4 }}>
         {label}
       </div>
-      <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--fg)' }}>{value}</div>
+      <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--fg-1)' }}>{value}</div>
     </div>
   );
 }
 
-const AVATAR_COLORS = ['#083EA7', '#1D958E', '#4B17B6', '#FB9B2A', '#9D2E7B', '#0A7BD7', '#EF3E4A'];
+const AVATAR_COLORS = ['var(--accent)', 'var(--cat-teal)', 'var(--cat-purple)', 'var(--cat-orange)', 'var(--cat-magenta)', 'var(--accent)', 'var(--cat-coral)'];
 function avatarColor(s: string) {
   let h = 0;
   for (const c of s) h = (h * 31 + c.charCodeAt(0)) >>> 0;
@@ -319,7 +319,7 @@ export default function NodeDetailPage({ params }: { params: Promise<{ id: strin
             {node.name.charAt(0).toUpperCase()}
           </div>
           <div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--fg)', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--fg-1)', display: 'flex', alignItems: 'center', gap: 8 }}>
               {node.name}
               <TypeBadge type={node.type} />
             </div>
@@ -337,7 +337,7 @@ export default function NodeDetailPage({ params }: { params: Promise<{ id: strin
             onClick={() => setTab('overview')}
             style={{
               padding: '7px 14px', fontSize: 12,
-              background: 'var(--sc-blue)', color: '#fff',
+              background: 'var(--accent)', color: '#fff',
               border: 'none', borderRadius: 5, cursor: 'pointer',
             }}
           >
@@ -353,7 +353,7 @@ export default function NodeDetailPage({ params }: { params: Promise<{ id: strin
             style={{
               padding: '7px 14px', fontSize: 12,
               background: 'var(--surface-2)', border: '1px solid var(--rule)',
-              borderRadius: 5, color: 'var(--fg)', cursor: 'pointer',
+              borderRadius: 5, color: 'var(--fg-1)', cursor: 'pointer',
             }}
           >
             Edit
@@ -363,8 +363,8 @@ export default function NodeDetailPage({ params }: { params: Promise<{ id: strin
             disabled={deleteMutation.isPending}
             style={{
               padding: '7px 14px', fontSize: 12,
-              background: 'transparent', border: '1px solid #EF3E4A44',
-              borderRadius: 5, color: '#EF3E4A', cursor: 'pointer',
+              background: 'transparent', border: '1px solid color-mix(in srgb, var(--bad) 27%, transparent)',
+              borderRadius: 5, color: 'var(--bad)', cursor: 'pointer',
             }}
           >
             Delete
@@ -396,7 +396,7 @@ export default function NodeDetailPage({ params }: { params: Promise<{ id: strin
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={() => editMutation.mutate()} disabled={!editName.trim() || editMutation.isPending}
-              style={{ padding: '7px 16px', fontSize: 12, background: 'var(--sc-blue)', color: '#fff', border: 'none', borderRadius: 5, cursor: 'pointer' }}>
+              style={{ padding: '7px 16px', fontSize: 12, background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 5, cursor: 'pointer' }}>
               {editMutation.isPending ? 'Saving…' : 'Save'}
             </button>
             <button onClick={() => setEditing(false)}
@@ -419,10 +419,10 @@ export default function NodeDetailPage({ params }: { params: Promise<{ id: strin
               padding: '10px 18px',
               fontSize: 13,
               fontWeight: activeTab === t.id ? 600 : 400,
-              color: activeTab === t.id ? 'var(--sc-blue)' : 'var(--fg-3)',
+              color: activeTab === t.id ? 'var(--accent)' : 'var(--fg-3)',
               background: 'transparent',
               border: 'none',
-              borderBottom: activeTab === t.id ? '2px solid var(--sc-blue)' : '2px solid transparent',
+              borderBottom: activeTab === t.id ? '2px solid var(--accent)' : '2px solid transparent',
               cursor: 'pointer',
               marginBottom: -1,
             }}

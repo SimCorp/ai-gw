@@ -131,7 +131,7 @@ export default function SkillsPage() {
             </div>
             {expanded === s.id && (
               <div className="card__body" style={{ borderTop: '1px solid var(--rule)' }}>
-                <div style={{ fontSize: 11, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>System prompt</div>
+                <div className="microlabel" style={{ marginBottom: 6 }}>System prompt</div>
                 <pre style={{ margin: 0, padding: '10px 14px', background: 'var(--surface-soft)', borderRadius: 8, fontSize: 12.5, fontFamily: 'var(--font-mono)', lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: 'var(--fg-2)' }}>
                   {s.system_prompt || '(no system prompt)'}
                 </pre>

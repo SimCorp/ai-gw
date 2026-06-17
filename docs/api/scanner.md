@@ -2,7 +2,7 @@
 
 The Security Scanner service provides automated vulnerability scanning for AI models, APIs, and network infrastructure. It uses industry-standard tools (Garak, Nuclei, Nmap, ZAP) to identify security issues in a multi-tenant environment with quota enforcement and approval workflows.
 
-**Service URL**: http://localhost:8011 (direct) or http://localhost:8080/scanner/ (via nginx)
+**Service URL**: https://aigw-dev.lab.cloud.scdom.net/scanner/
 
 ---
 
@@ -655,7 +655,7 @@ Teams are assigned quotas stored as JSONB in `organization_nodes.scanner_quota`:
 
 1. **Register target** (admin):
    ```bash
-   curl -X POST http://localhost:8080/scanner/targets \
+   curl -X POST https://aigw-dev.lab.cloud.scdom.net/scanner/targets \
      -H "Authorization: Bearer $TOKEN" \
      -H "Content-Type: application/json" \
      -d '{
@@ -669,7 +669,7 @@ Teams are assigned quotas stored as JSONB in `organization_nodes.scanner_quota`:
 
 2. **Approve target** (admin):
    ```bash
-   curl -X POST http://localhost:8080/scanner/targets/{target_id}/approve \
+   curl -X POST https://aigw-dev.lab.cloud.scdom.net/scanner/targets/{target_id}/approve \
      -H "Authorization: Bearer $ADMIN_TOKEN" \
      -H "Content-Type: application/json" \
      -d '{
@@ -680,7 +680,7 @@ Teams are assigned quotas stored as JSONB in `organization_nodes.scanner_quota`:
 
 3. **Submit scan job** (team member):
    ```bash
-   curl -X POST http://localhost:8080/scanner/jobs \
+   curl -X POST https://aigw-dev.lab.cloud.scdom.net/scanner/jobs \
      -H "Authorization: Bearer $TEAM_TOKEN" \
      -H "Content-Type: application/json" \
      -d '{
@@ -692,13 +692,13 @@ Teams are assigned quotas stored as JSONB in `organization_nodes.scanner_quota`:
 
 4. **Poll for results** (team member):
    ```bash
-   curl -X GET "http://localhost:8080/scanner/jobs/{job_id}/results?limit=50" \
+   curl -X GET "https://aigw-dev.lab.cloud.scdom.net/scanner/jobs/{job_id}/results?limit=50" \
      -H "Authorization: Bearer $TEAM_TOKEN"
    ```
 
 5. **Export as SARIF for CI** (team member):
    ```bash
-   curl -X GET "http://localhost:8080/scanner/jobs/{job_id}/results?format=sarif" \
+   curl -X GET "https://aigw-dev.lab.cloud.scdom.net/scanner/jobs/{job_id}/results?format=sarif" \
      -H "Authorization: Bearer $TEAM_TOKEN" \
      -o results.sarif
    ```
@@ -707,7 +707,7 @@ Teams are assigned quotas stored as JSONB in `organization_nodes.scanner_quota`:
 
 1. **Register AI model endpoint** (admin):
    ```bash
-   curl -X POST http://localhost:8080/scanner/targets \
+   curl -X POST https://aigw-dev.lab.cloud.scdom.net/scanner/targets \
      -H "Authorization: Bearer $TOKEN" \
      -d '{
        "url": "https://models.example.com/v1/chat/completions",
@@ -721,12 +721,12 @@ Teams are assigned quotas stored as JSONB in `organization_nodes.scanner_quota`:
 2. **Approve and submit scan** (admin):
    ```bash
    # Approve target
-   curl -X POST http://localhost:8080/scanner/targets/{target_id}/approve \
+   curl -X POST https://aigw-dev.lab.cloud.scdom.net/scanner/targets/{target_id}/approve \
      -H "Authorization: Bearer $ADMIN_TOKEN" \
      -d '{"allowed_scan_types": ["ai"], "approved_by": "admin-uuid"}'
 
    # Submit job
-   curl -X POST http://localhost:8080/scanner/jobs \
+   curl -X POST https://aigw-dev.lab.cloud.scdom.net/scanner/jobs \
      -H "Authorization: Bearer $TOKEN" \
      -d '{
        "target_id": "target-uuid",
@@ -737,7 +737,7 @@ Teams are assigned quotas stored as JSONB in `organization_nodes.scanner_quota`:
 
 3. **Review Garak findings**:
    ```bash
-   curl -X GET "http://localhost:8080/scanner/jobs/{job_id}/results?severity=high" \
+   curl -X GET "https://aigw-dev.lab.cloud.scdom.net/scanner/jobs/{job_id}/results?severity=high" \
      -H "Authorization: Bearer $TOKEN" \
      | jq '.findings[] | select(.scanner == "garak")'
    ```
@@ -760,7 +760,7 @@ Teams are assigned quotas stored as JSONB in `organization_nodes.scanner_quota`:
 ### Worker Endpoints
 - `POST /internal/jobs/{job_id}/progress`, `POST /internal/jobs/{job_id}/findings`, `POST /internal/jobs/{job_id}/complete`
 - Require `Authorization: Bearer {scanner_worker_secret}` header
-- Not exposed via nginx; only accessible from Docker network
+- Not exposed through gateway ingress; internal-only on the ACA network (scanner has no ingress)
 
 ---
 
@@ -783,16 +783,16 @@ Teams are assigned quotas stored as JSONB in `organization_nodes.scanner_quota`:
 
 ## Configuration
 
-Scanner service environment variables (see `.env`):
+Scanner service configuration is injected from Azure Key Vault via the Container App's managed identity (no local defaults):
 
 ```bash
-DATABASE_URL=postgresql+asyncpg://gateway:gateway@localhost:5432/gateway
-REDIS_URL=redis://localhost:6379/0
-AUTH_URL=http://localhost:8001
-SCANNER_WORKER_SECRET=dev-worker-secret
+# Postgres and Redis are managed PaaS, supplied as Key Vault secret references
+DATABASE_URL=<Key Vault secret ref>
+REDIS_URL=<Key Vault secret ref>
+AUTH_URL=http://ca-auth-dev-sdc
+SCANNER_WORKER_SECRET=<Key Vault secret ref>
 SCAN_JOB_QUEUE_KEY=scanner:jobs:queue
 MAX_CONTAINER_TIMEOUT_SECONDS=900
-ENVIRONMENT=development
 ```
 
 Admin service integrates scanner endpoints under `/admin/scanner/` prefix.

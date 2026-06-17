@@ -1,0 +1,55 @@
+flowchart TB
+  dev["Developer / AI agent<br/>browser or sk- API key"]
+
+  subgraph CORP["Corporate network — Zscaler ZPA · no public internet"]
+    zcc["Zscaler Client Connector"]
+    zpa["ZPA App Connector<br/>routes into the VNet"]
+  end
+
+  subgraph VNET["Azure spoke VNet · 10.179.231.0/25 · Sweden Central"]
+    subgraph ACA["ACA environment cae-aigw-dev-sdc · internal:true · LB 10.179.231.6"]
+      gw["ca-gateway — Caddy<br/>external:true · TCP 443<br/>path router + Host rewrite"]
+      subgraph SVC["Container Apps — internal only (external:false)"]
+        auth["auth :8001<br/>key/JWT validation, rate limit"]
+        cache["cache :8002<br/>exact + semantic cache, guardrails"]
+        litellm["litellm :8003<br/>provider routing"]
+        rest["portal · admin · admin-portal<br/>identity · librarian · memory<br/>league · agent-relay · observability"]
+        bg["scanner · workflow-worker<br/>background workers"]
+      end
+    end
+    subgraph PAAS["Managed PaaS — private endpoints (snet-pe-aigw-dev)"]
+      pg[("PostgreSQL<br/>Flexible Server")]
+      redis[("Cache for Redis")]
+      kv["Key Vault"]
+      sb["Service Bus"]
+      acr["Container Registry"]
+    end
+  end
+
+  ext["External LLM providers<br/>Anthropic, …"]
+  appi["Application Insights<br/>OpenTelemetry"]
+
+  dev --> zcc --> zpa -->|"TCP 443 · TLS"| gw
+  gw --> auth
+  gw --> cache
+  gw --> rest
+  cache --> auth
+  cache --> redis
+  cache --> litellm
+  litellm --> ext
+  auth --> pg
+  auth --> redis
+  rest --> pg
+  bg --> sb
+  SVC -. "secrets via managed identity" .-> kv
+  SVC -. "OTel traces" .-> appi
+
+  classDef edge fill:#e6f0ff,stroke:#3b6fb0,color:#10243e;
+  classDef svc fill:#eef7ee,stroke:#4a8a4a,color:#1d3a1d;
+  classDef paas fill:#fff3e0,stroke:#cc8a2e,color:#5a3b0a;
+  classDef obs fill:#f3e8ff,stroke:#8a52cc,color:#3a1d5a;
+  class dev,zcc,zpa,gw edge;
+  class auth,cache,litellm,rest,bg svc;
+  class pg,redis,kv,sb,acr paas;
+  class appi obs;
+  class ext obs;

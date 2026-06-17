@@ -63,7 +63,7 @@ function actionPill(a: GuardrailAction) {
 
 function severityDot(s: Severity) {
   const color: Record<Severity, string> = {
-    low: 'var(--fg-3)', medium: 'var(--warn)', high: 'var(--bad)', critical: '#c026d3',
+    low: 'var(--fg-3)', medium: 'var(--warn)', high: 'var(--bad)', critical: 'var(--cat-magenta)',
   };
   return <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: '50%', background: color[s], marginRight: 4 }} />;
 }
@@ -234,7 +234,7 @@ export default function GuardrailsPage() {
                 <tbody>
                   {guardrails.map(g => (
                     <tr key={g.id} tabIndex={0} style={{ opacity: g.enabled ? 1 : 0.5 }}>
-                      <td className="mono lo" style={{ textAlign: 'center' }}>{g.priority}</td>
+                      <td className="mono lo num" style={{ textAlign: 'center' }}>{g.priority}</td>
                       <td>
                         <div className="cell-2">
                           <span style={{ fontWeight: 500 }}>{g.name}</span>
@@ -323,7 +323,7 @@ export default function GuardrailsPage() {
                     <span>{inputRules.filter(g => g.enabled).length} active</span>
                   </div>
                   <div style={{ height: 6, borderRadius: 3, background: 'var(--surface-soft)', overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${guardrails.length ? (inputRules.filter(g => g.enabled).length / guardrails.length) * 100 : 0}%`, background: 'var(--sc-blue)', borderRadius: 3 }} />
+                    <div style={{ height: '100%', width: `${guardrails.length ? (inputRules.filter(g => g.enabled).length / guardrails.length) * 100 : 0}%`, background: 'var(--accent)', borderRadius: 3 }} />
                   </div>
                 </div>
                 <div>
@@ -332,7 +332,7 @@ export default function GuardrailsPage() {
                     <span>{outputRules.filter(g => g.enabled).length} active</span>
                   </div>
                   <div style={{ height: 6, borderRadius: 3, background: 'var(--surface-soft)', overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${guardrails.length ? (outputRules.filter(g => g.enabled).length / guardrails.length) * 100 : 0}%`, background: 'var(--sc-teal)', borderRadius: 3 }} />
+                    <div style={{ height: '100%', width: `${guardrails.length ? (outputRules.filter(g => g.enabled).length / guardrails.length) * 100 : 0}%`, background: 'var(--cat-teal)', borderRadius: 3 }} />
                   </div>
                 </div>
                 {guardrails.length > 0 && (

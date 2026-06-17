@@ -20,11 +20,11 @@ function formatPrimitive(val: unknown): React.ReactNode {
   if (val === null) return <span style={{ color: "var(--fg-3)" }}>null</span>;
   if (val === undefined) return <span style={{ color: "var(--fg-3)" }}>undefined</span>;
   if (typeof val === "string")
-    return <span style={{ color: "var(--sc-teal)" }}>&quot;{val}&quot;</span>;
+    return <span style={{ color: "var(--cat-teal)" }}>&quot;{val}&quot;</span>;
   if (typeof val === "number")
-    return <span style={{ color: "var(--sc-orange)" }}>{String(val)}</span>;
+    return <span style={{ color: "var(--cat-orange)" }}>{String(val)}</span>;
   if (typeof val === "boolean")
-    return <span style={{ color: "var(--sc-blue)" }}>{String(val)}</span>;
+    return <span style={{ color: "var(--accent)" }}>{String(val)}</span>;
   return <span>{String(val)}</span>;
 }
 

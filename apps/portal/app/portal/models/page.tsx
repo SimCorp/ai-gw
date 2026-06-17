@@ -122,7 +122,7 @@ export default function ModelsPage() {
       <style>{`
         .mgrid { display:grid; grid-template-columns:repeat(2,1fr); gap:14px; }
         .mcard { background:var(--surface); border:1px solid var(--rule); border-radius:var(--radius-3); padding:18px; display:flex; flex-direction:column; gap:10px; transition:border-color 120ms; }
-        .mcard:hover { border-color:var(--sc-blue); }
+        .mcard:hover { border-color:var(--accent); }
         .mcard--unconfigured { opacity:0.65; }
         .mcard__h { display:flex; align-items:flex-start; gap:12px; }
         .mcard__logo { width:36px; height:36px; border-radius:8px; flex-shrink:0; display:grid; place-items:center; color:#fff; font-weight:700; font-size:13px; }
@@ -131,9 +131,9 @@ export default function ModelsPage() {
         .mcard__foot { display:flex; gap:6px; align-items:center; padding-top:10px; border-top:1px solid var(--rule); }
         .pfilter { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:20px; }
         .pfilter__btn { padding:5px 12px; border-radius:999px; border:1px solid var(--rule); background:var(--surface); font-size:12px; cursor:pointer; transition:background 120ms,border-color 120ms; }
-        .pfilter__btn:hover { border-color:var(--sc-blue); }
-        .pfilter__btn--active { background:var(--sc-blue); color:#fff; border-color:var(--sc-blue); }
-        .pgroup__label { font-size:12px; font-weight:600; color:var(--fg-3); text-transform:uppercase; letter-spacing:.05em; margin:20px 0 10px; }
+        .pfilter__btn:hover { border-color:var(--accent); }
+        .pfilter__btn--active { background:var(--accent); color:var(--accent-fg); border-color:var(--accent); }
+        .pgroup__label { margin:20px 0 10px; }
         .pgroup__label:first-child { margin-top:0; }
       `}</style>
 
@@ -188,7 +188,7 @@ export default function ModelsPage() {
 
           {grouped.map(({ provider, items }) => (
             <div key={provider}>
-              <div className="pgroup__label">{provider}</div>
+              <div className="pgroup__label microlabel">{provider}</div>
               <div className="mgrid">
                 {items.map((m) => (
                   <div
@@ -228,7 +228,7 @@ export default function ModelsPage() {
 
       <p style={{ marginTop: 18, color: "var(--fg-3)", fontSize: 12.5 }}>
         Need a model that isn&apos;t here?{" "}
-        <a href="#" style={{ color: "var(--sc-blue)" }}>Request approval</a> — admins review on Mondays.
+        <a href="#" style={{ color: "var(--accent-text)" }}>Request approval</a> — admins review on Mondays.
       </p>
     </main>
   );

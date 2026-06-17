@@ -61,31 +61,31 @@ interface CopilotMeta {
 // ---------------------------------------------------------------------------
 
 const CATEGORY_COLORS: Record<Plugin['category'], string> = {
-  tool: '#1a6bbf',
-  integration: '#6b3fa0',
-  data: '#b85c00',
-  security: '#b81c1c',
-  workflow: '#1a7a40',
+  tool: 'var(--accent)',
+  integration: 'var(--cat-purple)',
+  data: 'var(--cat-orange)',
+  security: 'var(--bad)',
+  workflow: 'var(--good)',
 };
 
 const CATEGORY_BG: Record<Plugin['category'], string> = {
-  tool: '#dbeafe',
-  integration: '#ede9fe',
-  data: '#fed7aa',
-  security: '#fee2e2',
-  workflow: '#d1fae5',
+  tool: 'var(--accent-soft)',
+  integration: 'color-mix(in srgb, var(--cat-purple) 15%, transparent)',
+  data: 'color-mix(in srgb, var(--cat-orange) 15%, transparent)',
+  security: 'var(--bad-soft)',
+  workflow: 'var(--good-soft)',
 };
 
 const KIND_COLORS: Record<CopilotKind, string> = {
-  agent:       '#1a6bbf',
-  instruction: '#6b3fa0',
-  recipe:      '#b85c00',
+  agent:       'var(--accent)',
+  instruction: 'var(--cat-purple)',
+  recipe:      'var(--cat-orange)',
 };
 
 const KIND_BG: Record<CopilotKind, string> = {
-  agent:       '#dbeafe',
-  instruction: '#ede9fe',
-  recipe:      '#fed7aa',
+  agent:       'var(--accent-soft)',
+  instruction: 'color-mix(in srgb, var(--cat-purple) 15%, transparent)',
+  recipe:      'color-mix(in srgb, var(--cat-orange) 15%, transparent)',
 };
 
 const ALL_CATEGORIES: Array<Plugin['category'] | 'all'> = [
@@ -186,7 +186,7 @@ function PluginDetailPanel({ pluginId }: { pluginId: string }) {
             href={plugin.homepage_url}
             target="_blank"
             rel="noopener noreferrer"
-            style={{ fontSize: 13, color: 'var(--accent, #0A7BD7)', textDecoration: 'none' }}
+            style={{ fontSize: 13, color: 'var(--accent)', textDecoration: 'none' }}
           >
             Learn more →
           </a>
@@ -195,7 +195,7 @@ function PluginDetailPanel({ pluginId }: { pluginId: string }) {
 
       {plugin.scopes.length > 0 && (
         <div>
-          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg-3)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          <div className="microlabel" style={{ marginBottom: 6 }}>
             Scopes
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -347,7 +347,7 @@ function PluginsTab() {
               key={plugin.id}
               className="card"
               style={{
-                border: isExpanded ? '1px solid var(--sc-blue, #0A7BD7)' : undefined,
+                border: isExpanded ? '1px solid var(--accent)' : undefined,
               }}
             >
               <div className="card__head" style={{ alignItems: 'flex-start' }}>
@@ -388,7 +388,7 @@ function PluginsTab() {
                       v{plugin.version}
                     </span>
                     <span style={{ color: 'var(--fg-3)', fontSize: 12 }}>·</span>
-                    <span style={{ fontSize: 12, color: firstParty ? 'var(--good, #1f8a5b)' : 'var(--fg-3)' }}>
+                    <span style={{ fontSize: 12, color: firstParty ? 'var(--good)' : 'var(--fg-3)' }}>
                       {firstParty ? '✓ ' : ''}{plugin.author}
                     </span>
                     {plugin.scopes.length > 0 ? (
@@ -702,7 +702,7 @@ function CopilotCatalogTab() {
                       padding: '2px 7px',
                       borderRadius: 4,
                       fontSize: 11,
-                      background: 'var(--surface-soft, var(--surface))',
+                      background: 'var(--surface-soft)',
                       color: 'var(--fg-3)',
                       border: '1px solid var(--rule)',
                     }}>
@@ -733,7 +733,7 @@ function CopilotCatalogTab() {
                     rel="noopener noreferrer"
                     style={{
                       fontSize: 12.5,
-                      color: 'var(--accent, #0A7BD7)',
+                      color: 'var(--accent)',
                       textDecoration: 'none',
                       display: 'flex',
                       alignItems: 'center',
@@ -752,8 +752,8 @@ function CopilotCatalogTab() {
                     padding: '4px 10px',
                     borderRadius: 5,
                     border: '1px solid var(--rule)',
-                    background: copied === item.id ? 'var(--good-bg, #d1fae5)' : 'var(--surface)',
-                    color: copied === item.id ? 'var(--good, #1f8a5b)' : 'var(--fg-2)',
+                    background: copied === item.id ? 'var(--good-soft)' : 'var(--surface)',
+                    color: copied === item.id ? 'var(--good)' : 'var(--fg-2)',
                     fontSize: 12,
                     cursor: 'pointer',
                     transition: 'background 0.15s, color 0.15s',
@@ -809,7 +809,7 @@ export default function PluginsPage() {
               padding: '9px 20px',
               border: 'none',
               borderBottom: activeTab === tab.id
-                ? '2px solid var(--accent, #0A7BD7)'
+                ? '2px solid var(--accent)'
                 : '2px solid transparent',
               background: 'transparent',
               color: activeTab === tab.id ? 'var(--fg-1)' : 'var(--fg-3)',

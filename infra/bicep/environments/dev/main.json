@@ -1,0 +1,2638 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+  "languageVersion": "2.0",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.43.8.12551",
+      "templateHash": "14717056584588814944"
+    }
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "defaultValue": "swedencentral"
+    },
+    "env": {
+      "type": "string",
+      "defaultValue": "dev"
+    },
+    "vnetResourceGroup": {
+      "type": "string"
+    },
+    "vnetName": {
+      "type": "string"
+    },
+    "acaInfraSubnetId": {
+      "type": "string"
+    },
+    "deployingPrincipalId": {
+      "type": "string"
+    },
+    "imageTag": {
+      "type": "string",
+      "defaultValue": "dev-latest"
+    },
+    "ghcrPat": {
+      "type": "securestring"
+    },
+    "ghcrUsername": {
+      "type": "string"
+    },
+    "postgresAdminPassword": {
+      "type": "securestring"
+    },
+    "tlsCertBase64": {
+      "type": "securestring"
+    },
+    "tlsCertPassword": {
+      "type": "securestring"
+    }
+  },
+  "variables": {
+    "rgName": "[format('rg-aigw-{0}-sdc', parameters('env'))]",
+    "kvName": "[format('kv-aigw-{0}-sdc', parameters('env'))]",
+    "tags": {
+      "environment": "[parameters('env')]",
+      "workload": "aigw",
+      "managedBy": "bicep"
+    },
+    "agentRelaySecret": "[uniqueString(subscription().id, parameters('env'), 'agent-relay')]",
+    "adminInternalToken": "[uniqueString(subscription().id, parameters('env'), 'admin-token')]",
+    "identityKeySecret": "[uniqueString(subscription().id, parameters('env'), 'identity-key')]",
+    "identityServiceToken": "[uniqueString(subscription().id, parameters('env'), 'identity-svc')]",
+    "librarianServiceToken": "[uniqueString(subscription().id, parameters('env'), 'librarian-svc')]",
+    "litellmMasterKey": "[format('sk-{0}', uniqueString(subscription().id, parameters('env'), 'litellm-master'))]",
+    "adminSecretKey": "[uniqueString(subscription().id, parameters('env'), 'admin-secret')]",
+    "internalApiKey": "[uniqueString(subscription().id, parameters('env'), 'internal-api')]",
+    "scannerWorkerSecret": "[uniqueString(subscription().id, parameters('env'), 'scanner-worker')]"
+  },
+  "resources": {
+    "rg": {
+      "type": "Microsoft.Resources/resourceGroups",
+      "apiVersion": "2023-07-01",
+      "name": "[variables('rgName')]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('tags')]"
+    },
+    "networking": {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "networking",
+      "resourceGroup": "[parameters('vnetResourceGroup')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "vnetName": {
+            "value": "[parameters('vnetName')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.43.8.12551",
+              "templateHash": "5851048096882002169"
+            }
+          },
+          "parameters": {
+            "vnetName": {
+              "type": "string",
+              "defaultValue": "vnet-spoke-platformaitooling-dev-sdc-001"
+            },
+            "peSubnetName": {
+              "type": "string",
+              "defaultValue": "snet-pe-aigw-dev"
+            },
+            "peSubnetPrefix": {
+              "type": "string",
+              "defaultValue": "10.179.231.64/26"
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Network/virtualNetworks/subnets",
+              "apiVersion": "2023-09-01",
+              "name": "[format('{0}/{1}', parameters('vnetName'), parameters('peSubnetName'))]",
+              "properties": {
+                "addressPrefix": "[parameters('peSubnetPrefix')]",
+                "privateEndpointNetworkPolicies": "Disabled",
+                "privateLinkServiceNetworkPolicies": "Enabled"
+              }
+            }
+          ],
+          "outputs": {
+            "peSubnetId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('vnetName'), parameters('peSubnetName'))]"
+            }
+          }
+        }
+      }
+    },
+    "cmkIdentity": {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "cmkIdentity",
+      "resourceGroup": "[variables('rgName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "name": {
+            "value": "[format('id-sb-cmk-{0}-sdc', parameters('env'))]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "tags": {
+            "value": "[variables('tags')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.43.8.12551",
+              "templateHash": "5143755213930868619"
+            }
+          },
+          "parameters": {
+            "name": {
+              "type": "string"
+            },
+            "location": {
+              "type": "string"
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {}
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+              "apiVersion": "2023-01-31",
+              "name": "[parameters('name')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]"
+            }
+          ],
+          "outputs": {
+            "identityId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('name'))]"
+            },
+            "principalId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('name')), '2023-01-31').principalId]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "rg"
+      ]
+    },
+    "keyVault": {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "keyVault",
+      "resourceGroup": "[variables('rgName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "name": {
+            "value": "[variables('kvName')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "tags": {
+            "value": "[variables('tags')]"
+          },
+          "peSubnetId": {
+            "value": "[reference('networking').outputs.peSubnetId.value]"
+          },
+          "deployingPrincipalId": {
+            "value": "[parameters('deployingPrincipalId')]"
+          },
+          "sbEncryptionPrincipalId": {
+            "value": "[reference('cmkIdentity').outputs.principalId.value]"
+          },
+          "agentRelaySecret": {
+            "value": "[variables('agentRelaySecret')]"
+          },
+          "adminInternalToken": {
+            "value": "[variables('adminInternalToken')]"
+          },
+          "identityKeySecret": {
+            "value": "[variables('identityKeySecret')]"
+          },
+          "identityServiceToken": {
+            "value": "[variables('identityServiceToken')]"
+          },
+          "librarianServiceToken": {
+            "value": "[variables('librarianServiceToken')]"
+          },
+          "litellmMasterKey": {
+            "value": "[variables('litellmMasterKey')]"
+          },
+          "adminSecretKey": {
+            "value": "[variables('adminSecretKey')]"
+          },
+          "internalApiKey": {
+            "value": "[variables('internalApiKey')]"
+          },
+          "scannerWorkerSecret": {
+            "value": "[variables('scannerWorkerSecret')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.43.8.12551",
+              "templateHash": "17678240526390741755"
+            }
+          },
+          "parameters": {
+            "name": {
+              "type": "string"
+            },
+            "location": {
+              "type": "string"
+            },
+            "peSubnetId": {
+              "type": "string"
+            },
+            "deployingPrincipalId": {
+              "type": "string"
+            },
+            "sbEncryptionPrincipalId": {
+              "type": "string"
+            },
+            "agentRelaySecret": {
+              "type": "securestring"
+            },
+            "adminInternalToken": {
+              "type": "securestring"
+            },
+            "identityKeySecret": {
+              "type": "securestring"
+            },
+            "identityServiceToken": {
+              "type": "securestring"
+            },
+            "librarianServiceToken": {
+              "type": "securestring"
+            },
+            "litellmMasterKey": {
+              "type": "securestring"
+            },
+            "adminSecretKey": {
+              "type": "securestring"
+            },
+            "internalApiKey": {
+              "type": "securestring"
+            },
+            "scannerWorkerSecret": {
+              "type": "securestring"
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {}
+            }
+          },
+          "variables": {
+            "kvAdminRoleId": "00482a5a-887f-4fb3-b363-3b7fe8e74483",
+            "kvCryptoUserRoleId": "e147488a-f6f5-4113-8e2d-b22465e65bf6"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.KeyVault/vaults",
+              "apiVersion": "2023-07-01",
+              "name": "[parameters('name')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "sku": {
+                  "family": "A",
+                  "name": "standard"
+                },
+                "tenantId": "[subscription().tenantId]",
+                "enableRbacAuthorization": true,
+                "enableSoftDelete": true,
+                "softDeleteRetentionInDays": 7,
+                "enablePurgeProtection": true,
+                "publicNetworkAccess": "Disabled",
+                "networkAcls": {
+                  "bypass": "AzureServices",
+                  "defaultAction": "Deny"
+                }
+              }
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[resourceId('Microsoft.KeyVault/vaults', parameters('name'))]",
+              "name": "[guid(resourceId('Microsoft.KeyVault/vaults', parameters('name')), parameters('deployingPrincipalId'), variables('kvAdminRoleId'))]",
+              "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('kvAdminRoleId'))]",
+                "principalId": "[parameters('deployingPrincipalId')]",
+                "principalType": "User"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', parameters('name'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.KeyVault/vaults/keys",
+              "apiVersion": "2023-07-01",
+              "name": "[format('{0}/{1}', parameters('name'), 'sb-cmk-key')]",
+              "properties": {
+                "kty": "RSA",
+                "keySize": 4096,
+                "keyOps": [
+                  "encrypt",
+                  "decrypt",
+                  "wrapKey",
+                  "unwrapKey",
+                  "sign",
+                  "verify"
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', parameters('name'))]",
+                "[extensionResourceId(resourceId('Microsoft.KeyVault/vaults', parameters('name')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.KeyVault/vaults', parameters('name')), parameters('deployingPrincipalId'), variables('kvAdminRoleId')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[resourceId('Microsoft.KeyVault/vaults', parameters('name'))]",
+              "name": "[guid(resourceId('Microsoft.KeyVault/vaults', parameters('name')), parameters('sbEncryptionPrincipalId'), variables('kvCryptoUserRoleId'))]",
+              "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('kvCryptoUserRoleId'))]",
+                "principalId": "[parameters('sbEncryptionPrincipalId')]",
+                "principalType": "ServicePrincipal"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', parameters('name'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Network/privateEndpoints",
+              "apiVersion": "2023-09-01",
+              "name": "pe-kv-aigw-dev-sdc",
+              "location": "[parameters('location')]",
+              "properties": {
+                "subnet": {
+                  "id": "[parameters('peSubnetId')]"
+                },
+                "privateLinkServiceConnections": [
+                  {
+                    "name": "pe-kv-conn",
+                    "properties": {
+                      "privateLinkServiceId": "[resourceId('Microsoft.KeyVault/vaults', parameters('name'))]",
+                      "groupIds": [
+                        "vault"
+                      ]
+                    }
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', parameters('name'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.KeyVault/vaults/secrets",
+              "apiVersion": "2023-07-01",
+              "name": "[format('{0}/{1}', parameters('name'), 'agent-relay-secret')]",
+              "properties": {
+                "value": "[parameters('agentRelaySecret')]"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', parameters('name'))]",
+                "[extensionResourceId(resourceId('Microsoft.KeyVault/vaults', parameters('name')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.KeyVault/vaults', parameters('name')), parameters('deployingPrincipalId'), variables('kvAdminRoleId')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.KeyVault/vaults/secrets",
+              "apiVersion": "2023-07-01",
+              "name": "[format('{0}/{1}', parameters('name'), 'admin-internal-token')]",
+              "properties": {
+                "value": "[parameters('adminInternalToken')]"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', parameters('name'))]",
+                "[extensionResourceId(resourceId('Microsoft.KeyVault/vaults', parameters('name')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.KeyVault/vaults', parameters('name')), parameters('deployingPrincipalId'), variables('kvAdminRoleId')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.KeyVault/vaults/secrets",
+              "apiVersion": "2023-07-01",
+              "name": "[format('{0}/{1}', parameters('name'), 'identity-key-secret')]",
+              "properties": {
+                "value": "[parameters('identityKeySecret')]"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', parameters('name'))]",
+                "[extensionResourceId(resourceId('Microsoft.KeyVault/vaults', parameters('name')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.KeyVault/vaults', parameters('name')), parameters('deployingPrincipalId'), variables('kvAdminRoleId')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.KeyVault/vaults/secrets",
+              "apiVersion": "2023-07-01",
+              "name": "[format('{0}/{1}', parameters('name'), 'identity-service-token')]",
+              "properties": {
+                "value": "[parameters('identityServiceToken')]"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', parameters('name'))]",
+                "[extensionResourceId(resourceId('Microsoft.KeyVault/vaults', parameters('name')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.KeyVault/vaults', parameters('name')), parameters('deployingPrincipalId'), variables('kvAdminRoleId')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.KeyVault/vaults/secrets",
+              "apiVersion": "2023-07-01",
+              "name": "[format('{0}/{1}', parameters('name'), 'librarian-service-token')]",
+              "properties": {
+                "value": "[parameters('librarianServiceToken')]"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', parameters('name'))]",
+                "[extensionResourceId(resourceId('Microsoft.KeyVault/vaults', parameters('name')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.KeyVault/vaults', parameters('name')), parameters('deployingPrincipalId'), variables('kvAdminRoleId')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.KeyVault/vaults/secrets",
+              "apiVersion": "2023-07-01",
+              "name": "[format('{0}/{1}', parameters('name'), 'litellm-master-key')]",
+              "properties": {
+                "value": "[parameters('litellmMasterKey')]"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', parameters('name'))]",
+                "[extensionResourceId(resourceId('Microsoft.KeyVault/vaults', parameters('name')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.KeyVault/vaults', parameters('name')), parameters('deployingPrincipalId'), variables('kvAdminRoleId')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.KeyVault/vaults/secrets",
+              "apiVersion": "2023-07-01",
+              "name": "[format('{0}/{1}', parameters('name'), 'admin-secret-key')]",
+              "properties": {
+                "value": "[parameters('adminSecretKey')]"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', parameters('name'))]",
+                "[extensionResourceId(resourceId('Microsoft.KeyVault/vaults', parameters('name')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.KeyVault/vaults', parameters('name')), parameters('deployingPrincipalId'), variables('kvAdminRoleId')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.KeyVault/vaults/secrets",
+              "apiVersion": "2023-07-01",
+              "name": "[format('{0}/{1}', parameters('name'), 'internal-api-key')]",
+              "properties": {
+                "value": "[parameters('internalApiKey')]"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', parameters('name'))]",
+                "[extensionResourceId(resourceId('Microsoft.KeyVault/vaults', parameters('name')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.KeyVault/vaults', parameters('name')), parameters('deployingPrincipalId'), variables('kvAdminRoleId')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.KeyVault/vaults/secrets",
+              "apiVersion": "2023-07-01",
+              "name": "[format('{0}/{1}', parameters('name'), 'scanner-worker-secret')]",
+              "properties": {
+                "value": "[parameters('scannerWorkerSecret')]"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', parameters('name'))]",
+                "[extensionResourceId(resourceId('Microsoft.KeyVault/vaults', parameters('name')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.KeyVault/vaults', parameters('name')), parameters('deployingPrincipalId'), variables('kvAdminRoleId')))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "kvName": {
+              "type": "string",
+              "value": "[parameters('name')]"
+            },
+            "kvUri": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.KeyVault/vaults', parameters('name')), '2023-07-01').vaultUri]"
+            },
+            "kvId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.KeyVault/vaults', parameters('name'))]"
+            },
+            "sbKeyName": {
+              "type": "string",
+              "value": "sb-cmk-key"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "cmkIdentity",
+        "networking",
+        "rg"
+      ]
+    },
+    "postgres": {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "postgres",
+      "resourceGroup": "[variables('rgName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "name": {
+            "value": "[format('psql-aigw-{0}-sdc', parameters('env'))]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "tags": {
+            "value": "[variables('tags')]"
+          },
+          "peSubnetId": {
+            "value": "[reference('networking').outputs.peSubnetId.value]"
+          },
+          "administratorPassword": {
+            "value": "[parameters('postgresAdminPassword')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.43.8.12551",
+              "templateHash": "470617269022427096"
+            }
+          },
+          "parameters": {
+            "name": {
+              "type": "string"
+            },
+            "location": {
+              "type": "string"
+            },
+            "peSubnetId": {
+              "type": "string"
+            },
+            "administratorPassword": {
+              "type": "securestring"
+            },
+            "administratorLogin": {
+              "type": "string",
+              "defaultValue": "aigwadmin"
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {}
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.DBforPostgreSQL/flexibleServers",
+              "apiVersion": "2024-08-01",
+              "name": "[parameters('name')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "sku": {
+                "name": "Standard_B2ms",
+                "tier": "Burstable"
+              },
+              "properties": {
+                "administratorLogin": "[parameters('administratorLogin')]",
+                "administratorLoginPassword": "[parameters('administratorPassword')]",
+                "version": "16",
+                "storage": {
+                  "storageSizeGB": 32
+                },
+                "backup": {
+                  "backupRetentionDays": 7,
+                  "geoRedundantBackup": "Disabled"
+                },
+                "network": {
+                  "publicNetworkAccess": "Disabled"
+                },
+                "highAvailability": {
+                  "mode": "Disabled"
+                },
+                "authConfig": {
+                  "activeDirectoryAuth": "Disabled",
+                  "passwordAuth": "Enabled"
+                }
+              }
+            },
+            {
+              "type": "Microsoft.DBforPostgreSQL/flexibleServers/databases",
+              "apiVersion": "2024-08-01",
+              "name": "[format('{0}/{1}', parameters('name'), 'aigateway')]",
+              "properties": {
+                "charset": "UTF8",
+                "collation": "en_US.utf8"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', parameters('name'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.DBforPostgreSQL/flexibleServers/databases",
+              "apiVersion": "2024-08-01",
+              "name": "[format('{0}/{1}', parameters('name'), 'litellm')]",
+              "properties": {
+                "charset": "UTF8",
+                "collation": "en_US.utf8"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', parameters('name'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Network/privateEndpoints",
+              "apiVersion": "2023-09-01",
+              "name": "pe-postgres-aigw-dev-sdc",
+              "location": "[parameters('location')]",
+              "properties": {
+                "subnet": {
+                  "id": "[parameters('peSubnetId')]"
+                },
+                "privateLinkServiceConnections": [
+                  {
+                    "name": "pe-postgres-conn",
+                    "properties": {
+                      "privateLinkServiceId": "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', parameters('name'))]",
+                      "groupIds": [
+                        "postgresqlServer"
+                      ]
+                    }
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', parameters('name'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "postgresFqdn": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.DBforPostgreSQL/flexibleServers', parameters('name')), '2024-08-01').fullyQualifiedDomainName]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "networking",
+        "rg"
+      ]
+    },
+    "redis": {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "redis",
+      "resourceGroup": "[variables('rgName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "name": {
+            "value": "[format('redis-aigw-{0}-sdc', parameters('env'))]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "tags": {
+            "value": "[variables('tags')]"
+          },
+          "peSubnetId": {
+            "value": "[reference('networking').outputs.peSubnetId.value]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.43.8.12551",
+              "templateHash": "10570855812608093386"
+            }
+          },
+          "parameters": {
+            "name": {
+              "type": "string"
+            },
+            "location": {
+              "type": "string"
+            },
+            "peSubnetId": {
+              "type": "string"
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {}
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Cache/redis",
+              "apiVersion": "2023-08-01",
+              "name": "[parameters('name')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "sku": {
+                  "name": "Premium",
+                  "family": "P",
+                  "capacity": 1
+                },
+                "enableNonSslPort": false,
+                "minimumTlsVersion": "1.2",
+                "publicNetworkAccess": "Disabled",
+                "redisConfiguration": {
+                  "rdb-backup-enabled": "false",
+                  "maxmemory-policy": "allkeys-lru"
+                }
+              }
+            },
+            {
+              "type": "Microsoft.Network/privateEndpoints",
+              "apiVersion": "2023-09-01",
+              "name": "pe-redis-aigw-dev-sdc",
+              "location": "[parameters('location')]",
+              "properties": {
+                "subnet": {
+                  "id": "[parameters('peSubnetId')]"
+                },
+                "privateLinkServiceConnections": [
+                  {
+                    "name": "pe-redis-conn",
+                    "properties": {
+                      "privateLinkServiceId": "[resourceId('Microsoft.Cache/redis', parameters('name'))]",
+                      "groupIds": [
+                        "redisCache"
+                      ]
+                    }
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Cache/redis', parameters('name'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "redisFqdn": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Cache/redis', parameters('name')), '2023-08-01').hostName]"
+            },
+            "redisId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Cache/redis', parameters('name'))]"
+            },
+            "redisName": {
+              "type": "string",
+              "value": "[parameters('name')]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "networking",
+        "rg"
+      ]
+    },
+    "acr": {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "acr",
+      "resourceGroup": "[variables('rgName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "name": {
+            "value": "[format('acraigw{0}sdc', parameters('env'))]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "tags": {
+            "value": "[variables('tags')]"
+          },
+          "peSubnetId": {
+            "value": "[reference('networking').outputs.peSubnetId.value]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.43.8.12551",
+              "templateHash": "236679368102136698"
+            }
+          },
+          "parameters": {
+            "name": {
+              "type": "string"
+            },
+            "location": {
+              "type": "string"
+            },
+            "peSubnetId": {
+              "type": "string"
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {}
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.ContainerRegistry/registries",
+              "apiVersion": "2023-07-01",
+              "name": "[parameters('name')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "sku": {
+                "name": "Premium"
+              },
+              "properties": {
+                "adminUserEnabled": false,
+                "publicNetworkAccess": "Enabled",
+                "zoneRedundancy": "Disabled"
+              }
+            },
+            {
+              "type": "Microsoft.Network/privateEndpoints",
+              "apiVersion": "2023-09-01",
+              "name": "pe-acr-aigw-dev-sdc",
+              "location": "[parameters('location')]",
+              "properties": {
+                "subnet": {
+                  "id": "[parameters('peSubnetId')]"
+                },
+                "privateLinkServiceConnections": [
+                  {
+                    "name": "pe-acr-conn",
+                    "properties": {
+                      "privateLinkServiceId": "[resourceId('Microsoft.ContainerRegistry/registries', parameters('name'))]",
+                      "groupIds": [
+                        "registry"
+                      ]
+                    }
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.ContainerRegistry/registries', parameters('name'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "acrLoginServer": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.ContainerRegistry/registries', parameters('name')), '2023-07-01').loginServer]"
+            },
+            "acrId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.ContainerRegistry/registries', parameters('name'))]"
+            },
+            "acrPeId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Network/privateEndpoints', 'pe-acr-aigw-dev-sdc')]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "networking",
+        "rg"
+      ]
+    },
+    "serviceBus": {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "serviceBus",
+      "resourceGroup": "[variables('rgName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "name": {
+            "value": "[format('sb-aigw-{0}-sdc', parameters('env'))]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "tags": {
+            "value": "[variables('tags')]"
+          },
+          "peSubnetId": {
+            "value": "[reference('networking').outputs.peSubnetId.value]"
+          },
+          "encryptionIdentityId": {
+            "value": "[reference('cmkIdentity').outputs.identityId.value]"
+          },
+          "kvUri": {
+            "value": "[reference('keyVault').outputs.kvUri.value]"
+          },
+          "sbKeyName": {
+            "value": "[reference('keyVault').outputs.sbKeyName.value]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.43.8.12551",
+              "templateHash": "4082628978213526135"
+            }
+          },
+          "parameters": {
+            "name": {
+              "type": "string"
+            },
+            "location": {
+              "type": "string"
+            },
+            "peSubnetId": {
+              "type": "string"
+            },
+            "encryptionIdentityId": {
+              "type": "string"
+            },
+            "kvUri": {
+              "type": "string"
+            },
+            "sbKeyName": {
+              "type": "string"
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {}
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.ServiceBus/namespaces",
+              "apiVersion": "2022-10-01-preview",
+              "name": "[parameters('name')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "sku": {
+                "name": "Premium",
+                "tier": "Premium"
+              },
+              "identity": {
+                "type": "UserAssigned",
+                "userAssignedIdentities": {
+                  "[format('{0}', parameters('encryptionIdentityId'))]": {}
+                }
+              },
+              "properties": {
+                "publicNetworkAccess": "Disabled",
+                "encryption": {
+                  "keySource": "Microsoft.KeyVault",
+                  "keyVaultProperties": [
+                    {
+                      "keyName": "[parameters('sbKeyName')]",
+                      "keyVaultUri": "[parameters('kvUri')]",
+                      "keyVersion": "",
+                      "identity": {
+                        "userAssignedIdentity": "[parameters('encryptionIdentityId')]"
+                      }
+                    }
+                  ],
+                  "requireInfrastructureEncryption": true
+                }
+              }
+            },
+            {
+              "type": "Microsoft.ServiceBus/namespaces/queues",
+              "apiVersion": "2022-10-01-preview",
+              "name": "[format('{0}/{1}', parameters('name'), 'observability-events')]",
+              "properties": {
+                "maxSizeInMegabytes": 1024,
+                "lockDuration": "PT1M",
+                "maxDeliveryCount": 10,
+                "requiresSession": false
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.ServiceBus/namespaces', parameters('name'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Network/privateEndpoints",
+              "apiVersion": "2023-09-01",
+              "name": "pe-sb-aigw-dev-sdc",
+              "location": "[parameters('location')]",
+              "properties": {
+                "subnet": {
+                  "id": "[parameters('peSubnetId')]"
+                },
+                "privateLinkServiceConnections": [
+                  {
+                    "name": "pe-sb-conn",
+                    "properties": {
+                      "privateLinkServiceId": "[resourceId('Microsoft.ServiceBus/namespaces', parameters('name'))]",
+                      "groupIds": [
+                        "namespace"
+                      ]
+                    }
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.ServiceBus/namespaces', parameters('name'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "sbId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.ServiceBus/namespaces', parameters('name'))]"
+            },
+            "sbName": {
+              "type": "string",
+              "value": "[parameters('name')]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "cmkIdentity",
+        "keyVault",
+        "networking",
+        "rg"
+      ]
+    },
+    "monitoring": {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "monitoring",
+      "resourceGroup": "[variables('rgName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "lawName": {
+            "value": "[format('law-aigw-{0}-sdc', parameters('env'))]"
+          },
+          "appiName": {
+            "value": "[format('appi-aigw-{0}-sdc', parameters('env'))]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "tags": {
+            "value": "[variables('tags')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.43.8.12551",
+              "templateHash": "10710045222260986181"
+            }
+          },
+          "parameters": {
+            "lawName": {
+              "type": "string"
+            },
+            "appiName": {
+              "type": "string"
+            },
+            "location": {
+              "type": "string"
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {}
+            }
+          },
+          "resources": {
+            "law": {
+              "type": "Microsoft.OperationalInsights/workspaces",
+              "apiVersion": "2023-09-01",
+              "name": "[parameters('lawName')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "sku": {
+                  "name": "PerGB2018"
+                },
+                "retentionInDays": 30,
+                "publicNetworkAccessForIngestion": "Enabled",
+                "publicNetworkAccessForQuery": "Enabled"
+              }
+            },
+            "appInsights": {
+              "type": "Microsoft.Insights/components",
+              "apiVersion": "2020-02-02",
+              "name": "[parameters('appiName')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "kind": "web",
+              "properties": {
+                "Application_Type": "web",
+                "WorkspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('lawName'))]",
+                "publicNetworkAccessForIngestion": "Enabled",
+                "publicNetworkAccessForQuery": "Enabled"
+              },
+              "dependsOn": [
+                "law"
+              ]
+            }
+          },
+          "outputs": {
+            "appiConnectionString": {
+              "type": "string",
+              "value": "[reference('appInsights').ConnectionString]"
+            },
+            "appiInstrumentationKey": {
+              "type": "string",
+              "value": "[reference('appInsights').InstrumentationKey]"
+            },
+            "lawId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('lawName'))]"
+            },
+            "lawCustomerId": {
+              "type": "string",
+              "value": "[reference('law').customerId]"
+            },
+            "lawSharedKey": {
+              "type": "securestring",
+              "value": "[listKeys('law', '2023-09-01').primarySharedKey]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "rg"
+      ]
+    },
+    "containerEnv": {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "containerEnv",
+      "resourceGroup": "[variables('rgName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "name": {
+            "value": "[format('cae-aigw-{0}-sdc', parameters('env'))]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "tags": {
+            "value": "[variables('tags')]"
+          },
+          "infrastructureSubnetId": {
+            "value": "[parameters('acaInfraSubnetId')]"
+          },
+          "lawCustomerId": {
+            "value": "[reference('monitoring').outputs.lawCustomerId.value]"
+          },
+          "lawSharedKey": {
+            "value": "[listOutputsWithSecureValues('monitoring', '2025-04-01').lawSharedKey]"
+          },
+          "tlsCertBase64": {
+            "value": "[parameters('tlsCertBase64')]"
+          },
+          "tlsCertPassword": {
+            "value": "[parameters('tlsCertPassword')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.43.8.12551",
+              "templateHash": "8028711992781771471"
+            }
+          },
+          "parameters": {
+            "name": {
+              "type": "string"
+            },
+            "location": {
+              "type": "string"
+            },
+            "infrastructureSubnetId": {
+              "type": "string"
+            },
+            "lawCustomerId": {
+              "type": "string"
+            },
+            "lawSharedKey": {
+              "type": "securestring"
+            },
+            "tlsCertBase64": {
+              "type": "securestring"
+            },
+            "tlsCertPassword": {
+              "type": "securestring"
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {}
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.App/managedEnvironments",
+              "apiVersion": "2024-03-01",
+              "name": "[parameters('name')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "vnetConfiguration": {
+                  "internal": true,
+                  "infrastructureSubnetId": "[parameters('infrastructureSubnetId')]"
+                },
+                "appLogsConfiguration": {
+                  "destination": "log-analytics",
+                  "logAnalyticsConfiguration": {
+                    "customerId": "[parameters('lawCustomerId')]",
+                    "sharedKey": "[parameters('lawSharedKey')]"
+                  }
+                },
+                "workloadProfiles": [
+                  {
+                    "name": "Consumption",
+                    "workloadProfileType": "Consumption"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.App/managedEnvironments/certificates",
+              "apiVersion": "2024-03-01",
+              "name": "[format('{0}/{1}', parameters('name'), 'tls-wildcard-lab')]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "value": "[parameters('tlsCertBase64')]",
+                "password": "[parameters('tlsCertPassword')]"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.App/managedEnvironments', parameters('name'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "acaEnvId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.App/managedEnvironments', parameters('name'))]"
+            },
+            "acaEnvName": {
+              "type": "string",
+              "value": "[parameters('name')]"
+            },
+            "acaStaticIp": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.App/managedEnvironments', parameters('name')), '2024-03-01').staticIp]"
+            },
+            "acaDefaultDomain": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.App/managedEnvironments', parameters('name')), '2024-03-01').defaultDomain]"
+            },
+            "tlsCertId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.App/managedEnvironments/certificates', parameters('name'), 'tls-wildcard-lab')]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "monitoring",
+        "rg"
+      ]
+    },
+    "kvPaasSecrets": {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "kvPaasSecrets",
+      "resourceGroup": "[variables('rgName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "kvName": {
+            "value": "[variables('kvName')]"
+          },
+          "redisName": {
+            "value": "[format('redis-aigw-{0}-sdc', parameters('env'))]"
+          },
+          "serviceBusName": {
+            "value": "[format('sb-aigw-{0}-sdc', parameters('env'))]"
+          },
+          "postgresFqdn": {
+            "value": "[reference('postgres').outputs.postgresFqdn.value]"
+          },
+          "postgresAdminPassword": {
+            "value": "[parameters('postgresAdminPassword')]"
+          },
+          "appInsightsConn": {
+            "value": "[reference('monitoring').outputs.appiConnectionString.value]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.43.8.12551",
+              "templateHash": "18118381355612665393"
+            }
+          },
+          "parameters": {
+            "kvName": {
+              "type": "string"
+            },
+            "redisName": {
+              "type": "string"
+            },
+            "serviceBusName": {
+              "type": "string"
+            },
+            "postgresFqdn": {
+              "type": "string"
+            },
+            "postgresAdminLogin": {
+              "type": "string",
+              "defaultValue": "aigwadmin"
+            },
+            "postgresAdminPassword": {
+              "type": "securestring"
+            },
+            "appInsightsConn": {
+              "type": "securestring"
+            }
+          },
+          "variables": {
+            "postgresUrl": "[format('postgresql+asyncpg://{0}:{1}@{2}/aigateway?sslmode=require', parameters('postgresAdminLogin'), parameters('postgresAdminPassword'), parameters('postgresFqdn'))]",
+            "postgresUrlRaw": "[format('postgresql://{0}:{1}@{2}/aigateway?sslmode=require', parameters('postgresAdminLogin'), parameters('postgresAdminPassword'), parameters('postgresFqdn'))]",
+            "postgresUrlLitellm": "[format('postgresql+asyncpg://{0}:{1}@{2}/litellm?sslmode=require', parameters('postgresAdminLogin'), parameters('postgresAdminPassword'), parameters('postgresFqdn'))]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.KeyVault/vaults/secrets",
+              "apiVersion": "2023-07-01",
+              "name": "[format('{0}/{1}', parameters('kvName'), 'postgres-url')]",
+              "properties": {
+                "value": "[variables('postgresUrl')]"
+              }
+            },
+            {
+              "type": "Microsoft.KeyVault/vaults/secrets",
+              "apiVersion": "2023-07-01",
+              "name": "[format('{0}/{1}', parameters('kvName'), 'postgres-url-raw')]",
+              "properties": {
+                "value": "[variables('postgresUrlRaw')]"
+              }
+            },
+            {
+              "type": "Microsoft.KeyVault/vaults/secrets",
+              "apiVersion": "2023-07-01",
+              "name": "[format('{0}/{1}', parameters('kvName'), 'postgres-url-litellm')]",
+              "properties": {
+                "value": "[variables('postgresUrlLitellm')]"
+              }
+            },
+            {
+              "type": "Microsoft.KeyVault/vaults/secrets",
+              "apiVersion": "2023-07-01",
+              "name": "[format('{0}/{1}', parameters('kvName'), 'redis-url')]",
+              "properties": {
+                "value": "[format('rediss://:{0}@{1}.redis.cache.windows.net:6380/0', listKeys(resourceId('Microsoft.Cache/redis', parameters('redisName')), '2023-08-01').primaryKey, parameters('redisName'))]"
+              }
+            },
+            {
+              "type": "Microsoft.KeyVault/vaults/secrets",
+              "apiVersion": "2023-07-01",
+              "name": "[format('{0}/{1}', parameters('kvName'), 'service-bus-conn')]",
+              "properties": {
+                "value": "[listKeys(resourceId('Microsoft.ServiceBus/namespaces/AuthorizationRules', parameters('serviceBusName'), 'RootManageSharedAccessKey'), '2022-10-01-preview').primaryConnectionString]"
+              }
+            },
+            {
+              "type": "Microsoft.KeyVault/vaults/secrets",
+              "apiVersion": "2023-07-01",
+              "name": "[format('{0}/{1}', parameters('kvName'), 'app-insights-conn')]",
+              "properties": {
+                "value": "[parameters('appInsightsConn')]"
+              }
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "keyVault",
+        "monitoring",
+        "postgres",
+        "redis",
+        "rg",
+        "serviceBus"
+      ]
+    },
+    "containerApps": {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "containerApps",
+      "resourceGroup": "[variables('rgName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "env": {
+            "value": "[parameters('env')]"
+          },
+          "acaEnvId": {
+            "value": "[reference('containerEnv').outputs.acaEnvId.value]"
+          },
+          "kvUri": {
+            "value": "[reference('keyVault').outputs.kvUri.value]"
+          },
+          "kvName": {
+            "value": "[variables('kvName')]"
+          },
+          "acrName": {
+            "value": "[format('acraigw{0}sdc', parameters('env'))]"
+          },
+          "ghcrPat": {
+            "value": "[parameters('ghcrPat')]"
+          },
+          "ghcrUsername": {
+            "value": "[parameters('ghcrUsername')]"
+          },
+          "imageTag": {
+            "value": "[parameters('imageTag')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "tags": {
+            "value": "[variables('tags')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.43.8.12551",
+              "templateHash": "6463623711806757617"
+            }
+          },
+          "parameters": {
+            "env": {
+              "type": "string"
+            },
+            "acaEnvId": {
+              "type": "string"
+            },
+            "kvUri": {
+              "type": "string"
+            },
+            "kvName": {
+              "type": "string"
+            },
+            "acrName": {
+              "type": "string"
+            },
+            "ghcrPat": {
+              "type": "securestring"
+            },
+            "ghcrUsername": {
+              "type": "string"
+            },
+            "imageTag": {
+              "type": "string",
+              "defaultValue": "dev-latest"
+            },
+            "location": {
+              "type": "string"
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {}
+            }
+          },
+          "variables": {
+            "acrPullRoleId": "7f951dda-4ed3-4680-a7ca-43fe172d538d",
+            "kvSecretsUserRoleId": "4633458b-17de-408a-b874-0445c86b69e6",
+            "uamiId": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-aca-apps-{0}-sdc', parameters('env')))]",
+            "ghcrBase": "ghcr.io/simcorp/ai-gw",
+            "ghcrSecret": [
+              {
+                "name": "ghcr-pat",
+                "value": "[parameters('ghcrPat')]"
+              }
+            ],
+            "ghcrRegistries": [
+              {
+                "server": "ghcr.io",
+                "username": "[parameters('ghcrUsername')]",
+                "passwordSecretRef": "ghcr-pat"
+              }
+            ],
+            "authUrl": "[format('http://ca-auth-{0}-sdc', parameters('env'))]",
+            "cacheUrl": "[format('http://ca-cache-{0}-sdc', parameters('env'))]",
+            "litellmUrl": "[format('http://ca-litellm-{0}-sdc', parameters('env'))]",
+            "observabilityUrl": "[format('http://ca-observability-{0}-sdc', parameters('env'))]",
+            "adminUrl": "[format('http://ca-admin-{0}-sdc', parameters('env'))]",
+            "agentRelayUrl": "[format('http://ca-agent-relay-{0}-sdc', parameters('env'))]",
+            "librarianUrl": "[format('http://ca-librarian-{0}-sdc', parameters('env'))]",
+            "leagueUrl": "[format('http://ca-league-{0}-sdc', parameters('env'))]",
+            "stdResources": {
+              "cpu": "[json('0.5')]",
+              "memory": "1Gi"
+            },
+            "lgResources": {
+              "cpu": "[json('1.0')]",
+              "memory": "2Gi"
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+              "apiVersion": "2023-01-31",
+              "name": "[format('id-aca-apps-{0}-sdc', parameters('env'))]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]"
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName'))]",
+              "name": "[guid(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName')), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-aca-apps-{0}-sdc', parameters('env'))), variables('acrPullRoleId'))]",
+              "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('acrPullRoleId'))]",
+                "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-aca-apps-{0}-sdc', parameters('env'))), '2023-01-31').principalId]",
+                "principalType": "ServicePrincipal"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-aca-apps-{0}-sdc', parameters('env')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[resourceId('Microsoft.KeyVault/vaults', parameters('kvName'))]",
+              "name": "[guid(resourceId('Microsoft.KeyVault/vaults', parameters('kvName')), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-aca-apps-{0}-sdc', parameters('env'))), variables('kvSecretsUserRoleId'))]",
+              "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('kvSecretsUserRoleId'))]",
+                "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-aca-apps-{0}-sdc', parameters('env'))), '2023-01-31').principalId]",
+                "principalType": "ServicePrincipal"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-aca-apps-{0}-sdc', parameters('env')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.App/jobs",
+              "apiVersion": "2024-03-01",
+              "name": "[format('job-db-migrate-{0}-sdc', parameters('env'))]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "identity": {
+                "type": "UserAssigned",
+                "userAssignedIdentities": {
+                  "[format('{0}', variables('uamiId'))]": {}
+                }
+              },
+              "properties": {
+                "environmentId": "[parameters('acaEnvId')]",
+                "workloadProfileName": "Consumption",
+                "configuration": {
+                  "triggerType": "Manual",
+                  "replicaTimeout": 300,
+                  "manualTriggerConfig": {
+                    "parallelism": 1,
+                    "replicaCompletionCount": 1
+                  },
+                  "registries": "[variables('ghcrRegistries')]",
+                  "secrets": "[concat(variables('ghcrSecret'), createArray(createObject('name', 'postgres-url', 'keyVaultUrl', format('{0}secrets/postgres-url', parameters('kvUri')), 'identity', variables('uamiId'))))]"
+                },
+                "template": {
+                  "containers": [
+                    {
+                      "name": "db-migrate",
+                      "image": "[format('{0}/admin-api:{1}', variables('ghcrBase'), parameters('imageTag'))]",
+                      "command": [
+                        "alembic",
+                        "-c",
+                        "/app/alembic.ini",
+                        "upgrade",
+                        "head"
+                      ],
+                      "env": [
+                        {
+                          "name": "DATABASE_URL",
+                          "secretRef": "postgres-url"
+                        }
+                      ],
+                      "resources": "[variables('stdResources')]"
+                    }
+                  ]
+                }
+              },
+              "dependsOn": [
+                "[extensionResourceId(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName')), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-aca-apps-{0}-sdc', parameters('env'))), variables('acrPullRoleId')))]",
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-aca-apps-{0}-sdc', parameters('env')))]",
+                "[extensionResourceId(resourceId('Microsoft.KeyVault/vaults', parameters('kvName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.KeyVault/vaults', parameters('kvName')), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-aca-apps-{0}-sdc', parameters('env'))), variables('kvSecretsUserRoleId')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.App/containerApps",
+              "apiVersion": "2024-03-01",
+              "name": "[format('ca-auth-{0}-sdc', parameters('env'))]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "identity": {
+                "type": "UserAssigned",
+                "userAssignedIdentities": {
+                  "[format('{0}', variables('uamiId'))]": {}
+                }
+              },
+              "properties": {
+                "managedEnvironmentId": "[parameters('acaEnvId')]",
+                "workloadProfileName": "Consumption",
+                "configuration": {
+                  "ingress": {
+                    "external": false,
+                    "targetPort": 8001,
+                    "transport": "Http"
+                  },
+                  "registries": "[variables('ghcrRegistries')]",
+                  "secrets": "[concat(variables('ghcrSecret'), createArray(createObject('name', 'postgres-url', 'keyVaultUrl', format('{0}secrets/postgres-url', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'redis-url', 'keyVaultUrl', format('{0}secrets/redis-url', parameters('kvUri')), 'identity', variables('uamiId'))))]"
+                },
+                "template": {
+                  "containers": [
+                    {
+                      "name": "auth",
+                      "image": "[format('{0}/auth:{1}', variables('ghcrBase'), parameters('imageTag'))]",
+                      "env": [
+                        {
+                          "name": "DATABASE_URL",
+                          "secretRef": "postgres-url"
+                        },
+                        {
+                          "name": "REDIS_URL",
+                          "secretRef": "redis-url"
+                        },
+                        {
+                          "name": "JWKS_URI",
+                          "value": "https://login.microsoftonline.com/aa81b43f-3969-4fd4-80c9-84c411508d82/discovery/v2.0/keys"
+                        },
+                        {
+                          "name": "ENTRA_TENANT_ID",
+                          "value": "aa81b43f-3969-4fd4-80c9-84c411508d82"
+                        },
+                        {
+                          "name": "ENTRA_CLIENT_ID",
+                          "value": "placeholder-pending-app-registration"
+                        },
+                        {
+                          "name": "ADMIN_URL",
+                          "value": "[variables('adminUrl')]"
+                        },
+                        {
+                          "name": "ENVIRONMENT",
+                          "value": "[parameters('env')]"
+                        }
+                      ],
+                      "resources": "[variables('stdResources')]"
+                    }
+                  ],
+                  "scale": {
+                    "minReplicas": 1,
+                    "maxReplicas": 2
+                  }
+                }
+              },
+              "dependsOn": [
+                "[extensionResourceId(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName')), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-aca-apps-{0}-sdc', parameters('env'))), variables('acrPullRoleId')))]",
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-aca-apps-{0}-sdc', parameters('env')))]",
+                "[extensionResourceId(resourceId('Microsoft.KeyVault/vaults', parameters('kvName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.KeyVault/vaults', parameters('kvName')), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-aca-apps-{0}-sdc', parameters('env'))), variables('kvSecretsUserRoleId')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.App/containerApps",
+              "apiVersion": "2024-03-01",
+              "name": "[format('ca-cache-{0}-sdc', parameters('env'))]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "identity": {
+                "type": "UserAssigned",
+                "userAssignedIdentities": {
+                  "[format('{0}', variables('uamiId'))]": {}
+                }
+              },
+              "properties": {
+                "managedEnvironmentId": "[parameters('acaEnvId')]",
+                "workloadProfileName": "Consumption",
+                "configuration": {
+                  "ingress": {
+                    "external": false,
+                    "targetPort": 8002,
+                    "transport": "Http"
+                  },
+                  "registries": "[variables('ghcrRegistries')]",
+                  "secrets": "[concat(variables('ghcrSecret'), createArray(createObject('name', 'redis-url', 'keyVaultUrl', format('{0}secrets/redis-url', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'litellm-master-key', 'keyVaultUrl', format('{0}secrets/litellm-master-key', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'internal-api-key', 'keyVaultUrl', format('{0}secrets/internal-api-key', parameters('kvUri')), 'identity', variables('uamiId'))))]"
+                },
+                "template": {
+                  "containers": [
+                    {
+                      "name": "cache",
+                      "image": "[format('{0}/cache:{1}', variables('ghcrBase'), parameters('imageTag'))]",
+                      "env": [
+                        {
+                          "name": "REDIS_URL",
+                          "secretRef": "redis-url"
+                        },
+                        {
+                          "name": "LITELLM_MASTER_KEY",
+                          "secretRef": "litellm-master-key"
+                        },
+                        {
+                          "name": "LITELLM_URL",
+                          "value": "[variables('litellmUrl')]"
+                        },
+                        {
+                          "name": "AUTH_URL",
+                          "value": "[variables('authUrl')]"
+                        },
+                        {
+                          "name": "OBSERVABILITY_URL",
+                          "value": "[variables('observabilityUrl')]"
+                        },
+                        {
+                          "name": "INTERNAL_API_KEY",
+                          "secretRef": "internal-api-key"
+                        },
+                        {
+                          "name": "EMBEDDING_API_KEY",
+                          "secretRef": "litellm-master-key"
+                        },
+                        {
+                          "name": "EMBEDDING_BASE_URL",
+                          "value": "[format('{0}/v1', variables('litellmUrl'))]"
+                        },
+                        {
+                          "name": "EMBEDDING_MODEL",
+                          "value": "text-embedding-3-small"
+                        },
+                        {
+                          "name": "ENVIRONMENT",
+                          "value": "[parameters('env')]"
+                        }
+                      ],
+                      "resources": "[variables('stdResources')]"
+                    }
+                  ],
+                  "scale": {
+                    "minReplicas": 1,
+                    "maxReplicas": 2
+                  }
+                }
+              },
+              "dependsOn": [
+                "[extensionResourceId(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName')), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-aca-apps-{0}-sdc', parameters('env'))), variables('acrPullRoleId')))]",
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-aca-apps-{0}-sdc', parameters('env')))]",
+                "[extensionResourceId(resourceId('Microsoft.KeyVault/vaults', parameters('kvName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.KeyVault/vaults', parameters('kvName')), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-aca-apps-{0}-sdc', parameters('env'))), variables('kvSecretsUserRoleId')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.App/containerApps",
+              "apiVersion": "2024-03-01",
+              "name": "[format('ca-litellm-{0}-sdc', parameters('env'))]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "identity": {
+                "type": "UserAssigned",
+                "userAssignedIdentities": {
+                  "[format('{0}', variables('uamiId'))]": {}
+                }
+              },
+              "properties": {
+                "managedEnvironmentId": "[parameters('acaEnvId')]",
+                "workloadProfileName": "Consumption",
+                "configuration": {
+                  "ingress": {
+                    "external": false,
+                    "targetPort": 8003,
+                    "transport": "Http"
+                  },
+                  "registries": "[variables('ghcrRegistries')]",
+                  "secrets": "[concat(variables('ghcrSecret'), createArray(createObject('name', 'litellm-master-key', 'keyVaultUrl', format('{0}secrets/litellm-master-key', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'postgres-url-litellm', 'keyVaultUrl', format('{0}secrets/postgres-url-litellm', parameters('kvUri')), 'identity', variables('uamiId'))))]"
+                },
+                "template": {
+                  "containers": [
+                    {
+                      "name": "litellm",
+                      "image": "[format('{0}/litellm:{1}', variables('ghcrBase'), parameters('imageTag'))]",
+                      "env": [
+                        {
+                          "name": "LITELLM_MASTER_KEY",
+                          "secretRef": "litellm-master-key"
+                        },
+                        {
+                          "name": "DATABASE_URL",
+                          "secretRef": "postgres-url-litellm"
+                        },
+                        {
+                          "name": "ANTHROPIC_API_KEY",
+                          "value": ""
+                        },
+                        {
+                          "name": "GEMINI_API_KEY",
+                          "value": ""
+                        },
+                        {
+                          "name": "GITHUB_MODELS_API_KEY",
+                          "value": ""
+                        },
+                        {
+                          "name": "AZURE_API_BASE",
+                          "value": ""
+                        },
+                        {
+                          "name": "AZURE_API_KEY",
+                          "value": ""
+                        },
+                        {
+                          "name": "AZURE_API_VERSION",
+                          "value": ""
+                        }
+                      ],
+                      "resources": "[variables('lgResources')]"
+                    }
+                  ],
+                  "scale": {
+                    "minReplicas": 1,
+                    "maxReplicas": 2
+                  }
+                }
+              },
+              "dependsOn": [
+                "[extensionResourceId(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName')), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-aca-apps-{0}-sdc', parameters('env'))), variables('acrPullRoleId')))]",
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-aca-apps-{0}-sdc', parameters('env')))]",
+                "[extensionResourceId(resourceId('Microsoft.KeyVault/vaults', parameters('kvName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.KeyVault/vaults', parameters('kvName')), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-aca-apps-{0}-sdc', parameters('env'))), variables('kvSecretsUserRoleId')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.App/containerApps",
+              "apiVersion": "2024-03-01",
+              "name": "[format('ca-observability-{0}-sdc', parameters('env'))]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "identity": {
+                "type": "UserAssigned",
+                "userAssignedIdentities": {
+                  "[format('{0}', variables('uamiId'))]": {}
+                }
+              },
+              "properties": {
+                "managedEnvironmentId": "[parameters('acaEnvId')]",
+                "workloadProfileName": "Consumption",
+                "configuration": {
+                  "ingress": {
+                    "external": false,
+                    "targetPort": 8004,
+                    "transport": "Http"
+                  },
+                  "registries": "[variables('ghcrRegistries')]",
+                  "secrets": "[concat(variables('ghcrSecret'), createArray(createObject('name', 'postgres-url', 'keyVaultUrl', format('{0}secrets/postgres-url', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'redis-url', 'keyVaultUrl', format('{0}secrets/redis-url', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'service-bus-conn', 'keyVaultUrl', format('{0}secrets/service-bus-conn', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'app-insights-conn', 'keyVaultUrl', format('{0}secrets/app-insights-conn', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'internal-api-key', 'keyVaultUrl', format('{0}secrets/internal-api-key', parameters('kvUri')), 'identity', variables('uamiId'))))]"
+                },
+                "template": {
+                  "containers": [
+                    {
+                      "name": "observability",
+                      "image": "[format('{0}/observability:{1}', variables('ghcrBase'), parameters('imageTag'))]",
+                      "env": [
+                        {
+                          "name": "DATABASE_URL",
+                          "secretRef": "postgres-url"
+                        },
+                        {
+                          "name": "REDIS_URL",
+                          "secretRef": "redis-url"
+                        },
+                        {
+                          "name": "AZURE_SERVICE_BUS_CONNECTION_STRING",
+                          "secretRef": "service-bus-conn"
+                        },
+                        {
+                          "name": "APPINSIGHTS_CONNECTION_STRING",
+                          "secretRef": "app-insights-conn"
+                        },
+                        {
+                          "name": "INTERNAL_API_KEY",
+                          "secretRef": "internal-api-key"
+                        },
+                        {
+                          "name": "BUS_PROVIDER",
+                          "value": "servicebus"
+                        },
+                        {
+                          "name": "ENVIRONMENT",
+                          "value": "[parameters('env')]"
+                        }
+                      ],
+                      "resources": "[variables('stdResources')]"
+                    }
+                  ],
+                  "scale": {
+                    "minReplicas": 1,
+                    "maxReplicas": 2
+                  }
+                }
+              },
+              "dependsOn": [
+                "[extensionResourceId(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName')), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-aca-apps-{0}-sdc', parameters('env'))), variables('acrPullRoleId')))]",
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-aca-apps-{0}-sdc', parameters('env')))]",
+                "[extensionResourceId(resourceId('Microsoft.KeyVault/vaults', parameters('kvName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.KeyVault/vaults', parameters('kvName')), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-aca-apps-{0}-sdc', parameters('env'))), variables('kvSecretsUserRoleId')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.App/containerApps",
+              "apiVersion": "2024-03-01",
+              "name": "[format('ca-admin-{0}-sdc', parameters('env'))]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "identity": {
+                "type": "UserAssigned",
+                "userAssignedIdentities": {
+                  "[format('{0}', variables('uamiId'))]": {}
+                }
+              },
+              "properties": {
+                "managedEnvironmentId": "[parameters('acaEnvId')]",
+                "workloadProfileName": "Consumption",
+                "configuration": {
+                  "ingress": {
+                    "external": false,
+                    "targetPort": 8005,
+                    "transport": "Http"
+                  },
+                  "registries": "[variables('ghcrRegistries')]",
+                  "secrets": "[concat(variables('ghcrSecret'), createArray(createObject('name', 'postgres-url', 'keyVaultUrl', format('{0}secrets/postgres-url', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'redis-url', 'keyVaultUrl', format('{0}secrets/redis-url', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'admin-secret-key', 'keyVaultUrl', format('{0}secrets/admin-secret-key', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'admin-internal-token', 'keyVaultUrl', format('{0}secrets/admin-internal-token', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'litellm-master-key', 'keyVaultUrl', format('{0}secrets/litellm-master-key', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'identity-key-secret', 'keyVaultUrl', format('{0}secrets/identity-key-secret', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'librarian-service-token', 'keyVaultUrl', format('{0}secrets/librarian-service-token', parameters('kvUri')), 'identity', variables('uamiId'))))]"
+                },
+                "template": {
+                  "containers": [
+                    {
+                      "name": "admin",
+                      "image": "[format('{0}/admin-api:{1}', variables('ghcrBase'), parameters('imageTag'))]",
+                      "env": [
+                        {
+                          "name": "DATABASE_URL",
+                          "secretRef": "postgres-url"
+                        },
+                        {
+                          "name": "REDIS_URL",
+                          "secretRef": "redis-url"
+                        },
+                        {
+                          "name": "SECRET_KEY",
+                          "secretRef": "admin-secret-key"
+                        },
+                        {
+                          "name": "ADMIN_TOKEN",
+                          "secretRef": "admin-internal-token"
+                        },
+                        {
+                          "name": "LITELLM_MASTER_KEY",
+                          "secretRef": "litellm-master-key"
+                        },
+                        {
+                          "name": "IDENTITY_KEY_SECRET",
+                          "secretRef": "identity-key-secret"
+                        },
+                        {
+                          "name": "LIBRARIAN_SERVICE_TOKEN",
+                          "secretRef": "librarian-service-token"
+                        },
+                        {
+                          "name": "DEV_BYPASS_AUTH",
+                          "value": "true"
+                        },
+                        {
+                          "name": "AUTH_URL",
+                          "value": "[variables('authUrl')]"
+                        },
+                        {
+                          "name": "CACHE_URL",
+                          "value": "[variables('cacheUrl')]"
+                        },
+                        {
+                          "name": "LITELLM_URL",
+                          "value": "[variables('litellmUrl')]"
+                        },
+                        {
+                          "name": "OBSERVABILITY_URL",
+                          "value": "[variables('observabilityUrl')]"
+                        },
+                        {
+                          "name": "LEAGUE_URL",
+                          "value": "[variables('leagueUrl')]"
+                        },
+                        {
+                          "name": "LIBRARIAN_URL",
+                          "value": "[variables('librarianUrl')]"
+                        },
+                        {
+                          "name": "ENVIRONMENT",
+                          "value": "development"
+                        }
+                      ],
+                      "resources": "[variables('stdResources')]"
+                    }
+                  ],
+                  "scale": {
+                    "minReplicas": 1,
+                    "maxReplicas": 2
+                  }
+                }
+              },
+              "dependsOn": [
+                "[extensionResourceId(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName')), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-aca-apps-{0}-sdc', parameters('env'))), variables('acrPullRoleId')))]",
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-aca-apps-{0}-sdc', parameters('env')))]",
+                "[extensionResourceId(resourceId('Microsoft.KeyVault/vaults', parameters('kvName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.KeyVault/vaults', parameters('kvName')), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-aca-apps-{0}-sdc', parameters('env'))), variables('kvSecretsUserRoleId')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.App/containerApps",
+              "apiVersion": "2024-03-01",
+              "name": "[format('ca-identity-{0}-sdc', parameters('env'))]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "identity": {
+                "type": "UserAssigned",
+                "userAssignedIdentities": {
+                  "[format('{0}', variables('uamiId'))]": {}
+                }
+              },
+              "properties": {
+                "managedEnvironmentId": "[parameters('acaEnvId')]",
+                "workloadProfileName": "Consumption",
+                "configuration": {
+                  "ingress": {
+                    "external": false,
+                    "targetPort": 8006,
+                    "transport": "Http"
+                  },
+                  "registries": "[variables('ghcrRegistries')]",
+                  "secrets": "[concat(variables('ghcrSecret'), createArray(createObject('name', 'postgres-url', 'keyVaultUrl', format('{0}secrets/postgres-url', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'redis-url', 'keyVaultUrl', format('{0}secrets/redis-url', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'identity-service-token', 'keyVaultUrl', format('{0}secrets/identity-service-token', parameters('kvUri')), 'identity', variables('uamiId'))))]"
+                },
+                "template": {
+                  "containers": [
+                    {
+                      "name": "identity",
+                      "image": "[format('{0}/identity:{1}', variables('ghcrBase'), parameters('imageTag'))]",
+                      "env": [
+                        {
+                          "name": "DATABASE_URL",
+                          "secretRef": "postgres-url"
+                        },
+                        {
+                          "name": "REDIS_URL",
+                          "secretRef": "redis-url"
+                        },
+                        {
+                          "name": "IDENTITY_SERVICE_TOKEN",
+                          "secretRef": "identity-service-token"
+                        },
+                        {
+                          "name": "ADMIN_URL",
+                          "value": "[variables('adminUrl')]"
+                        },
+                        {
+                          "name": "ENVIRONMENT",
+                          "value": "[parameters('env')]"
+                        }
+                      ],
+                      "resources": "[variables('stdResources')]"
+                    }
+                  ],
+                  "scale": {
+                    "minReplicas": 1,
+                    "maxReplicas": 2
+                  }
+                }
+              },
+              "dependsOn": [
+                "[extensionResourceId(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName')), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-aca-apps-{0}-sdc', parameters('env'))), variables('acrPullRoleId')))]",
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-aca-apps-{0}-sdc', parameters('env')))]",
+                "[extensionResourceId(resourceId('Microsoft.KeyVault/vaults', parameters('kvName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.KeyVault/vaults', parameters('kvName')), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-aca-apps-{0}-sdc', parameters('env'))), variables('kvSecretsUserRoleId')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.App/containerApps",
+              "apiVersion": "2024-03-01",
+              "name": "[format('ca-agent-relay-{0}-sdc', parameters('env'))]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "identity": {
+                "type": "UserAssigned",
+                "userAssignedIdentities": {
+                  "[format('{0}', variables('uamiId'))]": {}
+                }
+              },
+              "properties": {
+                "managedEnvironmentId": "[parameters('acaEnvId')]",
+                "workloadProfileName": "Consumption",
+                "configuration": {
+                  "ingress": {
+                    "external": false,
+                    "targetPort": 8007,
+                    "transport": "Http"
+                  },
+                  "registries": "[variables('ghcrRegistries')]",
+                  "secrets": "[concat(variables('ghcrSecret'), createArray(createObject('name', 'redis-url', 'keyVaultUrl', format('{0}secrets/redis-url', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'agent-relay-secret', 'keyVaultUrl', format('{0}secrets/agent-relay-secret', parameters('kvUri')), 'identity', variables('uamiId'))))]"
+                },
+                "template": {
+                  "containers": [
+                    {
+                      "name": "agent-relay",
+                      "image": "[format('{0}/agent-relay:{1}', variables('ghcrBase'), parameters('imageTag'))]",
+                      "env": [
+                        {
+                          "name": "REDIS_URL",
+                          "secretRef": "redis-url"
+                        },
+                        {
+                          "name": "RELAY_SECRET",
+                          "secretRef": "agent-relay-secret"
+                        },
+                        {
+                          "name": "ENVIRONMENT",
+                          "value": "[parameters('env')]"
+                        }
+                      ],
+                      "resources": "[variables('stdResources')]"
+                    }
+                  ],
+                  "scale": {
+                    "minReplicas": 1,
+                    "maxReplicas": 2
+                  }
+                }
+              },
+              "dependsOn": [
+                "[extensionResourceId(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName')), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-aca-apps-{0}-sdc', parameters('env'))), variables('acrPullRoleId')))]",
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-aca-apps-{0}-sdc', parameters('env')))]",
+                "[extensionResourceId(resourceId('Microsoft.KeyVault/vaults', parameters('kvName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.KeyVault/vaults', parameters('kvName')), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-aca-apps-{0}-sdc', parameters('env'))), variables('kvSecretsUserRoleId')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.App/containerApps",
+              "apiVersion": "2024-03-01",
+              "name": "[format('ca-librarian-{0}-sdc', parameters('env'))]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "identity": {
+                "type": "UserAssigned",
+                "userAssignedIdentities": {
+                  "[format('{0}', variables('uamiId'))]": {}
+                }
+              },
+              "properties": {
+                "managedEnvironmentId": "[parameters('acaEnvId')]",
+                "workloadProfileName": "Consumption",
+                "configuration": {
+                  "ingress": {
+                    "external": false,
+                    "targetPort": 8008,
+                    "transport": "Http"
+                  },
+                  "registries": "[variables('ghcrRegistries')]",
+                  "secrets": "[concat(variables('ghcrSecret'), createArray(createObject('name', 'postgres-url', 'keyVaultUrl', format('{0}secrets/postgres-url', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'redis-url', 'keyVaultUrl', format('{0}secrets/redis-url', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'litellm-master-key', 'keyVaultUrl', format('{0}secrets/litellm-master-key', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'librarian-service-token', 'keyVaultUrl', format('{0}secrets/librarian-service-token', parameters('kvUri')), 'identity', variables('uamiId'))))]"
+                },
+                "template": {
+                  "containers": [
+                    {
+                      "name": "librarian",
+                      "image": "[format('{0}/librarian:{1}', variables('ghcrBase'), parameters('imageTag'))]",
+                      "env": [
+                        {
+                          "name": "DATABASE_URL",
+                          "secretRef": "postgres-url"
+                        },
+                        {
+                          "name": "REDIS_URL",
+                          "secretRef": "redis-url"
+                        },
+                        {
+                          "name": "EMBEDDING_API_KEY",
+                          "secretRef": "litellm-master-key"
+                        },
+                        {
+                          "name": "LIBRARIAN_SERVICE_TOKEN",
+                          "secretRef": "librarian-service-token"
+                        },
+                        {
+                          "name": "AUTH_URL",
+                          "value": "[variables('authUrl')]"
+                        },
+                        {
+                          "name": "CACHE_URL",
+                          "value": "[variables('cacheUrl')]"
+                        },
+                        {
+                          "name": "EMBEDDING_BASE_URL",
+                          "value": "[format('{0}/v1', variables('litellmUrl'))]"
+                        },
+                        {
+                          "name": "EMBEDDING_MODEL",
+                          "value": "text-embedding-3-small"
+                        },
+                        {
+                          "name": "ENVIRONMENT",
+                          "value": "[parameters('env')]"
+                        }
+                      ],
+                      "resources": "[variables('stdResources')]"
+                    }
+                  ],
+                  "scale": {
+                    "minReplicas": 1,
+                    "maxReplicas": 2
+                  }
+                }
+              },
+              "dependsOn": [
+                "[extensionResourceId(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName')), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-aca-apps-{0}-sdc', parameters('env'))), variables('acrPullRoleId')))]",
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-aca-apps-{0}-sdc', parameters('env')))]",
+                "[extensionResourceId(resourceId('Microsoft.KeyVault/vaults', parameters('kvName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.KeyVault/vaults', parameters('kvName')), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-aca-apps-{0}-sdc', parameters('env'))), variables('kvSecretsUserRoleId')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.App/containerApps",
+              "apiVersion": "2024-03-01",
+              "name": "[format('ca-memory-{0}-sdc', parameters('env'))]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "identity": {
+                "type": "UserAssigned",
+                "userAssignedIdentities": {
+                  "[format('{0}', variables('uamiId'))]": {}
+                }
+              },
+              "properties": {
+                "managedEnvironmentId": "[parameters('acaEnvId')]",
+                "workloadProfileName": "Consumption",
+                "configuration": {
+                  "ingress": {
+                    "external": false,
+                    "targetPort": 8009,
+                    "transport": "Http"
+                  },
+                  "registries": "[variables('ghcrRegistries')]",
+                  "secrets": "[concat(variables('ghcrSecret'), createArray(createObject('name', 'postgres-url-raw', 'keyVaultUrl', format('{0}secrets/postgres-url-raw', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'litellm-master-key', 'keyVaultUrl', format('{0}secrets/litellm-master-key', parameters('kvUri')), 'identity', variables('uamiId'))))]"
+                },
+                "template": {
+                  "containers": [
+                    {
+                      "name": "memory",
+                      "image": "[format('{0}/memory:{1}', variables('ghcrBase'), parameters('imageTag'))]",
+                      "env": [
+                        {
+                          "name": "DATABASE_URL",
+                          "secretRef": "postgres-url-raw"
+                        },
+                        {
+                          "name": "AUTH_URL",
+                          "value": "[variables('authUrl')]"
+                        },
+                        {
+                          "name": "ADMIN_URL",
+                          "value": "[variables('adminUrl')]"
+                        },
+                        {
+                          "name": "EMBEDDING_API_KEY",
+                          "secretRef": "litellm-master-key"
+                        },
+                        {
+                          "name": "EMBEDDING_BASE_URL",
+                          "value": "[format('{0}/v1', variables('litellmUrl'))]"
+                        },
+                        {
+                          "name": "EMBEDDING_MODEL",
+                          "value": "text-embedding-3-small"
+                        },
+                        {
+                          "name": "ENVIRONMENT",
+                          "value": "[parameters('env')]"
+                        }
+                      ],
+                      "resources": "[variables('stdResources')]"
+                    }
+                  ],
+                  "scale": {
+                    "minReplicas": 1,
+                    "maxReplicas": 2
+                  }
+                }
+              },
+              "dependsOn": [
+                "[extensionResourceId(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName')), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-aca-apps-{0}-sdc', parameters('env'))), variables('acrPullRoleId')))]",
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-aca-apps-{0}-sdc', parameters('env')))]",
+                "[extensionResourceId(resourceId('Microsoft.KeyVault/vaults', parameters('kvName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.KeyVault/vaults', parameters('kvName')), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-aca-apps-{0}-sdc', parameters('env'))), variables('kvSecretsUserRoleId')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.App/containerApps",
+              "apiVersion": "2024-03-01",
+              "name": "[format('ca-league-{0}-sdc', parameters('env'))]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "identity": {
+                "type": "UserAssigned",
+                "userAssignedIdentities": {
+                  "[format('{0}', variables('uamiId'))]": {}
+                }
+              },
+              "properties": {
+                "managedEnvironmentId": "[parameters('acaEnvId')]",
+                "workloadProfileName": "Consumption",
+                "configuration": {
+                  "ingress": {
+                    "external": false,
+                    "targetPort": 8010,
+                    "transport": "Http"
+                  },
+                  "registries": "[variables('ghcrRegistries')]",
+                  "secrets": "[concat(variables('ghcrSecret'), createArray(createObject('name', 'postgres-url', 'keyVaultUrl', format('{0}secrets/postgres-url', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'redis-url', 'keyVaultUrl', format('{0}secrets/redis-url', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'litellm-master-key', 'keyVaultUrl', format('{0}secrets/litellm-master-key', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'admin-internal-token', 'keyVaultUrl', format('{0}secrets/admin-internal-token', parameters('kvUri')), 'identity', variables('uamiId'))))]"
+                },
+                "template": {
+                  "containers": [
+                    {
+                      "name": "league",
+                      "image": "[format('{0}/league:{1}', variables('ghcrBase'), parameters('imageTag'))]",
+                      "env": [
+                        {
+                          "name": "DATABASE_URL",
+                          "secretRef": "postgres-url"
+                        },
+                        {
+                          "name": "REDIS_URL",
+                          "secretRef": "redis-url"
+                        },
+                        {
+                          "name": "LITELLM_MASTER_KEY",
+                          "secretRef": "litellm-master-key"
+                        },
+                        {
+                          "name": "ADMIN_TOKEN",
+                          "secretRef": "admin-internal-token"
+                        },
+                        {
+                          "name": "LITELLM_URL",
+                          "value": "[variables('litellmUrl')]"
+                        },
+                        {
+                          "name": "ENVIRONMENT",
+                          "value": "[parameters('env')]"
+                        }
+                      ],
+                      "resources": "[variables('stdResources')]"
+                    }
+                  ],
+                  "scale": {
+                    "minReplicas": 1,
+                    "maxReplicas": 2
+                  }
+                }
+              },
+              "dependsOn": [
+                "[extensionResourceId(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName')), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-aca-apps-{0}-sdc', parameters('env'))), variables('acrPullRoleId')))]",
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-aca-apps-{0}-sdc', parameters('env')))]",
+                "[extensionResourceId(resourceId('Microsoft.KeyVault/vaults', parameters('kvName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.KeyVault/vaults', parameters('kvName')), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-aca-apps-{0}-sdc', parameters('env'))), variables('kvSecretsUserRoleId')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.App/containerApps",
+              "apiVersion": "2024-03-01",
+              "name": "[format('ca-scanner-{0}-sdc', parameters('env'))]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "identity": {
+                "type": "UserAssigned",
+                "userAssignedIdentities": {
+                  "[format('{0}', variables('uamiId'))]": {}
+                }
+              },
+              "properties": {
+                "managedEnvironmentId": "[parameters('acaEnvId')]",
+                "workloadProfileName": "Consumption",
+                "configuration": {
+                  "ingress": {
+                    "external": false,
+                    "targetPort": 8011,
+                    "transport": "Http"
+                  },
+                  "registries": "[variables('ghcrRegistries')]",
+                  "secrets": "[concat(variables('ghcrSecret'), createArray(createObject('name', 'postgres-url', 'keyVaultUrl', format('{0}secrets/postgres-url', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'redis-url', 'keyVaultUrl', format('{0}secrets/redis-url', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'internal-api-key', 'keyVaultUrl', format('{0}secrets/internal-api-key', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'scanner-worker-secret', 'keyVaultUrl', format('{0}secrets/scanner-worker-secret', parameters('kvUri')), 'identity', variables('uamiId'))))]"
+                },
+                "template": {
+                  "containers": [
+                    {
+                      "name": "scanner",
+                      "image": "[format('{0}/scanner:{1}', variables('ghcrBase'), parameters('imageTag'))]",
+                      "env": [
+                        {
+                          "name": "DATABASE_URL",
+                          "secretRef": "postgres-url"
+                        },
+                        {
+                          "name": "REDIS_URL",
+                          "secretRef": "redis-url"
+                        },
+                        {
+                          "name": "AUTH_URL",
+                          "value": "[variables('authUrl')]"
+                        },
+                        {
+                          "name": "INTERNAL_API_KEY",
+                          "secretRef": "internal-api-key"
+                        },
+                        {
+                          "name": "SCANNER_WORKER_SECRET",
+                          "secretRef": "scanner-worker-secret"
+                        },
+                        {
+                          "name": "ENVIRONMENT",
+                          "value": "[parameters('env')]"
+                        }
+                      ],
+                      "resources": "[variables('stdResources')]"
+                    }
+                  ],
+                  "scale": {
+                    "minReplicas": 1,
+                    "maxReplicas": 2
+                  }
+                }
+              },
+              "dependsOn": [
+                "[extensionResourceId(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName')), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-aca-apps-{0}-sdc', parameters('env'))), variables('acrPullRoleId')))]",
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-aca-apps-{0}-sdc', parameters('env')))]",
+                "[extensionResourceId(resourceId('Microsoft.KeyVault/vaults', parameters('kvName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.KeyVault/vaults', parameters('kvName')), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-aca-apps-{0}-sdc', parameters('env'))), variables('kvSecretsUserRoleId')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.App/containerApps",
+              "apiVersion": "2024-03-01",
+              "name": "[format('ca-workflow-worker-{0}-sdc', parameters('env'))]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "identity": {
+                "type": "UserAssigned",
+                "userAssignedIdentities": {
+                  "[format('{0}', variables('uamiId'))]": {}
+                }
+              },
+              "properties": {
+                "managedEnvironmentId": "[parameters('acaEnvId')]",
+                "workloadProfileName": "Consumption",
+                "configuration": {
+                  "registries": "[variables('ghcrRegistries')]",
+                  "secrets": "[concat(variables('ghcrSecret'), createArray(createObject('name', 'postgres-url', 'keyVaultUrl', format('{0}secrets/postgres-url', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'redis-url', 'keyVaultUrl', format('{0}secrets/redis-url', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'agent-relay-secret', 'keyVaultUrl', format('{0}secrets/agent-relay-secret', parameters('kvUri')), 'identity', variables('uamiId')), createObject('name', 'admin-internal-token', 'keyVaultUrl', format('{0}secrets/admin-internal-token', parameters('kvUri')), 'identity', variables('uamiId'))))]"
+                },
+                "template": {
+                  "containers": [
+                    {
+                      "name": "workflow-worker",
+                      "image": "[format('{0}/workflow-worker:{1}', variables('ghcrBase'), parameters('imageTag'))]",
+                      "env": [
+                        {
+                          "name": "DATABASE_URL",
+                          "secretRef": "postgres-url"
+                        },
+                        {
+                          "name": "REDIS_URL",
+                          "secretRef": "redis-url"
+                        },
+                        {
+                          "name": "AGENT_RELAY_SECRET",
+                          "secretRef": "agent-relay-secret"
+                        },
+                        {
+                          "name": "ADMIN_INTERNAL_TOKEN",
+                          "secretRef": "admin-internal-token"
+                        },
+                        {
+                          "name": "AGENT_RELAY_URL",
+                          "value": "[variables('agentRelayUrl')]"
+                        },
+                        {
+                          "name": "ADMIN_URL",
+                          "value": "[variables('adminUrl')]"
+                        },
+                        {
+                          "name": "ENVIRONMENT",
+                          "value": "[parameters('env')]"
+                        }
+                      ],
+                      "resources": "[variables('stdResources')]"
+                    }
+                  ],
+                  "scale": {
+                    "minReplicas": 1,
+                    "maxReplicas": 1
+                  }
+                }
+              },
+              "dependsOn": [
+                "[extensionResourceId(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName')), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-aca-apps-{0}-sdc', parameters('env'))), variables('acrPullRoleId')))]",
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-aca-apps-{0}-sdc', parameters('env')))]",
+                "[extensionResourceId(resourceId('Microsoft.KeyVault/vaults', parameters('kvName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.KeyVault/vaults', parameters('kvName')), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-aca-apps-{0}-sdc', parameters('env'))), variables('kvSecretsUserRoleId')))]"
+              ]
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "containerEnv",
+        "keyVault",
+        "kvPaasSecrets",
+        "rg"
+      ]
+    }
+  },
+  "outputs": {
+    "acaStaticIp": {
+      "type": "string",
+      "value": "[reference('containerEnv').outputs.acaStaticIp.value]"
+    },
+    "acaDefaultDomain": {
+      "type": "string",
+      "value": "[reference('containerEnv').outputs.acaDefaultDomain.value]"
+    },
+    "acrLoginServer": {
+      "type": "string",
+      "value": "[reference('acr').outputs.acrLoginServer.value]"
+    },
+    "tlsCertId": {
+      "type": "string",
+      "value": "[reference('containerEnv').outputs.tlsCertId.value]"
+    }
+  }
+}

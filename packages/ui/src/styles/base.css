@@ -1,0 +1,105 @@
+/* ============================================================
+   ai-gw design system — base reset & typography
+   ============================================================ */
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--fg-1);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "ss01", "cv11";
+  letter-spacing: -0.005em;
+}
+
+a { color: inherit; text-decoration: none; }
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+::selection { background: var(--accent-soft); color: var(--fg-1); }
+
+* { scrollbar-color: var(--rule-strong) transparent; }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-thumb { background: var(--rule-strong); border-radius: 6px; }
+*::-webkit-scrollbar-thumb:hover { background: var(--fg-3); }
+
+hr { border: 0; border-top: 1px solid var(--rule); margin: 16px 0; }
+
+/* ── Form element baseline (previously per-surface overrides) ── */
+input[type="text"],
+input[type="search"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+input[type="url"],
+textarea,
+select {
+  background: var(--surface-2);
+  border: 1px solid var(--rule-strong);
+  color: var(--fg-1);
+  border-radius: var(--r-2);
+  font-family: inherit;
+}
+input[type="text"]:focus,
+input[type="search"]:focus,
+input[type="email"]:focus,
+input[type="password"]:focus,
+input[type="number"]:focus,
+input[type="url"]:focus,
+textarea:focus,
+select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+  outline: none;
+}
+
+/* ── Technical microlabel: mono, uppercase, letterspaced ── */
+.microlabel {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--fg-3);
+}
+
+/* ── Numbers are always tabular ── */
+.num { font-variant-numeric: tabular-nums; }
+
+/* ── Utilities (legacy names kept) ── */
+.muted { color: var(--fg-2); }
+.mono { font-family: var(--font-mono); }
+.right { text-align: right; }
+.nowrap { white-space: nowrap; }
+.gap-2 { display: flex; gap: 8px; align-items: center; }
+.gap-3 { display: flex; gap: 12px; align-items: center; }
+
+/* ── Brand gradient trace utilities ── */
+.trace-border {
+  border: 1px solid transparent;
+  background-image:
+    linear-gradient(var(--surface), var(--surface)),
+    linear-gradient(135deg, var(--trace-from), var(--trace-to));
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+}
+.trace-underline {
+  border-bottom: 2px solid;
+  border-image: linear-gradient(90deg, var(--trace-from), var(--trace-to)) 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

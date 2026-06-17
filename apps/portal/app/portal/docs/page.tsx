@@ -36,12 +36,12 @@ export default function DocsPage() {
     <main className="pmain">
       <style>{`
         .toc { position:sticky; top:28px; font-size:12.5px; }
-        .toc h5 { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.04em; color:var(--fg-3); margin:0 0 8px; }
+        .toc h5 { margin:0 0 8px; }
         .toc a { display:block; padding:4px 8px; color:var(--fg-2); text-decoration:none; border-radius:4px; border-left:2px solid transparent; margin-bottom:2px; }
         .toc a:hover { color:var(--fg-1); }
-        .toc a.is-active { color:var(--sc-blue); border-left-color:var(--sc-blue); background:var(--sc-blue-soft); }
+        .toc a.is-active { color:var(--accent); border-left-color:var(--accent); background:var(--accent-soft); }
         .doc { max-width:720px; }
-        .doc h2 { font-size:22px; font-weight:600; margin:36px 0 12px; letter-spacing:-0.005em; scroll-margin-top:20px; background:linear-gradient(180deg,#fff 0%,#C7CBE6 100%); -webkit-background-clip:text; background-clip:text; color:transparent; }
+        .doc h2 { font-size:22px; font-weight:600; margin:36px 0 12px; letter-spacing:-0.005em; scroll-margin-top:20px; color:var(--fg-1); }
         .doc h2:first-child { margin-top:0; }
         .doc h3 { font-size:15px; font-weight:600; margin:22px 0 8px; }
         .doc p, .doc li { font-size:14px; line-height:1.65; color:var(--fg-1); }
@@ -50,7 +50,7 @@ export default function DocsPage() {
         .doc code:not(.code-block code) { background:var(--surface-soft); padding:1px 6px; border-radius:3px; font-size:12.5px; font-family:var(--font-mono); }
         .env-switch { display:inline-flex; border:1px solid var(--rule); border-radius:6px; overflow:hidden; margin-bottom:20px; }
         .env-switch button { padding:5px 14px; font-size:12px; font-weight:500; background:none; border:0; cursor:pointer; color:var(--fg-2); }
-        .env-switch button.is-active { background:var(--sc-blue); color:#fff; }
+        .env-switch button.is-active { background:var(--accent); color:var(--accent-fg); }
       `}</style>
 
       <div className="phero">
@@ -62,7 +62,7 @@ export default function DocsPage() {
 
       <div style={{ display: "grid", gridTemplateColumns: "200px 1fr", gap: 32 }}>
         <aside className="toc">
-          <h5>On this page</h5>
+          <h5 className="microlabel">On this page</h5>
           {TOC.map((item) => (
             <a
               key={item.id}
@@ -103,7 +103,7 @@ export default function DocsPage() {
 
           <h2 id="auth">2. Get an API key</h2>
           <p>
-            Head to <Link href="/portal/keys" style={{ color: "var(--sc-blue)" }}>API keys</Link> and
+            Head to <Link href="/portal/keys" style={{ color: "var(--accent)" }}>API keys</Link> and
             click <strong>+ Issue key</strong>. Give it a name like <code>my-laptop</code>.
             Copy the key immediately — it is only shown once.
           </p>
@@ -123,7 +123,7 @@ export default function DocsPage() {
           <p>
             Same shape as OpenAI — just a different <code>base_url</code>.
             Current base URL: <code style={{ fontSize: 11 }}>{baseUrl}</code>.
-            Pick any model from the <Link href="/portal/models" style={{ color: "var(--sc-blue)" }}>catalog</Link>.
+            Pick any model from the <Link href="/portal/models" style={{ color: "var(--accent)" }}>catalog</Link>.
           </p>
           <div className="tabs-pills">
             {["Python", "TypeScript"].map((l, i) => (
@@ -261,25 +261,25 @@ resp = client.chat.completions.create(
 
           <h2 id="errors">7. Error handling</h2>
           <ul>
-            <li><code>401</code> — missing or invalid API key. Check <Link href="/portal/keys" style={{ color: "var(--sc-blue)" }}>your keys</Link>.</li>
+            <li><code>401</code> — missing or invalid API key. Check <Link href="/portal/keys" style={{ color: "var(--accent)" }}>your keys</Link>.</li>
             <li><code>429</code> — rate limit hit. Back off using the <code>Retry-After</code> header.</li>
             <li><code>402</code> — team monthly budget cap reached. Contact your team owner.</li>
-            <li><code>403</code> — model not in your team&apos;s allow-list. Check the <Link href="/portal/models" style={{ color: "var(--sc-blue)" }}>catalog</Link>.</li>
+            <li><code>403</code> — model not in your team&apos;s allow-list. Check the <Link href="/portal/models" style={{ color: "var(--accent)" }}>catalog</Link>.</li>
             <li><code>5xx</code> — upstream provider error; the gateway retries once before surfacing.</li>
           </ul>
           <div className="callout" style={{ marginTop: 16 }}>
             <strong>Local dev tip:</strong> Start all services with{" "}
             <code>docker compose -f infra/docker-compose.yml up</code> before making requests.
-            The playground at <Link href="/portal/playground" style={{ color: "var(--sc-blue)" }}>Playground</Link> is
+            The playground at <Link href="/portal/playground" style={{ color: "var(--accent)" }}>Playground</Link> is
             the fastest way to verify your key works.
           </div>
 
           <h2 id="next">Next steps</h2>
           <ul>
-            <li><Link href="/portal/playground" style={{ color: "var(--sc-blue)" }}>Open the Playground</Link> — iterate on prompts in the browser before writing code.</li>
-            <li><Link href="/portal/agents" style={{ color: "var(--sc-blue)" }}>Build an agent</Link> — compose tool-using agents with MCP servers.</li>
-            <li><Link href="/portal/usage" style={{ color: "var(--sc-blue)" }}>View your usage</Link> — cost breakdown by model, session, and day.</li>
-            <li><Link href="/portal/models" style={{ color: "var(--sc-blue)" }}>Browse the model catalog</Link> — see available models and their capabilities.</li>
+            <li><Link href="/portal/playground" style={{ color: "var(--accent)" }}>Open the Playground</Link> — iterate on prompts in the browser before writing code.</li>
+            <li><Link href="/portal/agents" style={{ color: "var(--accent)" }}>Build an agent</Link> — compose tool-using agents with MCP servers.</li>
+            <li><Link href="/portal/usage" style={{ color: "var(--accent)" }}>View your usage</Link> — cost breakdown by model, session, and day.</li>
+            <li><Link href="/portal/models" style={{ color: "var(--accent)" }}>Browse the model catalog</Link> — see available models and their capabilities.</li>
           </ul>
         </article>
       </div>

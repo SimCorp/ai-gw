@@ -56,7 +56,7 @@ function LiveHitRateChart({ snapshots }: { snapshots: Array<{ts: string; hit_rat
           <g key={v}><line x1={padL} x2={W - padR} y1={yAt(v)} y2={yAt(v)}/><text x={padL - 4} y={yAt(v) + 4} textAnchor="end" fill="var(--fg-3)" fontSize="10" fontFamily="var(--font-mono)">{v}%</text></g>
         ))}
       </g>
-      <polyline points={pts} fill="none" stroke="var(--sc-teal)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      <polyline points={pts} fill="none" stroke="var(--cat-teal)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
       <text x={padL} y={H - 6} fill="var(--fg-3)" fontSize="10" fontFamily="var(--font-mono)">{first}</text>
       <text x={W - padR} y={H - 6} textAnchor="end" fill="var(--fg-3)" fontSize="10" fontFamily="var(--font-mono)">{last}</text>
     </svg>
@@ -79,7 +79,7 @@ export default function CachePage() {
 
   const snapshotsQuery = useQuery<Array<{ts: string; hit_rate: number | null; requests_60s: number | null}>>({
     queryKey: ['cache-snapshots'],
-    queryFn: () => fetch(`${ADMIN_BASE}/cache/snapshots?range=7d`).then(r => r.ok ? r.json() : []),
+    queryFn: () => fetch(`${ADMIN_BASE}/system/cache/snapshots?range=7d`).then(r => r.ok ? r.json() : []),
     staleTime: 60_000,
   });
   const snapshots = snapshotsQuery.data ?? [];
@@ -148,8 +148,8 @@ export default function CachePage() {
             <h3 className="card__title">Hit rate over time</h3>
             <span className="card__sub">{snapshots.length > 1 ? 'live · last 7 days' : 'representative · no time-series endpoint'}</span>
             <div className="card__actions">
-              <span className="pill"><span className="dot" style={{ background: 'var(--sc-teal)' }}></span>Semantic</span>
-              <span className="pill"><span className="dot" style={{ background: 'var(--sc-blue)' }}></span>Exact</span>
+              <span className="pill"><span className="dot" style={{ background: 'var(--cat-teal)' }}></span>Semantic</span>
+              <span className="pill"><span className="dot" style={{ background: 'var(--accent)' }}></span>Exact</span>
             </div>
           </div>
           <div className="card__body">
@@ -165,8 +165,8 @@ export default function CachePage() {
                   <text x="32" y="24" textAnchor="end">50%</text><text x="32" y="74" textAnchor="end">35%</text>
                   <text x="32" y="124" textAnchor="end">20%</text><text x="32" y="174" textAnchor="end">5%</text>
                 </g>
-                <path d="M40,150 L120,148 L200,142 L280,138 L360,135 L440,132 L520,128 L588,125 L588,170 L40,170 Z" fill="var(--sc-blue)" opacity="0.85"/>
-                <path d="M40,118 L120,112 L200,108 L280,100 L360,95 L440,88 L520,82 L588,78 L588,125 L520,128 L440,132 L360,135 L280,138 L200,142 L120,148 L40,150 Z" fill="var(--sc-teal)" opacity="0.85"/>
+                <path d="M40,150 L120,148 L200,142 L280,138 L360,135 L440,132 L520,128 L588,125 L588,170 L40,170 Z" fill="var(--accent)" opacity="0.85"/>
+                <path d="M40,118 L120,112 L200,108 L280,100 L360,95 L440,88 L520,82 L588,78 L588,125 L520,128 L440,132 L360,135 L280,138 L200,142 L120,148 L40,150 Z" fill="var(--cat-teal)" opacity="0.85"/>
                 <g fill="var(--fg-3)" fontSize="10" fontFamily="var(--font-mono)">
                   <text x="40" y="190">Apr 30</text><text x="296" y="190">May 3</text>
                   <text x="588" y="190" textAnchor="end">May 6</text>
@@ -186,7 +186,7 @@ export default function CachePage() {
               </g>
               <line x1="378" y1="20" x2="378" y2="170" stroke="var(--bad)" strokeWidth="1" strokeDasharray="4 4"/>
               <text x="382" y="32" fill="var(--bad)" fontSize="10">Threshold 0.92</text>
-              <g fill="var(--sc-teal)">
+              <g fill="var(--cat-teal)">
                 {[2,3,5,8,12,18,28,40,52,68,86,104,120,142,160,170,148,108,72,38,14].map((v, i) => {
                   const x = 44 + i * 26; const h = v * 0.85; const y = 170 - h;
                   return <rect key={i} x={x} y={y} width="22" height={h} rx="1.5"/>;

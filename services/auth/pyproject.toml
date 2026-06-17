@@ -10,6 +10,8 @@ dependencies = [
     "pydantic-settings>=2.4",
     "PyJWT[cryptography]>=2.8",
     "asyncpg>=0.29",
+    "azure-monitor-opentelemetry>=1.6",
+    "opentelemetry-instrumentation-fastapi>=0.48b0",
 ]
 
 [project.optional-dependencies]

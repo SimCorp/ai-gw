@@ -23,8 +23,8 @@ export const WithDeltaUp: Story = {
         delta={{ label: "12.4% vs prev 24h", direction: "up" }}
         sparkline={
           <svg viewBox="0 0 100 28" preserveAspectRatio="none" style={{ display: "block", width: "100%", height: 28 }}>
-            <path d="M0,18 L10,16 L20,20 L30,12 L40,15 L50,9 L60,13 L70,8 L80,11 L90,6 L100,9" fill="none" stroke="var(--sc-blue)" strokeWidth="1.5" />
-            <path d="M0,18 L10,16 L20,20 L30,12 L40,15 L50,9 L60,13 L70,8 L80,11 L90,6 L100,9 L100,28 L0,28 Z" fill="var(--sc-blue)" opacity="0.08" />
+            <path d="M0,18 L10,16 L20,20 L30,12 L40,15 L50,9 L60,13 L70,8 L80,11 L90,6 L100,9" fill="none" stroke="var(--accent)" strokeWidth="1.5" />
+            <path d="M0,18 L10,16 L20,20 L30,12 L40,15 L50,9 L60,13 L70,8 L80,11 L90,6 L100,9 L100,28 L0,28 Z" fill="var(--accent)" opacity="0.08" />
           </svg>
         }
       />

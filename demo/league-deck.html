@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI League — SimCorp Platform</title>
+<style>
+@page { size: 297mm 167.2mm; margin: 0; }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+  background: #08080F;
+  font-family: Inter, system-ui, sans-serif;
+  color: #F2F3F8;
+}
+:root {
+  --bg: #08080F; --surface: #0F0F1A; --surface-2: #161624; --rule: #232336;
+  --sc-blue: #818CF8; --sc-purple: #C084FC; --sc-teal: #2DD4BF; --sc-magenta: #F472B6;
+  --good: #34D399; --warn: #FBBF24; --bad: #FB7185;
+  --fg-1: #F2F3F8; --fg-2: #A6A9BD; --fg-3: #6F7388;
+  --league-gold: #F59E0B; --league-silver: #94A3B8; --league-bronze: #CD7C4A;
+}
+.slide {
+  break-after: page;
+  page-break-after: always;
+  width: 297mm;
+  height: 167.2mm;
+  overflow: hidden;
+  padding: 20px 28px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+.slide:last-child { break-after: auto; page-break-after: avoid; }
+
+/* Slide-specific aurora backgrounds */
+.bg-cover {
+  background:
+    radial-gradient(ellipse 900px 500px at 50% -5%, rgba(245,158,11,0.20) 0%, transparent 55%),
+    radial-gradient(ellipse 600px 400px at 10% 90%, rgba(192,132,252,0.15) 0%, transparent 55%),
+    radial-gradient(ellipse 500px 350px at 92% 85%, rgba(45,212,191,0.12) 0%, transparent 55%),
+    radial-gradient(ellipse 400px 300px at 80% 10%, rgba(244,114,182,0.10) 0%, transparent 55%),
+    #08080F;
+}
+.bg-dev {
+  background:
+    radial-gradient(ellipse 700px 400px at 5% -10%, rgba(129,140,248,0.16) 0%, transparent 60%),
+    radial-gradient(ellipse 500px 350px at 95% 10%, rgba(45,212,191,0.12) 0%, transparent 55%),
+    radial-gradient(ellipse 600px 350px at 70% 100%, rgba(192,132,252,0.10) 0%, transparent 55%),
+    #08080F;
+}
+.bg-admin {
+  background:
+    radial-gradient(ellipse 700px 400px at 95% -5%, rgba(192,132,252,0.16) 0%, transparent 60%),
+    radial-gradient(ellipse 500px 350px at 5% 95%, rgba(244,114,182,0.10) 0%, transparent 55%),
+    radial-gradient(ellipse 600px 300px at 20% 20%, rgba(129,140,248,0.08) 0%, transparent 55%),
+    #08080F;
+}
+.bg-scoring {
+  background:
+    radial-gradient(ellipse 800px 500px at 50% 110%, rgba(245,158,11,0.15) 0%, transparent 55%),
+    radial-gradient(ellipse 500px 350px at 0% 0%, rgba(52,211,153,0.10) 0%, transparent 55%),
+    radial-gradient(ellipse 500px 350px at 100% 0%, rgba(244,114,182,0.10) 0%, transparent 55%),
+    #08080F;
+}
+.bg-why {
+  background:
+    radial-gradient(ellipse 900px 600px at 50% 50%, rgba(129,140,248,0.12) 0%, transparent 60%),
+    radial-gradient(ellipse 400px 300px at 5% 10%,  rgba(245,158,11,0.12) 0%, transparent 55%),
+    radial-gradient(ellipse 400px 300px at 95% 90%, rgba(45,212,191,0.10) 0%, transparent 55%),
+    #08080F;
+}
+
+/* typography */
+.slide-label {
+  font-size: 9px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--league-gold); margin-bottom: 5px;
+}
+.slide-title {
+  font-size: 26px; font-weight: 900; color: var(--fg-1);
+  letter-spacing: -0.6px; line-height: 1.1; margin-bottom: 14px;
+}
+.slide-title-hero {
+  font-size: 40px; font-weight: 900; letter-spacing: -1.5px; line-height: 1.0;
+}
+h3 {
+  font-size: 10px; font-weight: 700; color: var(--fg-3);
+  text-transform: uppercase; letter-spacing: 0.09em; margin-bottom: 7px;
+}
+
+/* layout */
+.cols2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.cols3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+.flex-col { display: flex; flex-direction: column; }
+.gap8 { gap: 8px; }
+.gap6 { gap: 6px; }
+.flex1 { flex: 1; }
+
+/* cards */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  padding: 13px 16px;
+}
+.card-sm {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  padding: 10px 13px;
+}
+.card-2 {
+  background: var(--surface-2);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  padding: 10px 13px;
+}
+.card-gold {
+  background: rgba(245,158,11,0.08);
+  border: 1px solid rgba(245,158,11,0.35);
+  border-radius: 10px;
+  padding: 13px 16px;
+}
+.card-glow-blue {
+  background: rgba(129,140,248,0.08);
+  border: 1px solid rgba(129,140,248,0.35);
+  border-radius: 10px;
+  padding: 13px 16px;
+}
+.card-glow-teal {
+  background: rgba(45,212,191,0.08);
+  border: 1px solid rgba(45,212,191,0.35);
+  border-radius: 10px;
+  padding: 13px 16px;
+}
+
+/* pills */
+.pill {
+  display: inline-block; padding: 3px 10px; border-radius: 999px;
+  font-size: 10px; font-weight: 600; line-height: 1.6;
+}
+.pill-gold    { background: rgba(245,158,11,0.18);   color: var(--league-gold);   border: 1px solid rgba(245,158,11,0.4); }
+.pill-blue    { background: rgba(129,140,248,0.18);  color: var(--sc-blue);       border: 1px solid rgba(129,140,248,0.35); }
+.pill-purple  { background: rgba(192,132,252,0.18);  color: var(--sc-purple);     border: 1px solid rgba(192,132,252,0.35); }
+.pill-teal    { background: rgba(45,212,191,0.18);   color: var(--sc-teal);       border: 1px solid rgba(45,212,191,0.35); }
+.pill-magenta { background: rgba(244,114,182,0.18);  color: var(--sc-magenta);    border: 1px solid rgba(244,114,182,0.35); }
+.pill-good    { background: rgba(52,211,153,0.18);   color: var(--good);          border: 1px solid rgba(52,211,153,0.35); }
+.pill-ghost   { background: rgba(242,243,248,0.07);  color: var(--fg-2);          border: 1px solid rgba(242,243,248,0.12); }
+
+/* stat */
+.stat-val { font-size: 28px; font-weight: 900; letter-spacing: -0.8px; line-height: 1; }
+.stat-label { font-size: 9.5px; color: var(--fg-3); margin-top: 3px; line-height: 1.4; }
+
+/* bullet list */
+.blist li { display: flex; gap: 6px; align-items: flex-start; margin-bottom: 5px; font-size: 11px; color: var(--fg-2); line-height: 1.55; }
+.blist li::before { content: '›'; color: var(--league-gold); font-size: 14px; line-height: 1.25; flex-shrink: 0; }
+
+/* rule */
+.rule { border: none; border-top: 1px solid var(--rule); margin: 7px 0; }
+
+/* dot */
+.dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
+
+/* medal rows */
+.medal-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 12px; border-radius: 8px; margin-bottom: 5px;
+}
+
+/* watermark */
+.wm {
+  margin-top: auto; padding-top: 6px;
+  font-size: 8px; color: var(--fg-3);
+  border-top: 1px solid rgba(35,35,54,0.6);
+  flex-shrink: 0;
+}
+
+/* number callout */
+.num { color: var(--sc-teal); font-weight: 700; }
+.num-gold { color: var(--league-gold); font-weight: 700; }
+
+/* gradient text helper (cover) */
+.gradient-text {
+  background: linear-gradient(90deg, var(--league-gold) 0%, var(--sc-magenta) 50%, var(--sc-blue) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+</style>
+</head>
+<body>
+
+<!-- Slide 1 — Cover -->
+<div class="slide bg-cover">
+  <!-- Trophy SVG top-right accent -->
+  <svg style="position:absolute;top:16px;right:24px;opacity:0.18;" width="180" height="180" viewBox="0 0 180 180" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="90" cy="90" r="88" fill="none" stroke="#F59E0B" stroke-width="1"/>
+    <circle cx="90" cy="90" r="72" fill="none" stroke="#F59E0B" stroke-width="0.5"/>
+    <!-- Trophy shape -->
+    <path d="M65 40 h50 v40 c0 28-50 28-50 0z" fill="#F59E0B" opacity="0.5"/>
+    <path d="M50 45 h15 v25 c0 8-15 8-15 0z" fill="#F59E0B" opacity="0.3"/>
+    <path d="M115 45 h15 v25 c0 8-15 8-15 0z" fill="#F59E0B" opacity="0.3"/>
+    <rect x="80" y="80" width="20" height="30" fill="#F59E0B" opacity="0.4"/>
+    <rect x="65" y="110" width="50" height="8" rx="3" fill="#F59E0B" opacity="0.5"/>
+  </svg>
+
+  <div style="flex:1;display:flex;flex-direction:column;justify-content:center;position:relative;z-index:1;">
+    <div style="font-size:10px;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;color:var(--league-gold);margin-bottom:14px;">SimCorp AI Platform · Internal Engineering</div>
+
+    <div class="slide-title-hero gradient-text" style="margin-bottom:10px;">AI League</div>
+    <div style="font-size:19px;font-weight:400;color:var(--fg-2);margin-bottom:20px;">
+      Seasonal challenges. Leaderboards. Real engineering skill — measured.
+    </div>
+
+    <!-- 3 stat pills -->
+    <div style="display:flex;gap:12px;margin-bottom:22px;">
+      <div style="background:rgba(245,158,11,0.10);border:1px solid rgba(245,158,11,0.3);border-radius:10px;padding:12px 20px;text-align:center;">
+        <div style="font-size:26px;font-weight:900;color:var(--league-gold);">3</div>
+        <div style="font-size:9.5px;color:var(--fg-3);margin-top:2px;">attempts per challenge</div>
+      </div>
+      <div style="background:rgba(45,212,191,0.10);border:1px solid rgba(45,212,191,0.3);border-radius:10px;padding:12px 20px;text-align:center;">
+        <div style="font-size:26px;font-weight:900;color:var(--sc-teal);">4,096</div>
+        <div style="font-size:9.5px;color:var(--fg-3);margin-top:2px;">token budget per attempt</div>
+      </div>
+      <div style="background:rgba(192,132,252,0.10);border:1px solid rgba(192,132,252,0.3);border-radius:10px;padding:12px 20px;text-align:center;">
+        <div style="font-size:26px;font-weight:900;color:var(--sc-purple);">0–1,000</div>
+        <div style="font-size:9.5px;color:var(--fg-3);margin-top:2px;">composite score range</div>
+      </div>
+      <div style="background:rgba(129,140,248,0.10);border:1px solid rgba(129,140,248,0.3);border-radius:10px;padding:12px 20px;text-align:center;">
+        <div style="font-size:26px;font-weight:900;color:var(--sc-blue);">7</div>
+        <div style="font-size:9.5px;color:var(--fg-3);margin-top:2px;">scoring dimensions</div>
+      </div>
+    </div>
+
+    <!-- service pills -->
+    <div style="display:flex;flex-wrap:wrap;gap:6px;">
+      <span class="pill pill-gold">Seasonal Challenges</span>
+      <span class="pill pill-blue">Agent Configs</span>
+      <span class="pill pill-purple">Leaderboards</span>
+      <span class="pill pill-teal">Points Store</span>
+      <span class="pill pill-magenta">Community Proposals</span>
+      <span class="pill pill-ghost">Season Multipliers</span>
+    </div>
+  </div>
+  <div class="wm">SimCorp AI League · June 2026 · Sample figures — illustrative except where noted</div>
+</div>
+
+<!-- Slide 2 — Why It Exists -->
+<div class="slide bg-why">
+  <div class="slide-label">Rationale</div>
+  <div class="slide-title">Why AI League Exists</div>
+  <div class="cols2" style="flex:1;gap:14px;">
+    <div class="flex-col gap8">
+      <div class="card" style="border-color:rgba(251,113,133,0.3);">
+        <div style="font-size:10px;font-weight:700;color:var(--bad);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px;">The Problem</div>
+        <ul class="blist">
+          <li style="color:var(--fg-2);">AI skill development is invisible — no one knows who's ahead or falling behind</li>
+          <li style="color:var(--fg-2);">Engineers have no incentive to optimise agent configs beyond "good enough"</li>
+          <li style="color:var(--fg-2);">Best practices stay locked in individual heads — never shared or stress-tested</li>
+          <li style="color:var(--fg-2);">AI transformation progress is slow when it's unglamorous and unmeasured</li>
+          <li style="color:var(--fg-2);">Token efficiency and cost consciousness aren't rewarded by delivery pressure alone</li>
+        </ul>
+      </div>
+      <!-- Arrow bridge -->
+      <div style="display:flex;align-items:center;justify-content:center;gap:8px;">
+        <div style="flex:1;height:1px;background:var(--rule);"></div>
+        <div style="font-size:18px;font-weight:900;color:var(--league-gold);">→</div>
+        <div style="font-size:10px;font-weight:700;color:var(--league-gold);text-transform:uppercase;letter-spacing:0.08em;">AI League</div>
+        <div style="font-size:18px;font-weight:900;color:var(--league-gold);">←</div>
+        <div style="flex:1;height:1px;background:var(--rule);"></div>
+      </div>
+    </div>
+    <div class="flex-col gap8">
+      <div class="card" style="border-color:rgba(245,158,11,0.35);">
+        <div style="font-size:10px;font-weight:700;color:var(--league-gold);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px;">What It Delivers</div>
+        <ul class="blist">
+          <li>Makes AI skill <span class="num-gold">visible and measurable</span> — scored, ranked, tracked over seasons</li>
+          <li>Creates a <span class="num-gold">pull mechanism</span> for capability uplift — engineers choose to get better</li>
+          <li>Forces best-practice sharing: community proposals reviewed and promoted to all</li>
+          <li>Rewards the behaviours the platform needs: quality, efficiency, cost-consciousness</li>
+          <li>Gives leadership a <span class="num-gold">leading indicator</span> for AI readiness — before it shows in delivery</li>
+        </ul>
+      </div>
+      <div class="card-2">
+        <div style="font-size:9px;color:var(--fg-3);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.08em;">Design principle</div>
+        <p style="font-size:11.5px;color:var(--fg-2);line-height:1.65;font-style:italic;">"If you can measure it and make it competitive, engineers will self-optimise. League turns a platform policy goal — efficient, safe, capable AI use — into something engineers actually want to win."</p>
+      </div>
+    </div>
+  </div>
+  <div class="wm">SimCorp AI League · June 2026 · Sample figures — illustrative except where noted</div>
+</div>
+
+<!-- Slide 3 — Developer Experience -->
+<div class="slide bg-dev">
+  <div class="slide-label">Developer Experience</div>
+  <div class="slide-title">Playing in the League</div>
+  <div class="cols3" style="flex:1;gap:10px;">
+    <!-- Browse & Enter -->
+    <div class="flex-col gap8">
+      <div class="card-glow-blue flex-col gap8">
+        <h3>1 · Browse Challenges</h3>
+        <ul class="blist">
+          <li>Active challenges listed in Developer Portal under League tab</li>
+          <li>Each challenge: problem brief, scoring criteria, token budget, deadline</li>
+          <li>Filter by category, difficulty, season phase</li>
+          <li>Community-proposed challenges labelled with proposer name</li>
+        </ul>
+      </div>
+      <div class="card-2">
+        <div style="font-size:9px;color:var(--fg-3);margin-bottom:5px;">CHALLENGE CARD PREVIEW</div>
+        <div style="background:rgba(129,140,248,0.06);border:1px solid rgba(129,140,248,0.2);border-radius:7px;padding:8px 10px;">
+          <div style="font-size:11px;font-weight:700;color:var(--fg-1);margin-bottom:3px;">Minimal Summariser</div>
+          <div style="font-size:9.5px;color:var(--fg-2);margin-bottom:6px;">Summarise 5 documents in &lt;200 tokens each, quality score ≥ 0.8 — lowest cost wins.</div>
+          <div style="display:flex;gap:5px;flex-wrap:wrap;">
+            <span class="pill pill-gold" style="font-size:8.5px;">4,096 tokens</span>
+            <span class="pill pill-ghost" style="font-size:8.5px;">3 attempts</span>
+            <span class="pill pill-teal" style="font-size:8.5px;">Cost focus</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Submit & Iterate -->
+    <div class="flex-col gap8">
+      <div class="card-glow-teal flex-col gap8">
+        <h3>2 · Submit &amp; Iterate</h3>
+        <ul class="blist">
+          <li>Design your agent config: system prompt, tool selection, model choice</li>
+          <li>Submit via Developer Portal or REST API</li>
+          <li><span class="num">3 attempts</span> per challenge — use them strategically</li>
+          <li>Score breakdown shown immediately: see which dimension cost you points</li>
+          <li>Attempt history visible — watch your improvement across tries</li>
+        </ul>
+      </div>
+      <!-- Attempt tracker illustrative -->
+      <div class="card-2">
+        <div style="font-size:9px;color:var(--fg-3);margin-bottom:6px;">ATTEMPT TRACKER (illustrative)</div>
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span class="pill pill-ghost" style="font-size:8.5px;flex-shrink:0;">Attempt 1</span>
+            <div style="flex:1;height:8px;background:var(--surface-2);border-radius:4px;overflow:hidden;">
+              <div style="width:48%;height:100%;background:rgba(129,140,248,0.6);border-radius:4px;"></div>
+            </div>
+            <span style="font-size:9.5px;color:var(--sc-blue);">482</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span class="pill pill-ghost" style="font-size:8.5px;flex-shrink:0;">Attempt 2</span>
+            <div style="flex:1;height:8px;background:var(--surface-2);border-radius:4px;overflow:hidden;">
+              <div style="width:71%;height:100%;background:rgba(45,212,191,0.6);border-radius:4px;"></div>
+            </div>
+            <span style="font-size:9.5px;color:var(--sc-teal);">710</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span class="pill pill-gold" style="font-size:8.5px;flex-shrink:0;">Attempt 3</span>
+            <div style="flex:1;height:8px;background:var(--surface-2);border-radius:4px;overflow:hidden;">
+              <div style="width:86%;height:100%;background:rgba(245,158,11,0.7);border-radius:4px;"></div>
+            </div>
+            <span style="font-size:9.5px;color:var(--league-gold);">864</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Rewards & Leaderboard -->
+    <div class="flex-col gap8">
+      <div class="card-gold flex-col gap8">
+        <h3>3 · Earn Rewards</h3>
+        <ul class="blist">
+          <li>Points awarded on best-of-3 score, not final attempt</li>
+          <li>Season multipliers — late-season points worth more</li>
+          <li>Exclusive rewards for top-N finishers</li>
+        </ul>
+        <div style="margin-top:4px;">
+          <div style="font-size:9px;color:var(--fg-3);margin-bottom:5px;">POINTS STORE</div>
+          <div style="display:flex;flex-wrap:wrap;gap:5px;">
+            <span class="pill pill-ghost" style="font-size:8.5px;">Badges</span>
+            <span class="pill pill-ghost" style="font-size:8.5px;">Card borders</span>
+            <span class="pill pill-ghost" style="font-size:8.5px;">Avatar frames</span>
+            <span class="pill pill-ghost" style="font-size:8.5px;">Titles</span>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <h3 style="margin-bottom:7px;">Live Leaderboard</h3>
+        <!-- Illustrative leaderboard -->
+        <div class="medal-row" style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.2);">
+          <span style="font-size:14px;">🥇</span>
+          <span style="font-size:10.5px;color:var(--fg-1);font-weight:700;flex:1;">dev_alice</span>
+          <span style="font-size:12px;font-weight:800;color:var(--league-gold);">864</span>
+        </div>
+        <div class="medal-row" style="background:rgba(148,163,184,0.08);border:1px solid rgba(148,163,184,0.18);">
+          <span style="font-size:14px;">🥈</span>
+          <span style="font-size:10.5px;color:var(--fg-2);flex:1;">dev_bob</span>
+          <span style="font-size:12px;font-weight:800;color:var(--league-silver);">802</span>
+        </div>
+        <div class="medal-row" style="background:rgba(205,124,74,0.08);border:1px solid rgba(205,124,74,0.18);">
+          <span style="font-size:14px;">🥉</span>
+          <span style="font-size:10.5px;color:var(--fg-2);flex:1;">dev_chen</span>
+          <span style="font-size:12px;font-weight:800;color:var(--league-bronze);">771</span>
+        </div>
+        <div style="font-size:8.5px;color:var(--fg-3);margin-top:5px;text-align:center;">illustrative · updates live during season</div>
+      </div>
+    </div>
+  </div>
+  <div class="wm">SimCorp AI League · June 2026 · Sample figures — illustrative except where noted</div>
+</div>
+
+<!-- Slide 4 — Admin Experience -->
+<div class="slide bg-admin">
+  <div class="slide-label">Admin Experience</div>
+  <div class="slide-title">Running the League</div>
+  <div class="cols3" style="flex:1;gap:10px;">
+    <div class="card flex-col gap8">
+      <h3>Challenge Lifecycle</h3>
+      <div style="display:flex;flex-direction:column;gap:5px;">
+        <div class="card-2" style="display:flex;align-items:center;gap:8px;">
+          <span class="pill pill-ghost" style="font-size:8.5px;flex-shrink:0;">1 · Draft</span>
+          <span style="font-size:10px;color:var(--fg-2);">Admin or community member authors brief</span>
+        </div>
+        <div class="card-2" style="display:flex;align-items:center;gap:8px;">
+          <span class="pill pill-gold" style="font-size:8.5px;flex-shrink:0;">2 · Review</span>
+          <span style="font-size:10px;color:var(--fg-2);">Platform admin reviews + approves community proposals</span>
+        </div>
+        <div class="card-2" style="display:flex;align-items:center;gap:8px;">
+          <span class="pill pill-blue" style="font-size:8.5px;flex-shrink:0;">3 · Active</span>
+          <span style="font-size:10px;color:var(--fg-2);">Challenge live — submissions open to all engineers</span>
+        </div>
+        <div class="card-2" style="display:flex;align-items:center;gap:8px;">
+          <span class="pill pill-good" style="font-size:8.5px;flex-shrink:0;">4 · Scored</span>
+          <span style="font-size:10px;color:var(--fg-2);">Scoring runs, points awarded, leaderboard finalised</span>
+        </div>
+        <div class="card-2" style="display:flex;align-items:center;gap:8px;">
+          <span class="pill pill-purple" style="font-size:8.5px;flex-shrink:0;">5 · Archive</span>
+          <span style="font-size:10px;color:var(--fg-2);">Results stored, winners notified, rewards granted</span>
+        </div>
+      </div>
+    </div>
+    <div class="card flex-col gap8">
+      <h3>Season Management</h3>
+      <ul class="blist">
+        <li>Create and name seasons — configure start/end dates</li>
+        <li>Set season multiplier schedule — reward late-season effort</li>
+        <li>Define exclusive top-N rewards before season opens</li>
+        <li>Mid-season analytics: participation rate, avg scores, dropout flags</li>
+        <li>Season close: batch-award points, unlock exclusive store items for top-N</li>
+      </ul>
+      <hr class="rule">
+      <h3>Community Proposals Queue</h3>
+      <ul class="blist">
+        <li>Inbox of engineer-submitted challenge ideas</li>
+        <li>One-click approve → challenge drafted automatically from proposal</li>
+        <li>Reject with feedback — proposer notified in-portal</li>
+      </ul>
+    </div>
+    <div class="card flex-col gap8">
+      <h3>Analytics Dashboard</h3>
+      <table style="width:100%;">
+        <thead><tr><th>Metric</th><th style="text-align:right;">Value</th></tr></thead>
+        <tbody>
+          <tr><td>Participation rate</td><td style="text-align:right;color:var(--sc-blue);">(illustrative)</td></tr>
+          <tr><td>Avg score — Season</td><td style="text-align:right;color:var(--league-gold);">(illustrative)</td></tr>
+          <tr><td>Challenges active</td><td style="text-align:right;color:var(--sc-teal);">(illustrative)</td></tr>
+          <tr><td>Community proposals</td><td style="text-align:right;color:var(--sc-purple);">(illustrative)</td></tr>
+          <tr><td>Points awarded MTD</td><td style="text-align:right;color:var(--good);">(illustrative)</td></tr>
+          <tr><td>Token spend — League</td><td style="text-align:right;color:var(--fg-2);">(illustrative)</td></tr>
+        </tbody>
+      </table>
+      <hr class="rule">
+      <h3>Points Store Admin</h3>
+      <ul class="blist">
+        <li>Create reward items: badge art, card borders, avatar frames, custom titles</li>
+        <li>Set point costs + availability (season-exclusive vs permanent)</li>
+        <li>Redemption log — auditable history per engineer</li>
+      </ul>
+    </div>
+  </div>
+  <div class="wm">SimCorp AI League · June 2026 · Sample figures — illustrative except where noted</div>
+</div>
+
+<!-- Slide 5 — Scoring Deep Dive -->
+<div class="slide bg-scoring">
+  <div class="slide-label">Scoring System</div>
+  <div class="slide-title">7-Dimension Scoring — How Winners Are Made</div>
+  <div class="cols2" style="flex:1;gap:14px;">
+    <!-- Bar chart SVG -->
+    <div class="card flex-col gap8">
+      <h3>Scoring Weights</h3>
+      <svg viewBox="0 0 310 190" width="100%" height="190" xmlns="http://www.w3.org/2000/svg">
+        <!-- bars are horizontal, left-aligned -->
+        <!-- Quality 35% -->
+        <text x="0" y="16" font-size="9.5" fill="#A6A9BD" font-family="Inter,system-ui,sans-serif">Quality</text>
+        <text x="300" y="16" font-size="9.5" fill="#818CF8" font-family="Inter,system-ui,sans-serif" text-anchor="end" font-weight="700">35%</text>
+        <rect x="0" y="20" width="210" height="12" rx="4" fill="rgba(129,140,248,0.75)"/>
+
+        <!-- Robustness 20% -->
+        <text x="0" y="47" font-size="9.5" fill="#A6A9BD" font-family="Inter,system-ui,sans-serif">Robustness</text>
+        <text x="300" y="47" font-size="9.5" fill="#818CF8" font-family="Inter,system-ui,sans-serif" text-anchor="end">20%</text>
+        <rect x="0" y="51" width="120" height="12" rx="4" fill="rgba(129,140,248,0.55)"/>
+
+        <!-- Token efficiency 15% -->
+        <text x="0" y="78" font-size="9.5" fill="#A6A9BD" font-family="Inter,system-ui,sans-serif">Token efficiency</text>
+        <text x="300" y="78" font-size="9.5" fill="#2DD4BF" font-family="Inter,system-ui,sans-serif" text-anchor="end">15%</text>
+        <rect x="0" y="82" width="90" height="12" rx="4" fill="rgba(45,212,191,0.65)"/>
+
+        <!-- Speed 10% -->
+        <text x="0" y="109" font-size="9.5" fill="#A6A9BD" font-family="Inter,system-ui,sans-serif">Speed</text>
+        <text x="300" y="109" font-size="9.5" fill="#2DD4BF" font-family="Inter,system-ui,sans-serif" text-anchor="end">10%</text>
+        <rect x="0" y="113" width="60" height="12" rx="4" fill="rgba(45,212,191,0.45)"/>
+
+        <!-- Cost efficiency 10% -->
+        <text x="0" y="140" font-size="9.5" fill="#A6A9BD" font-family="Inter,system-ui,sans-serif">Cost efficiency</text>
+        <text x="300" y="140" font-size="9.5" fill="#C084FC" font-family="Inter,system-ui,sans-serif" text-anchor="end">10%</text>
+        <rect x="0" y="144" width="60" height="12" rx="4" fill="rgba(192,132,252,0.55)"/>
+
+        <!-- Improvement 5% -->
+        <text x="0" y="171" font-size="9.5" fill="#A6A9BD" font-family="Inter,system-ui,sans-serif">Improvement rate</text>
+        <text x="300" y="171" font-size="9.5" fill="#6F7388" font-family="Inter,system-ui,sans-serif" text-anchor="end">5%</text>
+        <rect x="0" y="175" width="30" height="8" rx="3" fill="rgba(111,115,136,0.5)"/>
+
+        <!-- Creativity 5% -->
+        <text x="150" y="171" font-size="9.5" fill="#A6A9BD" font-family="Inter,system-ui,sans-serif">Creativity</text>
+        <text x="300" y="183" font-size="9.5" fill="#F472B6" font-family="Inter,system-ui,sans-serif" text-anchor="end">5%</text>
+        <rect x="150" y="175" width="30" height="8" rx="3" fill="rgba(244,114,182,0.5)"/>
+      </svg>
+    </div>
+
+    <!-- Right: dimension explainers -->
+    <div class="flex-col gap8">
+      <div class="cols2" style="gap:8px;">
+        <div class="card-sm">
+          <div style="font-size:10px;font-weight:700;color:var(--sc-blue);margin-bottom:3px;">Quality — 35%</div>
+          <div style="font-size:9.5px;color:var(--fg-2);">Output correctness against rubric. The primary signal — quality always wins over efficiency alone.</div>
+        </div>
+        <div class="card-sm">
+          <div style="font-size:10px;font-weight:700;color:var(--sc-blue);margin-bottom:3px;">Robustness — 20%</div>
+          <div style="font-size:9.5px;color:var(--fg-2);">Consistent performance across edge cases, adversarial prompts, and varied inputs.</div>
+        </div>
+        <div class="card-sm">
+          <div style="font-size:10px;font-weight:700;color:var(--sc-teal);margin-bottom:3px;">Token Efficiency — 15%</div>
+          <div style="font-size:9.5px;color:var(--fg-2);">Quality-per-token ratio. Rewards lean, precise prompting over verbose chains.</div>
+        </div>
+        <div class="card-sm">
+          <div style="font-size:10px;font-weight:700;color:var(--sc-teal);margin-bottom:3px;">Speed — 10%</div>
+          <div style="font-size:9.5px;color:var(--fg-2);">End-to-end latency of the agent run. Penalises unnecessary sequential steps.</div>
+        </div>
+        <div class="card-sm">
+          <div style="font-size:10px;font-weight:700;color:var(--sc-purple);margin-bottom:3px;">Cost Efficiency — 10%</div>
+          <div style="font-size:9.5px;color:var(--fg-2);">Monetary cost of completion. Rewards choosing cheaper models when quality holds.</div>
+        </div>
+        <div class="card-sm">
+          <div style="font-size:10px;font-weight:700;color:var(--sc-magenta);margin-bottom:3px;">Creativity — 5%</div>
+          <div style="font-size:9.5px;color:var(--fg-2);">Novel approaches not seen in prior submissions. Encourages experimentation.</div>
+        </div>
+      </div>
+      <div class="card-gold">
+        <div style="font-size:9px;color:var(--league-gold);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:5px;">Improvement Rate — 5%</div>
+        <div style="font-size:10.5px;color:var(--fg-2);line-height:1.6;">Score delta across your 3 attempts. Even if you don't top the leaderboard, consistent improvement earns points — League rewards learning, not just winning.</div>
+      </div>
+      <div class="card-2" style="text-align:center;padding:8px 12px;">
+        <span style="font-size:11px;color:var(--fg-3);">Composite score range: </span>
+        <span style="font-size:16px;font-weight:900;color:var(--league-gold);">0 – 1,000</span>
+        <span style="font-size:10px;color:var(--fg-3);margin-left:4px;">per submission</span>
+      </div>
+    </div>
+  </div>
+  <div class="wm">SimCorp AI League · June 2026 · Sample figures — illustrative except where noted</div>
+</div>
+
+</body>
+</html>

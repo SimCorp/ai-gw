@@ -83,7 +83,7 @@ CREATE INDEX idx_role_assignments_node ON role_assignments(node_id);
 **Unique Constraint:** Prevents duplicate (entra_group_id, role, node_id) tuples
 
 **Access Flow:**
-1. User authenticates via OIDC (Dex / Entra ID)
+1. User authenticates via OIDC (Azure Entra ID)
 2. ID token contains `groups` claim (list of Entra group GUIDs)
 3. Server loads role_assignments for all user's groups
 4. Session payload stores roles as array: `[{role, node_path, node_id, node_name}, ...]`
@@ -229,19 +229,11 @@ if not can_access(user, node.path, "team_admin"):
 
 ---
 
-## Development Escape Hatch
+## Role assignment source
 
-In development mode (`ENVIRONMENT=development`), bcrypt-authenticated users (password login) are issued a synthetic `platform_admin` role:
-
-```python
-if _env in ("development", "test", "ci"):
-    roles = [{"role": "platform_admin", "node_path": "/", "node_id": None, "node_name": "root"}]
-else:
-    # Production: bcrypt users have no roles until Entra-assigned
-    roles = []
-```
-
-This allows local development without setting up Entra groups. In production, only OIDC users (logged in via Entra) have roles from group assignments.
+Only users authenticated through Azure Entra ID carry role assignments, derived from
+their Entra group memberships. Password-login (bcrypt) users receive no roles until they
+are assigned via Entra groups.
 
 ---
 

@@ -28,9 +28,7 @@ from pathlib import Path
 # Allow "from app.xxx import ..." without installing the package
 sys.path.insert(0, str(Path(__file__).parents[1]))
 
-# Bypass auth so importing app.main doesn't raise on missing settings
-os.environ.setdefault("DEV_BYPASS_AUTH", "true")
-os.environ.setdefault("ENVIRONMENT", "development")
+# Supply required settings so importing app.main doesn't raise on missing config
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://placeholder/placeholder")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
 os.environ.setdefault("SECRET_KEY", "test-secret-key-not-real")
@@ -121,8 +119,11 @@ _TRUNCATE_TABLES = [
     "api_keys",
     "projects",
     "node_members",
+    "local_group_members",
+    "local_groups",
     "role_assignments",
     "organization_nodes",
+    "users",
     "org_settings",
 ]
 
@@ -771,3 +772,103 @@ async def test_update_guardrail_increments_version(session):
     ).scalar_one()
 
     assert new_version == original_version + 1
+
+
+# ===========================================================================
+# LOCAL-ACCOUNT (unmanaged identity) LOGIN
+#
+# Local accounts authenticate via bcrypt and receive roles through the same
+# role_assignments mechanism as Entra users — by being members of a local
+# group bound to a node. These exercise the bcrypt login path against the real
+# schema (local_groups / local_group_members / role_assignments) rather than
+# mocks. login() is called directly with a hand-built Request whose
+# app.state.redis is an AsyncMock (incr must return an int so the rate limiter
+# compares against max_attempts instead of a MagicMock).
+# ===========================================================================
+
+from unittest.mock import AsyncMock as _AsyncMock
+from unittest.mock import MagicMock as _MagicMock
+
+from app.routers.unified_auth import LoginRequest, _hash_bcrypt, login
+
+
+def _fake_request():
+    req = _MagicMock()
+    req.client.host = "127.0.0.1"
+    redis = _AsyncMock()
+    redis.incr.return_value = 1
+    req.app.state.redis = redis
+    return req
+
+
+async def _insert_local_user(session, email: str, password: str) -> str:
+    uid = str(_uuid.uuid4())
+    await session.execute(
+        text("""
+            INSERT INTO users (id, email, display_name, password_hash, hash_type, status)
+            VALUES (CAST(:id AS uuid), :email, :dn, :h, 'bcrypt', 'active')
+        """),
+        {"id": uid, "email": email, "dn": "Local User", "h": _hash_bcrypt(password)},
+    )
+    await session.commit()
+    return uid
+
+
+async def test_local_account_with_group_gets_platform_admin(session):
+    """A local account whose local group → root → platform_admin role_assignment
+    exists logs in via bcrypt and receives the platform_admin role."""
+    password = "Sup3rSecret!!"
+    user_id = await _insert_local_user(session, "local-admin@simcorp.com", password)
+    root_id = await _insert_node(session, "SimCorp", "root", type="root")
+
+    group_id = "lcl-test-platform-admins"
+    await session.execute(
+        text("INSERT INTO local_groups (id, name) VALUES (:id, :n)"),
+        {"id": group_id, "n": "platform-admins"},
+    )
+    await session.execute(
+        text("INSERT INTO local_group_members (group_id, user_id) VALUES (:g, CAST(:u AS uuid))"),
+        {"g": group_id, "u": user_id},
+    )
+    await session.execute(
+        text("""
+            INSERT INTO role_assignments (entra_group_id, role, node_id)
+            VALUES (:g, 'platform_admin', CAST(:n AS uuid))
+        """),
+        {"g": group_id, "n": root_id},
+    )
+    await session.commit()
+
+    result = await login(
+        LoginRequest(email="local-admin@simcorp.com", password=password),
+        _fake_request(),
+        session,
+    )
+
+    role_names = [r["role"] for r in result["user"]["roles"]]
+    assert "platform_admin" in role_names
+    assert result["user"]["is_platform_admin"] is True
+    # Roles are shaped like the Entra path (same keys).
+    assert set(result["user"]["roles"][0].keys()) == {
+        "role",
+        "node_path",
+        "node_id",
+        "node_name",
+    }
+
+
+async def test_local_account_without_group_authenticates_with_no_roles(session):
+    """A local account with no local-group membership still authenticates via
+    bcrypt but receives no roles (authentication without authorization)."""
+    password = "An0therSecret!!"
+    await _insert_local_user(session, "no-group@simcorp.com", password)
+
+    result = await login(
+        LoginRequest(email="no-group@simcorp.com", password=password),
+        _fake_request(),
+        session,
+    )
+
+    assert result["user"]["email"] == "no-group@simcorp.com"
+    assert result["user"]["roles"] == []
+    assert result["user"]["is_platform_admin"] is False

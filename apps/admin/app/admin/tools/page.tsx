@@ -56,23 +56,23 @@ export default function ToolsAdminPage() {
     <div style={{ padding: '32px 40px', maxWidth: 900 }}>
       <div style={{ marginBottom: 28 }}>
         <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Developer Tools</h1>
-        <p style={{ color: 'var(--side-fg-mute)', marginTop: 4, fontSize: 14 }}>
+        <p style={{ color: 'var(--panel-fg-mute)', marginTop: 4, fontSize: 14 }}>
           Manage which tools are available in the developer portal
         </p>
       </div>
 
       <div style={{ display: 'flex', gap: 16, marginBottom: 24 }}>
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '12px 20px', minWidth: 120 }}>
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--rule)', borderRadius: 8, padding: '12px 20px', minWidth: 120 }}>
           <div style={{ fontSize: 24, fontWeight: 700 }}>{tools.length}</div>
-          <div style={{ fontSize: 12, color: 'var(--side-fg-mute)', marginTop: 2 }}>Total tools</div>
+          <div style={{ fontSize: 12, color: 'var(--panel-fg-mute)', marginTop: 2 }}>Total tools</div>
         </div>
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '12px 20px', minWidth: 120 }}>
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--rule)', borderRadius: 8, padding: '12px 20px', minWidth: 120 }}>
           <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--good)' }}>{enabledCount}</div>
-          <div style={{ fontSize: 12, color: 'var(--side-fg-mute)', marginTop: 2 }}>Enabled</div>
+          <div style={{ fontSize: 12, color: 'var(--panel-fg-mute)', marginTop: 2 }}>Enabled</div>
         </div>
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '12px 20px', minWidth: 120 }}>
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--rule)', borderRadius: 8, padding: '12px 20px', minWidth: 120 }}>
           <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--bad)' }}>{tools.length - enabledCount}</div>
-          <div style={{ fontSize: 12, color: 'var(--side-fg-mute)', marginTop: 2 }}>Disabled</div>
+          <div style={{ fontSize: 12, color: 'var(--panel-fg-mute)', marginTop: 2 }}>Disabled</div>
         </div>
       </div>
 
@@ -84,8 +84,8 @@ export default function ToolsAdminPage() {
           onChange={e => setSearch(e.target.value)}
           style={{
             flex: '1 1 200px', maxWidth: 300, padding: '7px 12px',
-            background: 'var(--surface)', border: '1px solid var(--border)',
-            borderRadius: 6, color: 'var(--fg)', fontSize: 13,
+            background: 'var(--surface)', border: '1px solid var(--rule)',
+            borderRadius: 6, color: 'var(--fg-1)', fontSize: 13,
           }}
         />
       </div>
@@ -97,9 +97,9 @@ export default function ToolsAdminPage() {
             onClick={() => setActiveCategory(cat)}
             style={{
               padding: '4px 10px', borderRadius: 16, fontSize: 12, cursor: 'pointer',
-              border: '1px solid var(--border)', fontFamily: 'inherit',
-              background: activeCategory === cat ? 'var(--sc-blue)' : 'var(--surface)',
-              color: activeCategory === cat ? '#fff' : 'var(--side-fg-mute)',
+              border: '1px solid var(--rule)', fontFamily: 'inherit',
+              background: activeCategory === cat ? 'var(--accent)' : 'var(--surface)',
+              color: activeCategory === cat ? 'var(--accent-fg)' : 'var(--panel-fg-mute)',
             }}
           >
             {cat}
@@ -107,7 +107,7 @@ export default function ToolsAdminPage() {
         ))}
       </div>
 
-      {isLoading && <p style={{ color: 'var(--side-fg-mute)' }}>Loading…</p>}
+      {isLoading && <p style={{ color: 'var(--panel-fg-mute)' }}>Loading…</p>}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
         {filtered.map(tool => (
@@ -116,12 +116,12 @@ export default function ToolsAdminPage() {
             style={{
               display: 'flex', alignItems: 'center', gap: 16,
               padding: '12px 16px', borderRadius: 6,
-              background: 'var(--surface)', border: '1px solid var(--border)',
+              background: 'var(--surface)', border: '1px solid var(--rule)',
             }}
           >
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 600, fontSize: 14 }}>{tool.label}</div>
-              <div style={{ fontSize: 12, color: 'var(--side-fg-mute)', marginTop: 2 }}>{tool.category}</div>
+              <div style={{ fontSize: 12, color: 'var(--panel-fg-mute)', marginTop: 2 }}>{tool.category}</div>
             </div>
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
               <span style={{ fontSize: 12, color: tool.enabled ? 'var(--good)' : 'var(--bad)' }}>
@@ -131,7 +131,7 @@ export default function ToolsAdminPage() {
                 onClick={() => toggleMutation.mutate({ tool_id: tool.tool_id, enabled: !tool.enabled })}
                 style={{
                   width: 36, height: 20, borderRadius: 10, cursor: 'pointer',
-                  background: tool.enabled ? 'var(--good)' : 'var(--border)',
+                  background: tool.enabled ? 'var(--good)' : 'var(--rule)',
                   position: 'relative', transition: 'background 0.2s',
                 }}
               >
@@ -147,7 +147,7 @@ export default function ToolsAdminPage() {
       </div>
 
       {!isLoading && filtered.length === 0 && (
-        <p style={{ color: 'var(--side-fg-mute)', padding: '24px 0' }}>No tools match your filter.</p>
+        <p style={{ color: 'var(--panel-fg-mute)', padding: '24px 0' }}>No tools match your filter.</p>
       )}
     </div>
   );

@@ -1,0 +1,70 @@
+name: bicep-validate
+
+on:
+  pull_request:
+    paths:
+      - 'infra/bicep/**'
+  push:
+    branches: [main, master]
+    paths:
+      - 'infra/bicep/**'
+  workflow_dispatch:
+
+jobs:
+  validate:
+    name: Validate Bicep (dev)
+    runs-on: ubuntu-latest
+    # Skip fork PRs: secrets and OIDC are unavailable for forks and would
+    # cause this job to fail. Push and dispatch runs are unaffected.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        # azure/login action is blocked by SimCorp org policy (only actions/* allowed).
+        run: |
+          OIDC_TOKEN=$(curl -sSfL \
+            -H "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=api://AzureADTokenExchange" \
+            | python3 -c "import sys,json; print(json.load(sys.stdin)['value'])")
+          az login --service-principal \
+            --username "${{ secrets.AZURE_CLIENT_ID }}" \
+            --tenant "${{ secrets.AZURE_TENANT_ID }}" \
+            --federated-token "${OIDC_TOKEN}"
+          az account set --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+
+      - name: Resolve runtime values
+        id: resolve
+        run: |
+          ACA_ENV_ID=$(az containerapp env show \
+            --name cae-aigw-dev-sdc \
+            --resource-group rg-aigw-dev-sdc \
+            --query id -o tsv | tr -d '\r')
+          KV_URI=$(az keyvault show \
+            --name kv-aigw-dev-sdc \
+            --resource-group rg-aigw-dev-sdc \
+            --query properties.vaultUri -o tsv | tr -d '\r')
+          echo "acaEnvId=${ACA_ENV_ID}" >> "${GITHUB_OUTPUT}"
+          echo "kvUri=${KV_URI}" >> "${GITHUB_OUTPUT}"
+
+      - name: Validate containerApps.bicep
+        env:
+          GHCR_PAT: ${{ secrets.GHCR_PAT }}
+        run: |
+          az deployment group validate \
+            --resource-group rg-aigw-dev-sdc \
+            --template-file infra/bicep/modules/containerApps.bicep \
+            --parameters \
+                env=dev \
+                "acaEnvId=${{ steps.resolve.outputs.acaEnvId }}" \
+                "kvUri=${{ steps.resolve.outputs.kvUri }}" \
+                kvName=kv-aigw-dev-sdc \
+                acrName=acraigwdevsdc \
+                "ghcrPat=${GHCR_PAT}" \
+                "ghcrUsername=${{ github.actor }}" \
+                imageTag=latest \
+                location=swedencentral

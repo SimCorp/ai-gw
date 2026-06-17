@@ -311,67 +311,11 @@ async def _collect_cache_snapshot():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Guard: DEV_BYPASS_AUTH must not be enabled outside dev/test/ci environments.
-    # Default to "production" so that an unset ENVIRONMENT var triggers the guard
-    # rather than silently suppressing it.
-    env = os.getenv("ENVIRONMENT", "production")
-    if app_settings.dev_bypass_auth:
-        if env not in ("development", "test", "ci"):
-            raise RuntimeError(
-                "DEV_BYPASS_AUTH=true is not allowed outside development/test environments. "
-                f"Current ENVIRONMENT={env!r}. Set ENVIRONMENT=development to suppress."
-            )
-        import logging as _logging
-
-        _logging.getLogger(__name__).warning(
-            "DEV_BYPASS_AUTH is active — all admin auth checks are skipped. "
-            "Never enable this in staging or production."
-        )
-
     # Schema is owned by Alembic (services/admin/migrations).
     # The db-migrate compose service runs `alembic upgrade head` before this
     # service starts; we do not run create_all() or DDL here anymore.
-
-    # Seed default accounts only in dev/test/ci environments.
-    # In production, accounts must be created explicitly via the provisioning script.
-    if os.getenv("ENVIRONMENT", "production") in ("development", "test", "ci"):
-        # bcrypt hash of "password"
-        _default_hash = "$2b$12$97tEM5lfcioIn4w9wDRHQe3qQNeU9OIBDImBuWj6wQRF30UCpIWom"
-        # bcrypt hash of "Admin1234!" — the documented admin credential
-        # (docs/SYSTEM_REFERENCE.md, portal login). Keep dev@ on "password".
-        _admin_hash = "$2b$12$w4aAEPPdqbjhNDH7kWPV6uQKSllc3EFzxvQvns5PlNgbfbkGkSi3e"
-        async with engine.begin() as conn:
-            try:
-                # Admin account — must_change_password=FALSE so local dev works immediately
-                # Roles are granted via dev escape hatch (ENVIRONMENT=development)
-                # so no user_roles row is needed.
-                await conn.execute(
-                    text("""
-                    INSERT INTO users (email, display_name, password_hash, hash_type, status, must_change_password)
-                    VALUES ('admin@simcorp.com', 'Default Admin', :hash, 'bcrypt', 'active', FALSE)
-                    ON CONFLICT (email) DO NOTHING
-                """),
-                    {"hash": _admin_hash},
-                )
-                # Developer test account for local dev and E2E tests
-                await conn.execute(
-                    text("""
-                    INSERT INTO users (email, display_name, password_hash, hash_type, status, must_change_password)
-                    VALUES ('dev@simcorp.com', 'Test Developer', :hash, 'bcrypt', 'active', FALSE)
-                    ON CONFLICT (email) DO NOTHING
-                """),
-                    {"hash": _default_hash},
-                )
-            except Exception:
-                # users table not yet created (before migration 0010) — seed admin_users as fallback
-                await conn.execute(
-                    text("""
-                    INSERT INTO admin_users (email, display_name, password_hash, role, must_change_password)
-                    VALUES ('admin@simcorp.com', 'Default Admin', :hash, 'superadmin', FALSE)
-                    ON CONFLICT (email) DO NOTHING
-                """),
-                    {"hash": _default_hash},
-                )
+    # Accounts must be created explicitly via the provisioning script — no
+    # default-account seeding.
 
     # Seed guardrails if table is empty
     async with engine.begin() as conn:
@@ -587,6 +531,11 @@ app = FastAPI(
     redoc_url="/redoc" if _is_dev else None,
     openapi_url="/openapi.json" if _is_dev else None,
 )
+
+from app.observability import init_observability  # noqa: E402
+
+init_observability(app, service_name="admin")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=app_settings.cors_origins,

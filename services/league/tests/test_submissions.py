@@ -1,15 +1,12 @@
 # services/league/tests/test_submissions.py
-import os
 import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
-os.environ.setdefault("DEV_BYPASS_AUTH", "true")
-os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
-os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
-
+import app.routers.submissions as _subs_mod
+from app.auth import require_dev_auth
 from app.db import get_session
 from app.main import app
 
@@ -23,6 +20,10 @@ def _make_session_override(mock_session):
         yield mock_session
 
     return _override
+
+
+async def _fake_dev_auth():
+    return {"user_id": _USER_ID, "email": "dev@simcorp.com"}
 
 
 def _mock_redis():
@@ -72,7 +73,7 @@ def test_training_submission_returns_scores_immediately():
     challenge = _mock_active_challenge()
     mock_session = AsyncMock()
 
-    # Sequence: challenge lookup, attempt count (scalar), prior best (one_or_none), attempt_num (scalar), INSERT sub (scalar), INSERT score, INSERT xp
+    # Sequence: challenge lookup, prior best (one_or_none), attempt_num (scalar), INSERT sub (scalar), INSERT score, INSERT xp
     challenge_result = MagicMock()
     challenge_result.mappings.return_value.one_or_none.return_value = challenge
 
@@ -105,8 +106,9 @@ def test_training_submission_returns_scores_immediately():
     ]
 
     app.dependency_overrides[get_session] = _make_session_override(mock_session)
+    app.dependency_overrides[require_dev_auth] = _fake_dev_auth
     try:
-        with patch("app.main.aioredis.from_url", return_value=_mock_redis()), patch("app.routers.submissions._call_litellm", new_callable=AsyncMock, side_effect=litellm_responses):
+        with patch("app.main.aioredis.from_url", return_value=_mock_redis()), patch.object(_subs_mod, "_call_litellm", new_callable=AsyncMock, side_effect=litellm_responses):
             with TestClient(app) as client:
                 resp = client.post(
                     f"/challenges/{_CHALLENGE_ID}/submit",
@@ -117,7 +119,7 @@ def test_training_submission_returns_scores_immediately():
                     },
                 )
     finally:
-        app.dependency_overrides.pop(get_session, None)
+        app.dependency_overrides.clear()
 
     assert resp.status_code == 200
     body = resp.json()
@@ -164,6 +166,7 @@ def test_league_submission_hides_scores_until_deadline():
     ]
 
     app.dependency_overrides[get_session] = _make_session_override(mock_session)
+    app.dependency_overrides[require_dev_auth] = _fake_dev_auth
     try:
         with patch("app.main.aioredis.from_url", return_value=_mock_redis()), patch("app.routers.submissions._call_litellm", new_callable=AsyncMock, side_effect=litellm_responses):
             with TestClient(app) as client:
@@ -176,7 +179,7 @@ def test_league_submission_hides_scores_until_deadline():
                     },
                 )
     finally:
-        app.dependency_overrides.pop(get_session, None)
+        app.dependency_overrides.clear()
 
     assert resp.status_code == 200
     body = resp.json()
@@ -202,6 +205,7 @@ def test_league_submission_blocks_over_limit():
     )
 
     app.dependency_overrides[get_session] = _make_session_override(mock_session)
+    app.dependency_overrides[require_dev_auth] = _fake_dev_auth
     try:
         with patch("app.main.aioredis.from_url", return_value=_mock_redis()):
             with TestClient(app) as client:
@@ -214,7 +218,7 @@ def test_league_submission_blocks_over_limit():
                     },
                 )
     finally:
-        app.dependency_overrides.pop(get_session, None)
+        app.dependency_overrides.clear()
 
     assert resp.status_code == 429
     assert "attempt limit" in resp.json()["detail"].lower()
@@ -229,6 +233,7 @@ def test_submission_on_inactive_challenge_rejected():
     mock_session.execute = AsyncMock(return_value=challenge_result)
 
     app.dependency_overrides[get_session] = _make_session_override(mock_session)
+    app.dependency_overrides[require_dev_auth] = _fake_dev_auth
     try:
         with patch("app.main.aioredis.from_url", return_value=_mock_redis()):
             with TestClient(app) as client:
@@ -241,6 +246,6 @@ def test_submission_on_inactive_challenge_rejected():
                     },
                 )
     finally:
-        app.dependency_overrides.pop(get_session, None)
+        app.dependency_overrides.clear()
 
     assert resp.status_code == 409

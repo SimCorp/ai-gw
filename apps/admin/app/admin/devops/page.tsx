@@ -53,8 +53,8 @@ function ToolCallBadge({ call }: { call: ToolCall }) {
       style={{
         margin: '4px 0',
         padding: '6px 10px',
-        background: 'rgba(255,255,255,0.04)',
-        border: '1px solid rgba(255,255,255,0.08)',
+        background: 'var(--surface-2)',
+        border: '1px solid var(--rule)',
         borderRadius: 8,
         fontSize: 12,
         cursor: 'pointer',
@@ -62,15 +62,15 @@ function ToolCallBadge({ call }: { call: ToolCall }) {
       }}
       onClick={() => setExpanded(v => !v)}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--side-fg-mute, #8b8fa8)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--panel-fg-mute)' }}>
         <span>{icon}</span>
-        <span style={{ fontFamily: 'monospace', color: 'var(--sc-blue, #0A7BD7)' }}>{call.tool}</span>
+        <span style={{ fontFamily: 'monospace', color: 'var(--accent)' }}>{call.tool}</span>
         {argsStr && <span style={{ opacity: 0.7 }}>({argsStr})</span>}
         <span style={{ marginLeft: 'auto' }}>{call.elapsed_ms}ms</span>
         <span>{expanded ? '▴' : '▾'}</span>
       </div>
       {expanded && (
-        <div style={{ marginTop: 6, color: 'var(--side-fg, #c8cad8)', fontFamily: 'monospace', fontSize: 11.5, wordBreak: 'break-word' }}>
+        <div style={{ marginTop: 6, color: 'var(--panel-fg)', fontFamily: 'monospace', fontSize: 11.5, wordBreak: 'break-word' }}>
           {call.result_preview}
         </div>
       )}
@@ -83,7 +83,7 @@ function AssistantMessage({ content, toolLog }: { content: string; toolLog: Tool
     <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', maxWidth: 820 }}>
       <div style={{
         width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
-        background: 'rgba(10,123,215,0.2)',
+        background: 'var(--accent-soft)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         fontSize: 14, marginTop: 2,
       }}>
@@ -92,20 +92,20 @@ function AssistantMessage({ content, toolLog }: { content: string; toolLog: Tool
       <div style={{ flex: 1 }}>
         {toolLog.length > 0 && (
           <div style={{ marginBottom: 10 }}>
-            <div style={{ fontSize: 11, color: 'var(--side-fg-mute, #8b8fa8)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            <div className="microlabel" style={{ marginBottom: 4 }}>
               Tools used
             </div>
             {toolLog.map((tc, i) => <ToolCallBadge key={i} call={tc} />)}
           </div>
         )}
         <div style={{
-          background: 'rgba(255,255,255,0.05)',
-          border: '1px solid rgba(255,255,255,0.08)',
+          background: 'var(--surface-2)',
+          border: '1px solid var(--rule)',
           borderRadius: 10,
           padding: '12px 16px',
           fontSize: 13.5,
           lineHeight: 1.7,
-          color: 'var(--side-fg, #e8eaf0)',
+          color: 'var(--panel-fg)',
           whiteSpace: 'pre-wrap',
         }}>
           {content}
@@ -181,31 +181,31 @@ export default function DevOpsAgentPage() {
   return (
     <div style={{
       display: 'flex', flexDirection: 'column', height: '100%',
-      background: 'var(--bg, #0f1117)',
-      color: 'var(--side-fg, #e8eaf0)',
+      background: 'var(--surface)',
+      color: 'var(--fg-1)',
     }}>
       {/* Header */}
       <div style={{
         padding: '18px 28px 14px',
-        borderBottom: '1px solid var(--side-rule, rgba(255,255,255,0.08))',
+        borderBottom: '1px solid var(--panel-rule)',
         display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0,
       }}>
         <div style={{
           width: 36, height: 36, borderRadius: 10,
-          background: 'rgba(10,123,215,0.2)',
+          background: 'var(--accent-soft)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontSize: 18,
         }}>✦</div>
         <div>
           <div style={{ fontWeight: 700, fontSize: 16 }}>DevOps Agent</div>
-          <div style={{ fontSize: 12, color: 'var(--side-fg-mute, #8b8fa8)', marginTop: 1 }}>
+          <div style={{ fontSize: 12, color: 'var(--panel-fg-mute)', marginTop: 1 }}>
             Inspects and troubleshoots the AI Gateway using live data · Direct LLM connection (bypasses proxy)
           </div>
         </div>
         {loading && (
           <div style={{
             marginLeft: 'auto', fontSize: 12,
-            color: 'var(--sc-blue, #0A7BD7)',
+            color: 'var(--accent)',
             display: 'flex', alignItems: 'center', gap: 6,
           }}>
             <span style={{ animation: 'pulse 1.2s infinite' }}>◉</span> Agent thinking…
@@ -219,13 +219,13 @@ export default function DevOpsAgentPage() {
           <div style={{ maxWidth: 700 }}>
             <div style={{ marginBottom: 20 }}>
               <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 6 }}>Gateway DevOps Assistant</div>
-              <div style={{ fontSize: 14, color: 'var(--side-fg-mute, #8b8fa8)', lineHeight: 1.6 }}>
+              <div style={{ fontSize: 14, color: 'var(--panel-fg-mute)', lineHeight: 1.6 }}>
                 I can inspect live gateway data, analyse errors, check service health, review budgets,
                 and give concrete optimisation recommendations. I call tools directly — not through the proxy.
               </div>
             </div>
 
-            <div style={{ fontSize: 12, color: 'var(--side-fg-mute, #8b8fa8)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            <div className="microlabel" style={{ marginBottom: 10 }}>
               Suggested tasks
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
@@ -235,21 +235,21 @@ export default function DevOpsAgentPage() {
                   onClick={() => send(s.prompt)}
                   style={{
                     padding: '10px 14px',
-                    background: 'rgba(255,255,255,0.04)',
-                    border: '1px solid rgba(255,255,255,0.1)',
+                    background: 'var(--surface-2)',
+                    border: '1px solid var(--rule)',
                     borderRadius: 10,
                     cursor: 'pointer',
                     textAlign: 'left',
-                    color: 'var(--side-fg, #e8eaf0)',
+                    color: 'var(--panel-fg)',
                     fontFamily: 'inherit',
                     fontSize: 13,
                     transition: 'background 0.15s',
                   }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.08)'; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.04)'; }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--surface-soft)'; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'var(--surface-2)'; }}
                 >
                   <div style={{ fontWeight: 500, marginBottom: 3 }}>{s.label}</div>
-                  <div style={{ fontSize: 11.5, color: 'var(--side-fg-mute, #8b8fa8)', lineHeight: 1.4 }}>{s.prompt}</div>
+                  <div style={{ fontSize: 11.5, color: 'var(--panel-fg-mute)', lineHeight: 1.4 }}>{s.prompt}</div>
                 </button>
               ))}
             </div>
@@ -263,10 +263,10 @@ export default function DevOpsAgentPage() {
                 <div style={{
                   maxWidth: 600,
                   padding: '10px 14px',
-                  background: 'var(--sc-blue, #0A7BD7)',
+                  background: 'var(--accent)',
                   borderRadius: '12px 12px 2px 12px',
                   fontSize: 13.5, lineHeight: 1.6,
-                  color: '#fff',
+                  color: 'var(--accent-fg)',
                   whiteSpace: 'pre-wrap',
                 }}>
                   {m.content}
@@ -283,12 +283,12 @@ export default function DevOpsAgentPage() {
           <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
             <div style={{
               width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
-              background: 'rgba(10,123,215,0.2)',
+              background: 'var(--accent-soft)',
               display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14,
             }}>✦</div>
             <div style={{
               padding: '10px 14px', fontSize: 13.5,
-              color: 'var(--side-fg-mute, #8b8fa8)', fontStyle: 'italic',
+              color: 'var(--panel-fg-mute)', fontStyle: 'italic',
             }}>
               Querying gateway data…
             </div>
@@ -301,7 +301,7 @@ export default function DevOpsAgentPage() {
       {/* Input */}
       <div style={{
         padding: '14px 28px 20px',
-        borderTop: '1px solid var(--side-rule, rgba(255,255,255,0.08))',
+        borderTop: '1px solid var(--panel-rule)',
         flexShrink: 0,
       }}>
         <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', maxWidth: 820 }}>
@@ -315,11 +315,11 @@ export default function DevOpsAgentPage() {
             disabled={loading}
             style={{
               flex: 1, resize: 'none',
-              border: '1px solid rgba(255,255,255,0.12)',
+              border: '1px solid var(--rule-strong)',
               borderRadius: 10, padding: '10px 14px',
               fontSize: 13.5, fontFamily: 'inherit',
-              background: 'rgba(255,255,255,0.05)',
-              color: 'var(--side-fg, #e8eaf0)',
+              background: 'var(--surface-2)',
+              color: 'var(--panel-fg)',
               outline: 'none', lineHeight: 1.5,
               maxHeight: 140, overflowY: 'auto',
             }}
@@ -329,8 +329,8 @@ export default function DevOpsAgentPage() {
             disabled={loading || !input.trim()}
             style={{
               padding: '10px 20px',
-              background: 'var(--sc-blue, #0A7BD7)',
-              color: '#fff', border: 'none', borderRadius: 10,
+              background: 'var(--accent)',
+              color: 'var(--accent-fg)', border: 'none', borderRadius: 10,
               cursor: loading || !input.trim() ? 'not-allowed' : 'pointer',
               fontSize: 13.5, fontFamily: 'inherit', fontWeight: 500,
               opacity: loading || !input.trim() ? 0.5 : 1,
@@ -341,7 +341,7 @@ export default function DevOpsAgentPage() {
             Send
           </button>
         </div>
-        <div style={{ fontSize: 11, color: 'var(--side-fg-mute, #8b8fa8)', marginTop: 8, maxWidth: 820 }}>
+        <div style={{ fontSize: 11, color: 'var(--panel-fg-mute)', marginTop: 8, maxWidth: 820 }}>
           This agent has read-only access to live gateway data. It cannot modify configuration or restart services.
         </div>
       </div>
