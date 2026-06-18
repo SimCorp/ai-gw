@@ -1,0 +1,214 @@
+name: deploy-test
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Image tag to deploy (e.g. sha-abc1234 or v1.2.3)'
+        required: false
+        default: 'latest'
+
+# Prevent concurrent deploys to test
+concurrency:
+  group: deploy-test
+  cancel-in-progress: false
+
+jobs:
+  deploy-test:
+    name: Deploy to Test
+    runs-on: ubuntu-latest
+    # Only deploy when:
+    # - CI succeeded AND the triggering ref was a version tag (head_branch starts with 'v')
+    # - OR manual workflow_dispatch
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       startsWith(github.event.workflow_run.head_branch, 'v'))
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.event.workflow_run.head_sha }}
+
+      - name: Azure login (OIDC)
+        # azure/login action is blocked by SimCorp org policy (only actions/* allowed).
+        # Replicate OIDC login inline: exchange GitHub OIDC token for Azure access.
+        run: |
+          OIDC_TOKEN=$(curl -sSfL \
+            -H "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=api://AzureADTokenExchange" \
+            | python3 -c "import sys,json; print(json.load(sys.stdin)['value'])")
+          az login --service-principal \
+            --username "${{ secrets.AZURE_CLIENT_ID_TEST }}" \
+            --tenant "${{ secrets.AZURE_TENANT_ID }}" \
+            --federated-token "${OIDC_TOKEN}"
+          az account set --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID_TEST }}"
+
+      - name: Resolve runtime values
+        id: resolve
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            IMAGE_TAG="${{ inputs.image_tag }}"
+          else
+            SHA=$(echo "${{ github.event.workflow_run.head_sha }}" | cut -c1-7)
+            IMAGE_TAG="sha-${SHA}"
+          fi
+          ACA_ENV_ID=$(az containerapp env show \
+            --name cae-aigw-test-sdc \
+            --resource-group rg-aigw-test-sdc \
+            --query id -o tsv | tr -d '\r')
+          KV_URI=$(az keyvault show \
+            --name kv-aigw-test-sdc \
+            --resource-group rg-aigw-test-sdc \
+            --query properties.vaultUri -o tsv | tr -d '\r')
+          echo "imageTag=${IMAGE_TAG}" >> "${GITHUB_OUTPUT}"
+          echo "acaEnvId=${ACA_ENV_ID}" >> "${GITHUB_OUTPUT}"
+          echo "kvUri=${KV_URI}" >> "${GITHUB_OUTPUT}"
+
+      - name: Deploy foundation storage (ACA-Jobs runs share)
+        # containerApps.bicep references staigwruns${env}sdc as `existing`;
+        # deploy the storage module here (idempotent) so container-apps deployment
+        # can resolve it.
+        run: |
+          az deployment group create \
+            --resource-group rg-aigw-test-sdc \
+            --template-file infra/bicep/modules/storage.bicep \
+            --parameters env=test location=swedencentral \
+            --name "runs-storage-$(date +%Y%m%d%H%M)"
+
+      - name: Deploy container apps
+        env:
+          GHCR_PAT: ${{ secrets.GHCR_PAT }}
+        run: |
+          az deployment group create \
+            --resource-group rg-aigw-test-sdc \
+            --template-file infra/bicep/modules/containerApps.bicep \
+            --parameters \
+                env=test \
+                gatewayHostname=aigw-test.lab.cloud.scdom.net \
+                "acaEnvId=${{ steps.resolve.outputs.acaEnvId }}" \
+                "kvUri=${{ steps.resolve.outputs.kvUri }}" \
+                kvName=kv-aigw-test-sdc \
+                acrName=acraigwtestsdc \
+                "ghcrPat=${GHCR_PAT}" \
+                "ghcrUsername=${{ github.actor }}" \
+                "imageTag=${{ steps.resolve.outputs.imageTag }}" \
+                location=swedencentral \
+            --name "container-apps-$(date +%Y%m%d%H%M)"
+
+      - name: Run DB migrations
+        run: |
+          EXEC_NAME=$(az containerapp job start \
+            --name job-db-migrate-test-sdc \
+            --resource-group rg-aigw-test-sdc \
+            --query name -o tsv | tr -d '\r')
+          echo "Started migration job execution: ${EXEC_NAME}"
+
+          # Poll until Succeeded or Failed (max 5 min)
+          for i in $(seq 1 30); do
+            STATUS=$(az containerapp job execution show \
+              --name job-db-migrate-test-sdc \
+              --resource-group rg-aigw-test-sdc \
+              --job-execution-name "${EXEC_NAME}" \
+              --query properties.status -o tsv 2>/dev/null | tr -d '\r')
+            echo "Migration status (${i}/30): ${STATUS}"
+            [[ "${STATUS}" == "Succeeded" ]] && { echo "Migrations complete"; exit 0; }
+            [[ "${STATUS}" == "Failed" ]] && { echo "ERROR: Migrations failed"; exit 1; }
+            sleep 10
+          done
+          echo "ERROR: Migration timed out after 5 minutes"
+          exit 1
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Smoke test (control plane) — verify every Container App rolled out healthy.
+  # Runs from a GitHub-hosted runner via the Azure control plane (no VNet needed).
+  # ────────────────────────────────────────────────────────────────────────────
+  smoke-test:
+    name: Smoke test (control plane)
+    needs: deploy-test
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Azure login (OIDC)
+        run: |
+          OIDC_TOKEN=$(curl -sSfL \
+            -H "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=api://AzureADTokenExchange" \
+            | python3 -c "import sys,json; print(json.load(sys.stdin)['value'])")
+          az login --service-principal \
+            --username "${{ secrets.AZURE_CLIENT_ID_TEST }}" \
+            --tenant "${{ secrets.AZURE_TENANT_ID }}" \
+            --federated-token "${OIDC_TOKEN}"
+          az account set --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID_TEST }}"
+
+      - name: Verify all container apps are Running
+        run: |
+          set -euo pipefail
+          RG=rg-aigw-test-sdc
+          APPS=(ca-auth ca-cache ca-litellm ca-observability ca-admin ca-identity \
+                ca-agent-relay ca-librarian ca-memory ca-league ca-scanner \
+                ca-workflow-worker ca-admin-portal ca-portal)
+          fail=0
+          for app in "${APPS[@]}"; do
+            name="${app}-test-sdc"
+            STATE=$(az containerapp show -n "$name" -g "$RG" \
+              --query "properties.runningStatus" -o tsv 2>/dev/null | tr -d '\r' || echo "Missing")
+            echo "${name}: ${STATE}"
+            if [[ "$STATE" != "Running" ]]; then
+              echo "::error::${name} is not Running (state: ${STATE})"
+              fail=1
+            fi
+          done
+          exit $fail
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # E2E smoke (data plane) — disabled until a VNet self-hosted runner is
+  # registered in the test landing zone. Same activation pattern as dev.
+  # Runner label: vnet-aigw-test
+  # ────────────────────────────────────────────────────────────────────────────
+  e2e-test:
+    name: E2E smoke (data plane)
+    needs: smoke-test
+    if: false  # TODO: enable once the VNet self-hosted runner (jumpbox) is registered
+    runs-on: [self-hosted, vnet-aigw-test]
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      RG: rg-aigw-test-sdc
+      E2E_ADMIN_EMAIL: e2e-admin@simcorp.com
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        run: |
+          OIDC_TOKEN=$(curl -sSfL \
+            -H "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=api://AzureADTokenExchange" \
+            | python3 -c "import sys,json; print(json.load(sys.stdin)['value'])")
+          az login --service-principal \
+            --username "${{ secrets.AZURE_CLIENT_ID_TEST }}" \
+            --tenant "${{ secrets.AZURE_TENANT_ID }}" \
+            --federated-token "${OIDC_TOKEN}"
+          az account set --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID_TEST }}"
+
+      - name: Seed local platform_admin (unmanaged identity)
+        run: |
+          printf '%s' "${{ secrets.AIGW_E2E_ADMIN_PASSWORD }}" | az containerapp exec \
+            -n ca-admin-test-sdc -g "$RG" --command \
+            "python scripts/create_local_account.py --email '${E2E_ADMIN_EMAIL}' --role platform_admin --password-stdin"
+
+      - name: Run E2E smoke
+        env:
+          AIGW_E2E_ADMIN_EMAIL: ${{ env.E2E_ADMIN_EMAIL }}
+          AIGW_E2E_ADMIN_PASSWORD: ${{ secrets.AIGW_E2E_ADMIN_PASSWORD }}
+          AIGW_TEST_API_KEY: ${{ secrets.AIGW_TEST_API_KEY }}
+        run: python3 services/admin/scripts/e2e_smoke.py
