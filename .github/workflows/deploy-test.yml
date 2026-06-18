@@ -7,9 +7,8 @@ on:
   workflow_dispatch:
     inputs:
       image_tag:
-        description: 'Image tag to deploy (e.g. sha-abc1234 or v1.2.3)'
-        required: false
-        default: 'latest'
+        description: 'Image tag to deploy — must be a sha-XXXXXXX or v* tag (not latest)'
+        required: true
 
 # Prevent concurrent deploys to test
 concurrency:

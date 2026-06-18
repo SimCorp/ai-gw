@@ -103,3 +103,5 @@ Python/worker service images are environment-agnostic — the same `sha-{sha}` i
 | `AZURE_CLIENT_ID_TEST` | Repo | Test Entra SP client ID |
 | `AZURE_SUBSCRIPTION_ID_TEST` | Repo | Test subscription ID |
 | `GHCR_PAT` | Repo | GitHub Container Registry PAT (shared) |
+| `AIGW_E2E_ADMIN_PASSWORD` | Repo | Required before enabling e2e-test job |
+| `AIGW_TEST_API_KEY` | Repo | Optional — used by e2e-test for inference validation |

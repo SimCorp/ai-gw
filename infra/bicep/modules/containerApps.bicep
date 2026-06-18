@@ -149,6 +149,10 @@ resource runsEnvStorage 'Microsoft.App/managedEnvironments/storages@2024-03-01' 
   }
 }
 
+// ── Portal image name suffix — dev uses no suffix; other envs use '-${env}'
+// admin-portal:sha-<sha> (dev) vs admin-portal-test:sha-<sha> (test)
+var portalSuffix = env == 'dev' ? '' : '-${env}'
+
 // ── GHCR registry pull credentials ───────────────────────────────────────────
 var ghcrBase = 'ghcr.io/simcorp/ai-gw'
 var ghcrSecret = [{ name: 'ghcr-pat', value: ghcrPat }]
@@ -903,7 +907,7 @@ resource caAdminPortal 'Microsoft.App/containerApps@2024-03-01' = {
       containers: [
         {
           name: 'admin-portal'
-          image: '${ghcrBase}/admin-portal:${imageTag}'
+          image: '${ghcrBase}/admin-portal${portalSuffix}:${imageTag}'
           resources: stdResources
         }
       ]
@@ -931,7 +935,7 @@ resource caPortal 'Microsoft.App/containerApps@2024-03-01' = {
       containers: [
         {
           name: 'portal'
-          image: '${ghcrBase}/portal:${imageTag}'
+          image: '${ghcrBase}/portal${portalSuffix}:${imageTag}'
           resources: stdResources
         }
       ]

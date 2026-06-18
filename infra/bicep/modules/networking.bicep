@@ -1,7 +1,7 @@
 // infra/bicep/modules/networking.bicep
 // Deployed scoped to rg-spoke-platformaitooling-dev-sdc-001
 
-param vnetName string = 'vnet-spoke-platformaitooling-dev-sdc-001'
+param vnetName string
 param env string
 param peSubnetPrefix string  // required — CIDR space is LZ-specific, no safe default
 var peSubnetName = 'snet-pe-aigw-${env}'
