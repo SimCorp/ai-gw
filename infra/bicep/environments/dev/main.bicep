@@ -2,6 +2,7 @@ targetScope = 'subscription'
 
 param location string = 'swedencentral'
 param env string = 'dev'
+param peSubnetPrefix string  // required — CIDR space is LZ-specific, passed from bicepparam
 param vnetResourceGroup string
 param vnetName string
 param acaInfraSubnetId string
@@ -19,6 +20,7 @@ param tlsCertBase64 string
 param tlsCertPassword string
 
 var rgName = 'rg-aigw-${env}-sdc'
+var gatewayHostname = 'aigw-${env}.lab.cloud.scdom.net'
 var kvName = 'kv-aigw-${env}-sdc'
 var tags = { environment: env, workload: 'aigw', managedBy: 'bicep' }
 
@@ -46,6 +48,8 @@ module networking '../../modules/networking.bicep' = {
   scope: resourceGroup(vnetResourceGroup)
   params: {
     vnetName: vnetName
+    env: env
+    peSubnetPrefix: peSubnetPrefix
   }
 }
 
@@ -207,6 +211,7 @@ module containerApps '../../modules/containerApps.bicep' = {
     imageTag: imageTag
     location: location
     tags: tags
+    gatewayHostname: gatewayHostname
   }
 }
 

@@ -97,6 +97,7 @@ jobs:
                 "ghcrUsername=${{ github.actor }}" \
                 "imageTag=${{ steps.resolve.outputs.imageTag }}" \
                 location=swedencentral \
+                gatewayHostname=aigw-dev.lab.cloud.scdom.net \
             --name "container-apps-$(date +%Y%m%d%H%M)"
 
       - name: Run DB migrations

@@ -67,4 +67,5 @@ jobs:
                 "ghcrPat=${GHCR_PAT}" \
                 "ghcrUsername=${{ github.actor }}" \
                 imageTag=latest \
-                location=swedencentral
+                location=swedencentral \
+                gatewayHostname=aigw-dev.lab.cloud.scdom.net
