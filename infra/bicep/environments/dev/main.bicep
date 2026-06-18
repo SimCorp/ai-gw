@@ -73,6 +73,7 @@ module keyVault '../../modules/keyVault.bicep' = {
     location: location
     tags: tags
     peSubnetId: networking.outputs.peSubnetId
+    env: env
     deployingPrincipalId: deployingPrincipalId
     sbEncryptionPrincipalId: cmkIdentity.outputs.principalId
     agentRelaySecret: agentRelaySecret
@@ -96,6 +97,7 @@ module postgres '../../modules/postgres.bicep' = {
     location: location
     tags: tags
     peSubnetId: networking.outputs.peSubnetId
+    env: env
     administratorPassword: postgresAdminPassword
   }
 }
@@ -109,6 +111,7 @@ module redis '../../modules/redis.bicep' = {
     location: location
     tags: tags
     peSubnetId: networking.outputs.peSubnetId
+    env: env
   }
 }
 
@@ -121,6 +124,7 @@ module acr '../../modules/acr.bicep' = {
     location: location
     tags: tags
     peSubnetId: networking.outputs.peSubnetId
+    env: env
   }
 }
 
@@ -135,6 +139,7 @@ module serviceBus '../../modules/serviceBus.bicep' = {
     location: location
     tags: tags
     peSubnetId: networking.outputs.peSubnetId
+    env: env
     encryptionIdentityId: cmkIdentity.outputs.identityId
     kvUri: keyVault.outputs.kvUri
     sbKeyName: keyVault.outputs.sbKeyName

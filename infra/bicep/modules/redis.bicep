@@ -3,6 +3,7 @@
 param name string
 param location string
 param peSubnetId string
+param env string
 param tags object = {}
 
 resource redisCache 'Microsoft.Cache/redis@2023-08-01' = {
@@ -26,7 +27,7 @@ resource redisCache 'Microsoft.Cache/redis@2023-08-01' = {
 }
 
 resource privateEndpoint 'Microsoft.Network/privateEndpoints@2023-09-01' = {
-  name: 'pe-redis-aigw-dev-sdc'
+  name: 'pe-redis-aigw-${env}-sdc'
   location: location
   properties: {
     subnet: {

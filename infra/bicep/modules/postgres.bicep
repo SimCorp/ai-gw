@@ -3,6 +3,7 @@
 param name string
 param location string
 param peSubnetId string
+param env string
 @secure()
 param administratorPassword string
 param administratorLogin string = 'aigwadmin'
@@ -68,7 +69,7 @@ resource extensionsConfig 'Microsoft.DBforPostgreSQL/flexibleServers/configurati
 }
 
 resource privateEndpoint 'Microsoft.Network/privateEndpoints@2023-09-01' = {
-  name: 'pe-postgres-aigw-dev-sdc'
+  name: 'pe-postgres-aigw-${env}-sdc'
   location: location
   properties: {
     subnet: {
