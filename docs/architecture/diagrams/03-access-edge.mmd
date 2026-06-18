@@ -1,13 +1,13 @@
 flowchart LR
   dev["Developer workstation\nhttps://dev.aigw.scdom.net/portal/"]
 
-  subgraph DNSZ["DNS — internal SimCorp zone"]
-    int["dev.aigw.scdom.net A → 10.179.231.68\nmanaged by SimCorp IT (scdom.net)"]
+  subgraph DNSZ["DNS — internal SimCorp zone  ✅ active"]
+    int["dev.aigw.scdom.net A → 100.64.1.34\n(ZPA virtual IP → VM 10.179.231.68)\nconfirmed resolving 2026-06-18"]
   end
 
-  subgraph ZPA["Zscaler ZPA"]
+  subgraph ZPA["Zscaler ZPA  ✅ TCP routing active"]
     zcc["ZPA Client Connector\n(dev workstation)"]
-    zac["ZPA App Connector\ndev.aigw.scdom.net · TCP 443+80+22\nTLS passthrough"]
+    zac["ZPA App Connector\ndev.aigw.scdom.net · TCP 443+80+22 ✅\n⚠ TLS passthrough needed on port 443"]
   end
 
   subgraph NSG["NSG nsg-aigw-vm-dev"]

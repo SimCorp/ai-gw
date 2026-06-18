@@ -1,8 +1,12 @@
 # Dev environment — single-host deployment
 
-**Status:** Running · Phase 1 stabilisation · 2026-06-17
+**Status:** Running · Phase 1 stabilisation · updated 2026-06-18
 **Host:** `vm-aigw-dev-sdc` · `10.179.231.68` (static private IP) · Sweden Central
-**Access:** Pending ZPA/DNS/cert IT forms — reachable on-box now, from corp workstations once IT forms are fulfilled
+**ZPA virtual IP:** `100.64.1.34` (Zscaler-assigned, routes to `10.179.231.68`)
+**DNS:** `dev.aigw.scdom.net` → `100.64.1.34` ✅ resolving
+**TLS cert:** self-signed `O=SimCorp, CN=dev.aigw.scdom.net` (90-day stand-in, expires 2026-09-16) — cert and Caddy confirmed working on-box
+**ZPA status:** TCP routing active (443/80/22 all reachable) · ⚠️ TLS passthrough must be enabled in ZPA policy for port 443 — currently ZPA is intercepting TLS rather than passing it through
+**SSH:** `ssh azureuser@dev.aigw.scdom.net` (RSA key auth, via ZPA)
 
 ---
 
@@ -92,7 +96,7 @@ flowchart TB
 
 ## Container inventory
 
-All 18 containers verified healthy on 2026-06-17:
+All 18 containers verified healthy on 2026-06-18 (VM uptime 20h+):
 
 | Container | Image | Port (host) | Status |
 |---|---|---|---|
@@ -229,17 +233,32 @@ curl -s -X POST \
 
 ---
 
-## Access edge — pending IT forms
+## Access edge
 
-Three SimCorp IT Service Desk forms are required before the stack is reachable from a corp workstation:
-
-| # | Form type | Details |
+| IT form | Status | Detail |
 |---|---|---|
-| ① | Certificate — New / Internal | Subject/SAN: `*.aigw.scdom.net`, delivered as PEM + key |
-| ② | DNS A Record — New | `dev.aigw.scdom.net` → `10.179.231.68`, internal scdom.net zone |
-| ③ | ZPA — New resource | Hostname `dev.aigw.scdom.net` / IP `10.179.231.68`; HTTPS 443 + HTTP 80 + SSH 22; **TLS passthrough** |
+| ① Certificate `*.aigw.scdom.net` | ⏳ Pending | SimCorp Internal CA — PEM + key. Once received: copy to `infra/certs/` on VM, `docker compose restart caddy` |
+| ② DNS `dev.aigw.scdom.net` | ✅ Done | A record → `100.64.1.34` (ZPA virtual IP), resolving from corp workstations |
+| ③ ZPA app segment | ✅ Active (partial) | TCP routing on 443/80/22 confirmed working. **TLS passthrough not yet enabled** — ZPA is intercepting HTTPS; needs to be set to passthrough in ZPA admin console for port 443 |
 
-Once ① arrives: copy `cert.pem` and `key.pem` to `infra/certs/` on the VM, then `docker compose -f docker-compose.yml -f docker-compose.host.yml restart caddy`.
+**Network path (current):**
+```
+Developer workstation
+  → Zscaler Client Connector
+  → ZPA (100.64.1.34 virtual IP → 10.179.231.68 VM private IP)
+  → NSG nsg-aigw-vm-dev (443/80/22 from ZPA connector range)
+  → VM 10.179.231.68
+  → Caddy :443 (TLS, self-signed cert O=SimCorp CN=dev.aigw.scdom.net)
+```
+
+**To complete HTTPS access:**
+1. Enable TLS passthrough in ZPA admin for `dev.aigw.scdom.net` port 443
+2. Install production `*.aigw.scdom.net` cert when IT form ① is fulfilled
+
+**SSH access** (confirmed working 2026-06-18):
+```bash
+ssh azureuser@dev.aigw.scdom.net   # RSA key auth via ZPA
+```
 
 ---
 
@@ -293,9 +312,10 @@ docker compose -f docker-compose.yml -f docker-compose.host.yml up -d --no-deps 
 
 ## Pending items
 
-| Item | Blocked on |
-|---|---|
-| Inference test (cache MISS → HIT) | `ANTHROPIC_API_KEY` is empty in VM `.env` — set manually: `sed -i 's/^ANTHROPIC_API_KEY=$/ANTHROPIC_API_KEY=sk-ant-.../' /home/azureuser/ai-gw/.env && docker compose up -d --no-deps litellm` |
-| ZPA access from workstation | IT form ③ |
-| Production TLS cert | IT form ① — then swap `infra/certs/cert.pem` + `key.pem`, restart caddy |
-| DNS resolution from corp workstations | IT form ② |
+| Item | Status | Action |
+|---|---|---|
+| DNS `dev.aigw.scdom.net` | ✅ Done | Resolves to `100.64.1.34` from corp workstations |
+| SSH access via ZPA | ✅ Done | `ssh azureuser@dev.aigw.scdom.net` works |
+| ZPA TLS passthrough | ⚠️ Action needed | In ZPA admin console: set port 443 app segment to TLS passthrough (not inspection) |
+| Production cert `*.aigw.scdom.net` | ⏳ Pending IT form ① | Once received, copy to `infra/certs/cert.pem` + `key.pem` on VM then `docker compose restart caddy` |
+| Inference test (cache MISS → HIT) | ⏳ Blocked | Set `ANTHROPIC_API_KEY` in VM `.env`: `ssh azureuser@dev.aigw.scdom.net "sed -i 's/^ANTHROPIC_API_KEY=\$/ANTHROPIC_API_KEY=sk-ant-YOUR_KEY/' ~/ai-gw/.env && cd ~/ai-gw/infra && docker compose -f docker-compose.yml -f docker-compose.host.yml up -d --no-deps litellm"` |

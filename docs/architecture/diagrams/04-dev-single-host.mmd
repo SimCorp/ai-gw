@@ -1,14 +1,14 @@
 flowchart TB
   dev["Developer / AI agent\nbrowser  ·  sk- API key"]
 
-  subgraph CORP["Corporate network — Zscaler ZPA  ·  pending IT forms"]
+  subgraph CORP["Corporate network — Zscaler ZPA"]
     zcc["Zscaler Client Connector"]
-    zpa["ZPA App Connector\n(pending: dev.aigw.scdom.net / 10.179.231.68)"]
+    zpa["ZPA App Connector\ndev.aigw.scdom.net → 100.64.1.34 → 10.179.231.68\nTCP 443/80/22 active  ·  ⚠ TLS passthrough needed on 443"]
   end
 
   subgraph VM["vm-aigw-dev-sdc  ·  10.179.231.68 (static)  ·  Ubuntu 24.04\nrg-spoke-platformaitooling-dev-sdc-001  ·  Sweden Central"]
     subgraph EDGE["NSG nsg-aigw-vm-dev\n443 in · 80 in · 22 in  (from ZPA connector range)"]
-      caddy["Caddy 2.8\n:443 TLS-terminate\n:80 → redirect HTTPS\ncerts/cert.pem (self-signed, stand-in)"]
+      caddy["Caddy 2.8\n:443 TLS-terminate\n:80 → redirect HTTPS\nself-signed O=SimCorp CN=dev.aigw.scdom.net\nexpires 2026-09-16  ·  confirmed working on-box"]
     end
 
     subgraph INFERENCE["Inference path  /v1/*"]
@@ -46,10 +46,10 @@ flowchart TB
 
   ext["External LLM providers\nAnthropic  ·  Azure OpenAI\nGemini  ·  GitHub Models"]
   cert_pending["*.aigw.scdom.net cert\nSimCorp Internal CA\n⚠ pending IT form ①"]
-  dns_pending["DNS A record\ndev.aigw.scdom.net → 10.179.231.68\n⚠ pending IT form ②"]
+  dns_done["DNS ✅\ndev.aigw.scdom.net → 100.64.1.34 (ZPA VIP)\n→ 10.179.231.68 (VM)"]
 
   dev --> zcc --> zpa -->|"TCP 443"| caddy
-  dns_pending -. "resolves" .-> zpa
+  dns_done -. "resolves ✅" .-> zpa
   cert_pending -. "replaces self-signed" .-> caddy
 
   caddy -->|"/v1/*"| cache
