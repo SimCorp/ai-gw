@@ -2,8 +2,90 @@
 
 **Audience:** Platform engineers and on-call responders  
 **System:** Enterprise AI gateway serving ~2,000 SimCorp engineers  
-**Deployment:** Azure Container Apps (ACA), SimCorp Landing Zone, resource group `rg-aigw-dev-sdc`, Sweden Central  
-**Last updated:** 2026-06-10
+**Last updated:** 2026-06-19
+
+> **Current deployment: single-host VM** — `vm-aigw-dev-sdc` at `10.179.231.68`, reached via `dev.aigw.scdom.net` (ZPA). The ACA sections below are archived reference for the V2/prod promotion path.
+
+---
+
+## Single-host VM operations (current)
+
+### Quick reference
+
+| | |
+|---|---|
+| Host | `vm-aigw-dev-sdc` · `10.179.231.68` |
+| SSH | `ssh-aigw` helper on AZWESU0005 (pass key `ssh/dev.aigw.scdom.net`) |
+| Compose dir | `/home/azureuser/ai-gw/infra/` |
+| Compose command | `docker compose -f docker-compose.yml -f docker-compose.host.yml` |
+| Admin portal | `https://dev.aigw.scdom.net/admin-portal/` |
+| Dev portal | `https://dev.aigw.scdom.net/portal/` |
+| Inference | `https://dev.aigw.scdom.net/v1/` |
+
+### Check service health
+
+```bash
+ssh-aigw
+cd ~/ai-gw/infra
+docker compose -f docker-compose.yml -f docker-compose.host.yml ps
+```
+
+All 18 containers should show `(healthy)`. The two background workers (`workflow-worker`, `scanner`) show `Up` without a healthcheck.
+
+### Restart a service
+
+```bash
+cd ~/ai-gw/infra
+docker compose -f docker-compose.yml -f docker-compose.host.yml up -d --no-deps <service>
+# e.g.: caddy, auth, cache, litellm, admin, portal, admin-portal
+```
+
+### View logs
+
+```bash
+docker logs ai-gateway-<service>-1 --tail 100 -f
+# e.g.: ai-gateway-auth-1, ai-gateway-cache-1, ai-gateway-litellm-1
+```
+
+### Deploy a code change
+
+CI builds and pushes images on every `master` push. To apply on the VM:
+
+```bash
+cd ~/ai-gw/infra
+git pull origin master   # pull source (for config files)
+docker compose -f docker-compose.yml -f docker-compose.host.yml pull  # pull new images
+docker compose -f docker-compose.yml -f docker-compose.host.yml up -d  # rolling restart
+```
+
+> **Portal rebuilds:** If `Dockerfile.portal` or `Dockerfile.admin` changed, or if `NEXT_PUBLIC_*` URLs need updating, rebuild locally — CI does not rebuild portal images automatically:
+> ```bash
+> docker compose -f docker-compose.yml -f docker-compose.host.yml build portal admin-portal
+> docker compose -f docker-compose.yml -f docker-compose.host.yml up -d --no-deps portal admin-portal
+> ```
+
+### Secrets and `.env`
+
+All provider API keys live in `/home/azureuser/ai-gw/.env` (gitignored, mode 0600). To update a key, pipe it from `pass` on AZWESU0005 via SSH — never write secrets to disk in plaintext. See `docs/architecture/dev-environment.md` for the exact pattern.
+
+### TLS certificate
+
+Wildcard cert `*.aigw.scdom.net` (SimCorp Issuing CA, valid until 2028). Stored in `pass` as `certificate/wildcard.aigw.scdom.net.pfx.b64`. Installed at `~/ai-gw/infra/certs/cert.pem` + `key.pem` on the VM. See `docs/architecture/dev-environment.md` for the reinstall procedure.
+
+### Common failure modes (single-host)
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| `x-cache: MISS` on every call | Inference is working but not hitting cache | Check Redis: `docker exec ai-gateway-redis-1 redis-cli ping` |
+| 401 "Invalid or revoked API key" | sk-* key doesn't exist or was revoked | Verify key hash in DB: `docker exec ai-gateway-postgres-1 psql -U aigateway -d aigateway -c "SELECT name, revoked_at FROM api_keys WHERE key_hash = '$HASH';"` |
+| 503 from inference path | litellm unavailable or provider key missing | Check litellm logs; verify `ANTHROPIC_API_KEY` etc. in `.env` |
+| Portal "Failed to fetch" on login | Portal built with wrong API URL baked in | Rebuild portal images with correct `--build-arg NEXT_PUBLIC_*` |
+| Admin portal stays at `/login` after submit | Admin service unreachable at `/admin/*` | Check caddy is running; check `docker logs ai-gateway-admin-1 --tail 20` |
+| `can_access` returns False for platform_admin | Stale code pre-`17e3ab6` — root node UUID path | Pull latest and rebuild admin container |
+
+---
+
+## ACA reference (archived — V2/prod path)
 
 ---
 

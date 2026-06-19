@@ -10,8 +10,8 @@ promotion — CI/CD workflows for ACA are archived in `.github/workflows/_archiv
 |---|---|
 | **Host** | `vm-aigw-dev-sdc` — `10.179.231.68` (Sweden Central) |
 | **Access** | `dev.aigw.scdom.net` via ZPA (corp VPN) — HTTPS 443, SSH 22 |
-| **SSH** | `ssh -i ~/.ssh/aigw_vm azureuser@10.179.231.68` |
-| **Compose file** | `/home/azureuser/ai-gw/docker-compose.yml` on the VM |
+| **SSH** | `ssh-aigw` helper (pass key `ssh/dev.aigw.scdom.net`) — see `~/.bashrc` on AZWESU0005 |
+| **Compose files** | `/home/azureuser/ai-gw/infra/docker-compose.yml` + `docker-compose.host.yml` on the VM |
 | **Deploy** | `git push` to `master` → CI builds images → pull & restart on VM |
 
 ## Services (Docker Compose)
@@ -24,8 +24,8 @@ request path and is exposed via Caddy on port 443.
 | caddy | 80/443 | TLS termination, reverse proxy |
 | admin-portal | 3001 | Admin Next.js app |
 | portal | 3002 | Developer Next.js app |
-| auth | 8001 | JWT / API key validation, rate limiting; inference entry point |
-| cache | 8002 | Semantic + exact cache proxy |
+| auth | 8001 | JWT / API key validation, rate limiting; called internally by cache |
+| cache | 8002 | Semantic + exact cache proxy; inference entry point after Caddy |
 | litellm | 8003 | Provider routing (OpenAI-compatible) |
 | observability | 8004 | Async event ingestion |
 | admin | 8005 | Team management, API keys, dashboards |
@@ -37,7 +37,9 @@ request path and is exposed via Caddy on port 443.
 | scanner | — | Security scanning worker (background) |
 | workflow-worker | — | Agentic workflow runner (background) |
 
-Request path: `caller → Caddy:443 → cache(8002) → auth(8001) → litellm(8003) → provider`
+Request path: `caller → Caddy:443 → cache(8002) → [cache calls auth(8001) to validate token] → litellm(8003) → provider`
+
+Compose command (always use both files): `docker compose -f docker-compose.yml -f docker-compose.host.yml`
 
 ## Running tests
 
