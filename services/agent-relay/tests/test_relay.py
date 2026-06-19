@@ -3,6 +3,9 @@
 import json
 from unittest.mock import AsyncMock
 
+# Matches the secret configured by the autouse reset_state fixture.
+AUTH = {"X-Relay-Secret": "testsecret"}
+
 
 async def test_health(client):
     resp = await client.get("/health")
@@ -28,7 +31,9 @@ async def test_invoke_round_trip(client):
     main._connections[token] = ws
     main._slug_to_token["agent-x"] = token
 
-    resp = await client.post("/invoke/agent-x", json={"inputs": {"q": "hi"}, "env": {}})
+    resp = await client.post(
+        "/invoke/agent-x", json={"inputs": {"q": "hi"}, "env": {}}, headers=AUTH
+    )
 
     assert resp.status_code == 200
     assert resp.json() == {"outputs": {"answer": 42}, "exit_code": 0}
@@ -39,9 +44,20 @@ async def test_invoke_round_trip(client):
 
 
 async def test_invoke_not_connected_returns_503(client):
-    resp = await client.post("/invoke/nobody", json={"inputs": {}, "env": {}})
+    resp = await client.post("/invoke/nobody", json={"inputs": {}, "env": {}}, headers=AUTH)
     assert resp.status_code == 503
     assert "not connected" in resp.json()["detail"]
+
+
+async def test_invoke_fails_closed_when_secret_unset(client, monkeypatch):
+    """With no relay secret configured, protected endpoints are 503 (not open)."""
+    from app import config
+
+    monkeypatch.setattr(config, "_settings", config.Settings(relay_secret=""))
+
+    resp = await client.post("/invoke/anything", json={"inputs": {}, "env": {}})
+    assert resp.status_code == 503
+    assert "not configured" in resp.json()["detail"]
 
 
 async def test_invoke_timeout_returns_504(client, monkeypatch):
@@ -62,7 +78,7 @@ async def test_invoke_timeout_returns_504(client, monkeypatch):
 
     monkeypatch.setattr(main.asyncio, "wait_for", fast_wait_for)
 
-    resp = await client.post("/invoke/slow-agent", json={"inputs": {}, "env": {}})
+    resp = await client.post("/invoke/slow-agent", json={"inputs": {}, "env": {}}, headers=AUTH)
     assert resp.status_code == 504
     assert "timed out" in resp.json()["detail"]
     # The pending future must be cleaned up after timeout.
@@ -85,7 +101,9 @@ async def test_register_returns_token_and_populates_state(client):
     main._redis = AsyncMock()  # capture the Redis write
 
     resp = await client.post(
-        "/register", json={"slug": "agent-a", "name": "Agent A", "capabilities": ["x"]}
+        "/register",
+        json={"slug": "agent-a", "name": "Agent A", "capabilities": ["x"]},
+        headers=AUTH,
     )
     assert resp.status_code == 200
     body = resp.json()
@@ -186,7 +204,7 @@ async def test_invoke_does_not_consult_redis(client):
     main._redis = AsyncMock()
     main._redis.get = AsyncMock(return_value="some-token-from-another-instance")
 
-    resp = await client.post("/invoke/elsewhere", json={"inputs": {}, "env": {}})
+    resp = await client.post("/invoke/elsewhere", json={"inputs": {}, "env": {}}, headers=AUTH)
 
     assert resp.status_code == 503
     main._redis.get.assert_not_called()

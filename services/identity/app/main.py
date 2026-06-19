@@ -11,6 +11,7 @@ Redis heartbeat key: identity:online:{slug}  TTL 60 s
 from __future__ import annotations
 
 import asyncio
+import hmac
 import logging
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -265,15 +266,18 @@ def _redis(request: Request) -> Redis:
 
 
 def _check_service_token(request: Request) -> None:
-    """Verify X-Service-Token header if identity_service_token is configured.
+    """Verify the X-Service-Token header against the configured service token.
 
-    Fails open (allows) when identity_service_token is empty — dev mode.
-    Raises HTTP 401 when the token is configured but missing or wrong.
+    Fails closed: when no token is configured the protected endpoints are
+    unavailable (503) rather than open to anyone on the network. A configured
+    token is compared in constant time; a missing or wrong header is 401.
+    Compose provides a non-empty dev default (see IDENTITY_SERVICE_TOKEN);
+    production supplies the real value from Key Vault.
     """
     if not settings.identity_service_token:
-        return  # dev mode — no auth required
+        raise HTTPException(status_code=503, detail="Identity service token not configured")
     provided = request.headers.get("X-Service-Token", "")
-    if provided != settings.identity_service_token:
+    if not hmac.compare_digest(provided, settings.identity_service_token):
         raise HTTPException(status_code=401, detail="Invalid or missing X-Service-Token")
 
 
