@@ -4,6 +4,6 @@
   "private": true,
   "exports": { ".": "./src/index.ts" },
   "scripts": { "test": "vitest run" },
-  "dependencies": { "zod": "^3.24.0" },
-  "devDependencies": { "typescript": "^5.8.0", "vitest": "^3.2.6" }
+  "dependencies": { "zod": "^4.4.3" },
+  "devDependencies": { "typescript": "^6.0.3", "vitest": "^4.1.9" }
 }

@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "exports": { ".": "./src/index.ts" },
-  "dependencies": { "recharts": "^2.15.0" },
+  "dependencies": { "recharts": "^3.8.1" },
   "peerDependencies": { "react": "^19", "react-dom": "^19" },
-  "devDependencies": { "typescript": "^5.8.0", "@types/react": "^19" }
+  "devDependencies": { "typescript": "^6.0.3", "@types/react": "^19" }
 }
