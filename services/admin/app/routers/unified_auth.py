@@ -54,11 +54,22 @@ _ROLE_POWER = {
 def can_access(user: dict, target_path: str, min_role: str) -> bool:
     """Return True if user has at least min_role power on any node whose path
     is a prefix of target_path (i.e. the role is at or above the target node).
+
+    "/" is the root sentinel used by callers to mean "global root access".
+    Root nodes are stored with UUID-based paths ("/uuid"), not literal "/",
+    so we treat "/" specially: it matches any role held at a root-level node
+    (path of the form "/uuid" — exactly one slash).
     """
     required = _ROLE_POWER.get(min_role, 0)
     for r in user.get("roles", []):
         node_path = r.get("node_path", "")
-        if node_path and target_path.startswith(node_path):
+        if not node_path:
+            continue
+        if target_path == "/":
+            # Root sentinel: role must be at a root node (single-segment path).
+            if node_path.count("/") == 1 and _ROLE_POWER.get(r.get("role", ""), 0) >= required:
+                return True
+        elif target_path.startswith(node_path):
             if _ROLE_POWER.get(r.get("role", ""), 0) >= required:
                 return True
     return False
