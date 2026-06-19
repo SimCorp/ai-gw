@@ -1,7 +1,8 @@
 """Tests for /teams/{team_id}/keys endpoints."""
 
+import json
 import uuid
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -134,6 +135,32 @@ async def test_create_key_key_returned_once(client, mock_session):
     assert raw_key.startswith("sk-")
     # It is not the key_hash (which would be a sha256 hex digest)
     assert len(raw_key) < 100  # raw key, not a 64-char hash
+
+
+# ---------------------------------------------------------------------------
+# POST /portal/teams/{team_id}/keys — self-service scope guard
+# ---------------------------------------------------------------------------
+
+
+async def test_portal_create_key_rejects_control_plane_scope(client, mock_session):
+    """A developer may not self-assign control-plane scopes via the portal."""
+    from app.main import app
+
+    team_id = uuid.uuid4()
+    app.state.redis.get = AsyncMock(return_value=json.dumps({"developer_id": str(uuid.uuid4())}))
+    # First execute() is the node_members membership check → return a row.
+    membership = MagicMock()
+    membership.first.return_value = (1,)
+    mock_session.execute.return_value = membership
+
+    resp = await client.post(
+        f"/portal/teams/{team_id}/keys",
+        json={"name": "k", "scopes": ["ai-gw:policy:write", "ai-gw:inference:*"]},
+        headers={"Authorization": "Bearer devtoken"},
+    )
+
+    assert resp.status_code == 403
+    assert "policy:write" in resp.json()["detail"]
 
 
 # ---------------------------------------------------------------------------
