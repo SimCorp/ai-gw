@@ -8,7 +8,16 @@ can_access(user, target_path, min_role) returns True iff the user holds a role
 with power >= min_role on any node whose path is a prefix of target_path.
 """
 
-from app.routers.unified_auth import _ROLE_POWER, can_access
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+from app.routers.unified_auth import (
+    _ROLE_POWER,
+    _assert_sa_in_scope,
+    can_access,
+    max_role_power,
+)
+from fastapi import HTTPException
 
 
 def _user(*roles):
@@ -131,3 +140,74 @@ def test_multiple_roles_any_match_grants():
     )
     assert can_access(user, "/root/engineering/team", "team_admin") is True
     assert can_access(user, "/root/finance/team", "team_admin") is False
+
+
+# ---------------------------------------------------------------------------
+# max_role_power — privilege-amplification guard for granting roles
+# ---------------------------------------------------------------------------
+
+
+def test_max_role_power_returns_highest_matching_role():
+    user = _user(("area_owner", "/root/eng"), ("viewer", "/root/eng/team"))
+    assert max_role_power(user, "/root/eng/team") == _ROLE_POWER["area_owner"]
+
+
+def test_max_role_power_ignores_non_prefix_nodes():
+    user = _user(("platform_admin", "/root/finance"))
+    # The platform_admin grant is on a sibling subtree, not a prefix.
+    assert max_role_power(user, "/root/eng/team") == 0
+
+
+def test_area_owner_cannot_amplify_to_platform_admin():
+    # The exploit: an area_owner (power 5) must not be able to grant
+    # platform_admin (power 6) — max_role_power gates the add_permission check.
+    user = _user(("area_owner", "/root/eng"))
+    assert _ROLE_POWER["platform_admin"] > max_role_power(user, "/root/eng")
+    # ...but they can grant a role at or below their own power.
+    assert _ROLE_POWER["team_admin"] <= max_role_power(user, "/root/eng")
+
+
+# ---------------------------------------------------------------------------
+# _assert_sa_in_scope — cross-team service-account access guard
+# ---------------------------------------------------------------------------
+
+
+def _sa_session(team_id):
+    """Mock session whose SA lookup returns the given team_id (or None)."""
+    session = AsyncMock()
+    result = MagicMock()
+    result.mappings.return_value.first.return_value = (
+        {"team_id": team_id} if team_id is not None else None
+    )
+    session.execute.return_value = result
+    return session
+
+
+async def test_sa_scope_platform_admin_bypasses_lookup():
+    session = AsyncMock()
+    caller = {"roles": [{"role": "platform_admin", "node_path": "/"}]}
+    await _assert_sa_in_scope(session, "sa-1", caller)  # no raise
+    session.execute.assert_not_called()
+
+
+async def test_sa_scope_team_admin_blocked_cross_team():
+    # team_admin of team A may not touch an SA owned by team B.
+    session = _sa_session("team-B")
+    caller = {"roles": [{"role": "team_admin", "scope_id": "team-A"}]}
+    with pytest.raises(HTTPException) as exc:
+        await _assert_sa_in_scope(session, "sa-b", caller)
+    assert exc.value.status_code == 403
+
+
+async def test_sa_scope_team_admin_allowed_own_team():
+    session = _sa_session("team-A")
+    caller = {"roles": [{"role": "team_admin", "scope_id": "team-A"}]}
+    await _assert_sa_in_scope(session, "sa-a", caller)  # no raise
+
+
+async def test_sa_scope_missing_sa_is_404():
+    session = _sa_session(None)
+    caller = {"roles": [{"role": "team_admin", "scope_id": "team-A"}]}
+    with pytest.raises(HTTPException) as exc:
+        await _assert_sa_in_scope(session, "ghost", caller)
+    assert exc.value.status_code == 404

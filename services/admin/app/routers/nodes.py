@@ -22,7 +22,12 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
-from app.routers.unified_auth import can_access, get_current_user
+from app.routers.unified_auth import (
+    _ROLE_POWER,
+    can_access,
+    get_current_user,
+    max_role_power,
+)
 
 router = APIRouter(prefix="/nodes", tags=["nodes"])
 
@@ -973,6 +978,12 @@ async def add_permission(
     valid_roles = {"platform_admin", "area_owner", "unit_lead", "team_admin", "developer", "viewer"}
     if body.role not in valid_roles:
         raise HTTPException(422, f"role must be one of {sorted(valid_roles)}")
+
+    # Privilege-amplification guard: a grantor may not assign a role more
+    # powerful than the one they themselves hold on this node. Without this an
+    # area_owner could grant platform_admin and self-escalate.
+    if _ROLE_POWER.get(body.role, 0) > max_role_power(current_user, row["path"]):
+        raise HTTPException(403, "Cannot grant a role above your own on this node")
 
     assignment_id = str(uuid.uuid4())
     await session.execute(

@@ -75,6 +75,36 @@ def can_access(user: dict, target_path: str, min_role: str) -> bool:
     return False
 
 
+def max_role_power(user: dict, target_path: str) -> int:
+    """Highest role power the user holds on any node that is a prefix of
+    target_path (using the same "/" root-sentinel rule as can_access).
+
+    Used to prevent privilege amplification: a grantor must not assign a role
+    more powerful than the one they themselves hold on the node.
+    """
+    best = 0
+    for r in user.get("roles", []):
+        node_path = r.get("node_path", "")
+        if not node_path:
+            continue
+        if target_path == "/":
+            matches = node_path.count("/") == 1
+        else:
+            matches = target_path.startswith(node_path)
+        if matches:
+            best = max(best, _ROLE_POWER.get(r.get("role", ""), 0))
+    return best
+
+
+def _team_admin_scope_ids(user: dict) -> list[str]:
+    """team_id scope_ids on which the user holds the team_admin role."""
+    return [
+        r.get("scope_id")
+        for r in user.get("roles", [])
+        if r.get("role") == "team_admin" and r.get("scope_id")
+    ]
+
+
 def require_node_role(min_role: str = "viewer"):
     """FastAPI dependency: validates that the current user has at least
     min_role on the node identified by the `node_id` path parameter.
@@ -1488,6 +1518,36 @@ class CreateServiceAccountRequest(BaseModel):
     team_id: str | None = None
 
 
+async def _assert_sa_in_scope(session: AsyncSession, sa_id: str, caller: dict) -> None:
+    """Ensure the caller may act on this service account.
+
+    platform_admin may act on any SA. A team_admin may act only on SAs whose
+    team_id is in their team_admin scope. Raises 404 if the SA does not exist,
+    403 otherwise.
+    """
+    roles = [r["role"] for r in caller.get("roles", [])]
+    if "platform_admin" in roles:
+        return
+    if "team_admin" not in roles:
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    row = (
+        (
+            await session.execute(
+                text(
+                    "SELECT team_id::text AS team_id FROM service_accounts WHERE id = CAST(:id AS uuid)"
+                ),
+                {"id": sa_id},
+            )
+        )
+        .mappings()
+        .first()
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail="Service account not found")
+    if row["team_id"] not in _team_admin_scope_ids(caller):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+
 @router.post("/service-accounts", status_code=201)
 async def create_service_account(
     body: CreateServiceAccountRequest,
@@ -1495,8 +1555,15 @@ async def create_service_account(
     session: AsyncSession = Depends(get_session),
 ):
     roles = [r["role"] for r in caller.get("roles", [])]
-    if "platform_admin" not in roles and "team_admin" not in roles:
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    if "platform_admin" not in roles:
+        # A team_admin may only create a service account scoped to a team they
+        # administer; a bare team_id outside their scope is rejected.
+        if "team_admin" not in roles:
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+        if not body.team_id or body.team_id not in _team_admin_scope_ids(caller):
+            raise HTTPException(
+                status_code=403, detail="Cannot create a service account outside your team"
+            )
 
     import hashlib as _hl
     import uuid as _uuid
@@ -1601,9 +1668,7 @@ async def set_service_account_status(
     caller: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    roles = [r["role"] for r in caller.get("roles", [])]
-    if "platform_admin" not in roles and "team_admin" not in roles:
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    await _assert_sa_in_scope(session, sa_id, caller)
     if status not in ("active", "suspended", "revoked"):
         raise HTTPException(status_code=422, detail="Invalid status")
     await session.execute(
@@ -1622,9 +1687,7 @@ async def rotate_service_account_key(
     caller: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    roles = [r["role"] for r in caller.get("roles", [])]
-    if "platform_admin" not in roles and "team_admin" not in roles:
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    await _assert_sa_in_scope(session, sa_id, caller)
 
     import hashlib as _hl
 

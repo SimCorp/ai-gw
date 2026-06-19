@@ -134,6 +134,25 @@ ROLE_SCOPES: dict[str, list[str]] = {
 # Default scopes for a newly issued API key
 DEFAULT_KEY_SCOPES: list[str] = [DP_INFERENCE_ALL]
 
+# Scopes a developer may self-assign when minting an API key via the portal.
+# Control-plane (CP_*) scopes are never honored on an sk- key, so they must not
+# be grantable through self-service key creation (defence against minting keys
+# that claim privileges the developer does not hold).
+SELF_SERVICE_KEY_SCOPES: list[str] = [
+    DP_INFERENCE_ALL,
+    DP_INFERENCE_CLAUDE_ALL,
+    DP_INFERENCE_OPENAI_ALL,
+    DP_INFERENCE_HAIKU,
+    DP_INFERENCE_SONNET,
+    DP_INFERENCE_OPUS,
+    DP_STREAMING,
+    DP_TOOL_EXECUTE,
+    DP_CACHE_BYPASS,
+    DP_AUTODRIVE_OVERRIDE,
+    DP_BATCH_SUBMIT,
+    DP_VISION_EXECUTE,
+]
+
 
 # ---------------------------------------------------------------------------
 # Scope matching — resolves wildcards

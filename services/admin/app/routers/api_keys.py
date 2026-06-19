@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app import audit
 from app.db import get_session
 from app.models.api_key import APIKey
-from app.scopes import DEFAULT_KEY_SCOPES
+from app.scopes import DEFAULT_KEY_SCOPES, SELF_SERVICE_KEY_SCOPES
 
 router = APIRouter(prefix="/teams/{team_id}/keys", tags=["api-keys"])
 
@@ -91,6 +91,14 @@ async def portal_create_key(
     if not membership:
         raise HTTPException(status_code=403, detail="Not a member of this team")
     scopes = body.scopes if body.scopes else DEFAULT_KEY_SCOPES
+    # A developer may only self-assign data-plane scopes; control-plane scopes
+    # must never be mintable through self-service key creation.
+    disallowed = [s for s in scopes if s not in SELF_SERVICE_KEY_SCOPES]
+    if disallowed:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Cannot self-assign scopes: {sorted(disallowed)}",
+        )
     raw_key = "sk-" + secrets.token_urlsafe(32)
     key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
     api_key = APIKey(
