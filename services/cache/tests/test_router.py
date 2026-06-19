@@ -103,6 +103,46 @@ class TestListModels:
 
 
 # ---------------------------------------------------------------------------
+# POST /anthropic/{path} — must enforce the same controls as /v1/chat/completions
+# ---------------------------------------------------------------------------
+
+from types import SimpleNamespace  # noqa: E402
+
+
+class TestAnthropicProxyEnforcement:
+    async def test_rejects_model_not_in_allowed_list(self, app_and_client):
+        app, client = app_and_client
+        app.state.http.post = AsyncMock(return_value=_auth_response_ok())
+        policy = SimpleNamespace(allowed_models=["claude-allowed"])
+        with patch("app.router.get_policy", new=AsyncMock(return_value=policy)):
+            resp = await client.post(
+                "/anthropic/v1/messages",
+                json={"model": "claude-forbidden", "messages": []},
+                headers={"x-api-key": "valid"},
+            )
+        assert resp.status_code == 403
+
+    async def test_blocks_on_input_guardrail(self, app_and_client):
+        app, client = app_and_client
+        app.state.http.post = AsyncMock(return_value=_auth_response_ok())
+        blocked = SimpleNamespace(blocked_rule="pii", hits=[], text="")
+        with (
+            patch(
+                "app.router.get_policy",
+                new=AsyncMock(return_value=SimpleNamespace(allowed_models=[])),
+            ),
+            patch("app.router._load_guardrails", new=AsyncMock(return_value=[{"action": "block"}])),
+            patch("app.router.evaluate_guardrails", return_value=blocked),
+        ):
+            resp = await client.post(
+                "/anthropic/v1/messages",
+                json={"model": "claude-x", "messages": [{"role": "user", "content": "secret"}]},
+                headers={"x-api-key": "valid"},
+            )
+        assert resp.status_code == 400
+
+
+# ---------------------------------------------------------------------------
 # POST /v1/chat/completions
 # ---------------------------------------------------------------------------
 

@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from app.rate_limiter import check_rate_limit
 from app.validators.api_key import validate_api_key
-from app.validators.jwt import _validate_jwks_uri
+from app.validators.jwt import _oidc_identity, _validate_jwks_uri
 from fastapi import HTTPException
 
 
@@ -88,3 +88,23 @@ def test_jwks_uri_public_resolution_allowed(monkeypatch):
     monkeypatch.setattr("app.validators.jwt.socket.gethostbyname", lambda host: "93.184.216.34")
 
     _validate_jwks_uri("https://idp.example/keys")  # must not raise
+
+
+# ---------------------------------------------------------------------------
+# OIDC identity — must be per-user, never the tenant-wide `tid`
+# ---------------------------------------------------------------------------
+
+
+def test_oidc_identity_uses_per_user_oid_not_tenant_tid():
+    # `tid` is the same for every user in the tenant; using it would collapse
+    # all SSO callers into one cache namespace. oid (per-user) must win.
+    payload = {"oid": "user-123", "sub": "subj", "tid": "tenant-shared"}
+    assert _oidc_identity(payload) == "user-123"
+
+
+def test_oidc_identity_falls_back_to_sub_when_no_oid():
+    assert _oidc_identity({"sub": "subj", "tid": "tenant-shared"}) == "subj"
+
+
+def test_oidc_identity_never_returns_tenant_id():
+    assert _oidc_identity({"tid": "tenant-shared"}) != "tenant-shared"
