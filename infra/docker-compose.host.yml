@@ -1,5 +1,16 @@
 name: ai-gateway
 
+# VM overlay. Adds Caddy (TLS edge) and redirects every built service to the
+# images CI pushes to GHCR, so the VM runs `docker compose pull && up -d`
+# instead of building from source. The base file keeps each `build:` block for
+# local dev; the `image:` keys below take effect for pull/up on the VM.
+#
+# Image names follow the CI build-push matrix (.github/workflows/ci.yml), which
+# differ from compose service names in one place: `admin` and `db-migrate` both
+# use the `admin-api` image (same image, different command).
+#
+# Override the tag for a pinned deploy / rollback: `IMAGE_TAG=sha-<sha> docker compose ... pull`.
+
 services:
   caddy:
     image: caddy:2.8-alpine
@@ -16,3 +27,34 @@ services:
       admin:
         condition: service_started
     restart: unless-stopped
+
+  db-migrate:
+    image: ghcr.io/simcorp/ai-gw/admin-api:${IMAGE_TAG:-latest}
+  admin:
+    image: ghcr.io/simcorp/ai-gw/admin-api:${IMAGE_TAG:-latest}
+  litellm:
+    image: ghcr.io/simcorp/ai-gw/litellm:${IMAGE_TAG:-latest}
+  auth:
+    image: ghcr.io/simcorp/ai-gw/auth:${IMAGE_TAG:-latest}
+  cache:
+    image: ghcr.io/simcorp/ai-gw/cache:${IMAGE_TAG:-latest}
+  observability:
+    image: ghcr.io/simcorp/ai-gw/observability:${IMAGE_TAG:-latest}
+  identity:
+    image: ghcr.io/simcorp/ai-gw/identity:${IMAGE_TAG:-latest}
+  agent-relay:
+    image: ghcr.io/simcorp/ai-gw/agent-relay:${IMAGE_TAG:-latest}
+  librarian:
+    image: ghcr.io/simcorp/ai-gw/librarian:${IMAGE_TAG:-latest}
+  memory:
+    image: ghcr.io/simcorp/ai-gw/memory:${IMAGE_TAG:-latest}
+  league:
+    image: ghcr.io/simcorp/ai-gw/league:${IMAGE_TAG:-latest}
+  scanner:
+    image: ghcr.io/simcorp/ai-gw/scanner:${IMAGE_TAG:-latest}
+  workflow-worker:
+    image: ghcr.io/simcorp/ai-gw/workflow-worker:${IMAGE_TAG:-latest}
+  admin-portal:
+    image: ghcr.io/simcorp/ai-gw/admin-portal:${IMAGE_TAG:-latest}
+  portal:
+    image: ghcr.io/simcorp/ai-gw/portal:${IMAGE_TAG:-latest}

@@ -81,8 +81,42 @@ jobs:
       - name: Build
         run: pnpm build
         env:
-          NEXT_PUBLIC_ADMIN_API: https://aigw-dev.lab.cloud.scdom.net/admin
-          NEXT_PUBLIC_ADMIN_BASE_URL: https://aigw-dev.lab.cloud.scdom.net/admin
+          NEXT_PUBLIC_ADMIN_API: https://dev.aigw.scdom.net/admin
+          NEXT_PUBLIC_ADMIN_BASE_URL: https://dev.aigw.scdom.net/admin
+          NEXT_TELEMETRY_DISABLED: "1"
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Frontend unit tests (Vitest via turbo)
+  # ────────────────────────────────────────────────────────────────────────────
+  test-frontend:
+    name: Unit tests (frontend)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install pnpm
+        run: corepack enable && corepack prepare pnpm@9 --activate
+
+      - name: Get pnpm store path
+        id: pnpm-cache
+        run: echo "dir=$(pnpm store path)" >> $GITHUB_OUTPUT
+
+      - uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.dir }}
+          key: pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Test
+        run: pnpm test
+        env:
           NEXT_TELEMETRY_DISABLED: "1"
 
   # ────────────────────────────────────────────────────────────────────────────
@@ -94,7 +128,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [auth, cache, observability, admin, identity, agent-relay, league, librarian, memory, scanner]
+        service: [auth, cache, observability, admin, identity, agent-relay, league, librarian, memory, scanner, workflow-worker]
 
     steps:
       - uses: actions/checkout@v4
@@ -144,7 +178,7 @@ jobs:
             # e.g. --ignore-vuln GHSA-xxxx-xxxx-xxxx  # no fixed version yet (dep X)
           )
           fail=0
-          for svc in auth cache observability admin librarian memory scanner; do
+          for svc in auth cache observability admin librarian memory scanner identity agent-relay league workflow-worker; do
             echo "::group::pip-audit $svc"
             # Project mode: resolves and audits the service's DECLARED deps from
             # pyproject.toml — not the ambient env / pip-audit's own deps.
@@ -168,7 +202,7 @@ jobs:
   build-push:
     name: Build & push — ${{ matrix.component.name }}
     runs-on: ubuntu-latest
-    needs: [lint-python, lint-frontend, unit-tests]
+    needs: [lint-python, lint-frontend, test-frontend, unit-tests]
     if: github.event_name == 'push'
     permissions:
       contents: read
@@ -210,17 +244,17 @@ jobs:
             context: .
             dockerfile: Dockerfile.admin
             build_args: >-
-              --build-arg NEXT_PUBLIC_ADMIN_API=https://aigw-dev.lab.cloud.scdom.net/admin
+              --build-arg NEXT_PUBLIC_ADMIN_API=https://dev.aigw.scdom.net/admin
           - name: portal
             context: .
             dockerfile: Dockerfile.portal
             build_args: >-
-              --build-arg NEXT_PUBLIC_ADMIN_BASE_URL=https://aigw-dev.lab.cloud.scdom.net/admin
-              --build-arg NEXT_PUBLIC_CACHE_BASE_URL=https://aigw-dev.lab.cloud.scdom.net/cache
-              --build-arg NEXT_PUBLIC_IDENTITY_BASE_URL=https://aigw-dev.lab.cloud.scdom.net/identity
-              --build-arg NEXT_PUBLIC_LIBRARIAN_BASE_URL=https://aigw-dev.lab.cloud.scdom.net/librarian
-              --build-arg NEXT_PUBLIC_MEMORY_BASE_URL=https://aigw-dev.lab.cloud.scdom.net/memory
-              --build-arg NEXT_PUBLIC_LITELLM_BASE_URL=https://aigw-dev.lab.cloud.scdom.net/litellm
+              --build-arg NEXT_PUBLIC_ADMIN_BASE_URL=https://dev.aigw.scdom.net/admin
+              --build-arg NEXT_PUBLIC_CACHE_BASE_URL=https://dev.aigw.scdom.net/cache
+              --build-arg NEXT_PUBLIC_IDENTITY_BASE_URL=https://dev.aigw.scdom.net/identity
+              --build-arg NEXT_PUBLIC_LIBRARIAN_BASE_URL=https://dev.aigw.scdom.net/librarian
+              --build-arg NEXT_PUBLIC_MEMORY_BASE_URL=https://dev.aigw.scdom.net/memory
+              --build-arg NEXT_PUBLIC_LITELLM_BASE_URL=https://dev.aigw.scdom.net/litellm
 
     steps:
       - uses: actions/checkout@v4
@@ -282,7 +316,7 @@ jobs:
   build-portals-test:
     name: Build portal images (test)
     runs-on: ubuntu-latest
-    needs: [lint-python, lint-frontend, unit-tests]
+    needs: [lint-python, lint-frontend, test-frontend, unit-tests]
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: read

@@ -178,10 +178,13 @@ docker compose -f docker-compose.yml -f docker-compose.host.yml up -d --no-deps 
 # View logs
 docker logs ai-gateway-<service>-1 --tail 50 -f
 
-# Rebuild and restart portals (required after NEXT_PUBLIC_* URL changes)
-docker compose -f docker-compose.yml -f docker-compose.host.yml build portal admin-portal
-docker compose -f docker-compose.yml -f docker-compose.host.yml up -d --no-deps portal admin-portal
+# Deploy the latest CI-built images (pull-based; host.yml carries GHCR image: keys)
+docker compose -f docker-compose.yml -f docker-compose.host.yml pull
+docker compose -f docker-compose.yml -f docker-compose.host.yml up -d
 ```
+
+Prefer `scripts/deploy-vm.sh [IMAGE_TAG]` from an in-VNet host — it handles the GHCR
+login (token from `pass`), `git pull`, image pull, and rolling restart in one step.
 
 ---
 
