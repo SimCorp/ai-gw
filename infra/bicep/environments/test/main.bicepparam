@@ -9,7 +9,7 @@ param vnetName = 'vnet-spoke-platformaitooling-test-sdc-001'
 param acaInfraSubnetId = '/subscriptions/<TEST_SUBSCRIPTION_ID>/resourceGroups/rg-spoke-platformaitooling-test-sdc-001/providers/Microsoft.Network/virtualNetworks/vnet-spoke-platformaitooling-test-sdc-001/subnets/snet-aca-infra'
 param peSubnetPrefix = '<TEST_PE_SUBNET_CIDR>'
 param deployingPrincipalId = '<TEST_DEPLOYING_PRINCIPAL_ID>'
-param imageTag = 'latest'
+param imageTag = 'sha-<placeholder>'  // MUST override at deploy time: sha-XXXXXXX or v1.2.3
 
 // postgresAdminPassword, tlsCertBase64, tlsCertPassword are passed at deploy time
 // via --parameters on the az CLI command — never committed to this file.

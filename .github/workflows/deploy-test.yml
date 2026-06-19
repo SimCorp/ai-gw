@@ -9,6 +9,7 @@ on:
       image_tag:
         description: 'Image tag to deploy — must be a sha-XXXXXXX or v* tag (not latest)'
         required: true
+    branches: [master]
 
 # Prevent concurrent deploys to test
 concurrency:
@@ -25,7 +26,7 @@ jobs:
     if: >
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.conclusion == 'success' &&
-       startsWith(github.event.workflow_run.head_branch, 'v'))
+       (startsWith(github.event.workflow_run.head_branch, 'v') && contains(github.event.workflow_run.head_branch, '.')))
     permissions:
       id-token: write
       contents: read
