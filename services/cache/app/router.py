@@ -889,6 +889,67 @@ async def chat_completions_auto(request: Request):
     return await _handle_chat_completions(request, body)
 
 
+async def _enforce_anthropic_policy(redis, team_id, project_id, body: dict, is_stream: bool):
+    """Apply the team's allowed-models gate and guardrails to the Anthropic
+    passthrough — the same controls /v1/chat/completions enforces — so the proxy
+    cannot be used to reach forbidden models or evade block guardrails. Returns a
+    JSONResponse to reject, or None to proceed.
+    """
+    try:
+        policy = await get_policy(team_id, project_id, redis)
+    except Exception:
+        policy = None
+
+    requested_model = body.get("model", "")
+    if (
+        policy
+        and policy.allowed_models
+        and requested_model
+        and requested_model not in policy.allowed_models
+    ):
+        return JSONResponse(
+            {
+                "error": {
+                    "type": "permission_error",
+                    "message": f"Model '{requested_model}' is not in your team's allowed model list",
+                }
+            },
+            status_code=403,
+        )
+
+    guardrail_rules = await _load_guardrails(redis, team_id)
+    if guardrail_rules:
+        outcome = evaluate_guardrails(guardrail_rules, _prompt_text(body), "input")
+        if outcome.blocked_rule:
+            return JSONResponse(
+                {
+                    "error": {
+                        "type": "invalid_request_error",
+                        "message": f"Request blocked by guardrail: {outcome.blocked_rule}",
+                    }
+                },
+                status_code=400,
+            )
+        # Streaming cannot be scanned for output guardrails → fail closed.
+        has_output_enforcement = any(
+            r.get("enabled", True)
+            and r.get("action") in ("block", "redact")
+            and r.get("applies_to", "input") in ("output", "both")
+            for r in guardrail_rules
+        )
+        if has_output_enforcement and is_stream:
+            return JSONResponse(
+                {
+                    "error": {
+                        "type": "invalid_request_error",
+                        "message": "Streaming is disabled because output guardrails are active for this team.",
+                    }
+                },
+                status_code=400,
+            )
+    return None
+
+
 @router.post("/anthropic/{path:path}")
 async def anthropic_proxy(path: str, request: Request):
     """Anthropic-compatible passthrough — validates gateway key then forwards to LiteLLM."""
@@ -917,6 +978,16 @@ async def anthropic_proxy(path: str, request: Request):
         return result
     team_id, project_id, key_id, _scope = result
 
+    is_stream = body.get("stream", False)
+
+    # Enforce the same allowed-models + guardrail controls as /v1/chat/completions
+    # so this passthrough can't be used to bypass them.
+    reject = await _enforce_anthropic_policy(
+        request.app.state.redis, team_id, project_id, body, is_stream
+    )
+    if reject is not None:
+        return reject
+
     fwd_headers = {
         k: v
         for k, v in request.headers.items()
@@ -926,7 +997,6 @@ async def anthropic_proxy(path: str, request: Request):
     # Ensure Anthropic prefix caching is active for all forwarded Anthropic requests.
     fwd_headers.setdefault("anthropic-beta", "prompt-caching-2024-07-31")
 
-    is_stream = body.get("stream", False)
     target = f"{settings.litellm_url}/anthropic/{path}"
 
     start = time.monotonic()

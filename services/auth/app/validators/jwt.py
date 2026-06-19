@@ -44,6 +44,18 @@ _METADATA_HOSTNAMES = {
 }
 
 
+def _oidc_identity(payload: dict) -> str | None:
+    """Per-user identity for an Entra OIDC token used as the team/cache key.
+
+    Must be PER-USER, never the tenant-wide ``tid`` claim — ``tid`` is identical
+    for every user in the tenant, so using it collapses all SSO callers into one
+    cache / rate-limit namespace and leaks cached responses across teams. Prefer
+    the immutable per-user object id (``oid``), fall back to the subject
+    (``sub``); ``tid`` is intentionally never used.
+    """
+    return payload.get("oid") or payload.get("sub")
+
+
 def _validate_jwks_uri(uri: str) -> None:
     parsed = urlparse(uri)
     if parsed.scheme not in ("http", "https"):
@@ -262,7 +274,7 @@ async def validate_jwt(token: str, settings: Settings, redis=None) -> dict:
             options={"verify_at_hash": False},
         )
         return {
-            "team_id": payload.get("tid") or payload.get("sub"),
+            "team_id": _oidc_identity(payload),
             "project_id": payload.get("project_id"),
         }
     except jwt.PyJWTError:
