@@ -3,6 +3,7 @@
 param name string
 param location string
 param peSubnetId string
+param env string
 param encryptionIdentityId string
 param kvUri string
 param sbKeyName string
@@ -53,7 +54,7 @@ resource observabilityQueue 'Microsoft.ServiceBus/namespaces/queues@2022-10-01-p
 }
 
 resource privateEndpoint 'Microsoft.Network/privateEndpoints@2023-09-01' = {
-  name: 'pe-sb-aigw-dev-sdc'
+  name: 'pe-sb-aigw-${env}-sdc'
   location: location
   properties: {
     subnet: {

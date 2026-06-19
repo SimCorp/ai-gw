@@ -19,7 +19,7 @@ param imageTag string = 'latest'
 // The gateway uses internal ingress (external ingress is denied by the SCLZ
 // policy Deny-ContainerApps-Public-Network-Access); the custom-domain binding is
 // inactive until the domain is validated in public DNS, which is harmless.
-param gatewayHostname string = 'aigw-dev.lab.cloud.scdom.net'
+param gatewayHostname string
 param tlsCertName string = 'tls-wildcard-lab'
 param location string
 param tags object = {}
@@ -149,12 +149,17 @@ resource runsEnvStorage 'Microsoft.App/managedEnvironments/storages@2024-03-01' 
   }
 }
 
+// ── Portal image name suffix — dev uses no suffix; other envs use '-${env}'
+// admin-portal:sha-<sha> (dev) vs admin-portal-test:sha-<sha> (test)
+var portalSuffix = env == 'dev' ? '' : '-${env}'
+
 // ── GHCR registry pull credentials ───────────────────────────────────────────
 var ghcrBase = 'ghcr.io/simcorp/ai-gw'
 var ghcrSecret = [{ name: 'ghcr-pat', value: ghcrPat }]
 var ghcrRegistries = [{ server: 'ghcr.io', username: ghcrUsername, passwordSecretRef: 'ghcr-pat' }]
 
 // ── Inter-service base URLs (short ACA env DNS — works within same environment)
+var gatewayOrigin = 'https://${gatewayHostname}'
 var authUrl = 'http://ca-auth-${env}-sdc'
 var cacheUrl = 'http://ca-cache-${env}-sdc'
 var litellmUrl = 'http://ca-litellm-${env}-sdc'
@@ -563,7 +568,7 @@ resource caAdmin 'Microsoft.App/containerApps@2024-03-01' = {
             // Entra ID OIDC issuer for SimCorp tenant (admin-portal SSO login)
             #disable-next-line no-hardcoded-env-urls
             { name: 'OIDC_ISSUER', value: 'https://login.microsoftonline.com/aa81b43f-3969-4fd4-80c9-84c411508d82/v2.0' }
-            { name: 'CORS_ORIGINS', value: '["https://aigw-dev.lab.cloud.scdom.net"]' }
+            { name: 'CORS_ORIGINS', value: '["${gatewayOrigin}"]' }
             { name: 'AUTH_URL', value: authUrl }
             { name: 'CACHE_URL', value: cacheUrl }
             { name: 'LITELLM_URL', value: litellmUrl }
@@ -686,7 +691,7 @@ resource caLibrarian 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'REDIS_URL', secretRef: 'redis-url' }
             { name: 'EMBEDDING_API_KEY', secretRef: 'litellm-master-key' }
             { name: 'LIBRARIAN_SERVICE_TOKEN', secretRef: 'librarian-service-token' }
-            { name: 'CORS_ORIGINS', value: 'https://aigw-dev.lab.cloud.scdom.net' }
+            { name: 'CORS_ORIGINS', value: gatewayOrigin }
             { name: 'AUTH_URL', value: authUrl }
             { name: 'CACHE_URL', value: cacheUrl }
             { name: 'EMBEDDING_BASE_URL', value: '${litellmUrl}/v1' }
@@ -773,7 +778,7 @@ resource caLeague 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'LITELLM_MASTER_KEY', secretRef: 'litellm-master-key' }
             { name: 'ADMIN_TOKEN', secretRef: 'admin-internal-token' }
             { name: 'LITELLM_URL', value: litellmUrl }
-            { name: 'CORS_ORIGINS', value: '["https://aigw-dev.lab.cloud.scdom.net"]' }
+            { name: 'CORS_ORIGINS', value: '["${gatewayOrigin}"]' }
             { name: 'ENVIRONMENT', value: env }
           ]
           resources: stdResources
@@ -902,7 +907,7 @@ resource caAdminPortal 'Microsoft.App/containerApps@2024-03-01' = {
       containers: [
         {
           name: 'admin-portal'
-          image: '${ghcrBase}/admin-portal:${imageTag}'
+          image: '${ghcrBase}/admin-portal${portalSuffix}:${imageTag}'
           resources: stdResources
         }
       ]
@@ -930,7 +935,7 @@ resource caPortal 'Microsoft.App/containerApps@2024-03-01' = {
       containers: [
         {
           name: 'portal'
-          image: '${ghcrBase}/portal:${imageTag}'
+          image: '${ghcrBase}/portal${portalSuffix}:${imageTag}'
           resources: stdResources
         }
       ]

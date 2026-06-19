@@ -4,6 +4,7 @@
 param name string
 param location string
 param peSubnetId string
+param env string
 param tags object = {}
 
 resource acr 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
@@ -21,7 +22,7 @@ resource acr 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
 }
 
 resource acrPe 'Microsoft.Network/privateEndpoints@2023-09-01' = {
-  name: 'pe-acr-aigw-dev-sdc'
+  name: 'pe-acr-aigw-${env}-sdc'
   location: location
   properties: {
     subnet: {

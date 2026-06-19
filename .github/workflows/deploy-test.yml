@@ -1,29 +1,32 @@
-name: deploy
+name: deploy-test
 
 on:
   workflow_run:
-    workflows: ["ci"]
-    branches: [master, main]
+    workflows: ["CI"]
     types: [completed]
   workflow_dispatch:
     inputs:
       image_tag:
-        description: 'Image tag to deploy (e.g. sha-abc1234 or latest)'
-        required: false
-        default: 'latest'
+        description: 'Image tag to deploy — must be a sha-XXXXXXX or v* tag (not latest)'
+        required: true
+    branches: [master]
 
-# Prevent concurrent deploys to dev
+# Prevent concurrent deploys to test
 concurrency:
-  group: deploy-dev
+  group: deploy-test
   cancel-in-progress: false
 
 jobs:
-  deploy-dev:
-    name: Deploy to Dev
+  deploy-test:
+    name: Deploy to Test
     runs-on: ubuntu-latest
+    # Only deploy when:
+    # - CI succeeded AND the triggering ref was a version tag (head_branch starts with 'v')
+    # - OR manual workflow_dispatch
     if: >
       github.event_name == 'workflow_dispatch' ||
-      github.event.workflow_run.conclusion == 'success'
+      (github.event.workflow_run.conclusion == 'success' &&
+       (startsWith(github.event.workflow_run.head_branch, 'v') && contains(github.event.workflow_run.head_branch, '.')))
     permissions:
       id-token: write
       contents: read
@@ -42,10 +45,10 @@ jobs:
             "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=api://AzureADTokenExchange" \
             | python3 -c "import sys,json; print(json.load(sys.stdin)['value'])")
           az login --service-principal \
-            --username "${{ secrets.AZURE_CLIENT_ID }}" \
+            --username "${{ secrets.AZURE_CLIENT_ID_TEST }}" \
             --tenant "${{ secrets.AZURE_TENANT_ID }}" \
             --federated-token "${OIDC_TOKEN}"
-          az account set --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+          az account set --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID_TEST }}"
 
       - name: Resolve runtime values
         id: resolve
@@ -57,12 +60,12 @@ jobs:
             IMAGE_TAG="sha-${SHA}"
           fi
           ACA_ENV_ID=$(az containerapp env show \
-            --name cae-aigw-dev-sdc \
-            --resource-group rg-aigw-dev-sdc \
+            --name cae-aigw-test-sdc \
+            --resource-group rg-aigw-test-sdc \
             --query id -o tsv | tr -d '\r')
           KV_URI=$(az keyvault show \
-            --name kv-aigw-dev-sdc \
-            --resource-group rg-aigw-dev-sdc \
+            --name kv-aigw-test-sdc \
+            --resource-group rg-aigw-test-sdc \
             --query properties.vaultUri -o tsv | tr -d '\r')
           echo "imageTag=${IMAGE_TAG}" >> "${GITHUB_OUTPUT}"
           echo "acaEnvId=${ACA_ENV_ID}" >> "${GITHUB_OUTPUT}"
@@ -70,14 +73,13 @@ jobs:
 
       - name: Deploy foundation storage (ACA-Jobs runs share)
         # containerApps.bicep references staigwruns${env}sdc as `existing`;
-        # it is created by the environment main.bicep, which this workflow
-        # never runs. Deploy the storage module here (idempotent) so the
-        # container-apps deployment can resolve it.
+        # deploy the storage module here (idempotent) so container-apps deployment
+        # can resolve it.
         run: |
           az deployment group create \
-            --resource-group rg-aigw-dev-sdc \
+            --resource-group rg-aigw-test-sdc \
             --template-file infra/bicep/modules/storage.bicep \
-            --parameters env=dev location=swedencentral \
+            --parameters env=test location=swedencentral \
             --name "runs-storage-$(date +%Y%m%d%H%M)"
 
       - name: Deploy container apps
@@ -85,34 +87,34 @@ jobs:
           GHCR_PAT: ${{ secrets.GHCR_PAT }}
         run: |
           az deployment group create \
-            --resource-group rg-aigw-dev-sdc \
+            --resource-group rg-aigw-test-sdc \
             --template-file infra/bicep/modules/containerApps.bicep \
             --parameters \
-                env=dev \
+                env=test \
+                gatewayHostname=aigw-test.lab.cloud.scdom.net \
                 "acaEnvId=${{ steps.resolve.outputs.acaEnvId }}" \
                 "kvUri=${{ steps.resolve.outputs.kvUri }}" \
-                kvName=kv-aigw-dev-sdc \
-                acrName=acraigwdevsdc \
+                kvName=kv-aigw-test-sdc \
+                acrName=acraigwtestsdc \
                 "ghcrPat=${GHCR_PAT}" \
                 "ghcrUsername=${{ github.actor }}" \
                 "imageTag=${{ steps.resolve.outputs.imageTag }}" \
                 location=swedencentral \
-                gatewayHostname=aigw-dev.lab.cloud.scdom.net \
             --name "container-apps-$(date +%Y%m%d%H%M)"
 
       - name: Run DB migrations
         run: |
           EXEC_NAME=$(az containerapp job start \
-            --name job-db-migrate-dev-sdc \
-            --resource-group rg-aigw-dev-sdc \
+            --name job-db-migrate-test-sdc \
+            --resource-group rg-aigw-test-sdc \
             --query name -o tsv | tr -d '\r')
           echo "Started migration job execution: ${EXEC_NAME}"
 
           # Poll until Succeeded or Failed (max 5 min)
           for i in $(seq 1 30); do
             STATUS=$(az containerapp job execution show \
-              --name job-db-migrate-dev-sdc \
-              --resource-group rg-aigw-dev-sdc \
+              --name job-db-migrate-test-sdc \
+              --resource-group rg-aigw-test-sdc \
               --job-execution-name "${EXEC_NAME}" \
               --query properties.status -o tsv 2>/dev/null | tr -d '\r')
             echo "Migration status (${i}/30): ${STATUS}"
@@ -129,7 +131,7 @@ jobs:
   # ────────────────────────────────────────────────────────────────────────────
   smoke-test:
     name: Smoke test (control plane)
-    needs: deploy-dev
+    needs: deploy-test
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -142,21 +144,21 @@ jobs:
             "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=api://AzureADTokenExchange" \
             | python3 -c "import sys,json; print(json.load(sys.stdin)['value'])")
           az login --service-principal \
-            --username "${{ secrets.AZURE_CLIENT_ID }}" \
+            --username "${{ secrets.AZURE_CLIENT_ID_TEST }}" \
             --tenant "${{ secrets.AZURE_TENANT_ID }}" \
             --federated-token "${OIDC_TOKEN}"
-          az account set --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+          az account set --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID_TEST }}"
 
       - name: Verify all container apps are Running
         run: |
           set -euo pipefail
-          RG=rg-aigw-dev-sdc
+          RG=rg-aigw-test-sdc
           APPS=(ca-auth ca-cache ca-litellm ca-observability ca-admin ca-identity \
                 ca-agent-relay ca-librarian ca-memory ca-league ca-scanner \
                 ca-workflow-worker ca-admin-portal ca-portal)
           fail=0
           for app in "${APPS[@]}"; do
-            name="${app}-dev-sdc"
+            name="${app}-test-sdc"
             STATE=$(az containerapp show -n "$name" -g "$RG" \
               --query "properties.runningStatus" -o tsv 2>/dev/null | tr -d '\r' || echo "Missing")
             echo "${name}: ${STATE}"
@@ -168,27 +170,20 @@ jobs:
           exit $fail
 
   # ────────────────────────────────────────────────────────────────────────────
-  # E2E smoke (data plane). The ACA environment is internal:true, so this runs
-  # from a VNet-connected self-hosted runner in the Landing Zone (label
-  # vnet-aigw-dev) — e.g. the ca-toolbox jumpbox registered as a runner, which
-  # resolves the ACA internal app DNS (ca-admin-dev-sdc, ca-cache-dev-sdc, …).
-  #
-  # ACTIVATION (one ops step): register that runner, then change `if: false` to
-  # `github.event.workflow_run.conclusion == 'success'`. The seed step uses
-  # local accounts (unmanaged identity) so NO Entra app-registration is needed.
-  # Secrets: AIGW_E2E_ADMIN_PASSWORD (required), AIGW_TEST_API_KEY (optional, to
-  # exercise inference). See services/admin/scripts/e2e_smoke.py.
+  # E2E smoke (data plane) — disabled until a VNet self-hosted runner is
+  # registered in the test landing zone. Same activation pattern as dev.
+  # Runner label: vnet-aigw-test
   # ────────────────────────────────────────────────────────────────────────────
   e2e-test:
     name: E2E smoke (data plane)
     needs: smoke-test
     if: false  # TODO: enable once the VNet self-hosted runner (jumpbox) is registered
-    runs-on: [self-hosted, vnet-aigw-dev]
+    runs-on: [self-hosted, vnet-aigw-test]
     permissions:
       id-token: write
       contents: read
     env:
-      RG: rg-aigw-dev-sdc
+      RG: rg-aigw-test-sdc
       E2E_ADMIN_EMAIL: e2e-admin@simcorp.com
     steps:
       - uses: actions/checkout@v4
@@ -200,18 +195,15 @@ jobs:
             "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=api://AzureADTokenExchange" \
             | python3 -c "import sys,json; print(json.load(sys.stdin)['value'])")
           az login --service-principal \
-            --username "${{ secrets.AZURE_CLIENT_ID }}" \
+            --username "${{ secrets.AZURE_CLIENT_ID_TEST }}" \
             --tenant "${{ secrets.AZURE_TENANT_ID }}" \
             --federated-token "${OIDC_TOKEN}"
-          az account set --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+          az account set --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID_TEST }}"
 
       - name: Seed local platform_admin (unmanaged identity)
-        # Runs the bootstrap script inside the admin container (it has DB access +
-        # the script). The password is piped via stdin (--password-stdin) so it
-        # never appears in the command argv / exec logs. Idempotent.
         run: |
           printf '%s' "${{ secrets.AIGW_E2E_ADMIN_PASSWORD }}" | az containerapp exec \
-            -n ca-admin-dev-sdc -g "$RG" --command \
+            -n ca-admin-test-sdc -g "$RG" --command \
             "python scripts/create_local_account.py --email '${E2E_ADMIN_EMAIL}' --role platform_admin --password-stdin"
 
       - name: Run E2E smoke
@@ -219,6 +211,4 @@ jobs:
           AIGW_E2E_ADMIN_EMAIL: ${{ env.E2E_ADMIN_EMAIL }}
           AIGW_E2E_ADMIN_PASSWORD: ${{ secrets.AIGW_E2E_ADMIN_PASSWORD }}
           AIGW_TEST_API_KEY: ${{ secrets.AIGW_TEST_API_KEY }}
-        # Defaults target the ACA internal DNS (ca-admin-dev-sdc, ca-cache-dev-sdc,
-        # ca-auth-dev-sdc), which the VNet runner resolves.
         run: python3 services/admin/scripts/e2e_smoke.py

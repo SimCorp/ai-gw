@@ -1,7 +1,7 @@
 // infra/bicep/modules/gateway.bicep
 // Front-door reverse proxy for the AI Gateway.
 //
-// Owns the single public hostname aigw-dev.lab.cloud.scdom.net (the one entry
+// Owns the single public hostname (aigw-${env}.lab.cloud.scdom.net) (the one entry
 // point brokered to clients via Zscaler ZPA) and path-routes it to the internal
 // services over the ACA environment's DNS. This replaces the ad-hoc local-dev
 // nginx container that had leaked into Azure: it is version-controlled IaC built
@@ -25,7 +25,7 @@ param env string
 param location string
 param acaEnvId string
 param tags object = {}
-param customDomain string = 'aigw-dev.lab.cloud.scdom.net'
+param customDomain string  // required — passed from containerApps.bicep via gatewayHostname
 param certificateName string = 'tls-wildcard-lab'
 
 // NOTE: Bicep multi-line strings ('''...''') are RAW — they do NOT interpolate
@@ -42,7 +42,7 @@ var caddyfileTemplate = '''
 	encode gzip
 
 	# Agent inference (OpenAI-compatible). Agents set
-	# base_url = https://aigw-dev.lab.cloud.scdom.net/v1
+	# base_url = https://<gatewayHostname>/v1
 	# cache serves /v1/chat/completions (validates the sk-* key, then auth -> litellm).
 	handle /v1/* {
 		reverse_proxy http://ca-cache-__ENV__-sdc:80 {

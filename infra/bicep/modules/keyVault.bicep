@@ -3,6 +3,7 @@
 param name string
 param location string
 param peSubnetId string
+param env string
 param deployingPrincipalId string
 param sbEncryptionPrincipalId string
 @secure()
@@ -88,7 +89,7 @@ resource sbCryptoRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
 }
 
 resource privateEndpoint 'Microsoft.Network/privateEndpoints@2023-09-01' = {
-  name: 'pe-kv-aigw-dev-sdc'
+  name: 'pe-kv-aigw-${env}-sdc'
   location: location
   properties: {
     subnet: {
