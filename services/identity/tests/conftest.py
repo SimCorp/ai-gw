@@ -15,6 +15,18 @@ from httpx import ASGITransport, AsyncClient
 from testcontainers.postgres import PostgresContainer
 
 
+@pytest.fixture(autouse=True)
+def _configure_service_token(monkeypatch):
+    """Run identity in its normal (fail-closed) mode with a known service token.
+
+    Tests that exercise the misconfigured/unauthorized paths override
+    ``main.settings.identity_service_token`` themselves.
+    """
+    from app import main
+
+    monkeypatch.setattr(main.settings, "identity_service_token", "testtoken")
+
+
 @pytest.fixture(scope="session")
 def pg_url():
     """Start one Postgres for the whole test session; yield an asyncpg URL."""

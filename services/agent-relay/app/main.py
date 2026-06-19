@@ -27,6 +27,7 @@ Flow:
 from __future__ import annotations
 
 import asyncio
+import hmac
 import json
 import logging
 import uuid
@@ -86,17 +87,19 @@ app = FastAPI(title="AI Gateway Agent Relay", version="0.1.0", lifespan=lifespan
 
 
 def _check_relay_secret(request: Request) -> None:
-    """Verify X-Relay-Secret header if relay_secret is configured.
+    """Verify the X-Relay-Secret header against the configured relay secret.
 
-    Fails open (allows) when relay_secret is empty — dev mode.
-    Raises HTTP 401 when the secret is configured but the header is missing
-    or does not match.
+    Fails closed: when no secret is configured the protected endpoints are
+    unavailable (503) rather than open to anyone on the network. A configured
+    secret is compared in constant time; a missing or wrong header is 401.
+    Compose provides a non-empty dev default (see RELAY_SECRET); production
+    supplies the real value from Key Vault.
     """
     cfg = get_settings()
     if not cfg.relay_secret:
-        return  # dev mode — no auth required
+        raise HTTPException(status_code=503, detail="Relay secret not configured")
     provided = request.headers.get("X-Relay-Secret", "")
-    if provided != cfg.relay_secret:
+    if not hmac.compare_digest(provided, cfg.relay_secret):
         raise HTTPException(status_code=401, detail="Invalid or missing X-Relay-Secret")
 
 

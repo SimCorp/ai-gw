@@ -12,9 +12,17 @@ from httpx import ASGITransport, AsyncClient
 
 
 @pytest.fixture(autouse=True)
-def reset_state():
-    """Clear agent-relay's module globals and cached settings before each test."""
+def reset_state(monkeypatch):
+    """Clear agent-relay's module globals and cached settings before each test.
+
+    Also configures a non-empty relay secret so the service runs in its normal
+    (fail-closed) mode; tests that need the misconfigured/unauthorized paths
+    override ``config._settings`` themselves.
+    """
     from app import config, main
+
+    monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
+    monkeypatch.setenv("RELAY_SECRET", "testsecret")
 
     main._registered_agents.clear()
     main._connections.clear()

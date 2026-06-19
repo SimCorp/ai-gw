@@ -1,5 +1,8 @@
 """Behavioral tests for the identity service (real Postgres via testcontainers)."""
 
+# Matches the service token configured by the autouse _configure_service_token fixture.
+AUTH = {"X-Service-Token": "testtoken"}
+
 
 async def test_health(client):
     resp = await client.get("/health")
@@ -158,6 +161,7 @@ async def test_register_inserts_then_upserts(client):
     first = await client.post(
         "/agents/register",
         json={"slug": "reg", "name": "Reg One", "capabilities": ["a"]},
+        headers=AUTH,
     )
     assert first.status_code == 201
     assert first.json()["name"] == "Reg One"
@@ -167,6 +171,7 @@ async def test_register_inserts_then_upserts(client):
     second = await client.post(
         "/agents/register",
         json={"slug": "reg", "name": "Reg Two", "capabilities": ["a", "b"]},
+        headers=AUTH,
     )
     assert second.status_code == 201
     assert second.json()["name"] == "Reg Two"
@@ -187,12 +192,14 @@ async def test_register_verifies_identity_token(client, monkeypatch):
     verified = await client.post(
         "/agents/register",
         json={"slug": "v", "name": "V", "identity_token": "good-token"},
+        headers=AUTH,
     )
     assert verified.json()["token_verified"] is True
 
     unverified = await client.post(
         "/agents/register",
         json={"slug": "u", "name": "U", "identity_token": "bad-token"},
+        headers=AUTH,
     )
     assert unverified.json()["token_verified"] is False
 
@@ -215,13 +222,22 @@ async def test_register_enforces_service_token_when_configured(client, monkeypat
 
 async def test_deregister(client, insert_agent):
     await insert_agent("byebye")
-    resp = await client.delete("/agents/byebye")
+    resp = await client.delete("/agents/byebye", headers=AUTH)
     assert resp.status_code == 204
     client.redis.delete.assert_awaited_with("identity:online:byebye")
     assert (await client.get("/agents/byebye")).status_code == 404
 
     # 404 when already gone.
-    assert (await client.delete("/agents/byebye")).status_code == 404
+    assert (await client.delete("/agents/byebye", headers=AUTH)).status_code == 404
+
+
+async def test_register_fails_closed_when_token_unset(client, monkeypatch):
+    """With no service token configured, register is 503 (not open)."""
+    from app import main
+
+    monkeypatch.setattr(main.settings, "identity_service_token", "")
+    resp = await client.post("/agents/register", json={"slug": "x", "name": "X"})
+    assert resp.status_code == 503
 
 
 async def test_deregister_enforces_service_token_when_configured(client, insert_agent, monkeypatch):
