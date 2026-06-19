@@ -14,5 +14,11 @@
     "typescript": "^5.8.0",
     "prettier": "^3.5.0"
   },
+  "pnpm": {
+    "overrides": {
+      "ws": ">=8.21.0",
+      "vite": ">=6.4.3"
+    }
+  },
   "engines": { "node": ">=20" }
 }
