@@ -49,16 +49,34 @@ docker logs ai-gateway-<service>-1 --tail 100 -f
 
 ### Deploy a code change
 
-CI builds and pushes images on every `master` push. To apply on the VM:
+CI builds and pushes all images (incl. the portals, baked with the `dev.aigw.scdom.net`
+URL) to GHCR on every `master` push. The VM overlay (`docker-compose.host.yml`) carries
+`image:` keys pointing at those GHCR images, so deploying is a pull + restart.
+
+**Preferred — from an in-VNet host (e.g. AZWESU0005):**
+
+```bash
+scripts/deploy-vm.sh            # deploy :latest
+scripts/deploy-vm.sh sha-abc123 # pin a specific build (rollback / controlled deploy)
+```
+
+The script pulls the SSH key and a GHCR read token from `pass`, logs the VM into GHCR,
+then runs the pull + restart below. See the script header for env overrides.
+
+**Manual equivalent — on the VM:**
 
 ```bash
 cd ~/ai-gw/infra
-git pull origin master   # pull source (for config files)
-docker compose -f docker-compose.yml -f docker-compose.host.yml pull  # pull new images
-docker compose -f docker-compose.yml -f docker-compose.host.yml up -d  # rolling restart
+docker login ghcr.io                 # one-time; GHCR images are private
+git pull origin master               # pull source (config files, compose)
+docker compose -f docker-compose.yml -f docker-compose.host.yml pull   # pull new images
+docker compose -f docker-compose.yml -f docker-compose.host.yml up -d   # rolling restart
+# Pin a tag for rollback: prefix both commands with IMAGE_TAG=sha-<sha>
 ```
 
-> **Portal rebuilds:** If `Dockerfile.portal` or `Dockerfile.admin` changed, or if `NEXT_PUBLIC_*` URLs need updating, rebuild locally — CI does not rebuild portal images automatically:
+> **Portal rebuilds:** Portal `NEXT_PUBLIC_*` URLs are baked correctly by CI, so a URL
+> change no longer needs a local rebuild — just redeploy. Only rebuild locally if you are
+> testing an uncommitted `Dockerfile.portal` / `Dockerfile.admin` change before it lands:
 > ```bash
 > docker compose -f docker-compose.yml -f docker-compose.host.yml build portal admin-portal
 > docker compose -f docker-compose.yml -f docker-compose.host.yml up -d --no-deps portal admin-portal

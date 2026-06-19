@@ -3,6 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "exports": { ".": "./src/index.ts" },
+  "scripts": { "test": "vitest run" },
   "dependencies": { "zod": "^3.24.0" },
-  "devDependencies": { "typescript": "^5.8.0" }
+  "devDependencies": { "typescript": "^5.8.0", "vitest": "^2.1.8" }
 }
