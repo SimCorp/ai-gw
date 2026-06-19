@@ -21,12 +21,12 @@ COPY --from=deps /app ./
 COPY . .
 
 # NEXT_PUBLIC_* are baked at build time and must be set before `pnpm build`.
-ARG NEXT_PUBLIC_ADMIN_BASE_URL=https://aigw-dev.lab.cloud.scdom.net/admin
-ARG NEXT_PUBLIC_CACHE_BASE_URL=https://aigw-dev.lab.cloud.scdom.net/cache
-ARG NEXT_PUBLIC_IDENTITY_BASE_URL=https://aigw-dev.lab.cloud.scdom.net/identity
-ARG NEXT_PUBLIC_LIBRARIAN_BASE_URL=https://aigw-dev.lab.cloud.scdom.net/librarian
-ARG NEXT_PUBLIC_MEMORY_BASE_URL=https://aigw-dev.lab.cloud.scdom.net/memory
-ARG NEXT_PUBLIC_LITELLM_BASE_URL=https://aigw-dev.lab.cloud.scdom.net/litellm
+ARG NEXT_PUBLIC_ADMIN_BASE_URL=https://dev.aigw.scdom.net/admin
+ARG NEXT_PUBLIC_CACHE_BASE_URL=https://dev.aigw.scdom.net/cache
+ARG NEXT_PUBLIC_IDENTITY_BASE_URL=https://dev.aigw.scdom.net/identity
+ARG NEXT_PUBLIC_LIBRARIAN_BASE_URL=https://dev.aigw.scdom.net/librarian
+ARG NEXT_PUBLIC_MEMORY_BASE_URL=https://dev.aigw.scdom.net/memory
+ARG NEXT_PUBLIC_LITELLM_BASE_URL=https://dev.aigw.scdom.net/litellm
 ARG NEXT_PUBLIC_LITELLM_KEY=
 ENV NEXT_PUBLIC_ADMIN_BASE_URL=$NEXT_PUBLIC_ADMIN_BASE_URL
 ENV NEXT_PUBLIC_CACHE_BASE_URL=$NEXT_PUBLIC_CACHE_BASE_URL
