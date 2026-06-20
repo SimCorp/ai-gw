@@ -49,11 +49,29 @@ echo "==> Logging the VM into GHCR as $GHCR_USER"
 pass show "$GHCR_PASS_ENTRY" | head -1 \
   | $SSH "docker login ghcr.io -u '$GHCR_USER' --password-stdin"
 
-echo "==> Pulling source + images (IMAGE_TAG=$IMAGE_TAG) and restarting on $VM_HOST"
-$SSH "cd ~/ai-gw/infra \
-  && git pull origin master \
-  && IMAGE_TAG='$IMAGE_TAG' $COMPOSE pull \
-  && IMAGE_TAG='$IMAGE_TAG' $COMPOSE up -d"
+echo "==> Pulling source + images (IMAGE_TAG=$IMAGE_TAG) and updating on $VM_HOST"
+$SSH "set -e; cd ~/ai-gw/infra
+  before=\$(md5sum Caddyfile 2>/dev/null | awk '{print \$1}')
+  git pull origin master
+  after=\$(md5sum Caddyfile 2>/dev/null | awk '{print \$1}')
+  IMAGE_TAG='$IMAGE_TAG' $COMPOSE pull
+  IMAGE_TAG='$IMAGE_TAG' $COMPOSE up -d
+  # Caddy's Caddyfile is a read-only bind-mount, and 'compose up -d' only recreates
+  # changed *images* — so a Caddyfile-only change needs an explicit reload (and the
+  # Caddyfile sets 'admin off', so 'caddy reload' via the admin API is unavailable).
+  # Validate the new config against the running container's mounted certs, then restart.
+  if [ \"\$before\" != \"\$after\" ]; then
+    echo '==> Caddyfile changed — validating new config'
+    if $COMPOSE exec -T caddy caddy validate --config /etc/caddy/Caddyfile; then
+      echo '==> Valid — restarting caddy to load new routes'
+      $COMPOSE restart caddy
+    else
+      echo 'ERROR: new Caddyfile failed validation — caddy NOT restarted (still serving previous config)' >&2
+      exit 1
+    fi
+  else
+    echo '==> Caddyfile unchanged — caddy left running'
+  fi"
 
 echo "==> Done. Current status:"
 $SSH "cd ~/ai-gw/infra && $COMPOSE ps"
