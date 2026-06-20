@@ -20,17 +20,17 @@
 #               it does. A post-deploy smoke gate — does NOT gate PR merges.
 #   VM_HOST     SSH target (default: azureuser@10.179.231.68)
 #   GHCR_USER   GitHub username that owns the GHCR read token (default: the
-#               `login` field of the `github/ghcr-pat-aigw` pass entry)
+#               `login` field of the `api/GHCR PAT aigw` pass entry)
 #   SSH_PASS_ENTRY   pass entry holding the VM SSH key (default: ssh/dev.aigw.scdom.net)
 #   GHCR_PASS_ENTRY  pass entry holding the GHCR read:packages PAT
-#                    (default: github/ghcr-pat-aigw; first line = token)
+#                    (default: api/GHCR PAT aigw; first line = token)
 #
 set -euo pipefail
 
 IMAGE_TAG="${1:-latest}"
 VM_HOST="${VM_HOST:-azureuser@10.179.231.68}"
 SSH_PASS_ENTRY="${SSH_PASS_ENTRY:-ssh/dev.aigw.scdom.net}"
-GHCR_PASS_ENTRY="${GHCR_PASS_ENTRY:-github/ghcr-pat-aigw}"
+GHCR_PASS_ENTRY="${GHCR_PASS_ENTRY:-api/GHCR PAT aigw}"
 COMPOSE="docker compose -f docker-compose.yml -f docker-compose.host.yml"
 
 command -v pass >/dev/null || { echo "error: 'pass' not found on this host" >&2; exit 1; }

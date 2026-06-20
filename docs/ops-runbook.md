@@ -132,7 +132,7 @@ Terraform/Bicep-VM would be over-engineering. Provisioning is a manual, reproduc
 5. **Cert:** install `infra/certs/cert.pem` + `key.pem` from the `pass` PFX entry (see
    `docs/architecture/dev-environment.md` for the exact pipe-from-pass commands).
 6. **`.env`:** seed `~/ai-gw/.env` (mode 0600) from `pass` — the keys in the table above.
-7. **GHCR + bring up:** `docker login ghcr.io` (read-only PAT from `pass github/ghcr-pat-aigw`),
+7. **GHCR + bring up:** `docker login ghcr.io` (read-only PAT from `pass api/GHCR PAT aigw`),
    then `scripts/deploy-vm.sh` from an in-VNet host (or `docker compose … pull && up -d` on the VM).
 
 The repo is the source of truth for the compose stack, Caddyfile, dex config, and the deploy model;
