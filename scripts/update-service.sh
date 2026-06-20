@@ -40,7 +40,7 @@ done
 
 VM_HOST="${VM_HOST:-azureuser@10.179.231.68}"
 SSH_PASS_ENTRY="${SSH_PASS_ENTRY:-ssh/dev.aigw.scdom.net}"
-GHCR_PASS_ENTRY="${GHCR_PASS_ENTRY:-github/ghcr-pat-aigw}"
+GHCR_PASS_ENTRY="${GHCR_PASS_ENTRY:-api/GHCR PAT aigw}"
 COMPOSE="docker compose -f docker-compose.yml -f docker-compose.host.yml"
 
 command -v pass >/dev/null || { echo "error: 'pass' not found on this host" >&2; exit 1; }
