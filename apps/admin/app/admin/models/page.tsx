@@ -3,8 +3,7 @@
 import React, { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { LoadingState, ErrorState, EmptyState } from '../_components/PageStates';
-
-const BASE = process.env.NEXT_PUBLIC_ADMIN_API ?? 'http://localhost:8005';
+import { apiFetch } from '../../../lib/apiClient';
 
 interface Model {
   id: string;
@@ -85,20 +84,15 @@ function RegisterModelModal({ onClose, onSaved }: RegisterModalProps) {
     setSaving(true);
     setError('');
     try {
-      const res = await fetch(BASE + '/models', {
+      await apiFetch('/models', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       });
-      if (res.ok) {
-        onSaved();
-        onClose();
-      } else {
-        const body = await res.json().catch(() => ({}));
-        setError(body?.detail ?? 'Error saving model.');
-      }
-    } catch {
-      setError('Request failed.');
+      onSaved();
+      onClose();
+    } catch (err) {
+      setError((err as Error)?.message ?? 'Error saving model.');
     } finally {
       setSaving(false);
     }
@@ -204,12 +198,12 @@ export default function ModelsPage() {
 
   const { data, isLoading, isError, error, refetch } = useQuery<Model[]>({
     queryKey: ['models'],
-    queryFn: () => fetch(BASE + '/models').then(r => r.json()),
+    queryFn: () => apiFetch<Model[]>('/models'),
   });
 
   async function toggleEnabled(m: Model) {
     try {
-      await fetch(`${BASE}/models/${m.id}`, {
+      await apiFetch(`/models/${m.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled: !m.enabled }),

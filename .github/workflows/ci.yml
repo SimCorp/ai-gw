@@ -245,6 +245,7 @@ jobs:
             dockerfile: Dockerfile.admin
             build_args: >-
               --build-arg NEXT_PUBLIC_ADMIN_API=https://dev.aigw.scdom.net/admin
+              --build-arg NEXT_PUBLIC_LEAGUE_API=https://dev.aigw.scdom.net/league
           - name: portal
             context: .
             dockerfile: Dockerfile.portal
@@ -255,6 +256,7 @@ jobs:
               --build-arg NEXT_PUBLIC_LIBRARIAN_BASE_URL=https://dev.aigw.scdom.net/librarian
               --build-arg NEXT_PUBLIC_MEMORY_BASE_URL=https://dev.aigw.scdom.net/memory
               --build-arg NEXT_PUBLIC_LITELLM_BASE_URL=https://dev.aigw.scdom.net/litellm
+              --build-arg NEXT_PUBLIC_LEAGUE_API=https://dev.aigw.scdom.net/league
 
     steps:
       - uses: actions/checkout@v4
