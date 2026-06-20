@@ -389,7 +389,7 @@ export default function PoliciesPage() {
         Policies control per-team cache behaviour, rate limits, and model allowlists.
         {' '}Empty <em>allowed models</em> means all configured models are permitted.
         {' '}Changes are applied immediately via Redis and recorded in the{' '}
-        <a href="/admin/audit" style={{ color: 'var(--accent-text)' }}>audit log</a>.
+        <a href="/audit" style={{ color: 'var(--accent-text)' }}>audit log</a>.
       </p>
     </section>
   );

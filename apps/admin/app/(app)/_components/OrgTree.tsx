@@ -185,7 +185,7 @@ export function OrgTree({ onSelect, expandedIds: extExpandedIds, onToggle: extOn
     if (onSelect) {
       onSelect(node);
     } else {
-      router.push(`/admin/nodes/${node.id}`);
+      router.push(`/nodes/${node.id}`);
     }
   }, [onSelect, router]);
 

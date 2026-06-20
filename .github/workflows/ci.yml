@@ -81,8 +81,8 @@ jobs:
       - name: Build
         run: pnpm build
         env:
-          NEXT_PUBLIC_ADMIN_API: https://dev.aigw.scdom.net/admin
-          NEXT_PUBLIC_ADMIN_BASE_URL: https://dev.aigw.scdom.net/admin
+          NEXT_PUBLIC_ADMIN_API: https://dev.aigw.scdom.net/api/admin
+          NEXT_PUBLIC_ADMIN_BASE_URL: https://dev.aigw.scdom.net/api/admin
           NEXT_TELEMETRY_DISABLED: "1"
 
   # ────────────────────────────────────────────────────────────────────────────
@@ -244,19 +244,19 @@ jobs:
             context: .
             dockerfile: Dockerfile.admin
             build_args: >-
-              --build-arg NEXT_PUBLIC_ADMIN_API=https://dev.aigw.scdom.net/admin
-              --build-arg NEXT_PUBLIC_LEAGUE_API=https://dev.aigw.scdom.net/league
+              --build-arg NEXT_PUBLIC_ADMIN_API=https://dev.aigw.scdom.net/api/admin
+              --build-arg NEXT_PUBLIC_LEAGUE_API=https://dev.aigw.scdom.net/api/league
           - name: portal
             context: .
             dockerfile: Dockerfile.portal
             build_args: >-
-              --build-arg NEXT_PUBLIC_ADMIN_BASE_URL=https://dev.aigw.scdom.net/admin
-              --build-arg NEXT_PUBLIC_CACHE_BASE_URL=https://dev.aigw.scdom.net/cache
-              --build-arg NEXT_PUBLIC_IDENTITY_BASE_URL=https://dev.aigw.scdom.net/identity
-              --build-arg NEXT_PUBLIC_LIBRARIAN_BASE_URL=https://dev.aigw.scdom.net/librarian
-              --build-arg NEXT_PUBLIC_MEMORY_BASE_URL=https://dev.aigw.scdom.net/memory
-              --build-arg NEXT_PUBLIC_LITELLM_BASE_URL=https://dev.aigw.scdom.net/litellm
-              --build-arg NEXT_PUBLIC_LEAGUE_API=https://dev.aigw.scdom.net/league
+              --build-arg NEXT_PUBLIC_ADMIN_BASE_URL=https://dev.aigw.scdom.net/api/admin
+              --build-arg NEXT_PUBLIC_CACHE_BASE_URL=https://dev.aigw.scdom.net/api/cache
+              --build-arg NEXT_PUBLIC_IDENTITY_BASE_URL=https://dev.aigw.scdom.net/api/identity
+              --build-arg NEXT_PUBLIC_LIBRARIAN_BASE_URL=https://dev.aigw.scdom.net/api/librarian
+              --build-arg NEXT_PUBLIC_MEMORY_BASE_URL=https://dev.aigw.scdom.net/api/memory
+              --build-arg NEXT_PUBLIC_LITELLM_BASE_URL=https://dev.aigw.scdom.net/api/litellm
+              --build-arg NEXT_PUBLIC_LEAGUE_API=https://dev.aigw.scdom.net/api/league
 
     steps:
       - uses: actions/checkout@v4
@@ -355,7 +355,7 @@ jobs:
               --push \
               $DOCKER_TAGS \
               -f Dockerfile.admin \
-              --build-arg NEXT_PUBLIC_ADMIN_API=https://aigw-test.lab.cloud.scdom.net/admin \
+              --build-arg NEXT_PUBLIC_ADMIN_API=https://aigw-test.lab.cloud.scdom.net/api/admin \
               --cache-from type=gha,scope=admin-portal-test \
               --cache-to type=gha,mode=max,scope=admin-portal-test \
               .; then
@@ -378,12 +378,12 @@ jobs:
               --push \
               $DOCKER_TAGS \
               -f Dockerfile.portal \
-              --build-arg NEXT_PUBLIC_ADMIN_BASE_URL=https://aigw-test.lab.cloud.scdom.net/admin \
-              --build-arg NEXT_PUBLIC_CACHE_BASE_URL=https://aigw-test.lab.cloud.scdom.net/cache \
-              --build-arg NEXT_PUBLIC_IDENTITY_BASE_URL=https://aigw-test.lab.cloud.scdom.net/identity \
-              --build-arg NEXT_PUBLIC_LIBRARIAN_BASE_URL=https://aigw-test.lab.cloud.scdom.net/librarian \
-              --build-arg NEXT_PUBLIC_MEMORY_BASE_URL=https://aigw-test.lab.cloud.scdom.net/memory \
-              --build-arg NEXT_PUBLIC_LITELLM_BASE_URL=https://aigw-test.lab.cloud.scdom.net/litellm \
+              --build-arg NEXT_PUBLIC_ADMIN_BASE_URL=https://aigw-test.lab.cloud.scdom.net/api/admin \
+              --build-arg NEXT_PUBLIC_CACHE_BASE_URL=https://aigw-test.lab.cloud.scdom.net/api/cache \
+              --build-arg NEXT_PUBLIC_IDENTITY_BASE_URL=https://aigw-test.lab.cloud.scdom.net/api/identity \
+              --build-arg NEXT_PUBLIC_LIBRARIAN_BASE_URL=https://aigw-test.lab.cloud.scdom.net/api/librarian \
+              --build-arg NEXT_PUBLIC_MEMORY_BASE_URL=https://aigw-test.lab.cloud.scdom.net/api/memory \
+              --build-arg NEXT_PUBLIC_LITELLM_BASE_URL=https://aigw-test.lab.cloud.scdom.net/api/litellm \
               --cache-from type=gha,scope=portal-test \
               --cache-to type=gha,mode=max,scope=portal-test \
               .; then

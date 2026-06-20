@@ -2,12 +2,11 @@ import { makeAuthedTest } from '../fixtures/auth';
 import { defineRouteSuite } from '../lib/routeSuite';
 
 /**
- * Admin portal walkthrough. Explicit route list (nav surface + the build-route
- * set confirmed by the exploratory crawl). basePath is `/admin-portal`, routes
- * live under `/admin-portal/admin`.
+ * Admin portal walkthrough. Explicit route list. basePath is `/admin`, so routes
+ * live under `/admin/<page>`.
  */
 const test = makeAuthedTest('admin');
-const B = '/admin-portal/admin';
+const B = '/admin';
 
 test.describe('admin portal', () => {
   defineRouteSuite(test, [

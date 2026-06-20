@@ -60,7 +60,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <RailShell
       domains={ADMIN_NAV}
       activePath={path}
-      brandSuffix="/admin"
+      brandSuffix="/"
       LinkComponent={Link}
       footer={
         <>

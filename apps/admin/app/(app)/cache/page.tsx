@@ -230,7 +230,7 @@ export default function CachePage() {
                   const v = noteVariant(o.note);
                   return (
                     <tr key={o.team}>
-                      <td><a href={`/admin/org`}>{o.team}</a></td>
+                      <td><a href={`/org`}>{o.team}</a></td>
                       <td className="mono">{o.threshold}</td>
                       <td className="mono">{o.ttl}</td>
                       <td className="num mono">{o.hit}</td>

@@ -20,7 +20,7 @@ export function MockBoot({ children }: { children: React.ReactNode }) {
       .then(({ worker }) =>
         worker.start({
           onUnhandledRequest: 'bypass',
-          serviceWorker: { url: '/admin-portal/mockServiceWorker.js' },
+          serviceWorker: { url: '/mockServiceWorker.js' },
         }),
       )
       .then(() => setReady(true));

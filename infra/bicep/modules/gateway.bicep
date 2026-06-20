@@ -56,49 +56,49 @@ var caddyfileTemplate = '''
 			header_up Host ca-portal-__ENV__-sdc
 		}
 	}
-	handle /admin-portal* {
+	handle /admin* {
 		reverse_proxy http://ca-admin-portal-__ENV__-sdc:80 {
 			header_up Host ca-admin-portal-__ENV__-sdc
 		}
 	}
 
 	# API services (strip the /prefix/ -> service root).
-	handle_path /admin/* {
+	handle_path /api/admin/* {
 		reverse_proxy http://ca-admin-__ENV__-sdc:80 {
 			header_up Host ca-admin-__ENV__-sdc
 		}
 	}
-	handle_path /cache/* {
+	handle_path /api/cache/* {
 		reverse_proxy http://ca-cache-__ENV__-sdc:80 {
 			header_up Host ca-cache-__ENV__-sdc
 		}
 	}
-	handle_path /litellm/* {
+	handle_path /api/litellm/* {
 		reverse_proxy http://ca-litellm-__ENV__-sdc:80 {
 			header_up Host ca-litellm-__ENV__-sdc
 		}
 	}
-	handle_path /identity/* {
+	handle_path /api/identity/* {
 		reverse_proxy http://ca-identity-__ENV__-sdc:80 {
 			header_up Host ca-identity-__ENV__-sdc
 		}
 	}
-	handle_path /librarian/* {
+	handle_path /api/librarian/* {
 		reverse_proxy http://ca-librarian-__ENV__-sdc:80 {
 			header_up Host ca-librarian-__ENV__-sdc
 		}
 	}
-	handle_path /memory/* {
+	handle_path /api/memory/* {
 		reverse_proxy http://ca-memory-__ENV__-sdc:80 {
 			header_up Host ca-memory-__ENV__-sdc
 		}
 	}
-	handle_path /league/* {
+	handle_path /api/league/* {
 		reverse_proxy http://ca-league-__ENV__-sdc:80 {
 			header_up Host ca-league-__ENV__-sdc
 		}
 	}
-	handle_path /observability/* {
+	handle_path /api/observability/* {
 		reverse_proxy http://ca-observability-__ENV__-sdc:80 {
 			header_up Host ca-observability-__ENV__-sdc
 		}
@@ -124,7 +124,7 @@ var caddyfileTemplate = '''
 	}
 
 	# Front-door liveness (also the ACA ingress probe target).
-	handle /healthz {
+	handle /health {
 		respond "ok" 200
 	}
 }

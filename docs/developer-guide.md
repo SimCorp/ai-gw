@@ -493,7 +493,7 @@ curl https://aigw-dev.lab.cloud.scdom.net/v1/chat/completions \
 Developers can query their own usage and cost metrics without admin access:
 
 ```
-GET https://aigw-dev.lab.cloud.scdom.net/admin/dev-auth/me/stats
+GET https://aigw-dev.lab.cloud.scdom.net/api/admin/dev-auth/me/stats
 Authorization: Bearer <portal-session-token>
 ```
 
@@ -734,7 +734,7 @@ If your prompt text stays the same but the underlying data changes (e.g. you upd
 | Developer portal (keys, usage, docs) | Over the corporate VPN (Entra ID SSO) |
 | Admin portal (teams, guardrails, audit) | Over the corporate VPN (Entra ID SSO) |
 | Gateway health status | https://aigw-dev.lab.cloud.scdom.net/health |
-| Admin API health | https://aigw-dev.lab.cloud.scdom.net/admin/health |
+| Admin API health | https://aigw-dev.lab.cloud.scdom.net/api/admin/health |
 
 ### Quick health check
 

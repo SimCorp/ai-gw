@@ -145,7 +145,7 @@ function OverviewTab({ node }: { node: OrgNode }) {
           <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg-1)', marginBottom: 10 }}>Child nodes</div>
           <ResourceTable
             nodes={children}
-            onNavigate={n => router.push(`/admin/nodes/${n.id}`)}
+            onNavigate={n => router.push(`/nodes/${n.id}`)}
           />
         </section>
       )}
@@ -254,9 +254,9 @@ export default function NodeDetailPage({ params }: { params: Promise<{ id: strin
       queryClient.invalidateQueries({ queryKey: ['node-tree'] });
       const parentId = node?.parent_id;
       if (parentId) {
-        router.push(`/admin/nodes/${parentId}`);
+        router.push(`/nodes/${parentId}`);
       } else {
-        router.push('/admin/org');
+        router.push('/org');
       }
     },
   });
@@ -291,7 +291,7 @@ export default function NodeDetailPage({ params }: { params: Promise<{ id: strin
   const color = node.color ?? typeBadgeColor(node.type);
 
   function setTab(tab: Tab) {
-    router.push(`/admin/nodes/${id}?tab=${tab}`);
+    router.push(`/nodes/${id}?tab=${tab}`);
   }
 
   function handleDelete() {

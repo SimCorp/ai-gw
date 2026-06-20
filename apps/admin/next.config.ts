@@ -22,7 +22,7 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  basePath: "/admin-portal",
+  basePath: "/admin",
   output: "standalone",
   transpilePackages: ["@aigw/ui", "@aigw/charts", "@aigw/hooks", "@aigw/contracts"],
   async headers() {

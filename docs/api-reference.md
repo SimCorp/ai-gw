@@ -892,7 +892,7 @@ Budget alert webhooks send an HTTP POST to the configured URL when a team approa
 POST /webhooks/github
 ```
 
-Receives GitHub push and pull-request events and attributes commits to developer sessions. The request must include a valid `X-Hub-Signature-256` HMAC header (computed with the `GITHUB_WEBHOOK_SECRET` env var). Configure the webhook in your GitHub repository or organisation settings to point at `https://aigw-dev.lab.cloud.scdom.net/admin/webhooks/github`.
+Receives GitHub push and pull-request events and attributes commits to developer sessions. The request must include a valid `X-Hub-Signature-256` HMAC header (computed with the `GITHUB_WEBHOOK_SECRET` env var). Configure the webhook in your GitHub repository or organisation settings to point at `https://aigw-dev.lab.cloud.scdom.net/api/admin/webhooks/github`.
 
 ### Budget Forecast
 
@@ -1066,7 +1066,7 @@ Authorization: Bearer <token>    (platform_admin or team_admin)
   "email": "newdev@simcorp.com",
   "role": "developer",
   "expires_at": "2026-05-15T10:00:00+00:00",
-  "accept_url": "https://aigw-dev.lab.cloud.scdom.net/admin/auth/invitations/accept?token=...",
+  "accept_url": "https://aigw-dev.lab.cloud.scdom.net/api/admin/auth/invitations/accept?token=...",
   "token": "<raw-token>"
 }
 ```
