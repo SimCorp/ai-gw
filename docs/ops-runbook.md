@@ -457,6 +457,45 @@ on the developer's machine; the rest run without it.
 as part of `deploy.yml` after a successful deploy. They exercise the gateway FQDN and confirm each
 service responds on `/health` and that the auth → cache → litellm path works end-to-end.
 
+### Quality tests (browser E2E walkthrough)
+
+`e2e/` is a standalone Playwright (`@playwright/test`) project that logs into the **dev + admin
+portals** and walks every route, asserting **no client-side crashes** (uncaught page errors) and
+**no failed backend calls** (HTTP ≥ 400, benign noise filtered), then clicks every
+**non-destructive** button (a deny-list skips delete/revoke/rotate/etc.; native confirms
+auto-cancel). It catches exactly the class of breakage that unit tests miss — e.g. a page that
+renders but whose data fetch 401s/CSP-blocks, or an `x.map is not a function` crash.
+
+It targets a **deployed** environment (reachable only in-VNet / over ZPA) and is **NOT a CI merge
+gate** — gating PR merges on a live-env test would validate the *old* deployment, not the PR, and
+add flake. Run it on demand or as a post-deploy smoke.
+
+```bash
+# On-demand, from an in-VNet host (creds pulled from pass; never written to disk):
+scripts/e2e-quality.sh                       # walk both portals on dev.aigw.scdom.net
+scripts/e2e-quality.sh --project dev-portal  # one portal
+E2E_BASE_URL=https://aigw-test.lab.cloud.scdom.net scripts/e2e-quality.sh
+
+# Post-deploy smoke (deploy, then fail if the walkthrough fails):
+SMOKE=1 scripts/deploy-vm.sh
+
+# View the HTML report / traces afterwards:
+pnpm --prefix e2e exec playwright show-report
+```
+
+**Where results land:** the terminal `list` reporter prints each route live; a rich **HTML
+report** (with a screenshot + trace for any failure) is written to `e2e/playwright-report/`; and a
+**machine-readable `e2e/results.json`** (for dashboards/alerts) is emitted. In CI both are uploaded
+as the `playwright-report` artifact.
+
+**Known-benign signals** (allow-listed in `e2e/lib/walk.ts`, not failures): the Radix
+`DialogContent requires a DialogTitle` a11y advisory; the `403 …/developers/{id}/teams` for a test
+account with no team. **Automation:** `.github/workflows/e2e-quality.yml` runs it on
+`workflow_dispatch` + nightly schedule, **non-gating**, on a `vnet-aigw-dev` self-hosted runner —
+dormant until that runner exists and the repo variable `E2E_ENABLED=true` is set. A true hermetic
+PR gate (spin up the full stack in CI and run Playwright against `localhost`) is a planned
+follow-up.
+
 ---
 
 ## 4. Common Failure Modes
