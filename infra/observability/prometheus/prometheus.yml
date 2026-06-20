@@ -1,0 +1,9 @@
+# Minimal Prometheus config for the single-host observability stack.
+# Alloy does all collection (host + cAdvisor + service /metrics) and remote-writes
+# the result here; Prometheus is run as a receiver + query engine (PromQL), so there
+# are no local scrape_configs. OTLP and remote-write receivers are enabled via flags
+# in the container command (see docker-compose.yml).
+global:
+  scrape_interval: 30s
+  external_labels:
+    host: vm-aigw-dev-sdc

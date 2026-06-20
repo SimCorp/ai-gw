@@ -59,7 +59,7 @@ loki.process "parse" {
 
 loki.write "lgtm" {
 	endpoint {
-		url = "http://obs-lgtm:3100/loki/api/v1/push"
+		url = "http://obs-loki:3100/loki/api/v1/push"
 	}
 }
 
@@ -108,6 +108,6 @@ prometheus.scrape "gateway" {
 
 prometheus.remote_write "lgtm" {
 	endpoint {
-		url = "http://obs-lgtm:9090/api/v1/write"
+		url = "http://obs-prometheus:9090/api/v1/write"
 	}
 }
