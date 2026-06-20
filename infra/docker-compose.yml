@@ -512,10 +512,62 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # ── Observability (single-host: logs + metrics for humans + the DevOps agent) ──
+  # otel-lgtm bundles Loki + Prometheus + Grafana in one container; Alloy collects
+  # all container logs + host/container metrics via the Docker socket. Upstream
+  # public images — defined here in the base only (NOT in docker-compose.host.yml,
+  # NOT in the CI build-push matrix).
+  obs-lgtm:
+    image: grafana/otel-lgtm:latest
+    ports:
+      - "127.0.0.1:3000:3000"   # Grafana
+      - "127.0.0.1:9090:9090"   # Prometheus (query + remote_write receiver)
+      - "127.0.0.1:3100:3100"   # Loki (push + query)
+      - "127.0.0.1:4317:4317"   # OTLP gRPC (future app tracing)
+      - "127.0.0.1:4318:4318"   # OTLP HTTP
+    environment:
+      PROMETHEUS_EXTRA_ARGS: "--storage.tsdb.retention.time=${OBS_PROM_RETENTION:-14d} --web.enable-remote-write-receiver"
+      LOKI_EXTRA_ARGS: "--limits.retention-period=${OBS_LOKI_RETENTION:-14d}"
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_SERVER_ROOT_URL: "https://dev.aigw.scdom.net/grafana/"
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+    volumes:
+      - ../data/observability-lgtm:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:3000/api/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    restart: unless-stopped
+
+  obs-alloy:
+    image: grafana/alloy:latest
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    ports:
+      - "127.0.0.1:12345:12345"   # Alloy UI / debug
+    volumes:
+      - ./observability/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /:/rootfs:ro
+      - /sys:/sys:ro
+      - /proc:/proc:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - obs_alloy_data:/var/lib/alloy/data
+    depends_on:
+      obs-lgtm:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   ollama_data:
   redis_master_data:
+  obs_alloy_data:
 
 networks:
   default:
