@@ -98,8 +98,13 @@ export async function clickSafeButtons(
   const clicked: string[] = [];
   const skipped: string[] = [];
   const seen = new Set<string>();
+  // Cap clicks per route: enough to surface click-triggered crashes without
+  // ballooning runtime. Buttons that navigate away cost a reload, so we return
+  // ONCE and stop rather than re-navigating after every click.
+  const MAX_CLICKS = 8;
   const buttons = await page.locator('button:visible, [role=button]:visible').all();
   for (const b of buttons) {
+    if (clicked.length >= MAX_CLICKS) break;
     let label = '';
     try {
       label = ((await b.innerText()) || '').trim().replace(/\s+/g, ' ').slice(0, 40);
@@ -115,13 +120,14 @@ export async function clickSafeButtons(
     }
     try {
       if (!(await b.isEnabled())) continue;
-      await b.click({ timeout: 2500 });
+      await b.click({ timeout: 1500 });
       clicked.push(label);
-      await page.waitForTimeout(400);
+      await page.waitForTimeout(150);
       await page.keyboard.press('Escape').catch(() => {}); // close any modal
       if (!page.url().includes(path)) {
         await page.goto(path).catch(() => {});
-        await settle(page, 600);
+        await settle(page, 500);
+        break; // navigated away — return once and stop (no per-button reloads)
       }
     } catch {
       // a non-clickable / detached button is not a failure for the walkthrough

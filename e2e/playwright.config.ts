@@ -12,10 +12,11 @@ const BASE_URL = process.env.E2E_BASE_URL ?? 'https://dev.aigw.scdom.net';
 
 export default defineConfig({
   testDir: './tests',
-  // A full portal walkthrough shares one authenticated tab per portal (the apps
-  // keep their token in sessionStorage), so each spec file runs serially.
+  // Each portal shares one authenticated tab (token in sessionStorage), so a
+  // spec runs serially within itself — but the two portal projects run in
+  // PARALLEL (one worker each) to roughly halve wall-clock.
   fullyParallel: false,
-  workers: 1,
+  workers: 2,
   retries: process.env.CI ? 1 : 0,
   timeout: 60_000,
   expect: { timeout: 15_000 },
@@ -31,7 +32,7 @@ export default defineConfig({
     ignoreHTTPSErrors: true, // SimCorp Issuing CA cert is not in the default trust store
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
-    navigationTimeout: 30_000,
+    navigationTimeout: 15_000, // fail fast on a stuck route rather than hang
   },
   projects: [
     { name: 'dev-portal', testMatch: /dev-portal\.spec\.ts/ },

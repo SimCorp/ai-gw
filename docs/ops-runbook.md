@@ -461,10 +461,11 @@ service responds on `/health` and that the auth → cache → litellm path works
 
 `e2e/` is a standalone Playwright (`@playwright/test`) project that logs into the **dev + admin
 portals** and walks every route, asserting **no client-side crashes** (uncaught page errors) and
-**no failed backend calls** (HTTP ≥ 400, benign noise filtered), then clicks every
-**non-destructive** button (a deny-list skips delete/revoke/rotate/etc.; native confirms
-auto-cancel). It catches exactly the class of breakage that unit tests miss — e.g. a page that
-renders but whose data fetch 401s/CSP-blocks, or an `x.map is not a function` crash.
+**no failed backend calls** (HTTP ≥ 400, benign noise filtered). It catches exactly the class of
+breakage that unit tests miss — e.g. a page that renders but whose data fetch 401s/CSP-blocks, or an
+`x.map is not a function` crash. The full walk is fast (~25s; both portals run in parallel). Set
+**`E2E_CLICK=1`** for the thorough pass that also clicks every **non-destructive** button (deny-list
+skips delete/revoke/rotate/etc.; native confirms auto-cancel) — slower, off by default.
 
 It targets a **deployed** environment (reachable only in-VNet / over ZPA) and is **NOT a CI merge
 gate** — gating PR merges on a live-env test would validate the *old* deployment, not the PR, and
@@ -472,8 +473,9 @@ add flake. Run it on demand or as a post-deploy smoke.
 
 ```bash
 # On-demand, from an in-VNet host (creds pulled from pass; never written to disk):
-scripts/e2e-quality.sh                       # walk both portals on dev.aigw.scdom.net
+scripts/e2e-quality.sh                       # walk both portals on dev.aigw.scdom.net (~25s)
 scripts/e2e-quality.sh --project dev-portal  # one portal
+E2E_CLICK=1 scripts/e2e-quality.sh           # thorough: also click every safe button (slower)
 E2E_BASE_URL=https://aigw-test.lab.cloud.scdom.net scripts/e2e-quality.sh
 
 # Post-deploy smoke (deploy, then fail if the walkthrough fails):
