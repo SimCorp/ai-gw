@@ -3,8 +3,10 @@ from contextlib import asynccontextmanager
 import asyncpg
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from prometheus_client import make_asgi_app
 
 from app.config import settings
+from app.logging_config import CorrelationIdMiddleware, init_logging
 from app.redis_utils import make_redis
 from app.router import router
 from app.validators.jwt import _validate_jwks_uri  # noqa: F401 — used in lifespan
@@ -29,7 +31,10 @@ async def lifespan(app: FastAPI):
     await app.state.db.close()
 
 
+init_logging("auth")
 app = FastAPI(title="AI Gateway — Auth Service", lifespan=lifespan)
+app.add_middleware(CorrelationIdMiddleware)
+app.mount("/metrics", make_asgi_app())
 
 from app.observability import init_observability  # noqa: E402
 

@@ -3,8 +3,10 @@ from contextlib import asynccontextmanager
 import httpx
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from prometheus_client import make_asgi_app
 
 from app.config import settings
+from app.logging_config import CorrelationIdMiddleware, init_logging
 from app.redis_utils import make_redis
 from app.router import router
 
@@ -18,7 +20,10 @@ async def lifespan(app: FastAPI):
     await app.state.http.aclose()
 
 
+init_logging("cache")
 app = FastAPI(title="AI Gateway — Cache Service", lifespan=lifespan)
+app.add_middleware(CorrelationIdMiddleware)
+app.mount("/metrics", make_asgi_app())
 
 from app.observability import init_observability  # noqa: E402
 

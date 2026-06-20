@@ -11,6 +11,8 @@ from sqlalchemy import text
 
 import app.models  # noqa: F401 — registers all ORM models with Base.metadata
 from app.config import settings
+from app.logging_config import init_logging, CorrelationIdMiddleware
+from prometheus_client import make_asgi_app
 from app.db import async_session_maker, engine
 from app.routers import challenges as challenges_router
 from app.routers import internal_points as internal_points_router
@@ -167,6 +169,7 @@ async def lifespan(app: FastAPI):
 
 _is_dev = os.getenv("ENVIRONMENT", "production") in ("development", "test", "ci")
 
+init_logging("league")
 app = FastAPI(
     title="AI Gateway — League Service",
     lifespan=lifespan,
@@ -174,6 +177,8 @@ app = FastAPI(
     redoc_url="/redoc" if _is_dev else None,
     openapi_url="/openapi.json" if _is_dev else None,
 )
+app.add_middleware(CorrelationIdMiddleware)
+app.mount("/metrics", make_asgi_app())
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,

@@ -15,6 +15,8 @@ dependencies = [
     "azure-mgmt-appcontainers>=3.0",
     "azure-identity>=1.16",
     "azure-storage-file-share>=12.16",
+    "prometheus-client>=0.20",
+    "python-json-logger>=2.0,<3",
 ]
 
 [project.optional-dependencies]
