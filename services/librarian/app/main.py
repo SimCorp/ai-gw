@@ -24,11 +24,13 @@ import numpy as np
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from openai import AsyncOpenAI
+from prometheus_fastapi_instrumentator import Instrumentator
 from pydantic import BaseModel
 from redis.asyncio import Redis
 
 from app.auth import AuthError, resolve_caller
 from app.config import settings
+from app.logging_config import CorrelationIdMiddleware, init_logging
 
 _log = logging.getLogger(__name__)
 
@@ -535,7 +537,10 @@ async def lifespan(app: FastAPI):
 # App
 # ---------------------------------------------------------------------------
 
+init_logging("librarian")
 app = FastAPI(title="AI Librarian", version="1.0.0", lifespan=lifespan)
+app.add_middleware(CorrelationIdMiddleware)
+Instrumentator().instrument(app).expose(app, include_in_schema=False)
 
 # CORS — allow portal browser calls (advisor point #4)
 _cors_origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]

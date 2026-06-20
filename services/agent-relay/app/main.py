@@ -36,12 +36,13 @@ from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
+from prometheus_fastapi_instrumentator import Instrumentator
 from pydantic import BaseModel
 from redis.asyncio import Redis
 
 from app.config import get_settings
+from app.logging_config import CorrelationIdMiddleware, init_logging
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 _log = logging.getLogger("agent-relay")
 
 # ---------------------------------------------------------------------------
@@ -78,7 +79,10 @@ async def lifespan(app: FastAPI):
         await _redis.aclose()
 
 
+init_logging("agent-relay")
 app = FastAPI(title="AI Gateway Agent Relay", version="0.1.0", lifespan=lifespan)
+app.add_middleware(CorrelationIdMiddleware)
+Instrumentator().instrument(app).expose(app, include_in_schema=False)
 
 
 # ---------------------------------------------------------------------------

@@ -3,8 +3,10 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from app.config import settings
+from app.logging_config import CorrelationIdMiddleware, init_logging
 from app.redis_utils import make_redis
 from app.routers import internal as internal_router
 from app.routers import jobs as jobs_router
@@ -25,7 +27,11 @@ async def lifespan(app: FastAPI):
     await app.state.redis.aclose()
 
 
+init_logging("scanner")
 app = FastAPI(title="AI Gateway Scanner", lifespan=lifespan)
+
+app.add_middleware(CorrelationIdMiddleware)
+Instrumentator().instrument(app).expose(app, include_in_schema=False)
 
 app.add_middleware(
     CORSMiddleware,

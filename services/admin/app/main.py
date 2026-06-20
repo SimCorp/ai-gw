@@ -8,11 +8,13 @@ from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from prometheus_fastapi_instrumentator import Instrumentator
 from sqlalchemy import text
 
 from app.auth import require_admin_auth
 from app.config import settings as app_settings
 from app.db import engine
+from app.logging_config import CorrelationIdMiddleware, init_logging
 
 # Import all ORM models so they're available to routers and Alembic env
 from app.models import (  # noqa: F401
@@ -524,6 +526,8 @@ async def lifespan(app: FastAPI):
 
 _is_dev = os.getenv("ENVIRONMENT", "production") in ("development", "test", "ci")
 
+init_logging("admin")
+
 app = FastAPI(
     title="AI Gateway — Admin Portal",
     lifespan=lifespan,
@@ -531,6 +535,9 @@ app = FastAPI(
     redoc_url="/redoc" if _is_dev else None,
     openapi_url="/openapi.json" if _is_dev else None,
 )
+
+app.add_middleware(CorrelationIdMiddleware)
+Instrumentator().instrument(app).expose(app, include_in_schema=False)
 
 from app.observability import init_observability  # noqa: E402
 
