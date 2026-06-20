@@ -17,6 +17,9 @@ services:
     ports:
       - "443:443"
       - "80:80"
+    environment:
+      # bcrypt hash for the /obs/* query routes' basic_auth (from pass; a hash, not a plaintext secret)
+      OBS_QUERY_BCRYPT: ${OBS_QUERY_BCRYPT:-}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./certs/cert.pem:/etc/caddy/cert.pem:ro

@@ -65,6 +65,32 @@ ruff check services/
 ruff format services/
 ```
 
+## Observability — use this FIRST when troubleshooting the running stack
+
+A single-host observability layer runs alongside the gateway. When diagnosing a
+problem (a service down/erroring, slow, crashing, OOMing), **query it before
+guessing** — it has the logs and metrics that `docker ps`/`/health` alone don't.
+
+- **Logs (Loki / LogQL)** and **metrics (Prometheus / PromQL)** for every container.
+  From the VM (via `ssh-aigw`), both are on localhost:
+  ```bash
+  # recent error logs for one service
+  curl -s 'http://localhost:3100/loki/api/v1/query_range' \
+    --data-urlencode 'query={compose_service="cache"} |= "error"' --data-urlencode 'limit=50'
+  # container memory / cpu / restarts (cAdvisor)
+  curl -s 'http://localhost:9090/api/v1/query?query=container_memory_usage_bytes{name="ai-gateway-cache-1"}'
+  ```
+  Logs are structured JSON (`service`, `level`, `request_id`, `session_trace_id`) — grep
+  by `request_id` to follow one request across services.
+- **Grafana** (humans): `https://dev.aigw.scdom.net/grafana/` (login from `pass aigw/grafana-admin`).
+- **In-product DevOps agent**: `POST /api/admin/system`… `/devops-agent/chat` (X-Admin-Token) —
+  has `query_logs`, `query_metrics`, `get_container_state` tools that hit Loki/Prometheus.
+- **MCP**: `obs-grafana-mcp` (SSE :8013) exposes Grafana query tools to MCP-aware agents
+  (see `.vscode/mcp.json`).
+- Stack containers: `obs-loki`, `obs-prometheus`, `obs-grafana`, `obs-alloy` (collector,
+  tails all container logs + cAdvisor/host metrics), `obs-grafana-mcp`. Config under
+  `infra/observability/`. `/metrics` is internal-only (Caddy 404s `/api/<svc>/metrics`).
+
 ## Architecture
 
 See `docs/superpowers/specs/2026-05-05-ai-gateway-design.md` for the service design and

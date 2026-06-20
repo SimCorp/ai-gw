@@ -586,6 +586,22 @@ services:
       - obs-prometheus
     restart: unless-stopped
 
+  # Grafana MCP server — lets MCP-aware agents (Claude Code, the devops agent)
+  # query logs/metrics/dashboards as tools. Needs a Grafana service-account token
+  # (GRAFANA_SA_TOKEN, from pass aigw/grafana-sa-token) — starts without it but
+  # authed calls fail until set. SSE on :8013 (bound to localhost).
+  obs-grafana-mcp:
+    image: mcp/grafana:latest
+    command: ["-t", "sse", "--address", ":8000"]
+    ports:
+      - "127.0.0.1:8013:8000"
+    environment:
+      GRAFANA_URL: "http://obs-grafana:3000"
+      GRAFANA_SERVICE_ACCOUNT_TOKEN: ${GRAFANA_SA_TOKEN:-}
+    depends_on:
+      - obs-grafana
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   ollama_data:
