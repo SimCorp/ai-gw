@@ -80,25 +80,10 @@
 
 	# Observability — Grafana UI (sub-path; obs-grafana sets GF_SERVER_ROOT_URL +
 	# serve_from_sub_path). Behind Grafana's own login + the corp ZPA boundary.
+	# Off-VM agents query logs/metrics via Grafana's API (or mcp-grafana / SSH tunnel);
+	# raw Loki/Prometheus are intentionally NOT exposed.
 	handle /grafana/* {
 		reverse_proxy obs-grafana:3000
-	}
-
-	# Raw LogQL/PromQL query APIs for off-VM agents, behind basic_auth (creds in
-	# pass; bcrypt hash via OBS_QUERY_BCRYPT). /obs/loki/api/... -> Loki (strip /obs,
-	# Loki namespaces under /loki); /obs/prom/api/... -> Prometheus (strip /obs/prom).
-	handle /obs/loki/* {
-		basic_auth {
-			obs {$OBS_QUERY_BCRYPT}
-		}
-		uri strip_prefix /obs
-		reverse_proxy obs-loki:3100
-	}
-	handle_path /obs/prom/* {
-		basic_auth {
-			obs {$OBS_QUERY_BCRYPT}
-		}
-		reverse_proxy obs-prometheus:9090
 	}
 
 	# Dev portal at the root — catch-all for everything not matched above
