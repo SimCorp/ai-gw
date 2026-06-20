@@ -91,7 +91,6 @@ prometheus.scrape "gateway" {
 	targets = [
 		{"__address__" = "auth:8001", "service" = "auth"},
 		{"__address__" = "cache:8002", "service" = "cache"},
-		{"__address__" = "litellm:8003", "service" = "litellm"},
 		{"__address__" = "observability:8004", "service" = "observability"},
 		{"__address__" = "admin:8005", "service" = "admin"},
 		{"__address__" = "identity:8006", "service" = "identity"},
@@ -102,6 +101,18 @@ prometheus.scrape "gateway" {
 		{"__address__" = "scanner:8011", "service" = "scanner"},
 	]
 	metrics_path    = "/metrics"
+	scrape_interval = "30s"
+	forward_to      = [prometheus.remote_write.lgtm.receiver]
+}
+
+// litellm gates /metrics behind its master key and serves it at /metrics/ (the
+// bare /metrics 307-redirects). Separate scrape with Bearer auth + trailing slash.
+prometheus.scrape "litellm" {
+	targets = [
+		{"__address__" = "litellm:8003", "service" = "litellm"},
+	]
+	metrics_path    = "/metrics/"
+	bearer_token    = sys.env("LITELLM_MASTER_KEY")
 	scrape_interval = "30s"
 	forward_to      = [prometheus.remote_write.lgtm.receiver]
 }

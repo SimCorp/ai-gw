@@ -565,6 +565,7 @@ services:
   obs-alloy:
     image: grafana/alloy:latest
     privileged: true   # cAdvisor needs containerd socket + cgroup access on this VM
+    env_file: ../.env  # for LITELLM_MASTER_KEY (litellm /metrics scrape auth)
     command:
       - run
       - --server.http.listen-addr=0.0.0.0:12345
