@@ -191,7 +191,7 @@ curl -H "Authorization: Bearer <token>" \
 Then link engineers to specific tools:
 
 ```
-https://aigw-dev.lab.cloud.scdom.net/portal/tools/base64-encode
+https://aigw-dev.lab.cloud.scdom.net/tools/base64-encode
 ```
 
 ## Security
@@ -261,7 +261,7 @@ If custom tools are needed beyond the community catalog, consider:
 
 ## Base URLs
 
-**Developer Portal:** `https://aigw-dev.lab.cloud.scdom.net/portal/tools/`
+**Developer Portal:** `https://aigw-dev.lab.cloud.scdom.net/tools/`
 
 **Direct Tool Access:** `https://aigw-dev.lab.cloud.scdom.net/tools-app/#/{tool_id}`
 

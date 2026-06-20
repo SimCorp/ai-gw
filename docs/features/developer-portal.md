@@ -2,7 +2,7 @@
 
 The Developer Portal (Next.js app at `apps/portal/`) is the primary interface for developers to interact with the AI Gateway. It provides a unified dashboard for model access, API key management, agent registration, and team collaboration.
 
-**Access:** https://aigw-dev.lab.cloud.scdom.net/portal/ (over the corporate VPN, Entra ID SSO)
+**Access:** https://aigw-dev.lab.cloud.scdom.net/ (over the corporate VPN, Entra ID SSO)
 
 ---
 

@@ -420,7 +420,7 @@ its liveness/readiness probes; ingress only routes to a revision once it reports
 
 **Access (over the corporate VPN):**
 - Admin Portal: https://aigw-dev.lab.cloud.scdom.net/admin/
-- Developer Portal: https://aigw-dev.lab.cloud.scdom.net/portal/
+- Developer Portal: https://aigw-dev.lab.cloud.scdom.net/
 - API: https://aigw-dev.lab.cloud.scdom.net/{path}/ (internally, services call `http://ca-<service>-dev-sdc`)
 
 ## Deployment Topology

@@ -163,7 +163,7 @@ single-host deployment. See [`dev-environment.md#access-edge`](dev-environment.m
 
 ```mermaid
 flowchart LR
-  dev["Developer workstation\nhttps://dev.aigw.scdom.net/portal/"]
+  dev["Developer workstation\nhttps://dev.aigw.scdom.net/"]
 
   subgraph DNSZ["DNS — internal SimCorp zone"]
     int["dev.aigw.scdom.net A → 10.179.231.68\nmanaged by SimCorp IT (scdom.net)"]

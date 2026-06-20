@@ -14,7 +14,7 @@ import { Recorder } from '../lib/walk';
 type Portal = 'dev' | 'admin';
 
 const CONFIG: Record<Portal, { loginPath: string; emailEnv: string; pwEnv: string }> = {
-  dev: { loginPath: '/portal/', emailEnv: 'E2E_DEV_EMAIL', pwEnv: 'E2E_DEV_PW' },
+  dev: { loginPath: '/', emailEnv: 'E2E_DEV_EMAIL', pwEnv: 'E2E_DEV_PW' },
   admin: { loginPath: '/admin/login', emailEnv: 'E2E_ADMIN_EMAIL', pwEnv: 'E2E_ADMIN_PW' },
 };
 
