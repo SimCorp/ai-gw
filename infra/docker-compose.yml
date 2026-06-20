@@ -527,7 +527,7 @@ services:
     ports:
       - "127.0.0.1:3100:3100"   # Loki push + LogQL query
     volumes:
-      - ../data/observability-loki:/loki
+      - obs_loki_data:/loki   # named volume: Docker inits with the image's uid (10001), avoids root-owned bind-mount crash
     restart: unless-stopped
 
   obs-prometheus:
@@ -542,7 +542,7 @@ services:
       - "127.0.0.1:9090:9090"   # Prometheus PromQL query + remote-write/OTLP receiver
     volumes:
       - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ../data/observability-prometheus:/prometheus
+      - obs_prometheus_data:/prometheus   # named volume (image uid 65534)
     restart: unless-stopped
 
   obs-grafana:
@@ -556,7 +556,7 @@ services:
       GF_AUTH_ANONYMOUS_ENABLED: "false"
     volumes:
       - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
-      - ../data/observability-grafana:/var/lib/grafana
+      - obs_grafana_data:/var/lib/grafana   # named volume (image uid 472)
     depends_on:
       - obs-prometheus
       - obs-loki
@@ -591,6 +591,9 @@ volumes:
   ollama_data:
   redis_master_data:
   obs_alloy_data:
+  obs_loki_data:
+  obs_prometheus_data:
+  obs_grafana_data:
 
 networks:
   default:
