@@ -3,12 +3,12 @@ flowchart TB
 
   subgraph CORP["Corporate network — Zscaler ZPA"]
     zcc["Zscaler Client Connector"]
-    zpa["ZPA App Connector\ndev.aigw.scdom.net → 100.64.1.34 → 10.179.231.68\nTCP 443/80/22 active  ·  ⚠ TLS passthrough needed on 443"]
+    zpa["ZPA App Connector\ndev.aigw.scdom.net → 100.64.1.34 → 10.179.231.68\nTCP 443/80/22 active  ·  TLS passthrough"]
   end
 
   subgraph VM["vm-aigw-dev-sdc  ·  10.179.231.68 (static)  ·  Ubuntu 24.04\nrg-spoke-platformaitooling-dev-sdc-001  ·  Sweden Central"]
     subgraph EDGE["NSG nsg-aigw-vm-dev\n443 in · 80 in · 22 in  (from ZPA connector range)"]
-      caddy["Caddy 2.8\n:443 TLS-terminate\n:80 → redirect HTTPS\nself-signed O=SimCorp CN=dev.aigw.scdom.net\nexpires 2026-09-16  ·  confirmed working on-box"]
+      caddy["Caddy 2.8\n:443 TLS-terminate\n:80 → redirect HTTPS\n*.aigw.scdom.net  ·  SimCorp Issuing CA  ·  valid to 2028"]
     end
 
     subgraph INFERENCE["Inference path  /v1/*"]
@@ -17,12 +17,12 @@ flowchart TB
       litellm["litellm :8003\nLiteLLM proxy\nprovider routing"]
     end
 
-    subgraph APPS["Web apps  /portal*  /admin-portal*"]
+    subgraph APPS["Web apps  /  (dev portal)   /admin*  (admin portal)"]
       portal["portal :3002\nDeveloper Next.js app\nbuilt from Dockerfile.portal"]
       adminportal["admin-portal :3001\nAdmin Next.js app\nbuilt from Dockerfile.admin"]
     end
 
-    subgraph API["API services  /&lt;name&gt;/*  (prefix stripped)"]
+    subgraph API["API services  /api/&lt;svc&gt;/*  (prefix stripped)"]
       admin["admin :8005\nteams · API keys · dashboards\nX-Admin-Token auth"]
       identity["identity :8006\nagent DNS registry\nheartbeat TTL"]
       librarian["librarian :8008\nknowledge ingestion\nsemantic search"]
@@ -45,22 +45,20 @@ flowchart TB
   end
 
   ext["External LLM providers\nAnthropic  ·  Azure OpenAI\nGemini  ·  GitHub Models"]
-  cert_pending["*.aigw.scdom.net cert\nSimCorp Internal CA\n⚠ pending IT form ①"]
   dns_done["DNS ✅\ndev.aigw.scdom.net → 100.64.1.34 (ZPA VIP)\n→ 10.179.231.68 (VM)"]
 
   dev --> zcc --> zpa -->|"TCP 443"| caddy
   dns_done -. "resolves ✅" .-> zpa
-  cert_pending -. "replaces self-signed" .-> caddy
 
-  caddy -->|"/v1/*"| cache
-  caddy -->|"/portal*"| portal
-  caddy -->|"/admin-portal*"| adminportal
-  caddy -->|"/admin/* (strip)"| admin
-  caddy -->|"/identity/* (strip)"| identity
-  caddy -->|"/librarian/* (strip)"| librarian
-  caddy -->|"/memory/* (strip)"| memory
-  caddy -->|"/league/* (strip)"| league
-  caddy -->|"/observability/* (strip)"| observability
+  caddy -->|"/v1/*  ·  /anthropic/*"| cache
+  caddy -->|"/  (catch-all)"| portal
+  caddy -->|"/admin*"| adminportal
+  caddy -->|"/api/admin/* (strip)"| admin
+  caddy -->|"/api/identity/* (strip)"| identity
+  caddy -->|"/api/librarian/* (strip)"| librarian
+  caddy -->|"/api/memory/* (strip)"| memory
+  caddy -->|"/api/league/* (strip)"| league
+  caddy -->|"/api/observability/* (strip)"| observability
   caddy -->|"/agent-relay/*"| agentrelay
   caddy -->|"/auth/*"| admin
 
@@ -91,7 +89,7 @@ flowchart TB
   classDef api fill:#f0f8f0,stroke:#5d9a5d,color:#1d3a1d;
   classDef bg fill:#fafafa,stroke:#999,color:#333;
   classDef data fill:#fff3e0,stroke:#cc8a2e,color:#5a3b0a;
-  classDef pending fill:#fff8e6,stroke:#e6a817,color:#6b4f00;
+  classDef active fill:#eef7ee,stroke:#4a8a4a,color:#1d3a1d;
 
   class dev,zcc,zpa,caddy edge;
   class cache,auth,litellm infer;
@@ -99,4 +97,4 @@ flowchart TB
   class admin,identity,librarian,memory,league,observability,agentrelay api;
   class scanner,worker bg;
   class pg,redis,dex data;
-  class cert_pending,dns_pending,ext pending;
+  class dns_done,ext active;

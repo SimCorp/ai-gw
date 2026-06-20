@@ -2825,7 +2825,7 @@ Personalised welcome page showing:
 - Quick-access links to API keys, playground, workflows, and documentation.
 - Current month spend summary.
 
-### `/portal/playground` — LLM Playground
+### `/playground` — LLM Playground
 
 Interactive playground for testing models. Supports:
 - Model selector (all gateway-enabled models).
@@ -2834,7 +2834,7 @@ Interactive playground for testing models. Supports:
 - Token count and cost estimate.
 - Copy-as-curl and copy-as-code buttons.
 
-### `/portal/agents` — Agent Catalog + Identity Search
+### `/agents` — Agent Catalog + Identity Search
 
 Browse all registered agents from the Identity Service. Features:
 - Search by name, capability, or category.
@@ -2842,11 +2842,11 @@ Browse all registered agents from the Identity Service. Features:
 - DID token verification badge.
 - Links to the agent's manifest and endpoint.
 
-### `/portal/workflows` — Workflow List
+### `/workflows` — Workflow List
 
 List all workflows the developer's team has access to. Shows workflow name, last run status, last run time, and a button to open the designer.
 
-### `/portal/workflows/[workflowId]/designer` — Drag-Drop Canvas
+### `/workflows/[workflowId]/designer` — Drag-Drop Canvas
 
 Visual workflow designer. Features:
 - Drag-and-drop node canvas for building DAGs.
@@ -2855,14 +2855,14 @@ Visual workflow designer. Features:
 - Version history and publish (creates a new version).
 - "Test run" button that submits a run with sample inputs and opens the run viewer.
 
-### `/portal/workflows/[workflowId]/runs/[runId]` — Live Run Viewer
+### `/workflows/[workflowId]/runs/[runId]` — Live Run Viewer
 
 Real-time run status viewer. Displays the DAG with each node coloured by status (pending, running, succeeded, failed). Subscribes to the SSE event stream for live updates. Shows per-node:
 - Status badge and timestamps.
 - Log output from the agent container.
 - Output JSON (expandable).
 
-### `/portal/keys` — API Key Management
+### `/keys` — API Key Management
 
 Manage the developer's own API keys:
 - List existing keys with creation date, last used, and scope.
@@ -2870,21 +2870,21 @@ Manage the developer's own API keys:
 - Revoke keys.
 - Security best practices panel.
 
-### `/portal/models` — Model Catalog
+### `/models` — Model Catalog
 
 Browse all gateway-enabled models. Shows model name, provider, context window, pricing, and availability. Allows filtering by provider and capability.
 
-### `/portal/mcp` — MCP Servers
+### `/mcp` — MCP Servers
 
 Browse MCP servers available to the developer's team. Shows server name, URL, tool list, and connection instructions. Includes the Awesome Copilot Catalog and CodeMate servers from the gateway.
 
-### `/portal/plugins` — Plugin Browser + Copilot Catalog Tab
+### `/plugins` — Plugin Browser + Copilot Catalog Tab
 
 Two-tab view:
 - **Gateway Plugins** — plugins registered in the admin portal, browseable by the developer.
 - **Copilot Catalog** — live feed from the Copilot Catalog MCP, showing agents, instructions, and recipes from awesome-copilot.
 
-### `/portal/prompts` — Prompts + Research Knowledge Base
+### `/prompts` — Prompts + Research Knowledge Base
 
 Browse and search the AI Librarian knowledge base. Features:
 - Search across all topics with semantic relevance scoring.
@@ -2892,18 +2892,18 @@ Browse and search the AI Librarian knowledge base. Features:
 - Document detail view with source URL and tags.
 - Ingest a new document (links to API docs).
 
-### `/portal/skills` — Skills (stub)
+### `/skills` — Skills (stub)
 
 Browse and discover published agent skills. Under development.
 
-### `/portal/usage` — Usage & Spend
+### `/usage` — Usage & Spend
 
 Spend analytics for the developer's team:
 - **Spend over time** — bar chart of daily/weekly spend.
 - **Team summary** — total requests, tokens, and cost for the current period.
 - **About these stats** — explanation of how costs are calculated.
 
-### `/portal/docs` — Quickstart
+### `/docs` — Quickstart
 
 Embedded quickstart documentation covering:
 - How to obtain an API key.
@@ -3924,7 +3924,7 @@ Browser  →  GET /auth/oidc/login
          →  extracts email + display_name claims
          →  finds or creates users row (developer role if new)
          →  issues Redis session
-         →  302 to /admin?sso_token=<token> or /portal?sso_token=<token>
+         →  302 to /admin?sso_token=<token> or /?sso_token=<token>
          →  frontend stores token, strips query param
 ```
 

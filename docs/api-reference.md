@@ -28,9 +28,9 @@ The gateway is deployed to Azure Container Apps (SimCorp Landing Zone, Sweden Ce
 
 | Surface | Base URL | Internal port (reference only) | Notes |
 |---|---|---|---|
-| Inference (OpenAI-compatible) | `https://aigw-dev.lab.cloud.scdom.net/v1` | `8002` (cache) | Cache service; proxies to LiteLLM after auth |
-| Inference (Anthropic-compatible) | `https://aigw-dev.lab.cloud.scdom.net/anthropic` | `8002` (cache) | Anthropic Messages wire protocol |
-| Admin REST API | `https://aigw-dev.lab.cloud.scdom.net/admin` | `8005` (admin) | JSON endpoints for platform operators |
+| Inference (OpenAI-compatible) | `https://dev.aigw.scdom.net/v1` | `8002` (cache) | Cache service; proxies to LiteLLM after auth |
+| Inference (Anthropic-compatible) | `https://dev.aigw.scdom.net/anthropic` | `8002` (cache) | Anthropic Messages wire protocol |
+| Admin REST API | `https://dev.aigw.scdom.net/api/admin` | `8005` (admin) | JSON endpoints for platform operators |
 | Developer portal | Over the corporate VPN (Entra ID SSO) | `3002` | Browser UI |
 | Admin portal | Over the corporate VPN (Entra ID SSO) | `3001` | Teams, guardrails, audit, quotas |
 
@@ -48,7 +48,7 @@ API keys start with the prefix `sk-` and are 32 bytes of URL-safe random data ap
 
 **Obtaining a key**
 
-- **Developer portal** — Reachable over the corporate VPN. Once authenticated, visit `/portal/keys` to issue a key.
+- **Developer portal** — Reachable over the corporate VPN. Once authenticated, visit `/keys` to issue a key.
 - **Admin REST API** — `POST /teams/{team_id}/keys` (requires `X-Admin-Token` header).
 
 ### Quick health check
@@ -59,7 +59,7 @@ Verify your key and the gateway are working end-to-end:
 import httpx
 
 resp = httpx.post(
-    "https://aigw-dev.lab.cloud.scdom.net/v1/chat/completions",
+    "https://dev.aigw.scdom.net/v1/chat/completions",
     headers={"Authorization": "Bearer sk-YOUR-KEY-HERE"},
     json={"model": "claude-haiku-4-5",
           "messages": [{"role": "user", "content": "ping"}],
@@ -83,16 +83,16 @@ The gateway follows the OpenAI API versioning convention. The current version is
 ## 2. Chat Completions — OpenAI-compatible
 
 ```
-POST https://aigw-dev.lab.cloud.scdom.net/v1/chat/completions
+POST https://dev.aigw.scdom.net/v1/chat/completions
 ```
 
-Fully OpenAI-compatible. Drop in any OpenAI SDK by pointing `base_url` at `https://aigw-dev.lab.cloud.scdom.net/v1`.
+Fully OpenAI-compatible. Drop in any OpenAI SDK by pointing `base_url` at `https://dev.aigw.scdom.net/v1`.
 
 ### Request
 
 ```http
 POST /v1/chat/completions HTTP/1.1
-Host: aigw-dev.lab.cloud.scdom.net
+Host: dev.aigw.scdom.net
 Authorization: Bearer sk-<your-key>
 Content-Type: application/json
 
@@ -166,7 +166,7 @@ from openai import OpenAI
 
 client = OpenAI(
     api_key="sk-your-key-here",
-    base_url="https://aigw-dev.lab.cloud.scdom.net/v1",
+    base_url="https://dev.aigw.scdom.net/v1",
 )
 
 response = client.chat.completions.create(
@@ -187,7 +187,7 @@ print(response.choices[0].message.content)
 ## 3. Chat Completions — Anthropic-compatible
 
 ```
-POST https://aigw-dev.lab.cloud.scdom.net/anthropic/v1/messages
+POST https://dev.aigw.scdom.net/anthropic/v1/messages
 ```
 
 This endpoint is handled by LiteLLM's Anthropic-compatible proxy. The request and response shapes follow the [Anthropic Messages API](https://docs.anthropic.com/en/api/messages) exactly.
@@ -196,7 +196,7 @@ This endpoint is handled by LiteLLM's Anthropic-compatible proxy. The request an
 
 ```http
 POST /anthropic/v1/messages HTTP/1.1
-Host: aigw-dev.lab.cloud.scdom.net
+Host: dev.aigw.scdom.net
 Authorization: Bearer sk-<your-key>
 Content-Type: application/json
 anthropic-version: 2023-06-01
@@ -258,7 +258,7 @@ import anthropic
 
 client = anthropic.Anthropic(
     api_key="sk-your-key-here",
-    base_url="https://aigw-dev.lab.cloud.scdom.net/anthropic",
+    base_url="https://dev.aigw.scdom.net/anthropic",
 )
 
 message = client.messages.create(
@@ -280,14 +280,14 @@ The developer portal is reachable over the corporate VPN. It provides browser-ba
 
 | Route | Method | Purpose |
 |---|---|---|
-| `/portal/signup` | GET/POST | Register with email + password |
-| `/portal/login` | GET/POST | Sign in |
-| `/portal/dashboard` | GET | Usage overview |
-| `/portal/keys` | GET/POST | Create / list API keys |
-| `/portal/keys/{id}/revoke` | POST | Revoke a key |
-| `/portal/quickstart` | GET | Copy-paste code examples |
-| `/portal/docs` | GET | LangChain, LlamaIndex, OpenAI Agents SDK, Claude Code CLI |
-| `/portal/profile` | GET/POST | Change display name / password |
+| `/signup` | GET/POST | Register with email + password |
+| `/login` | GET/POST | Sign in |
+| `/dashboard` | GET | Usage overview |
+| `/keys` | GET/POST | Create / list API keys |
+| `/keys/{id}/revoke` | POST | Revoke a key |
+| `/quickstart` | GET | Copy-paste code examples |
+| `/docs` | GET | LangChain, LlamaIndex, OpenAI Agents SDK, Claude Code CLI |
+| `/profile` | GET/POST | Change display name / password |
 
 Auth uses a session cookie (`portal_session`) backed by Redis with an 8-hour TTL.
 
@@ -308,7 +308,7 @@ from openai import OpenAI
 
 client = OpenAI(
     api_key="sk-your-key-here",
-    base_url="https://aigw-dev.lab.cloud.scdom.net/v1",
+    base_url="https://dev.aigw.scdom.net/v1",
 )
 
 with client.chat.completions.stream(
@@ -327,7 +327,7 @@ import anthropic
 
 client = anthropic.Anthropic(
     api_key="sk-your-key-here",
-    base_url="https://aigw-dev.lab.cloud.scdom.net/anthropic",
+    base_url="https://dev.aigw.scdom.net/anthropic",
 )
 
 with client.messages.stream(
@@ -356,7 +356,7 @@ data: [DONE]
 ## 5. Models
 
 ```
-GET https://aigw-dev.lab.cloud.scdom.net/v1/models
+GET https://dev.aigw.scdom.net/v1/models
 ```
 
 Returns the list of models configured in LiteLLM. Authentication is required.
@@ -365,7 +365,7 @@ Returns the list of models configured in LiteLLM. Authentication is required.
 
 ```http
 GET /v1/models HTTP/1.1
-Host: aigw-dev.lab.cloud.scdom.net
+Host: dev.aigw.scdom.net
 Authorization: Bearer sk-<your-key>
 ```
 
@@ -447,7 +447,7 @@ Model IDs: `copilot-gpt-4o`, `copilot-gpt-4o-mini`, `copilot-o3-mini`, `copilot-
 
 ```bash
 # GitHub Copilot via gateway
-curl https://aigw-dev.lab.cloud.scdom.net/v1/chat/completions \
+curl https://dev.aigw.scdom.net/v1/chat/completions \
   -H "Authorization: Bearer sk-your-api-key" \
   -H "Content-Type: application/json" \
   -d '{"model": "copilot-gpt-4o", "messages": [{"role": "user", "content": "Hello"}]}'
@@ -468,7 +468,7 @@ See https://portal.azure.com → Azure OpenAI → Keys and Endpoint.
 
 ```bash
 # Azure AI Foundry via gateway
-curl https://aigw-dev.lab.cloud.scdom.net/v1/chat/completions \
+curl https://dev.aigw.scdom.net/v1/chat/completions \
   -H "Authorization: Bearer sk-your-api-key" \
   -H "Content-Type: application/json" \
   -d '{"model": "azure-gpt-4o", "messages": [{"role": "user", "content": "Hello"}]}'
@@ -586,7 +586,7 @@ import time
 import httpx
 
 def chat_with_retry(payload: dict, api_key: str, max_attempts: int = 3) -> dict:
-    url = "https://aigw-dev.lab.cloud.scdom.net/v1/chat/completions"
+    url = "https://dev.aigw.scdom.net/v1/chat/completions"
     headers = {"Authorization": f"Bearer {api_key}"}
 
     for attempt in range(max_attempts):
@@ -638,7 +638,7 @@ When the cache is bypassed, the response header will be `x-cache: BYPASS` (not `
 
 ```bash
 # Using x-cache: bypass
-curl https://aigw-dev.lab.cloud.scdom.net/v1/chat/completions \
+curl https://dev.aigw.scdom.net/v1/chat/completions \
   -H "Authorization: Bearer sk-YOUR-KEY-HERE" \
   -H "x-cache: bypass" \
   -H "Content-Type: application/json" \
@@ -692,13 +692,13 @@ For per-request bypass, use the `x-cache: bypass` or `Cache-Control: no-cache` h
 
 ## 10. Admin REST API
 
-The admin REST API is available at `https://aigw-dev.lab.cloud.scdom.net/admin`. All endpoints require the `X-Admin-Token` header (value from the `ADMIN_TOKEN` environment variable).
+The admin REST API is available at `https://dev.aigw.scdom.net/api/admin`. All endpoints require the `X-Admin-Token` header (value from the `ADMIN_TOKEN` environment variable).
 
 ```
 X-Admin-Token: <admin-token>
 ```
 
-The developer portal routes under `/portal/*` are excluded from admin auth and manage their own session-cookie authentication.
+The developer portal routes under `/*` are excluded from admin auth and manage their own session-cookie authentication.
 
 ### Teams
 
@@ -892,7 +892,7 @@ Budget alert webhooks send an HTTP POST to the configured URL when a team approa
 POST /webhooks/github
 ```
 
-Receives GitHub push and pull-request events and attributes commits to developer sessions. The request must include a valid `X-Hub-Signature-256` HMAC header (computed with the `GITHUB_WEBHOOK_SECRET` env var). Configure the webhook in your GitHub repository or organisation settings to point at `https://aigw-dev.lab.cloud.scdom.net/api/admin/webhooks/github`.
+Receives GitHub push and pull-request events and attributes commits to developer sessions. The request must include a valid `X-Hub-Signature-256` HMAC header (computed with the `GITHUB_WEBHOOK_SECRET` env var). Configure the webhook in your GitHub repository or organisation settings to point at `https://dev.aigw.scdom.net/api/admin/webhooks/github`.
 
 ### Budget Forecast
 
@@ -1032,7 +1032,7 @@ GET /auth/oidc/callback?code=...&state=...
 Exchanges the authorization code for an id_token, extracts `email` and `name` claims, then:
 - Finds the existing user record by email, or creates a new one with the `developer` role
 - Issues a session token
-- Redirects to `/admin?sso_token=<token>` (for admin-role users) or `/portal?sso_token=<token>` (for developers)
+- Redirects to `/admin?sso_token=<token>` (for admin-role users) or `/?sso_token=<token>` (for developers)
 
 Both portal frontends read `?sso_token=` on mount and store it as a session.
 
@@ -1066,7 +1066,7 @@ Authorization: Bearer <token>    (platform_admin or team_admin)
   "email": "newdev@simcorp.com",
   "role": "developer",
   "expires_at": "2026-05-15T10:00:00+00:00",
-  "accept_url": "https://aigw-dev.lab.cloud.scdom.net/api/admin/auth/invitations/accept?token=...",
+  "accept_url": "https://dev.aigw.scdom.net/api/admin/auth/invitations/accept?token=...",
   "token": "<raw-token>"
 }
 ```

@@ -1,6 +1,13 @@
-# Environments
+# Environments (deferred V2 / ACA)
 
-The AI Gateway runs in two Azure Container Apps environments in the SimCorp Landing Zone (Sweden Central).
+> **Status: future target, not currently running.** This document describes the **Azure Container
+> Apps (ACA)** deployment — the deferred V2/prod target. The AI Gateway currently runs as a
+> single-host Docker Compose stack on a VM; see [`dev-environment.md`](dev-environment.md) for the
+> live deployment. The ACA Bicep IaC below is in-repo and ready for promotion, and its CI/CD
+> workflows are archived in `.github/workflows/_archived/`.
+
+The V2 target runs the AI Gateway in two Azure Container Apps environments in the SimCorp Landing
+Zone (Sweden Central).
 
 ## Environment comparison
 

@@ -14,7 +14,7 @@
 | Surface | URL | Credentials |
 |---|---|---|
 | Developer portal | `https://dev.aigw.scdom.net/` | `pass show aigw/dev-portal` → `developer@aigw.scdom.net` |
-| Admin portal | `https://dev.aigw.scdom.net/admin/` | `pass show aigw/admin-portal` → `admin@aigw.scdom.net` |
+| Admin portal | `https://dev.aigw.scdom.net/admin` | `pass show aigw/admin-portal` → `admin@aigw.scdom.net` |
 | Inference API | `https://dev.aigw.scdom.net/v1/` | `sk-*` key — create via admin portal |
 | Health check | `https://dev.aigw.scdom.net/health` | — |
 
@@ -269,7 +269,7 @@ flowchart TB
       adminportal["admin-portal :3001\nAdmin portal"]
     end
 
-    subgraph APIS["/name/* (prefix stripped)"]
+    subgraph APIS["/api/&lt;svc&gt;/* (prefix stripped)"]
       admin["admin :8005\norg nodes · API keys · auth"]
     end
 
@@ -282,10 +282,10 @@ flowchart TB
   ext["Anthropic · Azure AI · Gemini · GitHub"]
 
   dev --> zcc --> zpa -->|"443"| caddy
-  caddy -->|"/v1/*"| cache
-  caddy -->|"/portal*"| portal
-  caddy -->|"/admin-portal*"| adminportal
-  caddy -->|"/admin/*"| admin
+  caddy -->|"/v1/*  ·  /anthropic/*"| cache
+  caddy -->|"/  (catch-all)"| portal
+  caddy -->|"/admin*"| adminportal
+  caddy -->|"/api/admin/*"| admin
   cache -->|"POST /validate"| auth
   cache -->|"MISS"| litellm
   litellm --> ext
