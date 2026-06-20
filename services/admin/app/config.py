@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     librarian_url: str
     librarian_service_token: str = ""
 
+    # Observability backends queried by the DevOps agent (defaults = single-host stack).
+    loki_url: str = "http://obs-loki:3100"
+    prometheus_url: str = "http://obs-prometheus:9090"
+
     # Secret used to encrypt the RSA identity signing key stored in Redis.
     # Use a long random string in production (e.g. openssl rand -hex 32).
     identity_key_secret: str

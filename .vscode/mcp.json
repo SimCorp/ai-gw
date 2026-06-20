@@ -15,6 +15,10 @@
     "ai-librarian": {
       "type": "sse",
       "url": "http://localhost:8008/mcp/sse"
+    },
+    "ai-gateway-grafana": {
+      "type": "sse",
+      "url": "http://localhost:8013/sse"
     }
   }
 }
