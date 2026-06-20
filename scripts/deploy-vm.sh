@@ -29,6 +29,7 @@ set -euo pipefail
 
 IMAGE_TAG="${1:-latest}"
 VM_HOST="${VM_HOST:-azureuser@10.179.231.68}"
+GATEWAY_FQDN="${GATEWAY_FQDN:-dev.aigw.scdom.net}"
 SSH_PASS_ENTRY="${SSH_PASS_ENTRY:-ssh/dev.aigw.scdom.net}"
 GHCR_PASS_ENTRY="${GHCR_PASS_ENTRY:-api/GHCR PAT aigw}"
 COMPOSE="docker compose -f docker-compose.yml -f docker-compose.host.yml"
@@ -75,6 +76,24 @@ $SSH "set -e; cd ~/ai-gw/infra
 
 echo "==> Done. Current status:"
 $SSH "cd ~/ai-gw/infra && $COMPOSE ps"
+
+# TLS chain completeness check. A leaf-only cert.pem (missing the SimCorp Issuing CA
+# intermediate) passes curl -k / Playwright ignoreHTTPSErrors but FAILS in real
+# browsers ("authenticity of received data could not be verified"). This checks the
+# served chain WITHOUT needing the SimCorp root in the local trust store: verify
+# code 21 = "unable to verify first cert" = missing intermediate. (Code 0 or 20 = OK.)
+echo "==> Checking TLS chain on $GATEWAY_FQDN"
+if command -v openssl >/dev/null; then
+  _tls=$(echo | openssl s_client -connect "$GATEWAY_FQDN:443" -servername "$GATEWAY_FQDN" -showcerts 2>/dev/null)
+  _ncerts=$(printf '%s' "$_tls" | grep -c 'BEGIN CERTIFICATE')
+  if printf '%s' "$_tls" | grep -q 'Verify return code: 21' || [ "$_ncerts" -lt 2 ]; then
+    echo "  ⚠️  WARNING: incomplete TLS chain ($_ncerts cert(s) served) — the intermediate is" >&2
+    echo "      missing; browsers will reject it. Install cert.pem as a FULLCHAIN" >&2
+    echo "      (leaf + SimCorp Issuing CA). See docs/ops-runbook.md 'TLS certificate'." >&2
+  else
+    echo "  ✓ TLS chain complete ($_ncerts certs served)"
+  fi
+fi
 
 # Optional post-deploy smoke: walk the portals and fail the deploy if broken.
 if [ "${SMOKE:-0}" = "1" ]; then
