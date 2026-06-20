@@ -2,17 +2,7 @@
 
 import React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getAdminToken } from '../../../../lib/adminAuth';
-
-const SCANNER_API = process.env.NEXT_PUBLIC_SCANNER_API ?? 'http://localhost:8011';
-
-function authHeaders(json = false): HeadersInit {
-  const token = getAdminToken();
-  const h: Record<string, string> = {};
-  if (token) h.Authorization = `Bearer ${token}`;
-  if (json) h['Content-Type'] = 'application/json';
-  return h;
-}
+import { apiFetch } from '../../../../lib/apiClient';
 
 interface ScanJob {
   id: string;
@@ -47,12 +37,12 @@ export default function JobsPage() {
 
   const { data: jobs = [], isLoading } = useQuery<ScanJob[]>({
     queryKey: ['admin-scanner-jobs'],
-    queryFn: () => fetch(`${SCANNER_API}/jobs?limit=50`, { headers: authHeaders() }).then(r => r.json()),
+    queryFn: () => apiFetch<ScanJob[]>('/scanner/jobs?limit=50'),
     refetchInterval: 5_000,
   });
 
   const cancel = useMutation({
-    mutationFn: (id: string) => fetch(`${SCANNER_API}/jobs/${id}`, { method: 'DELETE', headers: authHeaders() }),
+    mutationFn: (id: string) => apiFetch(`/scanner/jobs/${id}`, { method: 'DELETE' }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-scanner-jobs'] }),
   });
 

@@ -95,6 +95,52 @@ async def list_targets(
     return [dict(r) for r in rows]
 
 
+@router.get("/jobs")
+async def list_scan_jobs(
+    node_id: str | None = Query(default=None),
+    status: str | None = Query(default=None),
+    limit: int = Query(default=50, le=200),
+    session: AsyncSession = Depends(get_session),
+):
+    """Admin view of scan jobs (all teams, gated by admin auth). The scanner
+    service's own /jobs is gateway-token-scoped to one team; the admin portal
+    reads the shared scan_jobs table directly instead."""
+    where_clauses, params = [], {"limit": limit}
+    if node_id:
+        where_clauses.append("node_id = CAST(:node_id AS uuid)")
+        params["node_id"] = node_id
+    if status:
+        where_clauses.append("status = :status")
+        params["status"] = status
+    where = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+    rows = (
+        (
+            await session.execute(
+                text(f"SELECT * FROM scan_jobs {where} ORDER BY queued_at DESC LIMIT :limit"),
+                params,
+            )
+        )
+        .mappings()
+        .all()
+    )
+    return [dict(r) for r in rows]
+
+
+@router.delete("/jobs/{job_id}")
+async def cancel_scan_job(job_id: str, session: AsyncSession = Depends(get_session)):
+    """Cancel a queued/running scan job (same DB status update the scanner
+    service performs; the worker observes the status change)."""
+    await session.execute(
+        text(
+            "UPDATE scan_jobs SET status = 'cancelled', finished_at = NOW() "
+            "WHERE id = CAST(:id AS uuid) AND status IN ('queued', 'running')"
+        ),
+        {"id": job_id},
+    )
+    await session.commit()
+    return {"ok": True}
+
+
 @router.post("/targets", status_code=201)
 async def register_target(body: TargetCreate, session: AsyncSession = Depends(get_session)):
     if _is_external(body.url):

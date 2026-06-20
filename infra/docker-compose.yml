@@ -321,6 +321,7 @@ services:
     environment:
       NEXT_TELEMETRY_DISABLED: "1"
       NEXT_PUBLIC_ADMIN_API: "https://dev.aigw.scdom.net/admin"
+      NEXT_PUBLIC_LEAGUE_API: "https://dev.aigw.scdom.net/league"
     depends_on:
       admin:
         condition: service_healthy
@@ -346,6 +347,7 @@ services:
       NEXT_PUBLIC_LIBRARIAN_BASE_URL: "https://dev.aigw.scdom.net/librarian"
       NEXT_PUBLIC_MEMORY_BASE_URL: "https://dev.aigw.scdom.net/memory"
       NEXT_PUBLIC_LITELLM_BASE_URL: "https://dev.aigw.scdom.net/litellm"
+      NEXT_PUBLIC_LEAGUE_API: "https://dev.aigw.scdom.net/league"
       NEXT_PUBLIC_LITELLM_KEY: "sk-litellm-local-dev"
     depends_on:
       admin:
