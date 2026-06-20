@@ -69,10 +69,10 @@
 		respond "ok" 200
 	}
 
-	# Observability — Grafana UI (sub-path; obs-lgtm sets GF_SERVER_ROOT_URL +
+	# Observability — Grafana UI (sub-path; obs-grafana sets GF_SERVER_ROOT_URL +
 	# serve_from_sub_path). Behind Grafana's own login + the corp ZPA boundary.
 	handle /grafana/* {
-		reverse_proxy obs-lgtm:3000
+		reverse_proxy obs-grafana:3000
 	}
 
 	# Dev portal at the root — catch-all for everything not matched above

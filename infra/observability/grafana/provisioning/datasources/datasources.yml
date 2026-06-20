@@ -1,0 +1,14 @@
+# Auto-provisioned Grafana datasources for the single-host observability stack.
+apiVersion: 1
+datasources:
+  - name: Prometheus
+    uid: prometheus
+    type: prometheus
+    access: proxy
+    url: http://obs-prometheus:9090
+    isDefault: true
+  - name: Loki
+    uid: loki
+    type: loki
+    access: proxy
+    url: http://obs-loki:3100
