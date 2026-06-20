@@ -183,8 +183,12 @@ docker compose -f docker-compose.yml -f docker-compose.host.yml pull
 docker compose -f docker-compose.yml -f docker-compose.host.yml up -d
 ```
 
-Prefer `scripts/deploy-vm.sh [IMAGE_TAG]` from an in-VNet host — it handles the GHCR
-login (token from `pass`), `git pull`, image pull, and rolling restart in one step.
+Prefer the scripts from an in-VNet host (both pull the GHCR token from `pass`):
+
+- **`scripts/update-service.sh <svc…>`** — the routine, light path: pull + `up -d --no-deps` for
+  just the named gateway service(s); the static base (postgres/redis/dex/caddy) is never touched.
+- **`scripts/deploy-vm.sh [IMAGE_TAG]`** — the full path (`git pull` + pull-all + `up -d`) for
+  multi-service, base, or compose changes.
 
 ---
 
