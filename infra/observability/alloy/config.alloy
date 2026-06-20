@@ -1,0 +1,113 @@
+// Grafana Alloy — single-host observability collector for the AI Gateway.
+//
+// Collects, with NO changes to the application services:
+//   1. all container stdout/stderr logs  -> Loki   (obs-lgtm:3100)
+//   2. host + per-container resource metrics (cAdvisor + node exporter) -> Prometheus (obs-lgtm:9090)
+//   3. each gateway service's /metrics endpoint (added in Phase 2)       -> Prometheus
+//
+// Runs with the Docker socket mounted read-only (precedented by scanner/workflow-worker).
+
+// ── 1. Container logs -> Loki ────────────────────────────────────────────────
+discovery.docker "containers" {
+	host = "unix:///var/run/docker.sock"
+}
+
+// Turn Docker metadata into useful Loki labels.
+discovery.relabel "containers" {
+	targets = discovery.docker.containers.targets
+
+	rule {
+		source_labels = ["__meta_docker_container_name"]
+		regex         = "/(.*)"
+		target_label  = "container"
+	}
+	rule {
+		source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+		target_label  = "compose_service"
+	}
+	rule {
+		source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+		target_label  = "compose_project"
+	}
+}
+
+loki.source.docker "containers" {
+	host          = "unix:///var/run/docker.sock"
+	targets       = discovery.relabel.containers.output
+	relabel_rules = discovery.relabel.containers.rules
+	forward_to    = [loki.process.parse.receiver]
+}
+
+// Parse JSON log lines (Phase 2 emits structured JSON) into labels/fields where present.
+// Plain-text lines pass through untouched (the JSON stage is best-effort).
+loki.process "parse" {
+	forward_to = [loki.write.lgtm.receiver]
+
+	stage.json {
+		expressions = {
+			level            = "level",
+			request_id       = "request_id",
+			session_trace_id = "session_trace_id",
+		}
+	}
+	stage.labels {
+		values = {
+			level = "",
+		}
+	}
+}
+
+loki.write "lgtm" {
+	endpoint {
+		url = "http://obs-lgtm:3100/loki/api/v1/push"
+	}
+}
+
+// ── 2. Host + container resource metrics -> Prometheus ───────────────────────
+prometheus.exporter.unix "host" {
+	rootfs_path = "/rootfs"
+	procfs_path = "/proc"
+	sysfs_path  = "/sys"
+}
+
+prometheus.exporter.cadvisor "containers" {
+	docker_host      = "unix:///var/run/docker.sock"
+	storage_duration = "5m"
+}
+
+prometheus.scrape "infra" {
+	targets = concat(
+		prometheus.exporter.unix.host.targets,
+		prometheus.exporter.cadvisor.containers.targets,
+	)
+	scrape_interval = "30s"
+	forward_to      = [prometheus.remote_write.lgtm.receiver]
+}
+
+// ── 3. Gateway service /metrics scrape (endpoints added in Phase 2) ──────────
+// Static list: postgres/redis/caddy/portals/workers have no /metrics. auth is
+// internal-only; cache..league expose /metrics on their service port.
+prometheus.scrape "gateway" {
+	targets = [
+		{"__address__" = "auth:8001", "service" = "auth"},
+		{"__address__" = "cache:8002", "service" = "cache"},
+		{"__address__" = "litellm:8003", "service" = "litellm"},
+		{"__address__" = "observability:8004", "service" = "observability"},
+		{"__address__" = "admin:8005", "service" = "admin"},
+		{"__address__" = "identity:8006", "service" = "identity"},
+		{"__address__" = "agent-relay:8007", "service" = "agent-relay"},
+		{"__address__" = "librarian:8008", "service" = "librarian"},
+		{"__address__" = "memory:8009", "service" = "memory"},
+		{"__address__" = "league:8010", "service" = "league"},
+		{"__address__" = "scanner:8011", "service" = "scanner"},
+	]
+	metrics_path    = "/metrics"
+	scrape_interval = "30s"
+	forward_to      = [prometheus.remote_write.lgtm.receiver]
+}
+
+prometheus.remote_write "lgtm" {
+	endpoint {
+		url = "http://obs-lgtm:9090/api/v1/write"
+	}
+}
