@@ -21,7 +21,7 @@ from uuid import UUID
 import asyncpg
 import httpx
 from fastapi import FastAPI, HTTPException, Query, Request
-from prometheus_fastapi_instrumentator import Instrumentator
+from prometheus_client import make_asgi_app
 from pydantic import BaseModel, Field
 from redis.asyncio import Redis
 
@@ -259,7 +259,7 @@ async def lifespan(app: FastAPI):
 init_logging("identity")
 app = FastAPI(title="AI Gateway — Identity Pool", version="0.1.0", lifespan=lifespan)
 app.add_middleware(CorrelationIdMiddleware)
-Instrumentator().instrument(app).expose(app, include_in_schema=False)
+app.mount("/metrics", make_asgi_app())
 
 
 def _pool(request: Request) -> asyncpg.Pool:

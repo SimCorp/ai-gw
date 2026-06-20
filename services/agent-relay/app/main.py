@@ -36,7 +36,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
-from prometheus_fastapi_instrumentator import Instrumentator
+from prometheus_client import make_asgi_app
 from pydantic import BaseModel
 from redis.asyncio import Redis
 
@@ -82,7 +82,7 @@ async def lifespan(app: FastAPI):
 init_logging("agent-relay")
 app = FastAPI(title="AI Gateway Agent Relay", version="0.1.0", lifespan=lifespan)
 app.add_middleware(CorrelationIdMiddleware)
-Instrumentator().instrument(app).expose(app, include_in_schema=False)
+app.mount("/metrics", make_asgi_app())
 
 
 # ---------------------------------------------------------------------------

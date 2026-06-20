@@ -79,8 +79,7 @@ class CorrelationIdMiddleware:
             return
 
         headers = {
-            k.decode("latin-1").lower(): v.decode("latin-1")
-            for k, v in scope.get("headers", [])
+            k.decode("latin-1").lower(): v.decode("latin-1") for k, v in scope.get("headers", [])
         }
         rid = headers.get("x-request-id") or headers.get("x-correlation-id") or str(uuid.uuid4())
         stid = headers.get("x-session-trace-id", "-")
@@ -89,9 +88,7 @@ class CorrelationIdMiddleware:
 
         async def send_wrapper(message):
             if message["type"] == "http.response.start":
-                message.setdefault("headers", []).append(
-                    (b"x-request-id", rid.encode("latin-1"))
-                )
+                message.setdefault("headers", []).append((b"x-request-id", rid.encode("latin-1")))
             await send(message)
 
         try:

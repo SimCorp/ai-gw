@@ -19,7 +19,7 @@ import httpx
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import Response
 from openai import AsyncOpenAI
-from prometheus_fastapi_instrumentator import Instrumentator
+from prometheus_client import make_asgi_app
 
 import app.store as store
 from app.auth import resolve_developer
@@ -155,7 +155,7 @@ async def lifespan(application: FastAPI):
 init_logging("memory")
 app = FastAPI(title="Memory Palace", version="0.1.0", lifespan=lifespan)
 app.add_middleware(CorrelationIdMiddleware)
-Instrumentator().instrument(app).expose(app, include_in_schema=False)
+app.mount("/metrics", make_asgi_app())
 mcp_server = MCPServer(
     name="memory-palace",
     version="0.1.0",
