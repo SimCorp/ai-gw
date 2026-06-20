@@ -15,10 +15,10 @@ The IT Tools integration provides:
 
 ### Service Configuration
 
-IT Tools runs the upstream `ghcr.io/corentinth/it-tools` image as its own Container App (`ca-it-tools-dev-sdc`) behind the gateway in Azure Container Apps.
+IT Tools runs the upstream `ghcr.io/corentinth/it-tools` image as its own service in the Docker Compose stack on the single-host VM, behind the gateway (Caddy).
 
 **Deployment:**
-The it-tools image (pinned to a specific SHA256 digest) and its version are managed through the Bicep Container App definition and deployed via the normal pipeline. The Container App is internal-only and exposes no public ingress — it is reachable solely through the gateway.
+The it-tools image (pinned to a specific SHA256 digest) and its version are managed through the Compose service definition and rolled out via the normal deploy flow. The service is internal-only and exposes no public ingress — it is reachable solely through the gateway.
 
 **Gateway Routing:**
 ```
@@ -31,8 +31,8 @@ The service runs in a WASM sandbox with no access to the host OS, file system, o
 
 The developer portal (`apps/portal`) surfaces IT Tools through:
 
-1. **Toolbox listing page**: `/portal/tools`
-2. **Individual tool viewer**: `/portal/tools/{tool_id}`
+1. **Toolbox listing page**: `/tools`
+2. **Individual tool viewer**: `/tools/{tool_id}`
 3. **Search and category filtering**
 4. **Direct iframe linking**: Each tool is embedded as `<iframe src="/tools-app/#{tool_id}">`
 
@@ -170,12 +170,12 @@ The admin interface calls `GET /tools?enabled_only=false` and `PATCH /tools/{too
 
 ### From the Developer Portal
 
-1. Developer navigates to `/portal/tools`
+1. Developer navigates to `/tools`
 2. Portal calls `GET /tools?enabled_only=true`
 3. Developer enters search term or clicks a category filter
 4. Portal filters locally (client-side)
 5. Developer clicks on a tool (e.g. JSON Formatter)
-6. Browser navigates to `/portal/tools/json-formatter`
+6. Browser navigates to `/tools/json-formatter`
 7. Page renders iframe: `<iframe src="/tools-app/#/json-formatter">`
 8. It-Tools service loads the tool in the browser
 
@@ -185,13 +185,13 @@ An external tool could list all available tools:
 
 ```bash
 curl -H "Authorization: Bearer <token>" \
-  "https://aigw-dev.lab.cloud.scdom.net/admin/tools?enabled_only=true"
+  "https://dev.aigw.scdom.net/api/admin/tools?enabled_only=true"
 ```
 
 Then link engineers to specific tools:
 
 ```
-https://aigw-dev.lab.cloud.scdom.net/tools/base64-encode
+https://dev.aigw.scdom.net/tools/base64-encode
 ```
 
 ## Security
@@ -211,7 +211,7 @@ https://aigw-dev.lab.cloud.scdom.net/tools/base64-encode
 
 ## Migration & Uptime
 
-As a Container App, the it-tools service is automatically restarted and recovered by the Azure Container Apps platform on failure. The container image is pinned to a specific SHA256 digest for consistency:
+As a Compose service, the it-tools container is automatically restarted and recovered by Docker on failure (per its restart policy). The container image is pinned to a specific SHA256 digest for consistency:
 
 ```
 ghcr.io/corentinth/it-tools@sha256:8b8128748339583ca951af03dfe02a9a4d7363f61a216226fc28030731a5a61f
@@ -219,14 +219,14 @@ ghcr.io/corentinth/it-tools@sha256:8b8128748339583ca951af03dfe02a9a4d7363f61a216
 
 To update to a newer version:
 1. Determine the digest of the desired upstream image tag
-2. Update the pinned image digest in the it-tools Bicep Container App definition
-3. Deploy through the normal pipeline; Azure Container Apps rolls out the new revision
+2. Update the pinned image digest in the it-tools Compose service definition
+3. Deploy through the normal flow; Docker Compose rolls out the new container
 
 ## Error Handling
 
 ### Tool Not Found
 
-If a developer requests `/portal/tools/nonexistent`:
+If a developer requests `/tools/nonexistent`:
 - Page component tries to load the iframe
 - It-Tools service responds with 404
 - Fallback message displayed in portal
@@ -250,7 +250,7 @@ If iframe fails to load within timeout:
 New tools can be added by:
 1. Contributing to the upstream `it-tools` project (or forking)
 2. Rebuilding the container image
-3. Updating the pinned image digest in the it-tools Bicep Container App definition and deploying through the pipeline
+3. Updating the pinned image digest in the it-tools Compose service definition and deploying through the normal flow
 4. No code changes needed in the gateway or portal — tools are auto-discovered
 
 If custom tools are needed beyond the community catalog, consider:
@@ -261,8 +261,8 @@ If custom tools are needed beyond the community catalog, consider:
 
 ## Base URLs
 
-**Developer Portal:** `https://aigw-dev.lab.cloud.scdom.net/tools/`
+**Developer Portal:** `https://dev.aigw.scdom.net/tools/`
 
-**Direct Tool Access:** `https://aigw-dev.lab.cloud.scdom.net/tools-app/#/{tool_id}`
+**Direct Tool Access:** `https://dev.aigw.scdom.net/tools-app/#/{tool_id}`
 
-**API Endpoint:** `https://aigw-dev.lab.cloud.scdom.net/admin/tools`
+**API Endpoint:** `https://dev.aigw.scdom.net/api/admin/tools`

@@ -16,13 +16,15 @@ routing, observability, and guardrails** applied centrally instead of in every a
 
 It is a set of small **FastAPI** (Python) microservices plus two **Next.js** web apps.
 
-**Current deployment (dev / stabilisation phase):** Docker Compose on a single Linux VM
+**Current deployment (live):** Docker Compose on a single Linux VM
 (`vm-aigw-dev-sdc`, `10.179.231.68`) in the dev Landing Zone spoke VNet — no ACA, no managed
-PaaS. See [`dev-environment.md`](dev-environment.md) for the full deployment picture.
+PaaS. Reached at `https://dev.aigw.scdom.net` over Zscaler ZPA. See
+[`dev-environment.md`](dev-environment.md) for the full deployment picture.
 
-**Target deployment (Phase 2):** Azure Container Apps (ACA) in the SimCorp Landing Zone
+**Deferred target (V2 / prod):** Azure Container Apps (ACA) in the SimCorp Landing Zone
 (Sweden Central), with managed PostgreSQL, Redis, Key Vault, and Service Bus reached over
-private endpoints.
+private endpoints. The Bicep IaC is in-repo and ready for promotion but not currently running —
+see [`environments.md`](environments.md).
 
 ---
 
@@ -30,19 +32,18 @@ private endpoints.
 
 | Layer | Technology | Role |
 |---|---|---|
-| Layer | Technology | Role |
-|---|---|---|
 | Front-door / router | **Caddy** | TLS termination + path-based reverse proxy |
 | Backend services | **FastAPI** (Python, async) | 12 request-path + 2 worker services |
 | Web apps | **Next.js** | Developer portal + admin portal |
 | Provider routing | **LiteLLM** | OpenAI-compatible facade over Anthropic, Azure OpenAI, Gemini, GitHub Models |
-| **Dev hosting** | **Docker Compose on Linux VM** | Single-host stabilisation; `vm-aigw-dev-sdc` (10.179.231.68) |
-| **Target hosting** | **Azure Container Apps** | Serverless containers, internal ACA env, scale-to-N |
+| **Hosting (current)** | **Docker Compose on Linux VM** | Single-host; `vm-aigw-dev-sdc` (10.179.231.68) |
+| **Hosting (deferred V2)** | **Azure Container Apps** | Serverless containers, internal ACA env, scale-to-N |
 | Datastore | **PostgreSQL** (pgvector:pg16) | Teams, API keys, registries, memory; Docker volume in dev, Flexible Server in prod |
 | Cache | **Redis** (redis-stack) | Exact + semantic response cache, rate-limit counters; Docker volume in dev |
-| Secrets | **`.env` file** (dev) / **Azure Key Vault** (prod) | Provider keys + service config |
+| Secrets | **`.env` file** (current) / **Azure Key Vault** (V2) | Provider keys + service config |
 | Edge access | **Zscaler ZPA** | Brokers corp clients to the VNet (no public internet) |
-| IaC / CI | **Bicep** + **GitHub Actions** | Declarative infra; build/push images; deploy on `master` |
+| CI / images | **GitHub Actions** + **GHCR** | `master` push → build/push images → VM pulls |
+| IaC (deferred V2) | **Bicep** | Declarative ACA infra; in-repo, ready for promotion |
 
 ---
 
@@ -63,30 +64,26 @@ flowchart TB
   end
 
   subgraph VNET["Azure spoke VNet · 10.179.231.0/25 · Sweden Central"]
-    subgraph ACA["ACA environment cae-aigw-dev-sdc · internal:true · LB 10.179.231.6"]
-      gw["ca-gateway — Caddy<br/>external:true · TCP 443<br/>path router + Host rewrite"]
-      subgraph SVC["Container Apps — internal only (external:false)"]
+    subgraph VM["vm-aigw-dev-sdc · 10.179.231.68 (static)<br/>Docker Compose single-host"]
+      gw["Caddy :443<br/>TLS front-door · path router"]
+      subgraph SVC["Containers — Compose network (no external ports)"]
         auth["auth :8001<br/>key/JWT validation, rate limit"]
         cache["cache :8002<br/>exact + semantic cache, guardrails"]
         litellm["litellm :8003<br/>provider routing"]
         rest["portal · admin · admin-portal<br/>identity · librarian · memory<br/>league · agent-relay · observability"]
         bg["scanner · workflow-worker<br/>background workers"]
       end
-    end
-    subgraph PAAS["Managed PaaS — private endpoints (snet-pe-aigw-dev)"]
-      pg[("PostgreSQL<br/>Flexible Server")]
-      redis[("Cache for Redis")]
-      kv["Key Vault"]
-      sb["Service Bus"]
-      acr["Container Registry"]
+      subgraph DATA["Data — local Docker volumes"]
+        pg[("postgres<br/>pgvector:pg16")]
+        redis[("redis-stack")]
+        dex["dex (dev OIDC)"]
+      end
     end
   end
 
-  ext["External LLM providers<br/>Anthropic, …"]
-  appi["Application Insights<br/>OpenTelemetry"]
+  ext["External LLM providers<br/>Anthropic · Azure OpenAI · Gemini · GitHub Models"]
 
   dev --> zcc --> zpa -->|"TCP 443 · TLS"| gw
-  gw --> auth
   gw --> cache
   gw --> rest
   cache --> auth
@@ -94,17 +91,14 @@ flowchart TB
   cache --> litellm
   litellm --> ext
   auth --> pg & redis
-  rest --> pg
-  bg --> sb
-  SVC -. "secrets via managed identity" .-> kv
-  SVC -. "OTel traces" .-> appi
+  rest --> pg & redis
 ```
 
-**Reading it (dev):** corp clients never touch the public internet — Zscaler ZPA brokers them
+**Reading it:** corp clients never touch the public internet — Zscaler ZPA brokers them
 into the VNet to `10.179.231.68`. Only **Caddy** is exposed (ports 443 and 80); every other
-container is bound to `127.0.0.1` and reachable only inside the VM. Data lives in local Docker
-volumes; secrets come from `.env`. See [`dev-environment.md`](dev-environment.md) for the
-full container inventory and deployment guide.
+container is bound to `127.0.0.1` and reachable only inside the VM. Services discover each
+other by container name. Data lives in local Docker volumes; secrets come from `.env`. See
+[`dev-environment.md`](dev-environment.md) for the full container inventory and deployment guide.
 
 ---
 
@@ -147,17 +141,19 @@ sequenceDiagram
   end
 ```
 
-Other paths are simpler: `/portal*` and `/admin-portal*` use `handle` (prefix kept, required
-by Next.js `basePath`); `/admin`, `/identity`, `/librarian`, `/memory`, `/league`,
-`/observability`, `/litellm`, `/agent-relay` use `handle_path` (prefix stripped, FastAPI
-services see their root). Full routing table: [`dev-environment.md#caddy-routing-table`](dev-environment.md#caddy-routing-table).
+Other paths are simpler: `/` (and everything unmatched) routes to the developer **portal**;
+`/admin*` routes to the **admin-portal** (prefix kept, required by its Next.js `basePath`);
+`/auth/*` and `/agent-relay/*` keep their prefix. Backend service APIs live under
+`/api/<svc>/*` (for `admin`, `cache`, `litellm`, `identity`, `librarian`, `memory`, `league`,
+`observability`) — Caddy strips the `/api/<svc>` prefix so the FastAPI services see their root.
+Full routing table: [`dev-environment.md#caddy-routing`](dev-environment.md#caddy-routing).
 
 ---
 
 ## 5. The access edge (how you reach it)
 
-**Internal-only** — there is no public endpoint. Three mechanisms cooperate in the current
-single-host deployment. See [`dev-environment.md#access-edge`](dev-environment.md#access-edge----pending-it-forms) for the pending IT forms.
+**Internal-only** — there is no public endpoint. Three mechanisms cooperate in the
+single-host deployment. See [`dev-environment.md`](dev-environment.md) for credentials and access details.
 
 ![Access edge](diagrams/03-access-edge.png)
 
@@ -166,7 +162,7 @@ flowchart LR
   dev["Developer workstation\nhttps://dev.aigw.scdom.net/"]
 
   subgraph DNSZ["DNS — internal SimCorp zone"]
-    int["dev.aigw.scdom.net A → 10.179.231.68\nmanaged by SimCorp IT (scdom.net)"]
+    int["dev.aigw.scdom.net A → 100.64.1.34\n(ZPA virtual IP → VM 10.179.231.68)\nmanaged by SimCorp IT (scdom.net)"]
   end
 
   subgraph ZPA["Zscaler ZPA"]
@@ -180,24 +176,23 @@ flowchart LR
 
   vm["vm-aigw-dev-sdc\n10.179.231.68 (static private IP)\nno public IP"]
   caddy["Caddy :443\ntls cert.pem key.pem\n*.aigw.scdom.net"]
-  cert_issued["TLS cert *.aigw.scdom.net\nSimCorp Internal CA\n⚠ pending GIT form ①"]
-  cert_interim["Self-signed stand-in\nCN=*.aigw.scdom.net\n30-day, on VM at infra/certs/"]
+  cert["TLS cert *.aigw.scdom.net\nSimCorp Issuing CA · valid to 2028\ninstalled on VM at infra/certs/"]
 
   dev -. "1 resolve" .-> int
   dev --> zcc
   int --> zac
   zcc -->|"2 ZPA tunnel"| zac -->|"3 TCP 443"| nsg --> vm --> caddy
-  cert_issued -. "swap in when issued" .-> caddy
-  cert_interim -. "in use now" .-> caddy
+  cert -. "in use" .-> caddy
 ```
 
-1. **DNS** — the internal scdom.net zone resolves `dev.aigw.scdom.net` to `10.179.231.68`
-   (static private IP). No public A record; no asuid TXT needed because we're not using ACA
-   domain binding.
+1. **DNS** — the internal scdom.net zone resolves `dev.aigw.scdom.net` to the ZPA virtual IP
+   `100.64.1.34`, which ZPA forwards to the VM at `10.179.231.68`. No public A record; no asuid
+   TXT needed because we're not using ACA domain binding.
 2. **Zscaler ZPA** brokers the corp client into the VNet with TLS passthrough (no inspection).
    The VM has no public IP — ZPA is the only path in.
 3. **NSG `nsg-aigw-vm-dev`** allows 443, 80, and 22 inbound from the ZPA connector range only.
-   TLS terminates at **Caddy** on the VM; all services behind it are on `127.0.0.1`.
+   TLS terminates at **Caddy** on the VM (wildcard `*.aigw.scdom.net`, SimCorp Issuing CA); all
+   services behind it are on `127.0.0.1`.
 
 ---
 
@@ -217,33 +212,44 @@ flowchart LR
 
 - **Two credential types:** end users carry JWTs; agents/apps carry `sk-` API keys. `auth`
   validates a key purely by `sha256(raw key)` against `api_keys` where `revoked_at IS NULL`.
-- **No secrets at rest:** every app uses its **managed identity** to read Key Vault; provider
-  keys and DB strings live only in Key Vault and in process memory at runtime.
-- **Network isolation:** internal-only ACA environment, private endpoints for all PaaS, and
-  Landing-Zone Azure Policy enforcing "no public endpoints" + "TLS required" (which is why the
-  edge in §5 is shaped the way it is).
+- **Secrets handling:** in the current single-host deployment provider keys and DB strings come
+  from a VM-local `.env` (gitignored, mode 0600) and live only in process memory at runtime. In
+  the deferred V2 (ACA), every app reads them from Key Vault via its managed identity.
+- **Network isolation:** the VM has no public IP and only Caddy is exposed; all services bind
+  `127.0.0.1`. Zscaler ZPA is the only path in (no public endpoint), which is why the edge in §5
+  is shaped the way it is. The V2 (ACA) target tightens this further with an internal-only ACA
+  environment and private endpoints for all PaaS.
 - **Guardrails** run in `cache` on the request body before anything is forwarded to a provider.
 
 ---
 
 ## 8. Observability
 
-Request-path services (`auth`, `cache`, `admin`, …) are instrumented with **OpenTelemetry**,
-exporting traces/metrics to **Application Insights** (`appi-aigw-dev-sdc`; connection string
-in Key Vault, env-gated and fail-safe). Usage/cost events also flow through the
-`observability` service via Service Bus for async aggregation. This gives end-to-end
-visibility — which key, which model, cache hit/miss, latency, cost — for diagnostics.
+Request-path services (`auth`, `cache`, `admin`, …) are instrumented with **OpenTelemetry**.
+OTel export to **Application Insights** (`appi-aigw-dev-sdc`) is env-gated and fail-safe — it
+activates in the V2 (ACA) target where the connection string comes from Key Vault. In the
+current single-host deployment, usage/cost events flow through the `observability` service for
+async aggregation. This gives end-to-end visibility — which key, which model, cache hit/miss,
+latency, cost — for diagnostics.
 
 ---
 
 ## 9. Deployment & CI
 
-- **Bicep** describes everything: the ACA environment, each Container App, networking,
-  private endpoints, the gateway + its Caddyfile, and certificate bindings
-  (`infra/bicep/`, entry `environments/dev/main.bicep`).
-- **GitHub Actions** builds and pushes service images to ACR, then `deploy.yml` deploys them
-  on a push to `master` via `az deployment group create … --parameters imageTag=sha-<sha>`.
+**Current (single-host, pull-based):**
+- **GitHub Actions** builds and pushes service images to **GHCR** on a push to `master`.
+- The VM **pulls** the new images: routine single-service updates use
+  `scripts/update-service.sh <svc>` (the static base — postgres/redis/dex/caddy — is untouched);
+  a full deploy uses `scripts/deploy-vm.sh`. Host stand-up is intentionally manual, not IaC.
+- Compose always runs with both files (`docker-compose.yml` + `docker-compose.host.yml`); the
+  host overlay carries the GHCR `image:` keys.
 - Frontend (Next.js) images are built outside the standard image job (pnpm monorepo).
+
+**Deferred V2 (ACA):** **Bicep** describes the whole ACA topology — the environment, each
+Container App, networking, private endpoints, the gateway + its Caddyfile, and certificate
+bindings (`infra/bicep/`, entry `environments/dev/main.bicep`). The ACA CI/CD workflows are
+archived in `.github/workflows/_archived/` and do not run. See
+[`environments.md`](environments.md).
 
 ---
 
@@ -251,7 +257,7 @@ visibility — which key, which model, cache hit/miss, latency, cost — for dia
 
 | Service | Port | Purpose |
 |---|---|---|
-| ca-gateway | 443/8080 | Caddy front-door: path routing, Host rewrite, TLS edge |
+| caddy | 80/443 | Caddy front-door: path routing, TLS edge |
 | auth | 8001 | JWT / API-key validation, rate limiting; inference gatekeeper |
 | cache | 8002 | Semantic + exact cache, guardrails, request orchestration |
 | litellm | 8003 | OpenAI-compatible provider routing |

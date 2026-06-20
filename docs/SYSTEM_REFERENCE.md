@@ -1,10 +1,12 @@
 # AI Gateway — System Reference
 
 > Enterprise AI gateway for SimCorp's ~2000 developers.
-> Stack: FastAPI + Next.js on Azure Container Apps, backed by managed Azure PaaS
-> (Azure Database for PostgreSQL, Azure Cache for Redis, Service Bus, Key Vault).
-> Deployed to the SimCorp Landing Zone, Sweden Central.
-> Last updated: 2026-05-12
+> Stack: FastAPI + Next.js services running on a single Linux VM via Docker Compose,
+> behind a Caddy reverse proxy doing TLS. Backed by PostgreSQL and Redis.
+> Current deployment: VM `vm-aigw-dev-sdc` (10.179.231.68, Azure Sweden Central),
+> reached at `https://dev.aigw.scdom.net` over ZPA (corporate VPN).
+> Azure Container Apps (ACA) is the deferred V2/prod target — see §17.
+> Last updated: 2026-06-20
 
 ---
 
@@ -56,33 +58,39 @@ Developer (Anthropic SDK)
 
 ### 1.2 Services and Ports
 
-Each service runs as an Azure Container App (`ca-<service>-dev-sdc`) with internal
-ingress only. Other services reach it over internal DNS at `http://ca-<service>-dev-sdc`
-on its container port. The gateway is reachable from the corporate VPN at the dev FQDN
-`https://aigw-dev.lab.cloud.scdom.net` (static IP `10.179.231.6`).
+Each service runs as a Docker Compose container on the VM. Other services reach it over
+the Compose network by container name at `http://<service>` on its container port. Only
+Caddy is exposed externally (ports 80/443); the gateway is reachable from the corporate
+VPN (ZPA) at the dev FQDN `https://dev.aigw.scdom.net` (VM `10.179.231.68`). In the V2/ACA
+target each service instead runs as an Azure Container App named `ca-<service>-dev-sdc`
+(see §17).
 
-| Service | Container App | Container Port | Health Endpoint | Purpose |
+| Service | Compose name | Container Port | Health Endpoint | Purpose |
 |---|---|---|---|---|
-| auth | `ca-auth-dev-sdc` | 8001 | `GET /ready` | JWT / API key validation, rate limiting, budget enforcement |
-| cache | `ca-cache-dev-sdc` | 8002 | `GET /ready` | Exact + semantic caching, guardrail enforcement, proxy to LiteLLM |
-| litellm | `ca-litellm-dev-sdc` | 8003 | `GET /health/liveliness` | Provider routing, OpenAI-compatible API |
-| observability | `ca-observability-dev-sdc` | 8004 | `GET /health` | Async event ingestion, cost recording, budget counters |
-| admin | `ca-admin-dev-sdc` | 8005 | `GET /health` | Team management, API keys, policies, guardrails, budgets, workflows, MCP registry |
-| identity | `ca-identity-dev-sdc` | 8006 | `GET /health` | Agent identity tokens (RS256 JWTs, JWKS endpoint) |
-| agent-relay | `ca-agent-relay-dev-sdc` | 8007 | `GET /health` | WebSocket relay for laptop-hosted agents (v1.0) |
-| librarian | `ca-librarian-dev-sdc` | 8008 | `GET /health` | AI Librarian: shared research knowledge base with semantic search |
-| memory | `ca-memory-dev-sdc` | 8009 | `GET /health` | Persistent agent memory scoped to user/team |
-| league | `ca-league-dev-sdc` | 8010 | `GET /health` | AI-League gamified challenge platform |
-| admin-portal | `ca-admin-portal-dev-sdc` | 3001 | — | Admin Next.js UI |
-| portal | `ca-portal-dev-sdc` | 3002 | — | Developer portal Next.js UI |
-| scanner | `ca-scanner-dev-sdc` | none | — | Guardrail/security scanning worker (no ingress) |
-| workflow-worker | `ca-workflow-worker-dev-sdc` | none | — | Async DAG executor (no ingress) |
+| auth | `auth` | 8001 | `GET /ready` | JWT / API key validation, rate limiting, budget enforcement |
+| cache | `cache` | 8002 | `GET /ready` | Exact + semantic caching, guardrail enforcement, proxy to LiteLLM |
+| litellm | `litellm` | 8003 | `GET /health/liveliness` | Provider routing, OpenAI-compatible API |
+| observability | `observability` | 8004 | `GET /health` | Async event ingestion, cost recording, budget counters |
+| admin | `admin` | 8005 | `GET /health` | Team management, API keys, policies, guardrails, budgets, workflows, MCP registry |
+| identity | `identity` | 8006 | `GET /health` | Agent identity tokens (RS256 JWTs, JWKS endpoint) |
+| agent-relay | `agent-relay` | 8007 | `GET /health` | WebSocket relay for laptop-hosted agents (v1.0) |
+| librarian | `librarian` | 8008 | `GET /health` | AI Librarian: shared research knowledge base with semantic search |
+| memory | `memory` | 8009 | `GET /health` | Persistent agent memory scoped to user/team |
+| league | `league` | 8010 | `GET /health` | AI-League gamified challenge platform |
+| admin-portal | `admin-portal` | 3001 | — | Admin Next.js UI |
+| portal | `portal` | 3002 | — | Developer portal Next.js UI |
+| scanner | `scanner` | none | — | Guardrail/security scanning worker (no ingress) |
+| workflow-worker | `workflow-worker` | none | — | Async DAG executor (no ingress) |
 
 ### 1.3 Infrastructure Dependencies
 
-All infrastructure dependencies are managed Azure PaaS, reached over private endpoints.
-Configuration and credentials come from Azure Key Vault via Container Apps native secret
-references (managed identity).
+In the current single-host deployment the infrastructure dependencies (PostgreSQL, Redis)
+run as Compose containers (or co-located services) on the VM, and each service receives its
+configuration and credentials as environment variables supplied by Docker Compose. The
+managed-PaaS specifics described below — Azure Cache for Redis, Azure Database for
+PostgreSQL, Service Bus, and Key Vault secret references — describe the deferred V2/ACA
+target (see §17); on the single host the same configuration values are provided directly as
+environment variables to the Compose services rather than resolved from Key Vault.
 
 **Azure Cache for Redis (Premium P1, RediSearch enabled for semantic cache)** — used for:
 - Rate limit counters: `ratelimit:{team_id}:{model}` (60-second fixed window)
@@ -107,15 +115,18 @@ schema) and `litellm`. Schema managed by Alembic
 **Azure Service Bus** — queue `observability-events` carries async observability events
 from the gateway to the worker that writes `cost_records` and increments budget counters.
 
-**Azure Key Vault** — single source of runtime configuration and secrets, surfaced to each
-Container App as native secret references resolved via managed identity.
+**Azure Key Vault** *(V2/ACA target)* — single source of runtime configuration and secrets,
+surfaced to each Container App as native secret references resolved via managed identity. On
+the single host, the same configuration is supplied as environment variables to the Compose
+services.
 
-**Application Insights + Log Analytics (`law-aca-dev-sdc`)** — telemetry, traces, and
-container logs for the Container Apps environment.
+**Application Insights + Log Analytics (`law-aca-dev-sdc`)** *(V2/ACA target)* — telemetry,
+traces, and container logs for the Container Apps environment. On the single host, container
+logs are available via `docker compose logs`.
 
-**Schema migrations:** the `job-db-migrate-dev-sdc` Container Apps job runs
-`alembic upgrade head` against Postgres before application services are rolled out.
-Application services do not run DDL.
+**Schema migrations:** Alembic (`alembic upgrade head`) runs against Postgres before
+application services start; application services do not run DDL. In the V2/ACA target this
+runs as the `job-db-migrate-dev-sdc` Container Apps job.
 
 ### 1.4 New Services (2026 additions)
 
@@ -263,9 +274,10 @@ when a budget limit is saved, ensuring enforcement is immediate on first set.
 
 ### 2.6 Configuration
 
-Environment variables (read via `pydantic-settings`; in the deployed environment each
-is a Container Apps secret reference resolved from Azure Key Vault — services fail fast
-if a required variable is missing, with no local defaults):
+Environment variables (read via `pydantic-settings`; on the current single host these are
+supplied directly by Docker Compose, and in the V2/ACA target each is a Container Apps secret
+reference resolved from Azure Key Vault — services fail fast if a required variable is
+missing, with no local defaults):
 
 | Variable | Source / Value | Description |
 |---|---|---|
@@ -483,7 +495,7 @@ rolling performance score from `AUTOROUTE_MODELS`.
 
 **Example:**
 ```bash
-curl -X POST https://aigw-dev.lab.cloud.scdom.net/v1/chat/completions/auto \
+curl -X POST https://dev.aigw.scdom.net/v1/chat/completions/auto \
   -H "Authorization: Bearer $API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"messages": [{"role": "user", "content": "What is 2+2?"}]}'
@@ -500,7 +512,7 @@ Returns the list of available models from LiteLLM. Requires gateway authenticati
 #### `POST /anthropic/{path}`
 
 Anthropic-native passthrough for callers using the Anthropic SDK directly
-(e.g. `ANTHROPIC_BASE_URL=https://aigw-dev.lab.cloud.scdom.net/anthropic`).
+(e.g. `ANTHROPIC_BASE_URL=https://dev.aigw.scdom.net/anthropic`).
 
 Authentication accepts either:
 - `x-api-key: sk-...` (Anthropic SDK default)
@@ -517,7 +529,7 @@ observability are applied.
 ```python
 import anthropic
 client = anthropic.Anthropic(
-    base_url="https://aigw-dev.lab.cloud.scdom.net/anthropic",
+    base_url="https://dev.aigw.scdom.net/anthropic",
     api_key="sk-my-gateway-key",
 )
 ```
@@ -538,13 +550,13 @@ Readiness probe — checks Redis connectivity.
 | Variable | Source / Value | Description |
 |---|---|---|
 | `REDIS_URL` | Key Vault ref | Azure Cache for Redis connection |
-| `LITELLM_URL` | `http://ca-litellm-dev-sdc` | LiteLLM proxy URL |
+| `LITELLM_URL` | `http://litellm` | LiteLLM proxy URL |
 | `LITELLM_MASTER_KEY` | Key Vault ref | Master key injected when forwarding to LiteLLM |
-| `AUTH_URL` | `http://ca-auth-dev-sdc` | Auth service URL |
-| `OBSERVABILITY_URL` | `http://ca-observability-dev-sdc` | Observability service URL |
+| `AUTH_URL` | `http://auth` | Auth service URL |
+| `OBSERVABILITY_URL` | `http://observability` | Observability service URL |
 | `EMBEDDING_MODEL` | `text-embedding-3-small` | Default embedding model |
 | `EMBEDDING_API_KEY` | Key Vault ref | Gateway API key for embedding calls (routed via LiteLLM) |
-| `EMBEDDING_BASE_URL` | `http://ca-litellm-dev-sdc/v1` | Base URL for the embedding API (via LiteLLM) |
+| `EMBEDDING_BASE_URL` | `http://litellm/v1` | Base URL for the embedding API (via LiteLLM) |
 | `DEFAULT_SIMILARITY_THRESHOLD` | `0.95` | Default cosine threshold for semantic cache hits |
 | `DEFAULT_TTL_SECONDS` | `3600` | Default cache entry TTL |
 | `INTERNAL_API_KEY` | Key Vault ref | Key used when posting events to observability |
@@ -582,8 +594,9 @@ on startup (via `model_registry` table):
 ### 4.3 Provider Registration
 
 LiteLLM reads provider credentials from its own configuration (environment variables
-or a `config.yaml`). Provider keys are supplied as Container Apps secret references
-resolved from Azure Key Vault. Required keys:
+or a `config.yaml`). On the single host these provider keys are supplied as environment
+variables to the `litellm` Compose service; in the V2/ACA target they are Container Apps
+secret references resolved from Azure Key Vault. Required keys:
 
 - `ANTHROPIC_API_KEY`
 - `OPENAI_API_KEY`
@@ -605,8 +618,8 @@ The LiteLLM proxy exposes the standard OpenAI API surface:
 - `POST /anthropic/{path}` (Anthropic native format)
 
 The Cache service is the only caller; direct access to LiteLLM is not expected in
-normal operation (it has internal ingress only and is not reachable from outside the
-Container Apps environment).
+normal operation (it is on the internal Compose network only, not exposed by Caddy, and
+so is not reachable from outside the VM).
 
 **Anthropic prefix caching:** The Cache service injects
 `anthropic-beta: prompt-caching-2024-07-31` on all requests so that provider-side
@@ -1198,7 +1211,7 @@ Lists all MCP servers with tool and access counts.
     "id": "...",
     "name": "Awesome Copilot",
     "description": "Community agents, instructions, and recipes",
-    "url": "http://ca-admin-dev-sdc/mcp/copilot-catalog",
+    "url": "http://admin/mcp/copilot-catalog",
     "auth_type": "none",
     "auth_header": null,
     "auth_secret": "***",
@@ -1347,7 +1360,7 @@ input/output schema, and whether it is managed (platform-owned) or team-owned.
 | `/run/outputs.json` | Agent writes JSON outputs here; worker reads after container exit |
 | `AIGW_RUN_ID` | UUID of the parent workflow run |
 | `AIGW_NODE_ID` | This node's ID within the DAG |
-| `AIGW_BASE_URL` | Gateway base URL (`http://ca-cache-dev-sdc`) |
+| `AIGW_BASE_URL` | Gateway base URL (`http://cache`) |
 | `AIGW_API_KEY` | Short-lived scoped API key for LLM calls via the gateway |
 
 **Image naming rules:**
@@ -1548,7 +1561,7 @@ On success, the server:
 The `scoped_api_key` is returned **once only** and is not stored in plaintext.
 The workflow worker uses this key (via Redis) to inject `AIGW_API_KEY` into agent
 containers. All LLM calls from agent containers must use this key via
-`http://ca-cache-dev-sdc`.
+`http://cache`.
 
 **Response 429:**
 ```json
@@ -1764,12 +1777,12 @@ Environment variables for the Admin service:
 | `OIDC_CLIENT_ID` | Key Vault ref | OIDC client ID (Entra ID app registration) |
 | `OIDC_CLIENT_SECRET` | Key Vault ref | OIDC client secret |
 | `LITELLM_MASTER_KEY` | Key Vault ref | Master key for LiteLLM calls |
-| `AUTH_URL` | `http://ca-auth-dev-sdc` | Auth service URL for health checks |
-| `CACHE_URL` | `http://ca-cache-dev-sdc` | Cache service URL for health checks |
-| `LITELLM_URL` | `http://ca-litellm-dev-sdc` | LiteLLM URL for health checks |
-| `OBSERVABILITY_URL` | `http://ca-observability-dev-sdc` | Observability service URL |
+| `AUTH_URL` | `http://auth` | Auth service URL for health checks |
+| `CACHE_URL` | `http://cache` | Cache service URL for health checks |
+| `LITELLM_URL` | `http://litellm` | LiteLLM URL for health checks |
+| `OBSERVABILITY_URL` | `http://observability` | Observability service URL |
 | `IDENTITY_KEY_SECRET` | Key Vault ref | Encryption key for RSA signing key in Redis |
-| `CORS_ORIGINS` | `["https://aigw-dev.lab.cloud.scdom.net"]` | Allowed CORS origins |
+| `CORS_ORIGINS` | `["https://dev.aigw.scdom.net"]` | Allowed CORS origins |
 | `ALLOWED_EMAIL_DOMAINS` | `[]` (all) | Restrict developer registration to specific email domains |
 | `ENVIRONMENT` | `production` | Deployment environment name |
 
@@ -1879,7 +1892,7 @@ The Identity Service does not issue tokens itself; it verifies them. Tokens are 
 |---------|---------|-------------|
 | `DATABASE_URL` | Key Vault ref | Azure Database for PostgreSQL connection string |
 | `REDIS_URL` | Key Vault ref | Azure Cache for Redis for heartbeat keys |
-| `ADMIN_URL` | `http://ca-admin-dev-sdc` | Admin service URL for startup seed and JWKS fetch |
+| `ADMIN_URL` | `http://admin` | Admin service URL for startup seed and JWKS fetch |
 | `IDENTITY_SERVICE_TOKEN` | Key Vault ref | Required `X-Service-Token` for register/deregister |
 
 ---
@@ -1924,7 +1937,7 @@ The agent connects to `WS /connect/{relay_token}`. Once connected, it receives *
 {
   "invocation_id": "uuid",
   "inputs": { "key": "value" },
-  "env": { "AIGW_RUN_ID": "uuid", "AIGW_NODE_ID": "n1", "AIGW_BASE_URL": "http://ca-cache-dev-sdc", "AIGW_API_KEY": "sk-..." },
+  "env": { "AIGW_RUN_ID": "uuid", "AIGW_NODE_ID": "n1", "AIGW_BASE_URL": "http://cache", "AIGW_API_KEY": "sk-..." },
   "run_id": "uuid",
   "node_id": "n1"
 }
@@ -2026,7 +2039,7 @@ A background asyncio task runs continuously, polling for stale research topics. 
 A topic is considered stale if `last_researched_at IS NULL` or `last_researched_at < NOW() - interval_seconds`.
 
 For each stale topic the loop:
-1. Calls `POST http://ca-cache-dev-sdc/v1/chat/completions` with `gpt-4o-mini` (gateway routes this to the configured provider).
+1. Calls `POST http://cache/v1/chat/completions` with `gpt-4o-mini` (gateway routes this to the configured provider).
 2. The system prompt requests a structured JSON response: `{"title": "...", "content": "...", "tags": [...]}`.
 3. Parses the JSON and calls `ingest_document()` to embed and persist it.
 4. Updates `last_researched_at = NOW()`.
@@ -2107,11 +2120,11 @@ Full schemas are in Appendix C.
 | `DATABASE_URL` | Key Vault ref | Azure Database for PostgreSQL connection |
 | `REDIS_URL` | Key Vault ref | Azure Cache for Redis for embeddings cache |
 | `EMBEDDING_API_KEY` | Key Vault ref | Gateway API key for embedding calls (routed via LiteLLM) |
-| `EMBEDDING_BASE_URL` | `http://ca-litellm-dev-sdc/v1` | Base URL for embedding API (via LiteLLM) |
+| `EMBEDDING_BASE_URL` | `http://litellm/v1` | Base URL for embedding API (via LiteLLM) |
 | `EMBEDDING_MODEL` | `text-embedding-3-small` | Embedding model name |
-| `CACHE_URL` | `http://ca-cache-dev-sdc` | Cache service URL (used by research loop for LLM calls) |
+| `CACHE_URL` | `http://cache` | Cache service URL (used by research loop for LLM calls) |
 | `RESEARCH_INTERVAL_SECONDS` | `3600` | How often the background loop polls for stale topics |
-| `CORS_ORIGINS` | `https://aigw-dev.lab.cloud.scdom.net` | Comma-separated allowed CORS origins |
+| `CORS_ORIGINS` | `https://dev.aigw.scdom.net` | Comma-separated allowed CORS origins |
 | `LIBRARIAN_SERVICE_TOKEN` | Key Vault ref | Token required on `X-Service-Token` for ingest endpoints |
 
 ---
@@ -2358,7 +2371,7 @@ These environment variables are injected into every agent container by the workf
 |----------|-------------|
 | `AIGW_RUN_ID` | UUID of the current workflow run |
 | `AIGW_NODE_ID` | ID of the current node within the DAG |
-| `AIGW_BASE_URL` | Base URL of the cache service (`http://ca-cache-dev-sdc`) — use this for LLM API calls |
+| `AIGW_BASE_URL` | Base URL of the cache service (`http://cache`) — use this for LLM API calls |
 | `AIGW_API_KEY` | Scoped API key for the current run (scope: `workflow-run`). Revoked when the run ends. |
 
 ### 11.3 Manifest Schema
@@ -2477,7 +2490,7 @@ Arguments:
   SCRIPT_OR_DIR   Path to a Python script or a directory containing main.py
 
 Options:
-  --relay-url URL    Agent relay base URL (e.g. https://aigw-dev.lab.cloud.scdom.net/agent-relay)
+  --relay-url URL    Agent relay base URL (e.g. https://dev.aigw.scdom.net/agent-relay)
   --slug SLUG        Agent slug (default: script filename stem)
   --name NAME        Human-readable name (default: slug)
 ```
@@ -2619,15 +2632,15 @@ The repository includes a `.vscode/mcp.json` that configures four MCP servers fo
     },
     "ai-gateway-catalog": {
       "type": "sse",
-      "url": "https://aigw-dev.lab.cloud.scdom.net/admin/mcp/copilot-catalog/sse"
+      "url": "https://dev.aigw.scdom.net/api/admin/mcp/copilot-catalog/sse"
     },
     "ai-gateway-codemate": {
       "type": "sse",
-      "url": "https://aigw-dev.lab.cloud.scdom.net/admin/mcp/codemate/sse"
+      "url": "https://dev.aigw.scdom.net/api/admin/mcp/codemate/sse"
     },
     "ai-librarian": {
       "type": "sse",
-      "url": "https://aigw-dev.lab.cloud.scdom.net/librarian/mcp/sse"
+      "url": "https://dev.aigw.scdom.net/api/librarian/mcp/sse"
     }
   }
 }
@@ -2655,7 +2668,7 @@ All error responses use standard JSON-RPC 2.0 error codes:
 
 ## 13. Admin Portal (port 3001)
 
-The Admin Portal is a Next.js application running as `ca-admin-portal-dev-sdc` (container port 3001), reached via the gateway FQDN at `https://aigw-dev.lab.cloud.scdom.net/admin/`. It is aimed at platform engineers and team administrators managing the gateway on behalf of ~2,000 engineers.
+The Admin Portal is a Next.js application running as the Docker Compose service `admin-portal` (container port 3001), reached via the gateway FQDN at `https://dev.aigw.scdom.net/admin`. It is aimed at platform engineers and team administrators managing the gateway on behalf of ~2,000 engineers.
 
 ### `/admin/dashboard` — Platform Overview
 
@@ -2803,7 +2816,7 @@ Organisation-level budget overview:
 
 ## 14. Developer Portal (port 3002)
 
-The Developer Portal is a Next.js application running as `ca-portal-dev-sdc` (container port 3002), reached via the gateway FQDN at `https://aigw-dev.lab.cloud.scdom.net/`. It is aimed at the ~2,000 engineers consuming the gateway.
+The Developer Portal is a Next.js application running as the Docker Compose service `portal` (container port 3002), reached via the gateway FQDN at `https://dev.aigw.scdom.net/`. It is aimed at the ~2,000 engineers consuming the gateway.
 
 ### `/portal` — Home Dashboard
 
@@ -2812,7 +2825,7 @@ Personalised welcome page showing:
 - Quick-access links to API keys, playground, workflows, and documentation.
 - Current month spend summary.
 
-### `/portal/playground` — LLM Playground
+### `/playground` — LLM Playground
 
 Interactive playground for testing models. Supports:
 - Model selector (all gateway-enabled models).
@@ -2821,7 +2834,7 @@ Interactive playground for testing models. Supports:
 - Token count and cost estimate.
 - Copy-as-curl and copy-as-code buttons.
 
-### `/portal/agents` — Agent Catalog + Identity Search
+### `/agents` — Agent Catalog + Identity Search
 
 Browse all registered agents from the Identity Service. Features:
 - Search by name, capability, or category.
@@ -2829,11 +2842,11 @@ Browse all registered agents from the Identity Service. Features:
 - DID token verification badge.
 - Links to the agent's manifest and endpoint.
 
-### `/portal/workflows` — Workflow List
+### `/workflows` — Workflow List
 
 List all workflows the developer's team has access to. Shows workflow name, last run status, last run time, and a button to open the designer.
 
-### `/portal/workflows/[workflowId]/designer` — Drag-Drop Canvas
+### `/workflows/[workflowId]/designer` — Drag-Drop Canvas
 
 Visual workflow designer. Features:
 - Drag-and-drop node canvas for building DAGs.
@@ -2842,14 +2855,14 @@ Visual workflow designer. Features:
 - Version history and publish (creates a new version).
 - "Test run" button that submits a run with sample inputs and opens the run viewer.
 
-### `/portal/workflows/[workflowId]/runs/[runId]` — Live Run Viewer
+### `/workflows/[workflowId]/runs/[runId]` — Live Run Viewer
 
 Real-time run status viewer. Displays the DAG with each node coloured by status (pending, running, succeeded, failed). Subscribes to the SSE event stream for live updates. Shows per-node:
 - Status badge and timestamps.
 - Log output from the agent container.
 - Output JSON (expandable).
 
-### `/portal/keys` — API Key Management
+### `/keys` — API Key Management
 
 Manage the developer's own API keys:
 - List existing keys with creation date, last used, and scope.
@@ -2857,21 +2870,21 @@ Manage the developer's own API keys:
 - Revoke keys.
 - Security best practices panel.
 
-### `/portal/models` — Model Catalog
+### `/models` — Model Catalog
 
 Browse all gateway-enabled models. Shows model name, provider, context window, pricing, and availability. Allows filtering by provider and capability.
 
-### `/portal/mcp` — MCP Servers
+### `/mcp` — MCP Servers
 
 Browse MCP servers available to the developer's team. Shows server name, URL, tool list, and connection instructions. Includes the Awesome Copilot Catalog and CodeMate servers from the gateway.
 
-### `/portal/plugins` — Plugin Browser + Copilot Catalog Tab
+### `/plugins` — Plugin Browser + Copilot Catalog Tab
 
 Two-tab view:
 - **Gateway Plugins** — plugins registered in the admin portal, browseable by the developer.
 - **Copilot Catalog** — live feed from the Copilot Catalog MCP, showing agents, instructions, and recipes from awesome-copilot.
 
-### `/portal/prompts` — Prompts + Research Knowledge Base
+### `/prompts` — Prompts + Research Knowledge Base
 
 Browse and search the AI Librarian knowledge base. Features:
 - Search across all topics with semantic relevance scoring.
@@ -2879,18 +2892,18 @@ Browse and search the AI Librarian knowledge base. Features:
 - Document detail view with source URL and tags.
 - Ingest a new document (links to API docs).
 
-### `/portal/skills` — Skills (stub)
+### `/skills` — Skills (stub)
 
 Browse and discover published agent skills. Under development.
 
-### `/portal/usage` — Usage & Spend
+### `/usage` — Usage & Spend
 
 Spend analytics for the developer's team:
 - **Spend over time** — bar chart of daily/weekly spend.
 - **Team summary** — total requests, tokens, and cost for the current period.
 - **About these stats** — explanation of how costs are calculated.
 
-### `/portal/docs` — Quickstart
+### `/docs` — Quickstart
 
 Embedded quickstart documentation covering:
 - How to obtain an API key.
@@ -2990,7 +3003,7 @@ The audit log is queryable from the admin portal's Audit page and is retained in
 
 ## 16. Configuration Reference
 
-Full environment variable reference across all services. Variables common to multiple services are listed once under their primary service. In the deployed environment, connection strings and secrets are Container Apps secret references resolved from Azure Key Vault via managed identity; services fail fast on a missing required variable.
+Full environment variable reference across all services. Variables common to multiple services are listed once under their primary service. On the current single host, these values are supplied directly as environment variables to the Compose services; the "Key Vault ref" source shown in the tables below describes the deferred V2/ACA target, where the same values are Container Apps secret references resolved from Azure Key Vault via managed identity. Either way, services fail fast on a missing required variable.
 
 ### Shared infrastructure
 
@@ -3012,13 +3025,13 @@ Full environment variable reference across all services. Variables common to mul
 
 | Env Var | Source / Value | Description |
 |---------|---------|-------------|
-| `LITELLM_URL` | `http://ca-litellm-dev-sdc` | Upstream for cache misses |
+| `LITELLM_URL` | `http://litellm` | Upstream for cache misses |
 | `LITELLM_MASTER_KEY` | Key Vault ref | Bearer token for LiteLLM API |
-| `AUTH_URL` | `http://ca-auth-dev-sdc` | Auth service for upstream validation |
-| `OBSERVABILITY_URL` | `http://ca-observability-dev-sdc` | Async event posting |
+| `AUTH_URL` | `http://auth` | Auth service for upstream validation |
+| `OBSERVABILITY_URL` | `http://observability` | Async event posting |
 | `EMBEDDING_MODEL` | `text-embedding-3-small` | Embedding model for semantic similarity |
 | `EMBEDDING_API_KEY` | Key Vault ref | Gateway API key for embedding calls (routed via LiteLLM) |
-| `EMBEDDING_BASE_URL` | `http://ca-litellm-dev-sdc/v1` | Base URL for embedding API (via LiteLLM) |
+| `EMBEDDING_BASE_URL` | `http://litellm/v1` | Base URL for embedding API (via LiteLLM) |
 | `DEFAULT_SIMILARITY_THRESHOLD` | `0.95` | Cosine similarity threshold for cache hits |
 | `DEFAULT_TTL_SECONDS` | `3600` | Cache entry TTL in seconds |
 
@@ -3042,10 +3055,10 @@ Full environment variable reference across all services. Variables common to mul
 | `OIDC_CLIENT_ID` | Key Vault ref | OIDC client ID (Entra ID app registration) |
 | `OIDC_CLIENT_SECRET` | Key Vault ref | OIDC client secret |
 | `LITELLM_MASTER_KEY` | Key Vault ref | Bearer token for LiteLLM management API |
-| `AUTH_URL` | `http://ca-auth-dev-sdc` | Auth service URL |
-| `CACHE_URL` | `http://ca-cache-dev-sdc` | Cache service URL |
-| `LITELLM_URL` | `http://ca-litellm-dev-sdc` | LiteLLM URL |
-| `OBSERVABILITY_URL` | `http://ca-observability-dev-sdc` | Observability service URL |
+| `AUTH_URL` | `http://auth` | Auth service URL |
+| `CACHE_URL` | `http://cache` | Cache service URL |
+| `LITELLM_URL` | `http://litellm` | LiteLLM URL |
+| `OBSERVABILITY_URL` | `http://observability` | Observability service URL |
 | `IDENTITY_KEY_SECRET` | Key Vault ref | Fernet encryption key for the RSA signing key |
 | `GITHUB_WEBHOOK_SECRET` | Key Vault ref | HMAC secret for GitHub webhook validation |
 | `ADMIN_INTERNAL_TOKEN` | Key Vault ref | Bearer token for internal service-to-service calls |
@@ -3054,7 +3067,7 @@ Full environment variable reference across all services. Variables common to mul
 
 | Env Var | Source / Value | Description |
 |---------|---------|-------------|
-| `ADMIN_URL` | `http://ca-admin-dev-sdc` | Admin service URL for startup seed and JWKS fetch |
+| `ADMIN_URL` | `http://admin` | Admin service URL for startup seed and JWKS fetch |
 | `IDENTITY_SERVICE_TOKEN` | Key Vault ref | Required `X-Service-Token` for register/deregister |
 
 ### Agent Relay (port 8007)
@@ -3068,11 +3081,11 @@ Full environment variable reference across all services. Variables common to mul
 | Env Var | Source / Value | Description |
 |---------|---------|-------------|
 | `EMBEDDING_API_KEY` | Key Vault ref | Gateway API key for embedding calls (routed via LiteLLM) |
-| `EMBEDDING_BASE_URL` | `http://ca-litellm-dev-sdc/v1` | Embedding API base URL (via LiteLLM) |
+| `EMBEDDING_BASE_URL` | `http://litellm/v1` | Embedding API base URL (via LiteLLM) |
 | `EMBEDDING_MODEL` | `text-embedding-3-small` | Embedding model |
-| `CACHE_URL` | `http://ca-cache-dev-sdc` | Cache service URL for research loop LLM calls |
+| `CACHE_URL` | `http://cache` | Cache service URL for research loop LLM calls |
 | `RESEARCH_INTERVAL_SECONDS` | `3600` | Background research loop poll interval |
-| `CORS_ORIGINS` | `https://aigw-dev.lab.cloud.scdom.net` | Comma-separated CORS origins |
+| `CORS_ORIGINS` | `https://dev.aigw.scdom.net` | Comma-separated CORS origins |
 | `LIBRARIAN_SERVICE_TOKEN` | Key Vault ref | Required `X-Service-Token` for ingest endpoints |
 
 ### Workflow Worker
@@ -3086,8 +3099,8 @@ Full environment variable reference across all services. Variables common to mul
 | `WORKER_SWEEPER_INTERVAL_S` | `30` | Stale claim recovery interval |
 | `HOST_RUNS_PATH` | `/tmp/aigw-runs` | Host path for agent I/O directories (bind-mounted into containers) |
 | `AGENT_CONTAINER_NETWORK` | `aigateway` | Docker network for agent containers |
-| `AGENT_RELAY_URL` | `http://ca-agent-relay-dev-sdc` | Agent Relay base URL |
-| `ADMIN_URL` | `http://ca-admin-dev-sdc` | Admin service URL for sub-workflow spawns |
+| `AGENT_RELAY_URL` | `http://agent-relay` | Agent Relay base URL |
+| `ADMIN_URL` | `http://admin` | Admin service URL for sub-workflow spawns |
 | `AGENT_CONTAINER_RUNTIME` | `docker` | Container runtime: `docker` or `kubernetes` |
 | `AGENT_RELAY_SECRET` | Key Vault ref | Relay authentication secret |
 | `ADMIN_INTERNAL_TOKEN` | Key Vault ref | Bearer token for worker→admin calls |
@@ -3105,15 +3118,33 @@ Full environment variable reference across all services. Variables common to mul
 
 ## 17. Deployment
 
-### 17.1 Deploying to Azure
+### 17.1 Deploying to the single-host VM (current)
 
-The gateway is deployed to Azure Container Apps in the SimCorp Landing Zone
-(`rg-aigw-dev-sdc`, Sweden Central). Container images are built in CI and pushed to ACR;
-the Bicep templates roll them out and wire up Key Vault, PostgreSQL, Redis, Service Bus,
-and Application Insights.
+All services run on a single Linux VM (`vm-aigw-dev-sdc`, `10.179.231.68`, Azure Sweden
+Central) via Docker Compose, behind a Caddy reverse proxy that terminates TLS. Caddy is the
+only externally exposed service (ports 443 and 22). Compose uses two files —
+`docker-compose.yml` plus the `docker-compose.host.yml` overlay (the host overlay carries
+the GHCR `image:` keys); commands always pass both:
 
 ```bash
-# Deploy the environment with a specific image tag
+docker compose -f docker-compose.yml -f docker-compose.host.yml up -d
+```
+
+Deploy model: `git push` to `master` → CI builds and pushes images to GHCR → the VM pulls.
+Routine single-service update: `scripts/update-service.sh <svc>`; full deploy:
+`scripts/deploy-vm.sh`. Host stand-up is intentionally manual (not IaC). Schema migrations
+run `alembic upgrade head` against Postgres before the application services start.
+
+#### V2/ACA target (deferred)
+
+In the deferred V2/prod target the gateway is deployed to Azure Container Apps in the
+SimCorp Landing Zone (`rg-aigw-dev-sdc`, Sweden Central). Container images are built in CI
+and pushed to ACR; the Bicep templates (`infra/bicep/`) roll them out and wire up Key Vault,
+PostgreSQL, Redis, Service Bus, and Application Insights. CI/CD workflows for this target are
+archived in `.github/workflows/_archived/` and do not currently run.
+
+```bash
+# V2/ACA target — deploy the environment with a specific image tag
 az deployment group create \
   --resource-group rg-aigw-dev-sdc \
   --template-file infra/bicep/environments/dev/main.bicep \
@@ -3121,8 +3152,7 @@ az deployment group create \
   --parameters imageTag=sha-<git-sha>
 ```
 
-Schema migrations run as a Container Apps job, which executes `alembic upgrade head`
-before application services are rolled out:
+In that target, schema migrations run as a Container Apps job:
 
 ```bash
 az containerapp job start \
@@ -3130,15 +3160,14 @@ az containerapp job start \
   --resource-group rg-aigw-dev-sdc
 ```
 
-All services have internal ingress only. Access the gateway from the corporate VPN at
-`https://aigw-dev.lab.cloud.scdom.net` (static IP `10.179.231.6`).
+The V2 gateway FQDN is `aigw-dev.lab.cloud.scdom.net`.
 
 ### 17.2 Access
 
-Developers and administrators authenticate via Azure Entra ID SSO
+Access the gateway from the corporate VPN (ZPA) at `https://dev.aigw.scdom.net` (VM
+`10.179.231.68`). Developers and administrators authenticate via Azure Entra ID SSO
 (tenant `aa81b43f-3969-4fd4-80c9-84c411508d82`). The Developer Portal is reached at
-`https://aigw-dev.lab.cloud.scdom.net/` and the Admin Portal at
-`https://aigw-dev.lab.cloud.scdom.net/admin/`.
+`https://dev.aigw.scdom.net/` and the Admin Portal at `https://dev.aigw.scdom.net/admin`.
 
 ### 17.3 Running Tests
 
@@ -3172,7 +3201,7 @@ End-to-end smoke tests run against the deployed environment.
 
 [gh-aw](https://github.github.com/gh-aw/) is a GitHub CLI extension that runs AI coding agents inside GitHub Actions. The AI Gateway integrates with gh-aw in five ways:
 
-**1. Gateway-triggered from GitHub events** — a gh-aw workflow fires on PR open or issue label, then calls `POST https://aigw-dev.lab.cloud.scdom.net/admin/runs` to start a DAG. For example, when a PR is opened, a gh-aw action can trigger an AI Librarian research brief workflow that posts a summary as a PR comment.
+**1. Gateway-triggered from GitHub events** — a gh-aw workflow fires on PR open or issue label, then calls `POST https://dev.aigw.scdom.net/api/admin/runs` to start a DAG. For example, when a PR is opened, a gh-aw action can trigger an AI Librarian research brief workflow that posts a summary as a PR comment.
 
 ```yaml
 # Example: .github/workflows/ai-brief.yml
@@ -3184,25 +3213,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: |
-          curl -X POST https://aigw-dev.lab.cloud.scdom.net/admin/runs \
+          curl -X POST https://dev.aigw.scdom.net/api/admin/runs \
             -H "Authorization: Bearer ${{ secrets.AIGW_API_KEY }}" \
             -d '{"workflow_id": "pr-brief", "inputs": {"pr_url": "${{ github.event.pull_request.html_url }}"}}'
 ```
 
-**2. Gateway as the AI engine** — configure gh-aw's BYO-model option to route inference through `https://aigw-dev.lab.cloud.scdom.net/v1/chat/completions`. All inference calls get the gateway's caching, cost tracking, guardrails, and per-team rate limits applied automatically.
+**2. Gateway as the AI engine** — configure gh-aw's BYO-model option to route inference through `https://dev.aigw.scdom.net/v1/chat/completions`. All inference calls get the gateway's caching, cost tracking, guardrails, and per-team rate limits applied automatically.
 
 ```yaml
 gh-aw run improve-pr \
-  --model-url https://aigw-dev.lab.cloud.scdom.net/v1/chat/completions \
+  --model-url https://dev.aigw.scdom.net/v1/chat/completions \
   --model gpt-4o \
   --api-key $AIGW_API_KEY
 ```
 
-**3. GitHub tokens to Gateway identity** — exchange a GitHub Actions per-job OIDC token at `POST https://aigw-dev.lab.cloud.scdom.net/auth/validate` to obtain a Gateway-scoped identity. This gives each GitHub Actions job a team-attributed identity for cost tracking and audit logging without needing to distribute long-lived API keys to CI.
+**3. GitHub tokens to Gateway identity** — exchange a GitHub Actions per-job OIDC token at `POST https://dev.aigw.scdom.net/auth/validate` to obtain a Gateway-scoped identity. This gives each GitHub Actions job a team-attributed identity for cost tracking and audit logging without needing to distribute long-lived API keys to CI.
 
 **4. Relay agent with gh-aw** — a developer laptop running `aigw-agent serve` can process invocations triggered by gh-aw's continuous improvement workflows. When gh-aw needs to run a task that requires local tools (IDE state, file system access, local test runner), it invokes the relay agent rather than spawning a new container, enabling hybrid local/cloud workflows.
 
-**5. Gateway Observability + gh-aw metrics** — post gh-aw run summaries to `POST https://aigw-dev.lab.cloud.scdom.net/observability/events` for unified cost and activity dashboards per team. This gives engineering leaders a single view of AI usage whether the call came from the gateway directly or from a gh-aw agent in CI.
+**5. Gateway Observability + gh-aw metrics** — post gh-aw run summaries to `POST https://dev.aigw.scdom.net/api/observability/events` for unified cost and activity dashboards per team. This gives engineering leaders a single view of AI usage whether the call came from the gateway directly or from a gh-aw agent in CI.
 
 **Install:**
 ```bash
@@ -3225,11 +3254,11 @@ gh extension install github/gh-aw
 
 | Pattern | How |
 |---|---|
-| **Gateway-triggered from GitHub events** | A gh-aw workflow fires on `pr.opened` or `issues.labeled`, then `POST https://aigw-dev.lab.cloud.scdom.net/admin/runs` to start a workflow DAG — e.g., AI Librarian research brief posted as a PR comment |
-| **Gateway as the AI engine** | Configure gh-aw's BYO-model option to route inference through `https://aigw-dev.lab.cloud.scdom.net/v1/chat/completions` — all calls inherit caching, guardrails, and cost tracking |
-| **GitHub tokens → Gateway identity** | Exchange the per-job read-only GitHub OIDC token at `https://aigw-dev.lab.cloud.scdom.net/auth/validate` for a Gateway-scoped identity with team cost attribution and rate limiting |
+| **Gateway-triggered from GitHub events** | A gh-aw workflow fires on `pr.opened` or `issues.labeled`, then `POST https://dev.aigw.scdom.net/api/admin/runs` to start a workflow DAG — e.g., AI Librarian research brief posted as a PR comment |
+| **Gateway as the AI engine** | Configure gh-aw's BYO-model option to route inference through `https://dev.aigw.scdom.net/v1/chat/completions` — all calls inherit caching, guardrails, and cost tracking |
+| **GitHub tokens → Gateway identity** | Exchange the per-job read-only GitHub OIDC token at `https://dev.aigw.scdom.net/auth/validate` for a Gateway-scoped identity with team cost attribution and rate limiting |
 | **Relay agent ↔ gh-aw** | A laptop relay agent (`aigw-agent serve`) processes invocations triggered by gh-aw continuous improvement or multi-repo sync workflows |
-| **Unified observability** | Post gh-aw run summaries to `https://aigw-dev.lab.cloud.scdom.net/observability/events` for unified agent activity + model cost dashboards per team |
+| **Unified observability** | Post gh-aw run summaries to `https://dev.aigw.scdom.net/api/observability/events` for unified agent activity + model cost dashboards per team |
 
 **Example — research brief on every PR:**
 
@@ -3238,7 +3267,7 @@ gh extension install github/gh-aw
 ---
 on: pull_request.opened
 ---
-Call POST https://aigw-dev.lab.cloud.scdom.net/admin/runs with:
+Call POST https://dev.aigw.scdom.net/api/admin/runs with:
 - workflow_id: <research-workflow-uuid>
 - inputs: {pr_title: "{{ event.pull_request.title }}", pr_body: "{{ event.pull_request.body }}"}
 Post the result as a PR comment.
@@ -3264,9 +3293,9 @@ Seven ready-to-use workflow definitions in `.github/workflows/`:
 | Name | Type | Value |
 |---|---|---|
 | `AIGW_API_KEY` | Secret | Service-account API key from Gateway admin → Teams → API Keys |
-| `AIGW_BASE_URL` | Variable | `https://aigw-dev.lab.cloud.scdom.net/v1` (OpenAI-compat inference endpoint) |
-| `AIGW_BASE_URL_ADMIN` | Variable | `https://aigw-dev.lab.cloud.scdom.net/admin` (admin service) |
-| `AIGW_LIBRARIAN_URL` | Variable | `https://aigw-dev.lab.cloud.scdom.net/librarian` (librarian) |
+| `AIGW_BASE_URL` | Variable | `https://dev.aigw.scdom.net/v1` (OpenAI-compat inference endpoint) |
+| `AIGW_BASE_URL_ADMIN` | Variable | `https://dev.aigw.scdom.net/api/admin` (admin service) |
+| `AIGW_LIBRARIAN_URL` | Variable | `https://dev.aigw.scdom.net/api/librarian` (librarian) |
 
 **Compile lock files** (required after frontmatter changes):
 ```bash
@@ -3895,11 +3924,11 @@ Browser  →  GET /auth/oidc/login
          →  extracts email + display_name claims
          →  finds or creates users row (developer role if new)
          →  issues Redis session
-         →  302 to /admin?sso_token=<token> or /portal?sso_token=<token>
+         →  302 to /admin?sso_token=<token> or /?sso_token=<token>
          →  frontend stores token, strips query param
 ```
 
-Entra ID config (`OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`) is supplied via Key Vault secret references. The redirect URI `https://aigw-dev.lab.cloud.scdom.net/auth/oidc/callback` is registered on the Entra ID app registration.
+Entra ID config (`OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`) is supplied via Key Vault secret references. The redirect URI `https://dev.aigw.scdom.net/auth/oidc/callback` is registered on the Entra ID app registration.
 
 ### 18.7 Backwards compatibility
 

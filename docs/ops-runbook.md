@@ -97,6 +97,13 @@ docker compose -f docker-compose.yml -f docker-compose.host.yml up -d   # rollin
 > docker compose -f docker-compose.yml -f docker-compose.host.yml up -d --no-deps portal admin-portal
 > ```
 
+> **Caddy-reload gotcha:** neither `deploy-vm.sh` nor `docker compose … up -d` reloads Caddy —
+> the Caddyfile is a read-only bind-mount, and `up -d` only recreates containers whose image or
+> config changed. After editing the Caddyfile you must restart Caddy explicitly:
+> ```bash
+> docker compose -f docker-compose.yml -f docker-compose.host.yml restart caddy
+> ```
+
 ### Secrets and `.env`
 
 All provider API keys live in `/home/azureuser/ai-gw/.env` (gitignored, mode 0600). To update a key, pipe it from `pass` on AZWESU0005 via SSH — never write secrets to disk in plaintext. See `docs/architecture/dev-environment.md` for the exact pattern.
@@ -156,6 +163,16 @@ Wildcard cert `*.aigw.scdom.net` (SimCorp Issuing CA, valid until 2028). Stored 
 ---
 
 ## ACA reference (archived — V2/prod path)
+
+> **Everything below this line describes the FUTURE Azure Container Apps (ACA) deployment**, not
+> the current single-host VM. It is kept as the reference for the V2/prod promotion path — `az`
+> commands, container-app revisions, Key Vault secrets, private endpoints, and the
+> `ca-*-dev-sdc` / `aigw-dev.lab.cloud.scdom.net` names all refer to that future target. For
+> operating the live system today, use the **Single-host VM operations** section above. The
+> deployment-agnostic procedures below (database maintenance, team/rate-limit management, the
+> audit-log queries) apply to both — on the single-host VM, reach Postgres and Redis via
+> `docker exec ai-gateway-postgres-1 …` / `ai-gateway-redis-1 …` instead of `az` / private
+> endpoints (see the single-host failure-modes table above for the exact form).
 
 ---
 

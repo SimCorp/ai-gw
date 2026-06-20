@@ -701,7 +701,7 @@ All endpoints follow REST conventions:
 
 All endpoints are relative to the league service URL:
 ```
-https://aigw-dev.lab.cloud.scdom.net/league
+https://dev.aigw.scdom.net/api/league
 ```
 
 ## Example: Complete Challenge Workflow
