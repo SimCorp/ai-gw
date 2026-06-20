@@ -149,6 +149,21 @@ the only host-local, gitignored state is `.env` + `infra/certs/` (both sourced f
 
 Wildcard cert `*.aigw.scdom.net` (SimCorp Issuing CA, valid until 2028). Stored in `pass` as `certificate/wildcard.aigw.scdom.net.pfx.b64`. Installed at `~/ai-gw/infra/certs/cert.pem` + `key.pem` on the VM. See `docs/architecture/dev-environment.md` for the reinstall procedure.
 
+> **`cert.pem` MUST be a full chain: leaf + the `SimCorp Issuing CA` intermediate** (leaf first).
+> A leaf-only `cert.pem` still passes `curl -k` and the Playwright suite (`ignoreHTTPSErrors: true`),
+> but **real browsers reject it** — *"Secure Connection Failed … the authenticity of the received data
+> could not be verified"* — because they can't build leaf → intermediate → root. The PFX usually
+> contains the chain; when exporting, include it (`openssl pkcs12 -nokeys` emits leaf + chain).
+>
+> Verify the served chain (must show **2 certs** and NOT `Verify return code: 21`):
+> ```bash
+> echo | openssl s_client -connect dev.aigw.scdom.net:443 -servername dev.aigw.scdom.net -showcerts 2>/dev/null \
+>   | grep -cE 'BEGIN CERTIFICATE'           # expect >= 2
+> ```
+> `deploy-vm.sh` now runs this check after every deploy and warns if the chain is incomplete.
+> To repair a leaf-only cert in place: fetch the intermediate from the leaf's AIA URL
+> (`openssl … -text | grep 'CA Issuers'`), convert DER→PEM, append it to `cert.pem`, `restart caddy`.
+
 ### Common failure modes (single-host)
 
 | Symptom | Likely cause | Fix |
