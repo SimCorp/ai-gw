@@ -353,7 +353,7 @@ services:
       admin:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3002/portal/ || exit 1"]
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3002/ || exit 1"]
       interval: 15s
       timeout: 10s
       retries: 10
