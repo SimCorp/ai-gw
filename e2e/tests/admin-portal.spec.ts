@@ -9,6 +9,14 @@ const test = makeAuthedTest('admin');
 const B = '/admin';
 
 test.describe('admin portal', () => {
+  // Bare /admin must land on the dashboard (basePath root redirect). curl can't
+  // follow the client-side hop, and the route list below hits explicit pages, so
+  // this is the only check that exercises the basePath root redirect end to end.
+  test('root redirects to dashboard', async ({ authedPage }) => {
+    await authedPage.goto(B, { waitUntil: 'domcontentloaded' });
+    await authedPage.waitForURL(/\/admin\/dashboard\/?$/, { timeout: 15000 });
+  });
+
   defineRouteSuite(test, [
     { label: 'dashboard', path: `${B}/dashboard` },
     { label: 'alerts', path: `${B}/alerts` },
