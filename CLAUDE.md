@@ -12,7 +12,7 @@ promotion — CI/CD workflows for ACA are archived in `.github/workflows/_archiv
 | **Access** | `dev.aigw.scdom.net` via ZPA (corp VPN) — HTTPS 443, SSH 22 |
 | **SSH** | `ssh-aigw` helper (pass key `ssh/dev.aigw.scdom.net`) — see `~/.bashrc` on AZWESU0005 |
 | **Compose files** | `/home/azureuser/ai-gw/infra/docker-compose.yml` + `docker-compose.host.yml` on the VM |
-| **Deploy** | `git push` to `master` → CI builds images → pull & restart on VM |
+| **Deploy** | `git push` to `master` → CI builds + pushes images to GHCR → pull on VM. Routine single-service update: `scripts/update-service.sh <svc>` (static base untouched); full: `scripts/deploy-vm.sh`. Host is intentionally manual, not IaC — see ops-runbook "Host stand-up". |
 
 ## Services (Docker Compose)
 

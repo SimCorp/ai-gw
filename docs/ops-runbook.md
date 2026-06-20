@@ -63,6 +63,21 @@ scripts/deploy-vm.sh sha-abc123 # pin a specific build (rollback / controlled de
 The script pulls the SSH key and a GHCR read token from `pass`, logs the VM into GHCR,
 then runs the pull + restart below. See the script header for env overrides.
 
+**Routine gateway update (one or a few services) — the light path:**
+
+Most changes touch a single gateway service. Update just that service and leave the **static
+base** (postgres, redis, dex, caddy) untouched:
+
+```bash
+scripts/update-service.sh auth cache          # pull + `up -d --no-deps` for these only
+scripts/update-service.sh --tag sha-abc123 admin
+```
+
+Use `deploy-vm.sh` (full pull + `up -d`) only for multi-service, base, or compose-file changes —
+and even then `up -d` is **convergent**: it recreates only containers whose image/config changed,
+so unchanged base containers keep running. The base is effectively static; it is updated only by a
+deliberate base/compose change, never as a side effect of a gateway update.
+
 **Manual equivalent — on the VM:**
 
 ```bash
@@ -85,6 +100,43 @@ docker compose -f docker-compose.yml -f docker-compose.host.yml up -d   # rollin
 ### Secrets and `.env`
 
 All provider API keys live in `/home/azureuser/ai-gw/.env` (gitignored, mode 0600). To update a key, pipe it from `pass` on AZWESU0005 via SSH — never write secrets to disk in plaintext. See `docs/architecture/dev-environment.md` for the exact pattern.
+
+The live `.env` carries ~49 keys. The full set is whatever `infra/docker-compose.yml` references; the
+keys that **must** be present (no safe default) are the provider keys + control-plane secrets:
+
+| Group | Keys |
+|---|---|
+| Providers | `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`/`AZURE_API_KEY`+`AZURE_API_BASE`+`AZURE_API_VERSION`, `GEMINI_API_KEY`, `GITHUB_MODELS_API_KEY`, `GITHUB_COPILOT_TOKEN`, `AZURE_AI_FOUNDRY_ENDPOINT`/`_KEY`, `EMBEDDING_API_KEY`/`_BASE_URL`/`_MODEL` |
+| Gateway / admin | `LITELLM_MASTER_KEY`, `ADMIN_TOKEN`, `SECRET_KEY`, `IDENTITY_KEY_SECRET`, `RELAY_SECRET` |
+| Auth / OIDC | `JWKS_URI`, `ENTRA_TENANT_ID`, `ENTRA_CLIENT_ID`, `OIDC_ISSUER`/`OIDC_CLIENT_ID`/`OIDC_CLIENT_SECRET` |
+| Infra | `DATABASE_URL`, `REDIS_URL`, `POSTGRES_DB`/`_USER`/`_PASSWORD`, `BUS_PROVIDER` |
+| Optional | `SMTP_*` (email), `WORKDAY_*` (org sync), `DEV_BYPASS_AUTH` |
+
+> The service-to-service secrets `AGENT_RELAY_SECRET`, `IDENTITY_SERVICE_TOKEN`,
+> `LIBRARIAN_SERVICE_TOKEN`, `SCANNER_WORKER_SECRET`, `INTERNAL_API_KEY`, `ADMIN_INTERNAL_TOKEN`
+> fall back to the non-empty dev defaults baked into `docker-compose.yml` (`${VAR:-…}`); set real
+> values for any hardening. (See §0.)
+
+### Host stand-up (manual, reproducible)
+
+The VM **host is intentionally not infrastructure-as-code** — for a single dev box, full
+Terraform/Bicep-VM would be over-engineering. Provisioning is a manual, reproducible checklist
+(VM creation is also classifier-blocked for agents). To rebuild the host from scratch:
+
+1. **VM + NSG (user):** `az vm create` an Ubuntu VM with a static private IP; NSG inbound `443`+`80`
+   from the ZPA connector range and `22` from ZPA/mgmt.
+2. **IT requests (user):** ① cert `*.aigw.scdom.net` (SimCorp Issuing CA); ② DNS A record
+   `dev.aigw.scdom.net` → the VM IP (internal zone); ③ ZPA route + TLS passthrough on 443/80/22.
+3. **Docker:** install Docker Engine + the compose plugin.
+4. **Repo:** clone to `~/ai-gw` and check out `master`.
+5. **Cert:** install `infra/certs/cert.pem` + `key.pem` from the `pass` PFX entry (see
+   `docs/architecture/dev-environment.md` for the exact pipe-from-pass commands).
+6. **`.env`:** seed `~/ai-gw/.env` (mode 0600) from `pass` — the keys in the table above.
+7. **GHCR + bring up:** `docker login ghcr.io` (read-only PAT from `pass github/ghcr-pat-aigw`),
+   then `scripts/deploy-vm.sh` from an in-VNet host (or `docker compose … pull && up -d` on the VM).
+
+The repo is the source of truth for the compose stack, Caddyfile, dex config, and the deploy model;
+the only host-local, gitignored state is `.env` + `infra/certs/` (both sourced from `pass`).
 
 ### TLS certificate
 
