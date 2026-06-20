@@ -41,7 +41,7 @@ export function Breadcrumb({ nodeId }: BreadcrumbProps) {
       {ancestors.map((node, i) => (
         <React.Fragment key={node.id}>
           <Link
-            href={`/admin/nodes/${node.id}`}
+            href={`/nodes/${node.id}`}
             style={{
               color: 'var(--accent-text)',
               textDecoration: 'none',

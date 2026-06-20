@@ -251,7 +251,7 @@ export default function QuotasPage() {
                         <span className="muted" style={{ fontSize: 12 }}>no cap set</span>
                       )}
                     </td>
-                    <td><Link href={`/admin/nodes/${q.id}`} className="btn btn--sm">Adjust</Link></td>
+                    <td><Link href={`/nodes/${q.id}`} className="btn btn--sm">Adjust</Link></td>
                   </tr>
                 );
               })}

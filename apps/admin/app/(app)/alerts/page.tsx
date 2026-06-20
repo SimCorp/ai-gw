@@ -320,10 +320,10 @@ export default function AlertsPage() {
                         <Link
                           href={
                             a.btn === 'Review'
-                              ? '/admin/quotas'
+                              ? '/quotas'
                               : a.ruleName.toLowerCase().includes('redis') || a.ruleName.toLowerCase().includes('postgres') || a.ruleName.toLowerCase().includes('litellm')
-                              ? '/admin/dashboard'
-                              : '/admin/requests'
+                              ? '/dashboard'
+                              : '/requests'
                           }
                           className="btn btn--sm"
                         >

@@ -1,0 +1,123 @@
+import type { NavDomain } from '@aigw/ui';
+import {
+  Activity,
+  Network,
+  Sparkles,
+  Scale,
+  ShieldCheck,
+  Boxes,
+  SlidersHorizontal,
+  Trophy,
+  Settings,
+} from 'lucide-react';
+
+export const ADMIN_NAV: NavDomain[] = [
+  {
+    id: 'monitor',
+    label: 'Monitor',
+    icon: <Activity />,
+    href: '/dashboard',
+    pages: [
+      { href: '/dashboard', label: 'Dashboard' },
+      { href: '/requests', label: 'Live requests' },
+      { href: '/reports', label: 'Cost reports' },
+      { href: '/alerts', label: 'Alerts' },
+    ],
+  },
+  {
+    id: 'org',
+    label: 'Organisation',
+    icon: <Network />,
+    href: '/org',
+    pages: [
+      { href: '/org', label: 'Org tree' },
+      { href: '/users', label: 'Users' },
+    ],
+  },
+  {
+    id: 'transformation',
+    label: 'AI Transformation',
+    icon: <Sparkles />,
+    href: '/transformation',
+    pages: [
+      { href: '/transformation', label: 'Overview' },
+      { href: '/genai-adoption', label: 'GenAI Adoption' },
+      { href: '/insights', label: 'AI Insights' },
+      { href: '/devops', label: 'DevOps Agent' },
+      { href: '/champions', label: 'Champions', group: 'Champions' },
+      { href: '/champions/activity', label: 'Activity', group: 'Champions' },
+      { href: '/champions/flags', label: 'Flags', group: 'Champions' },
+    ],
+  },
+  {
+    id: 'govern',
+    label: 'Govern',
+    icon: <Scale />,
+    href: '/guardrails',
+    pages: [
+      { href: '/guardrails', label: 'Guardrails' },
+      { href: '/policies', label: 'Policies' },
+      { href: '/quotas', label: 'Quotas & budgets' },
+      { href: '/approvals', label: 'Approvals' },
+      { href: '/audit', label: 'Audit log' },
+    ],
+  },
+  {
+    id: 'security',
+    label: 'Security',
+    icon: <ShieldCheck />,
+    href: '/security/targets',
+    pages: [
+      { href: '/security/targets', label: 'Targets' },
+      { href: '/security/jobs', label: 'Scan jobs' },
+      { href: '/security/quotas', label: 'Team quotas' },
+    ],
+  },
+  {
+    id: 'catalog',
+    label: 'Catalog',
+    icon: <Boxes />,
+    href: '/mcp',
+    pages: [
+      { href: '/mcp', label: 'MCP servers' },
+      { href: '/memory', label: 'Memory' },
+      { href: '/skills', label: 'Skills' },
+      { href: '/plugins', label: 'Plugins' },
+    ],
+  },
+  {
+    id: 'configure',
+    label: 'Configure',
+    icon: <SlidersHorizontal />,
+    href: '/models',
+    pages: [
+      { href: '/models', label: 'Model registry' },
+      { href: '/cache', label: 'Semantic cache' },
+      { href: '/providers', label: 'Providers' },
+      { href: '/providers#auto-drive', label: 'Auto-Drive' },
+      { href: '/tools', label: 'Developer tools' },
+    ],
+  },
+  {
+    id: 'league',
+    label: 'League',
+    icon: <Trophy />,
+    href: '/league/seasons',
+    pages: [
+      { href: '/league/seasons', label: 'Seasons' },
+      { href: '/league/challenges', label: 'Challenges' },
+      { href: '/league/proposals', label: 'Proposals' },
+      { href: '/league/store', label: 'Store editor' },
+    ],
+  },
+  {
+    id: 'settings',
+    label: 'Settings',
+    icon: <Settings />,
+    href: '/settings/entra',
+    pages: [
+      { href: '/settings/entra', label: 'Entra ID groups' },
+      { href: '/settings/sessions', label: 'Sessions' },
+    ],
+  },
+];

@@ -266,7 +266,7 @@ The platform classifies every session as **interactive**, **agentic**, or **auto
 Run manually or on a schedule:
 
 ```bash
-curl -s -X POST https://aigw-dev.lab.cloud.scdom.net/admin/transformation/classify \
+curl -s -X POST https://aigw-dev.lab.cloud.scdom.net/api/admin/transformation/classify \
   -H "Authorization: Bearer <admin-token>"
 ```
 

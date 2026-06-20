@@ -2,7 +2,7 @@
 
 The Admin Portal provides enterprise-grade controls for identity management, access governance, budget enforcement, and audit logging. These features are designed for large organizations (~2000 engineers) with hierarchical governance, contractor onboarding, and regulatory compliance requirements.
 
-**Access:** https://aigw-dev.lab.cloud.scdom.net/admin-portal/ (over the corporate VPN, Entra ID SSO)
+**Access:** https://aigw-dev.lab.cloud.scdom.net/admin/ (over the corporate VPN, Entra ID SSO)
 
 ---
 

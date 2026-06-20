@@ -2655,7 +2655,7 @@ All error responses use standard JSON-RPC 2.0 error codes:
 
 ## 13. Admin Portal (port 3001)
 
-The Admin Portal is a Next.js application running as `ca-admin-portal-dev-sdc` (container port 3001), reached via the gateway FQDN at `https://aigw-dev.lab.cloud.scdom.net/admin-portal/`. It is aimed at platform engineers and team administrators managing the gateway on behalf of ~2,000 engineers.
+The Admin Portal is a Next.js application running as `ca-admin-portal-dev-sdc` (container port 3001), reached via the gateway FQDN at `https://aigw-dev.lab.cloud.scdom.net/admin/`. It is aimed at platform engineers and team administrators managing the gateway on behalf of ~2,000 engineers.
 
 ### `/admin/dashboard` — Platform Overview
 
@@ -3138,7 +3138,7 @@ All services have internal ingress only. Access the gateway from the corporate V
 Developers and administrators authenticate via Azure Entra ID SSO
 (tenant `aa81b43f-3969-4fd4-80c9-84c411508d82`). The Developer Portal is reached at
 `https://aigw-dev.lab.cloud.scdom.net/portal/` and the Admin Portal at
-`https://aigw-dev.lab.cloud.scdom.net/admin-portal/`.
+`https://aigw-dev.lab.cloud.scdom.net/admin/`.
 
 ### 17.3 Running Tests
 

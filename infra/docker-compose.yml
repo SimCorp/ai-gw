@@ -320,13 +320,13 @@ services:
       - "127.0.0.1:3001:3001"
     environment:
       NEXT_TELEMETRY_DISABLED: "1"
-      NEXT_PUBLIC_ADMIN_API: "https://dev.aigw.scdom.net/admin"
-      NEXT_PUBLIC_LEAGUE_API: "https://dev.aigw.scdom.net/league"
+      NEXT_PUBLIC_ADMIN_API: "https://dev.aigw.scdom.net/api/admin"
+      NEXT_PUBLIC_LEAGUE_API: "https://dev.aigw.scdom.net/api/league"
     depends_on:
       admin:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3001/admin-portal/ || exit 1"]
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3001/admin/login || exit 1"]
       interval: 15s
       timeout: 10s
       retries: 10
@@ -341,13 +341,13 @@ services:
       - "127.0.0.1:3002:3002"
     environment:
       NEXT_TELEMETRY_DISABLED: "1"
-      NEXT_PUBLIC_ADMIN_BASE_URL: "https://dev.aigw.scdom.net/admin"
-      NEXT_PUBLIC_CACHE_BASE_URL: "https://dev.aigw.scdom.net/cache"
-      NEXT_PUBLIC_IDENTITY_BASE_URL: "https://dev.aigw.scdom.net/identity"
-      NEXT_PUBLIC_LIBRARIAN_BASE_URL: "https://dev.aigw.scdom.net/librarian"
-      NEXT_PUBLIC_MEMORY_BASE_URL: "https://dev.aigw.scdom.net/memory"
-      NEXT_PUBLIC_LITELLM_BASE_URL: "https://dev.aigw.scdom.net/litellm"
-      NEXT_PUBLIC_LEAGUE_API: "https://dev.aigw.scdom.net/league"
+      NEXT_PUBLIC_ADMIN_BASE_URL: "https://dev.aigw.scdom.net/api/admin"
+      NEXT_PUBLIC_CACHE_BASE_URL: "https://dev.aigw.scdom.net/api/cache"
+      NEXT_PUBLIC_IDENTITY_BASE_URL: "https://dev.aigw.scdom.net/api/identity"
+      NEXT_PUBLIC_LIBRARIAN_BASE_URL: "https://dev.aigw.scdom.net/api/librarian"
+      NEXT_PUBLIC_MEMORY_BASE_URL: "https://dev.aigw.scdom.net/api/memory"
+      NEXT_PUBLIC_LITELLM_BASE_URL: "https://dev.aigw.scdom.net/api/litellm"
+      NEXT_PUBLIC_LEAGUE_API: "https://dev.aigw.scdom.net/api/league"
       NEXT_PUBLIC_LITELLM_KEY: "sk-litellm-local-dev"
     depends_on:
       admin:

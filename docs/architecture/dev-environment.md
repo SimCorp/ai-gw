@@ -14,9 +14,9 @@
 | Surface | URL | Credentials |
 |---|---|---|
 | Developer portal | `https://dev.aigw.scdom.net/portal/` | `pass show aigw/dev-portal` → `developer@aigw.scdom.net` |
-| Admin portal | `https://dev.aigw.scdom.net/admin-portal/` | `pass show aigw/admin-portal` → `admin@aigw.scdom.net` |
+| Admin portal | `https://dev.aigw.scdom.net/admin/` | `pass show aigw/admin-portal` → `admin@aigw.scdom.net` |
 | Inference API | `https://dev.aigw.scdom.net/v1/` | `sk-*` key — create via admin portal |
-| Health check | `https://dev.aigw.scdom.net/healthz` | — |
+| Health check | `https://dev.aigw.scdom.net/health` | — |
 
 ---
 
@@ -107,21 +107,15 @@ docker compose -f docker-compose.yml -f docker-compose.host.yml <command>
 
 | Path | Target | Mode | Notes |
 |---|---|---|---|
-| `/v1/*` | `cache:8002` | `handle` | Inference entry — prefix kept |
-| `/portal*` | `portal:3002` | `handle` | Next.js basePath must be kept |
-| `/admin-portal*` | `admin-portal:3001` | `handle` | Next.js basePath must be kept |
-| `/admin/*` | `admin:8005` | `handle_path` | Prefix stripped |
-| `/auth/*` | `admin:8005` | `handle` | Admin serves login/OIDC at `/auth/*` |
-| `/cache/*` | `cache:8002` | `handle_path` | Prefix stripped |
-| `/litellm/*` | `litellm:8003` | `handle_path` | Prefix stripped |
-| `/identity/*` | `identity:8006` | `handle_path` | Prefix stripped |
-| `/librarian/*` | `librarian:8008` | `handle_path` | Prefix stripped |
-| `/memory/*` | `memory:8009` | `handle_path` | Prefix stripped |
-| `/league/*` | `league:8010` | `handle_path` | Prefix stripped |
-| `/observability/*` | `observability:8004` | `handle_path` | Prefix stripped |
+| `/v1/*`, `/anthropic/*` | `cache:8002` | `handle` | Inference entry (OpenAI/Anthropic) — **frozen** contracts |
+| `/admin*` | `admin-portal:3001` | `handle` | Admin portal (Next.js basePath `/admin`) |
+| `/portal*` | `portal:3002` | `handle` | Dev portal (basePath `/portal`; → `/` in a follow-up) |
+| `/api/admin/*` | `admin:8005` | `handle_path` | Admin API — prefix stripped |
+| `/api/cache,litellm,identity,librarian,memory,league,observability/*` | each service | `handle_path` | Service APIs — prefix stripped |
+| `/auth/*` | `admin:8005` | `handle` | Login/OIDC — **frozen** (keeps OIDC redirect URI stable) |
 | `/agent-relay/*` | `agent-relay:8007` | `handle` | WebSocket — prefix kept |
-| `/healthz` | `"ok" 200` | — | Caddy synthetic health probe |
-| `/` | redirect `/portal/` | — | |
+| `/health`, `/healthz` | `"ok" 200` | — | Gateway health (`/healthz` kept as alias) |
+| `/` | redirect `/portal/` | — | (→ dev portal directly in the follow-up) |
 
 ---
 

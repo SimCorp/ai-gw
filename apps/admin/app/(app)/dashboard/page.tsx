@@ -367,8 +367,8 @@ export default function DashboardPage() {
               <h3 className="card__title">Recent activity</h3>
               <span className="card__sub">latest admin actions</span>
               <div className="card__actions">
-                <Link href="/admin/requests" className="btn btn--sm btn--ghost">Requests →</Link>
-                <Link href="/admin/audit" className="btn btn--sm btn--ghost">View all →</Link>
+                <Link href="/requests" className="btn btn--sm btn--ghost">Requests →</Link>
+                <Link href="/audit" className="btn btn--sm btn--ghost">View all →</Link>
               </div>
             </div>
             <div className="card__body card__body--flush">
@@ -404,7 +404,7 @@ export default function DashboardPage() {
                 <h3 className="card__title">Top teams · spend</h3>
                 <span className="card__sub">last {range}</span>
                 <div className="card__actions">
-                  <Link href="/admin/org" className="btn btn--sm btn--ghost">View all →</Link>
+                  <Link href="/org" className="btn btn--sm btn--ghost">View all →</Link>
                 </div>
               </div>
               <div className="card__body" style={{ paddingTop: 8 }}>
@@ -559,8 +559,8 @@ export default function DashboardPage() {
               <h3 className="card__title">Active alerts</h3>
               <span className="card__sub">{unhealthyServices.length} open</span>
               <div className="card__actions">
-                <Link href="/admin/approvals" className="btn btn--sm btn--ghost">Approvals →</Link>
-                <Link href="/admin/alerts" className="btn btn--sm btn--ghost">View all →</Link>
+                <Link href="/approvals" className="btn btn--sm btn--ghost">Approvals →</Link>
+                <Link href="/alerts" className="btn btn--sm btn--ghost">View all →</Link>
               </div>
             </div>
             <div className="card__body" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -580,7 +580,7 @@ export default function DashboardPage() {
                         {svc.error ?? `HTTP ${svc.code} · ${svc.latency_ms != null ? `${svc.latency_ms.toFixed(0)}ms` : 'no latency data'}`}
                       </div>
                     </div>
-                    <Link href="/admin/alerts" className="btn btn--sm">Investigate</Link>
+                    <Link href="/alerts" className="btn btn--sm">Investigate</Link>
                   </div>
                 );
               })}

@@ -18,7 +18,7 @@
 | SSH | `ssh-aigw` helper on AZWESU0005 (pass key `ssh/dev.aigw.scdom.net`) |
 | Compose dir | `/home/azureuser/ai-gw/infra/` |
 | Compose command | `docker compose -f docker-compose.yml -f docker-compose.host.yml` |
-| Admin portal | `https://dev.aigw.scdom.net/admin-portal/` |
+| Admin portal | `https://dev.aigw.scdom.net/admin/` |
 | Dev portal | `https://dev.aigw.scdom.net/portal/` |
 | Inference | `https://dev.aigw.scdom.net/v1/` |
 
@@ -315,7 +315,7 @@ The default admin account is seeded automatically on first boot when `ENVIRONMEN
 
 | Field | Value |
 |-------|-------|
-| URL | https://aigw-dev.lab.cloud.scdom.net/admin-portal/ |
+| URL | https://aigw-dev.lab.cloud.scdom.net/admin/ |
 | Email | `admin@simcorp.com` |
 | Password | set by the `_default_hash` in `services/admin/app/main.py` |
 
@@ -339,7 +339,7 @@ On a freshly provisioned environment the areas/units/teams tables are empty. Pop
 hierarchy:
 
 ```bash
-# 1. Log in at https://aigw-dev.lab.cloud.scdom.net/admin-portal/, then in the browser console:
+# 1. Log in at https://aigw-dev.lab.cloud.scdom.net/admin/, then in the browser console:
 #    sessionStorage.getItem('admin_session_token')
 # 2. Copy the token and run (from a VNet-connected host):
 ADMIN_TOKEN=<token> python3 scripts/seed_simcorp_org.py
@@ -362,8 +362,8 @@ The admin portal exposes a built-in health dashboard (reachable over the corp VP
 
 | URL | Format | Notes |
 |-----|--------|-------|
-| `https://aigw-dev.lab.cloud.scdom.net/admin-portal/admin/dashboard` | HTML | Auto-refreshes every 10 seconds |
-| `https://aigw-dev.lab.cloud.scdom.net/admin/system/health` | JSON | Suitable for external monitoring/alerting |
+| `https://aigw-dev.lab.cloud.scdom.net/admin/dashboard` | HTML | Auto-refreshes every 10 seconds |
+| `https://aigw-dev.lab.cloud.scdom.net/api/admin/system/health` | JSON | Suitable for external monitoring/alerting |
 
 **Visual dashboard:** The JSON endpoint is also rendered as a rich visual dashboard at the admin-portal dashboard URL above. It polls every 10 seconds and shows: service status dots with latency bars, Redis memory, Postgres active connections, LiteLLM model count, gateway requests/minute, cache hit rate, and recent error events.
 
@@ -608,12 +608,12 @@ psql -h <flexible-server-fqdn> -U aigateway -d aigateway -c "
 
 # Check LiteLLM model list (should list configured models), via the gateway over VPN
 curl -s -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
-  https://aigw-dev.lab.cloud.scdom.net/litellm/v1/models | python3 -m json.tool
+  https://aigw-dev.lab.cloud.scdom.net/api/litellm/v1/models | python3 -m json.tool
 ```
 
 **Fix:**
 
-1. Open the admin portal settings page at `https://aigw-dev.lab.cloud.scdom.net/admin-portal/admin/dashboard`.
+1. Open the admin portal settings page at `https://aigw-dev.lab.cloud.scdom.net/admin/dashboard`.
 2. Enter the API key for the failing provider in the appropriate field.
 3. Click **Save**. The portal stores the key in `provider_keys` and immediately calls `PATCH /model/update` on LiteLLM — no restart required.
 4. Use the **Test** button on the settings page to verify connectivity. It fires a 1-token completion and reports latency.
@@ -790,7 +790,7 @@ pg_dump -h <flexible-server-fqdn> -U aigateway aigateway | gzip > aigateway-$(da
 
 ### Via the Admin UI (preferred)
 
-1. Open the admin portal at `https://aigw-dev.lab.cloud.scdom.net/admin-portal/admin/dashboard`.
+1. Open the admin portal at `https://aigw-dev.lab.cloud.scdom.net/admin/dashboard`.
 2. Navigate to **Settings** (or go directly to the dashboard URL above).
 3. Find the provider row (Anthropic, OpenAI, Google, or GitHub Models).
 4. Enter the API key in the text field for that provider.
@@ -804,7 +804,7 @@ pg_dump -h <flexible-server-fqdn> -U aigateway aigateway | gzip > aigateway-$(da
 
 ```bash
 curl -s -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
-  https://aigw-dev.lab.cloud.scdom.net/litellm/v1/models | python3 -c "
+  https://aigw-dev.lab.cloud.scdom.net/api/litellm/v1/models | python3 -c "
 import json, sys
 models = json.load(sys.stdin)
 for m in models.get('data', []):

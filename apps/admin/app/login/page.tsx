@@ -47,7 +47,7 @@ export default function LoginPage() {
     const ssoToken = params.get('sso_token');
     if (ssoToken) {
       setAdminToken(ssoToken, false);
-      router.replace('/admin');
+      router.replace('/');
     }
   }, [router]);
 
@@ -89,7 +89,7 @@ export default function LoginPage() {
         setAdminToken(data.token, false); // temporary — replaced after password change
       } else {
         setAdminToken(data.token, rememberMe);
-        router.replace('/admin');
+        router.replace('/');
       }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Login failed');
@@ -136,7 +136,7 @@ export default function LoginPage() {
       if (!loginRes.ok) throw new Error('Re-login after password change failed');
       const loginData = await loginRes.json();
       setAdminToken(loginData.token, rememberMe);
-      router.replace('/admin');
+      router.replace('/');
     } catch (err: unknown) {
       setChangeError(err instanceof Error ? err.message : 'Failed to change password');
     } finally {

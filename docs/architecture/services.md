@@ -419,7 +419,7 @@ Each deploy creates a fresh, atomic revision per Container App. Database migrati
 its liveness/readiness probes; ingress only routes to a revision once it reports ready.
 
 **Access (over the corporate VPN):**
-- Admin Portal: https://aigw-dev.lab.cloud.scdom.net/admin-portal/
+- Admin Portal: https://aigw-dev.lab.cloud.scdom.net/admin/
 - Developer Portal: https://aigw-dev.lab.cloud.scdom.net/portal/
 - API: https://aigw-dev.lab.cloud.scdom.net/{path}/ (internally, services call `http://ca-<service>-dev-sdc`)
 
