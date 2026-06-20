@@ -50,12 +50,7 @@ var caddyfileTemplate = '''
 		}
 	}
 
-	# Browser apps (Next.js basePath - keep the prefix).
-	handle /portal* {
-		reverse_proxy http://ca-portal-__ENV__-sdc:80 {
-			header_up Host ca-portal-__ENV__-sdc
-		}
-	}
+	# Admin portal (Next.js basePath /admin - keep the prefix).
 	handle /admin* {
 		reverse_proxy http://ca-admin-portal-__ENV__-sdc:80 {
 			header_up Host ca-admin-portal-__ENV__-sdc
@@ -118,14 +113,17 @@ var caddyfileTemplate = '''
 		}
 	}
 
-	# Root -> developer portal.
-	handle / {
-		redir /portal/ 302
-	}
-
 	# Front-door liveness (also the ACA ingress probe target).
 	handle /health {
 		respond "ok" 200
+	}
+
+	# Dev portal at the root - catch-all for everything not matched above
+	# (Next.js app with no basePath: /, /keys, /docs, /_next/*, assets, ...).
+	handle {
+		reverse_proxy http://ca-portal-__ENV__-sdc:80 {
+			header_up Host ca-portal-__ENV__-sdc
+		}
 	}
 }
 '''

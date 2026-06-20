@@ -2803,7 +2803,7 @@ Organisation-level budget overview:
 
 ## 14. Developer Portal (port 3002)
 
-The Developer Portal is a Next.js application running as `ca-portal-dev-sdc` (container port 3002), reached via the gateway FQDN at `https://aigw-dev.lab.cloud.scdom.net/portal/`. It is aimed at the ~2,000 engineers consuming the gateway.
+The Developer Portal is a Next.js application running as `ca-portal-dev-sdc` (container port 3002), reached via the gateway FQDN at `https://aigw-dev.lab.cloud.scdom.net/`. It is aimed at the ~2,000 engineers consuming the gateway.
 
 ### `/portal` — Home Dashboard
 
@@ -3137,7 +3137,7 @@ All services have internal ingress only. Access the gateway from the corporate V
 
 Developers and administrators authenticate via Azure Entra ID SSO
 (tenant `aa81b43f-3969-4fd4-80c9-84c411508d82`). The Developer Portal is reached at
-`https://aigw-dev.lab.cloud.scdom.net/portal/` and the Admin Portal at
+`https://aigw-dev.lab.cloud.scdom.net/` and the Admin Portal at
 `https://aigw-dev.lab.cloud.scdom.net/admin/`.
 
 ### 17.3 Running Tests

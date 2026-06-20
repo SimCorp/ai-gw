@@ -20,12 +20,9 @@
 		reverse_proxy cache:8002
 	}
 
-	# Browser portals (Next.js basePath — keep the prefix).
+	# Admin portal (Next.js basePath /admin — keep the prefix).
 	handle /admin* {
 		reverse_proxy admin-portal:3001
-	}
-	handle /portal* {
-		reverse_proxy portal:3002
 	}
 
 	# Backend service APIs — strip /api/<svc>/ -> service root.
@@ -64,14 +61,17 @@
 		reverse_proxy admin:8005
 	}
 
-	handle / {
-		redir /portal/ 302
-	}
 	# Gateway health. /healthz kept as an alias for existing probes.
 	handle /health {
 		respond "ok" 200
 	}
 	handle /healthz {
 		respond "ok" 200
+	}
+
+	# Dev portal at the root — catch-all for everything not matched above
+	# (Next.js app with no basePath: /, /keys, /docs, /_next/*, assets, …).
+	handle {
+		reverse_proxy portal:3002
 	}
 }

@@ -19,7 +19,7 @@
 | Compose dir | `/home/azureuser/ai-gw/infra/` |
 | Compose command | `docker compose -f docker-compose.yml -f docker-compose.host.yml` |
 | Admin portal | `https://dev.aigw.scdom.net/admin/` |
-| Dev portal | `https://dev.aigw.scdom.net/portal/` |
+| Dev portal | `https://dev.aigw.scdom.net/` |
 | Inference | `https://dev.aigw.scdom.net/v1/` |
 
 ### Check service health
