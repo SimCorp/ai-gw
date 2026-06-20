@@ -15,6 +15,9 @@
 #               `scripts/deploy-vm.sh sha-abc1234`.
 #
 # Env overrides:
+#   SMOKE=1     After a successful deploy, run the browser E2E quality
+#               walkthrough (scripts/e2e-quality.sh) against the VM and fail if
+#               it does. A post-deploy smoke gate — does NOT gate PR merges.
 #   VM_HOST     SSH target (default: azureuser@10.179.231.68)
 #   GHCR_USER   GitHub username that owns the GHCR read token (default: the
 #               `login` field of the `github/ghcr-pat-aigw` pass entry)
@@ -54,3 +57,9 @@ $SSH "cd ~/ai-gw/infra \
 
 echo "==> Done. Current status:"
 $SSH "cd ~/ai-gw/infra && $COMPOSE ps"
+
+# Optional post-deploy smoke: walk the portals and fail the deploy if broken.
+if [ "${SMOKE:-0}" = "1" ]; then
+  echo "==> Running post-deploy E2E quality walkthrough"
+  "$(dirname "${BASH_SOURCE[0]}")/e2e-quality.sh"
+fi
