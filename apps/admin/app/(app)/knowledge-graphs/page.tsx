@@ -102,7 +102,10 @@ function GraphModal({ repo, onClose }: { repo: string; onClose: () => void }) {
             <iframe
               title={`graph-${repo}`}
               srcDoc={data.html}
-              sandbox="allow-scripts allow-same-origin"
+              // allow-scripts only (NOT allow-same-origin): the graph HTML is
+              // derived from repo content and runs JS, so keep it in an opaque
+              // origin where it cannot read the admin token in localStorage.
+              sandbox="allow-scripts"
               style={{ width: '100%', height: '100%', border: 'none', background: '#fff' }}
             />
           )}
