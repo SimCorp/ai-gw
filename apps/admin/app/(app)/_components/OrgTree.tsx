@@ -94,7 +94,7 @@ function OrgTreeNode({
       <div
         style={{
           display: 'flex', alignItems: 'center', gap: 8,
-          padding: `9px 16px 9px ${16 + indent}px`,
+          padding: `11px 16px 11px ${16 + indent}px`,
           borderBottom: '1px solid var(--rule)',
           userSelect: 'none',
           background: baseBg,
@@ -128,7 +128,7 @@ function OrgTreeNode({
           onClick={() => onSelect(node)}
           style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, cursor: 'pointer', minWidth: 0 }}
         >
-          <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 3, background: color, flexShrink: 0 }} />
+          <span style={{ display: 'inline-block', width: 12, height: 12, borderRadius: 3, background: color, flexShrink: 0 }} />
           <span style={{ fontSize: 13, fontWeight: depth === 0 ? 600 : 500, color: 'var(--fg)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {node.name}
           </span>
@@ -152,7 +152,7 @@ function OrgTreeNode({
             style={{
               opacity: 0, transition: 'opacity 0.1s',
               background: 'none', border: '1px solid var(--rule)',
-              borderRadius: 4, padding: '2px 7px', fontSize: 11,
+              borderRadius: 4, padding: '4px 9px', fontSize: 11,
               color: 'var(--fg-2)', cursor: 'pointer', flexShrink: 0,
             }}
           >
@@ -169,7 +169,7 @@ function OrgTreeNode({
             style={{
               opacity: 0, transition: 'opacity 0.1s',
               background: 'none', border: '1px solid var(--rule)',
-              borderRadius: 4, padding: '2px 7px', fontSize: 11,
+              borderRadius: 4, padding: '4px 9px', fontSize: 11,
               color: 'var(--fg-2)', cursor: 'pointer', flexShrink: 0,
             }}
           >

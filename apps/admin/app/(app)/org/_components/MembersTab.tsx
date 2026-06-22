@@ -97,7 +97,7 @@ export function MembersTab({ nodeId }: MembersTabProps) {
               return (
                 <div key={m.id} style={{
                   display: 'flex', alignItems: 'center', gap: 12,
-                  padding: '10px 14px',
+                  padding: '12px 14px',
                   borderBottom: i < list.length - 1 ? '1px solid var(--rule)' : 'none',
                 }}>
                   <div style={{

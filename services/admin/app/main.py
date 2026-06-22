@@ -92,6 +92,9 @@ from app.routers import (
     memory_admin as memory_admin_router,
 )
 from app.routers import (
+    local_groups as local_groups_router,
+)
+from app.routers import (
     nodes as nodes_router,
 )
 from app.routers import (
@@ -572,6 +575,7 @@ app.include_router(users_router.router, dependencies=_auth)  # admin user manage
 app.include_router(settings_router.router, dependencies=_auth)
 app.include_router(dashboard.router, dependencies=_auth)
 app.include_router(nodes_router.router, dependencies=_auth)
+app.include_router(local_groups_router.router, dependencies=_auth)
 # members.py router (legacy /teams/{id}/members) is omitted — teams table removed.
 # Use /nodes/{id}/members instead.
 app.include_router(developers_router.router, dependencies=_auth)

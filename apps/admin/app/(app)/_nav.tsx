@@ -32,6 +32,7 @@ export const ADMIN_NAV: NavDomain[] = [
     pages: [
       { href: '/org', label: 'Org tree' },
       { href: '/users', label: 'Users' },
+      { href: '/groups', label: 'Groups' },
     ],
   },
   {

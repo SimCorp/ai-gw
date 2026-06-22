@@ -42,13 +42,17 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 # ---------------------------------------------------------------------------
 
 _ROLE_POWER = {
-    "platform_admin": 6,
+    "gateway_admin": 6, "platform_admin": 6,   # alias — old sessions in Redis
     "area_owner": 5,
     "unit_lead": 4,
     "team_admin": 3,
-    "developer": 2,
-    "viewer": 1,
+    "engineer": 2, "developer": 2,              # alias — old sessions in Redis
+    "reporter": 1, "viewer": 1,                 # alias — old sessions in Redis
 }
+
+# Sets used for role checks that must work with both old and new session names
+_GATEWAY_ADMIN_ROLES = {"gateway_admin", "platform_admin"}
+_ENGINEER_ROLES = {"developer", "engineer"}
 
 
 def can_access(user: dict, target_path: str, min_role: str) -> bool:
@@ -315,15 +319,16 @@ async def get_current_user(
 
 
 def require_platform_admin(user: dict = Depends(get_current_user)) -> dict:
-    roles = [r["role"] for r in user.get("roles", [])]
-    if "platform_admin" not in roles:
+    roles = {r["role"] for r in user.get("roles", [])}
+    if not roles & _GATEWAY_ADMIN_ROLES:
         raise HTTPException(status_code=403, detail="Platform admin access required")
     return user
 
 
 def require_developer(user: dict = Depends(get_current_user)) -> dict:
-    roles = [r["role"] for r in user.get("roles", [])]
-    if not any(r in roles for r in ("developer", "platform_admin", "team_admin", "area_owner")):
+    roles = {r["role"] for r in user.get("roles", [])}
+    allowed = _ENGINEER_ROLES | _GATEWAY_ADMIN_ROLES | {"team_admin", "area_owner", "unit_lead"}
+    if not roles & allowed:
         raise HTTPException(status_code=403, detail="Developer access required")
     return user
 
@@ -443,29 +448,52 @@ class ForceResetRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-async def _load_role_assignments(session: AsyncSession, group_ids: list[str]) -> list[dict]:
-    """Load role assignments for a list of Entra group IDs.
+async def _load_role_assignments(
+    session: AsyncSession, group_ids: list[str], user_id: str | None = None
+) -> list[dict]:
+    """Load role assignments for a list of group IDs plus optional direct user assignments.
 
     Returns a list of {role, node_path, node_id, node_name} dicts.
     """
-    if not group_ids:
-        return []
-    rows = (
-        (
-            await session.execute(
-                text("""
-            SELECT ra.role, n.path AS node_path, n.id::text AS node_id, n.name AS node_name
-            FROM role_assignments ra
-            JOIN organization_nodes n ON n.id = ra.node_id
-            WHERE ra.entra_group_id = ANY(:gids)
-        """),
-                {"gids": group_ids},
+    results: list[dict] = []
+
+    if group_ids:
+        rows = (
+            (
+                await session.execute(
+                    text("""
+                SELECT ra.role, n.path AS node_path, n.id::text AS node_id, n.name AS node_name
+                FROM role_assignments ra
+                JOIN organization_nodes n ON n.id = ra.node_id
+                WHERE ra.entra_group_id = ANY(:gids)
+            """),
+                    {"gids": group_ids},
+                )
             )
+            .mappings()
+            .all()
         )
-        .mappings()
-        .all()
-    )
-    return [dict(r) for r in rows]
+        results.extend(dict(r) for r in rows)
+
+    if user_id:
+        rows = (
+            (
+                await session.execute(
+                    text("""
+                SELECT ra.role, n.path AS node_path, n.id::text AS node_id, n.name AS node_name
+                FROM role_assignments ra
+                JOIN organization_nodes n ON n.id = ra.node_id
+                WHERE ra.user_id = CAST(:uid AS uuid)
+            """),
+                    {"uid": user_id},
+                )
+            )
+            .mappings()
+            .all()
+        )
+        results.extend(dict(r) for r in rows)
+
+    return results
 
 
 # Keep legacy alias so any remaining callers don't break immediately
@@ -476,7 +504,7 @@ async def _load_user_roles(session: AsyncSession, user_id: str) -> list[dict]:
 
 
 async def _build_session_payload(row, roles: list[dict]) -> dict:
-    is_platform_admin = any(r.get("role") == "platform_admin" for r in roles)
+    is_platform_admin = any(r.get("role") in _GATEWAY_ADMIN_ROLES for r in roles)
     access_expires = row.get("access_expires_at")
     return {
         "user_id": str(row["id"]),
@@ -603,13 +631,13 @@ async def login(
             )
         ).all()
     ]
-    roles = await _load_role_assignments(session, group_ids)
+    roles = await _load_role_assignments(session, group_ids, user_id=str(row["id"]))
 
     payload = await _build_session_payload(row, roles)
     payload["node_name"] = row["node_name"]
 
-    # TTL: admins get 8h/30d, developers get 7d/30d
-    is_admin = any(r.get("role") == "platform_admin" for r in roles)
+    # TTL: admins get 8h/30d, engineers get 7d/30d
+    is_admin = any(r.get("role") in _GATEWAY_ADMIN_ROLES for r in roles)
     if body.remember_me:
         ttl = _SESSION_TTL_REMEMBER
     elif is_admin:
@@ -674,11 +702,11 @@ async def register(
     )
     await session.commit()
 
-    # Self-service registrants get the base `developer` role so they can use the
+    # Self-service registrants get the base `engineer` role so they can use the
     # developer portal. Elevated/node-scoped roles still come from an admin
     # assigning their Entra group to a node (role_assignments).
     roles: list[dict] = [
-        {"role": "developer", "node_path": "/", "node_id": None, "node_name": "root"}
+        {"role": "engineer", "node_path": "/", "node_id": None, "node_name": "root"}
     ]
     payload = {
         "user_id": user_id,
@@ -1149,7 +1177,7 @@ async def update_contractor_settings(
 # Invitations
 # ---------------------------------------------------------------------------
 
-_VALID_ROLES = {"platform_admin", "area_owner", "unit_lead", "team_admin", "developer", "viewer"}
+_VALID_ROLES = {"gateway_admin", "area_owner", "unit_lead", "team_admin", "engineer", "reporter"}
 _INVITE_TTL = int(timedelta(hours=48).total_seconds())
 
 
@@ -1195,17 +1223,17 @@ async def create_invitation(
     caller: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    roles = [r["role"] for r in caller.get("roles", [])]
-    is_platform_admin = "platform_admin" in roles
+    roles = {r["role"] for r in caller.get("roles", [])}
+    is_platform_admin = bool(roles & _GATEWAY_ADMIN_ROLES)
     is_team_admin = "team_admin" in roles
 
-    # team_admin can only invite developers/viewers to their own team
+    # team_admin can only invite engineers/reporters to their own team
     if not is_platform_admin:
         if not is_team_admin:
             raise HTTPException(status_code=403, detail="Insufficient permissions to invite users")
-        if body.role not in ("developer", "viewer"):
+        if body.role not in ("engineer", "reporter"):
             raise HTTPException(
-                status_code=403, detail="Team admins can only invite developers or viewers"
+                status_code=403, detail="Team admins can only invite engineers or reporters"
             )
         if body.scope_type != "team":
             raise HTTPException(status_code=403, detail="Team admins must invite to team scope")
@@ -1267,8 +1295,8 @@ async def list_invitations(
     caller: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    roles = [r["role"] for r in caller.get("roles", [])]
-    is_platform_admin = "platform_admin" in roles
+    roles = {r["role"] for r in caller.get("roles", [])}
+    is_platform_admin = bool(roles & _GATEWAY_ADMIN_ROLES)
 
     if is_platform_admin:
         rows = (
@@ -1321,8 +1349,8 @@ async def revoke_invitation(
     caller: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    roles = [r["role"] for r in caller.get("roles", [])]
-    if "platform_admin" not in roles and "team_admin" not in roles:
+    roles = {r["role"] for r in caller.get("roles", [])}
+    if not (roles & _GATEWAY_ADMIN_ROLES) and "team_admin" not in roles:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     await session.execute(
         text("DELETE FROM user_invitations WHERE id = CAST(:id AS uuid) AND accepted_at IS NULL"),
@@ -1525,8 +1553,8 @@ async def _assert_sa_in_scope(session: AsyncSession, sa_id: str, caller: dict) -
     team_id is in their team_admin scope. Raises 404 if the SA does not exist,
     403 otherwise.
     """
-    roles = [r["role"] for r in caller.get("roles", [])]
-    if "platform_admin" in roles:
+    roles = {r["role"] for r in caller.get("roles", [])}
+    if roles & _GATEWAY_ADMIN_ROLES:
         return
     if "team_admin" not in roles:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
@@ -1554,8 +1582,8 @@ async def create_service_account(
     caller: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    roles = [r["role"] for r in caller.get("roles", [])]
-    if "platform_admin" not in roles:
+    roles = {r["role"] for r in caller.get("roles", [])}
+    if not (roles & _GATEWAY_ADMIN_ROLES):
         # A team_admin may only create a service account scoped to a team they
         # administer; a bare team_id outside their scope is rejected.
         if "team_admin" not in roles:
@@ -1609,8 +1637,8 @@ async def list_service_accounts(
     caller: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    roles = [r["role"] for r in caller.get("roles", [])]
-    is_platform_admin = "platform_admin" in roles
+    roles = {r["role"] for r in caller.get("roles", [])}
+    is_platform_admin = bool(roles & _GATEWAY_ADMIN_ROLES)
 
     if is_platform_admin:
         rows = (
@@ -1853,7 +1881,7 @@ async def oidc_callback(
         "primary_team_id": None,  # legacy compat
         "node_name": node_name,
         "group_ids": group_ids,
-        "is_platform_admin": any(r.get("role") == "platform_admin" for r in roles),
+        "is_platform_admin": any(r.get("role") in _GATEWAY_ADMIN_ROLES for r in roles),
         "is_contractor": False,
         "access_expires_at": None,
         "allowed_models": None,
@@ -1861,8 +1889,8 @@ async def oidc_callback(
     token = await _issue_session(request.app.state.redis, payload, _SESSION_TTL_DEV)
 
     # Redirect to the appropriate portal with token in fragment
-    role_names = [r["role"] for r in roles]
-    if any(r in role_names for r in ("platform_admin", "area_owner", "team_admin")):
+    role_names = {r["role"] for r in roles}
+    if role_names & (_GATEWAY_ADMIN_ROLES | {"area_owner", "team_admin"}):
         frontend = f"http://localhost:3001/admin?sso_token={token}"
     else:
         frontend = f"http://localhost:3002/portal?sso_token={token}"

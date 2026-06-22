@@ -347,12 +347,11 @@ export default function OrgTreePage() {
       </div>
 
       {/* Split-pane */}
-      <div style={{ display: 'flex', gap: 0, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+      <div style={{ display: 'flex', gap: 0, flexWrap: 'wrap', alignItems: 'stretch' }}>
         {/* Left: tree */}
         <div style={{
           flex: '1 1 320px', minWidth: 260,
-          borderRight: selectedId ? '1px solid var(--rule)' : 'none',
-          paddingRight: selectedId ? 0 : 0,
+          borderRight: '1px solid var(--rule)',
         }}>
           <OrgTree
             expandedIds={expandedIds}
@@ -372,7 +371,6 @@ export default function OrgTreePage() {
             background: 'var(--surface)', border: '1px solid var(--rule)',
             borderLeft: 'none', borderRadius: '0 8px 8px 0',
             overflow: 'hidden',
-            minHeight: 480,
           }}>
             <NodePanel
               nodeId={selectedId}

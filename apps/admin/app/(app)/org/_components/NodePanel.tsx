@@ -7,10 +7,10 @@ import { LoadingState, ErrorState } from '../../_components/PageStates';
 import { OrgNode, TypeBadge, typeBadgeColor } from '../../_components/nodeTypes';
 import { PolicyPanel } from '../../nodes/[id]/_components/PolicyPanel';
 import { BudgetPanel } from '../../nodes/[id]/_components/BudgetPanel';
-import { PermissionsPanel } from '../../nodes/[id]/_components/PermissionsPanel';
 import { MembersTab } from './MembersTab';
+import { AccessTab } from './AccessTab';
 
-export type PanelTab = 'overview' | 'members' | 'policy' | 'budget' | 'permissions';
+export type PanelTab = 'overview' | 'members' | 'policy' | 'budget' | 'access';
 
 interface NodeDetail extends OrgNode {
   member_count: number;
@@ -32,13 +32,13 @@ const TABS: { id: PanelTab; label: string }[] = [
   { id: 'members', label: 'Members' },
   { id: 'policy', label: 'Policy' },
   { id: 'budget', label: 'Budget' },
-  { id: 'permissions', label: 'Permissions' },
+  { id: 'access', label: 'Access' },
 ];
 
 function KpiCard({ label, value, muted }: { label: string; value: string; muted?: boolean }) {
   return (
     <div style={{
-      padding: '12px 14px',
+      padding: '14px 16px',
       background: 'var(--surface)',
       border: '1px solid var(--rule)',
       borderRadius: 8,
@@ -223,7 +223,7 @@ export function NodePanel({ nodeId, activeTab, onTabChange, onSelectNode, onAddC
               key={t.id}
               onClick={() => onTabChange(t.id)}
               style={{
-                padding: '8px 12px', fontSize: 12, fontWeight: activeTab === t.id ? 600 : 400,
+                padding: '8px 14px', fontSize: 12, fontWeight: activeTab === t.id ? 600 : 400,
                 background: 'none', border: 'none',
                 borderBottom: `2px solid ${activeTab === t.id ? color : 'transparent'}`,
                 color: activeTab === t.id ? 'var(--fg-1)' : 'var(--fg-3)',
@@ -245,11 +245,35 @@ export function NodePanel({ nodeId, activeTab, onTabChange, onSelectNode, onAddC
         {activeTab === 'members' && <MembersTab nodeId={nodeId} />}
         {activeTab === 'policy' && <PolicyPanel nodeId={nodeId} nodeName={node.name} />}
         {activeTab === 'budget' && <BudgetPanel nodeId={nodeId} />}
-        {activeTab === 'permissions' && <PermissionsPanel nodeId={nodeId} />}
+        {activeTab === 'access' && <AccessTab nodeId={nodeId} />}
       </div>
     </div>
   );
 }
+
+function avatarColor(s: string): string {
+  const colors = ['#6366f1', '#8b5cf6', '#ec4899', '#06b6d4', '#10b981', '#f59e0b', '#ef4444'];
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % colors.length;
+  return colors[h];
+}
+
+function adminInitials(displayName: string, email: string): string {
+  const src = displayName || email;
+  const parts = src.split(/[\s@.]+/).filter(Boolean);
+  return parts.length >= 2 ? (parts[0][0] + parts[1][0]).toUpperCase() : src.slice(0, 2).toUpperCase();
+}
+
+const ROLE_LABELS: Record<string, string> = {
+  gateway_admin: 'Gateway Admin', platform_admin: 'Gateway Admin',
+  area_owner: 'Area Owner', unit_lead: 'Unit Lead', team_admin: 'Team Admin',
+  engineer: 'Engineer', developer: 'Engineer', reporter: 'Reporter', viewer: 'Reporter',
+};
+const ROLE_COLORS: Record<string, string> = {
+  gateway_admin: '#F97316', platform_admin: '#F97316',
+  area_owner: '#F59E0B', unit_lead: '#D946EF', team_admin: '#6366F1',
+  engineer: '#0EA5E9', developer: '#0EA5E9', reporter: '#8B5CF6', viewer: '#8B5CF6',
+};
 
 function OverviewTab({ node, onSelectNode, onAddChild, onShowMembers }: {
   node: NodeDetail;
@@ -257,9 +281,46 @@ function OverviewTab({ node, onSelectNode, onAddChild, onShowMembers }: {
   onAddChild: (node: OrgNode) => void;
   onShowMembers: () => void;
 }) {
+  const directAdmins = node.direct_admins ?? [];
+  const parentAdmins = node.parent_direct_admins ?? [];
+  const adminsToShow = directAdmins.length > 0 ? directAdmins : parentAdmins;
+  const isInherited = directAdmins.length === 0 && parentAdmins.length > 0;
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10 }}>
+      {adminsToShow.length > 0 && (
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: isInherited ? 'var(--fg-3)' : 'var(--fg-1)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+            Admins
+            {isInherited && <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--fg-3)' }}> — inherited from {parentAdmins[0]?.source_node_name}</span>}
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {adminsToShow.map(a => {
+              const color = avatarColor(a.email);
+              const roleColor = ROLE_COLORS[a.role] ?? '#999';
+              const roleLabel = ROLE_LABELS[a.role] ?? a.role;
+              return (
+                <div key={a.id} style={{
+                  display: 'flex', alignItems: 'center', gap: 7,
+                  padding: '6px 10px 6px 6px',
+                  background: 'var(--surface)', border: '1px solid var(--rule)',
+                  borderRadius: 20, opacity: isInherited ? 0.65 : 1,
+                }}>
+                  <div style={{ width: 24, height: 24, borderRadius: '50%', background: color, color: '#fff', fontSize: 9, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    {adminInitials(a.display_name, a.email)}
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--fg-1)', lineHeight: 1.2, whiteSpace: 'nowrap' }}>{a.display_name || a.email}</div>
+                    <div style={{ fontSize: 9, color: roleColor, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{roleLabel}</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10 }}>
         <KpiCard label="Members" value={String(node.member_count ?? 0)} />
         <KpiCard label="Children" value={String(node.children?.length ?? 0)} />
         <KpiCard label="Spend MTD" value={node.spend_mtd ? `$${node.spend_mtd.toLocaleString()}` : '$0'} muted={!node.spend_mtd} />
@@ -289,7 +350,7 @@ function OverviewTab({ node, onSelectNode, onAddChild, onShowMembers }: {
                   onClick={() => onSelectNode(child.id)}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 10,
-                    padding: '10px 14px',
+                    padding: '12px 14px',
                     borderBottom: i < node.children!.length - 1 ? '1px solid var(--rule)' : 'none',
                     cursor: 'pointer',
                   }}

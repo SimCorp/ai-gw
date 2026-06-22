@@ -157,8 +157,9 @@ class SetBudgetRequest(BaseModel):
 
 
 class AddPermissionRequest(BaseModel):
-    entra_group_id: str
+    entra_group_id: str | None = None
     entra_group_name: str | None = None
+    user_id: str | None = None
     role: str
 
 
@@ -402,11 +403,70 @@ async def get_node(
         )
     ).scalar() or 0
 
+    # Direct user role assignments on this node (for node admin / contact display)
+    direct_admins_rows = (
+        (
+            await session.execute(
+                text("""
+            SELECT u.id, u.email, u.display_name, ra.role
+            FROM role_assignments ra
+            JOIN users u ON u.id = ra.user_id
+            WHERE ra.node_id = CAST(:nid AS uuid) AND ra.user_id IS NOT NULL
+            ORDER BY u.display_name, u.email
+        """),
+                {"nid": node_id},
+            )
+        )
+        .mappings()
+        .all()
+    )
+
+    # Inherited admins: first direct-admin on the parent node (display hint only)
+    parent_direct_admins: list[dict] = []
+    if row["parent_id"] and not direct_admins_rows:
+        parent_da_rows = (
+            (
+                await session.execute(
+                    text("""
+                SELECT u.id, u.email, u.display_name, ra.role, pn.name AS source_node_name
+                FROM role_assignments ra
+                JOIN users u ON u.id = ra.user_id
+                JOIN organization_nodes pn ON pn.id = ra.node_id
+                WHERE ra.node_id = CAST(:pid AS uuid) AND ra.user_id IS NOT NULL
+                ORDER BY u.display_name, u.email
+            """),
+                    {"pid": str(row["parent_id"])},
+                )
+            )
+            .mappings()
+            .all()
+        )
+        parent_direct_admins = [
+            {
+                "id": str(r["id"]),
+                "email": r["email"],
+                "display_name": r["display_name"] or "",
+                "role": r["role"],
+                "source_node_name": r["source_node_name"],
+            }
+            for r in parent_da_rows
+        ]
+
     result = _node_to_dict(row)
     result["parent"] = parent
     result["children"] = [_node_to_dict(c) for c in children]
     result["member_count"] = member_count
     result["spend_mtd"] = float(spend_mtd)
+    result["direct_admins"] = [
+        {
+            "id": str(r["id"]),
+            "email": r["email"],
+            "display_name": r["display_name"] or "",
+            "role": r["role"],
+        }
+        for r in direct_admins_rows
+    ]
+    result["parent_direct_admins"] = parent_direct_admins
     return result
 
 
@@ -923,6 +983,7 @@ async def set_budget(
 @router.get("/{node_id}/permissions")
 async def list_permissions(
     node_id: str,
+    include_inherited: bool = Query(default=False),
     current_user: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
@@ -930,15 +991,37 @@ async def list_permissions(
     if not can_access(current_user, row["path"], "team_admin"):
         raise HTTPException(403, "Insufficient permissions")
 
-    assignments = (
+    def _fmt(a: Any, inherited: bool = False, source_node_name: str | None = None) -> dict:
+        is_user = a["user_id"] is not None
+        return {
+            "id": str(a["id"]),
+            "subject": "user" if is_user else "group",
+            "user_id": str(a["user_id"]) if is_user else None,
+            "user_email": a.get("user_email"),
+            "user_display_name": a.get("user_display_name"),
+            "entra_group_id": a["entra_group_id"],
+            "entra_group_name": a["entra_group_name"],
+            "role": a["role"],
+            "node_id": str(a["node_id"]),
+            "granted_at": a["granted_at"].isoformat() if a["granted_at"] else None,
+            "granted_by": str(a["granted_by"]) if a["granted_by"] else None,
+            "granted_by_email": a.get("granted_by_email"),
+            "inherited": inherited,
+            "source_node_name": source_node_name,
+        }
+
+    # Direct assignments on this node
+    direct_rows = (
         (
             await session.execute(
                 text("""
             SELECT ra.id, ra.entra_group_id, ra.entra_group_name, ra.role,
-                   ra.node_id, ra.granted_at, ra.granted_by,
-                   u.email AS granted_by_email
+                   ra.node_id, ra.granted_at, ra.granted_by, ra.user_id,
+                   u.email AS granted_by_email,
+                   su.email AS user_email, su.display_name AS user_display_name
             FROM role_assignments ra
             LEFT JOIN users u ON u.id = ra.granted_by
+            LEFT JOIN users su ON su.id = ra.user_id
             WHERE ra.node_id = CAST(:nid AS uuid)
             ORDER BY ra.granted_at DESC
         """),
@@ -949,19 +1032,40 @@ async def list_permissions(
         .all()
     )
 
-    return [
-        {
-            "id": str(a["id"]),
-            "entra_group_id": a["entra_group_id"],
-            "entra_group_name": a["entra_group_name"],
-            "role": a["role"],
-            "node_id": str(a["node_id"]),
-            "granted_at": a["granted_at"].isoformat() if a["granted_at"] else None,
-            "granted_by": str(a["granted_by"]) if a["granted_by"] else None,
-            "granted_by_email": a["granted_by_email"],
-        }
-        for a in assignments
-    ]
+    result = [_fmt(a) for a in direct_rows]
+
+    if include_inherited:
+        # Ancestor node IDs from the path (excludes current node)
+        parts = [p for p in row["path"].strip("/").split("/") if p and p != node_id]
+        if parts:
+            ancestor_rows = (
+                (
+                    await session.execute(
+                        text("""
+                    SELECT ra.id, ra.entra_group_id, ra.entra_group_name, ra.role,
+                           ra.node_id, ra.granted_at, ra.granted_by, ra.user_id,
+                           u.email AS granted_by_email,
+                           su.email AS user_email, su.display_name AS user_display_name,
+                           n.name AS source_node_name
+                    FROM role_assignments ra
+                    LEFT JOIN users u ON u.id = ra.granted_by
+                    LEFT JOIN users su ON su.id = ra.user_id
+                    JOIN organization_nodes n ON n.id = ra.node_id
+                    WHERE ra.node_id = ANY(CAST(:ids AS uuid[]))
+                    ORDER BY length(n.path), ra.granted_at DESC
+                """),
+                        {"ids": parts},
+                    )
+                )
+                .mappings()
+                .all()
+            )
+            result.extend(
+                _fmt(a, inherited=True, source_node_name=a["source_node_name"])
+                for a in ancestor_rows
+            )
+
+    return result
 
 
 @router.post("/{node_id}/permissions", status_code=201)
@@ -975,35 +1079,58 @@ async def add_permission(
     if not can_access(current_user, row["path"], "area_owner"):
         raise HTTPException(403, "Insufficient permissions")
 
-    valid_roles = {"platform_admin", "area_owner", "unit_lead", "team_admin", "developer", "viewer"}
+    valid_roles = {"gateway_admin", "area_owner", "unit_lead", "team_admin", "engineer", "reporter"}
     if body.role not in valid_roles:
         raise HTTPException(422, f"role must be one of {sorted(valid_roles)}")
 
+    if not body.entra_group_id and not body.user_id:
+        raise HTTPException(422, "Either entra_group_id or user_id is required")
+    if body.entra_group_id and body.user_id:
+        raise HTTPException(422, "Only one of entra_group_id or user_id may be specified")
+
     # Privilege-amplification guard: a grantor may not assign a role more
-    # powerful than the one they themselves hold on this node. Without this an
-    # area_owner could grant platform_admin and self-escalate.
+    # powerful than the one they themselves hold on this node.
     if _ROLE_POWER.get(body.role, 0) > max_role_power(current_user, row["path"]):
         raise HTTPException(403, "Cannot grant a role above your own on this node")
 
     assignment_id = str(uuid.uuid4())
-    await session.execute(
-        text("""
-            INSERT INTO role_assignments
-                (id, entra_group_id, entra_group_name, role, node_id, granted_by)
-            VALUES
-                (CAST(:id AS uuid), :group_id, :group_name, :role,
-                 CAST(:nid AS uuid), CAST(:by AS uuid))
-            ON CONFLICT (entra_group_id, role, node_id) DO NOTHING
-        """),
-        {
-            "id": assignment_id,
-            "group_id": body.entra_group_id,
-            "group_name": body.entra_group_name,
-            "role": body.role,
-            "nid": node_id,
-            "by": current_user["user_id"],
-        },
-    )
+    if body.user_id:
+        await session.execute(
+            text("""
+                INSERT INTO role_assignments
+                    (id, user_id, role, node_id, granted_by)
+                VALUES
+                    (CAST(:id AS uuid), CAST(:uid AS uuid), :role,
+                     CAST(:nid AS uuid), CAST(:by AS uuid))
+                ON CONFLICT DO NOTHING
+            """),
+            {
+                "id": assignment_id,
+                "uid": body.user_id,
+                "role": body.role,
+                "nid": node_id,
+                "by": current_user["user_id"],
+            },
+        )
+    else:
+        await session.execute(
+            text("""
+                INSERT INTO role_assignments
+                    (id, entra_group_id, entra_group_name, role, node_id, granted_by)
+                VALUES
+                    (CAST(:id AS uuid), :group_id, :group_name, :role,
+                     CAST(:nid AS uuid), CAST(:by AS uuid))
+                ON CONFLICT (entra_group_id, role, node_id) DO NOTHING
+            """),
+            {
+                "id": assignment_id,
+                "group_id": body.entra_group_id,
+                "group_name": body.entra_group_name,
+                "role": body.role,
+                "nid": node_id,
+                "by": current_user["user_id"],
+            },
+        )
     await session.commit()
     return {"ok": True, "id": assignment_id}
 

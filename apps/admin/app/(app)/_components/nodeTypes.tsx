@@ -17,6 +17,8 @@ export interface OrgNode {
   children?: OrgNode[];
   member_count?: number;
   spend_mtd?: number;
+  direct_admins?: { id: string; email: string; display_name: string; role: string }[];
+  parent_direct_admins?: { id: string; email: string; display_name: string; role: string; source_node_name: string }[];
 }
 
 // Color for type badge backgrounds
