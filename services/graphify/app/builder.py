@@ -83,16 +83,25 @@ async def _clone_or_pull(name: str, github_url: str, ref: str) -> tuple[bool, st
     return rc == 0, log
 
 
-def _extract_env() -> dict:
-    """Environment for `graphify extract --backend openai` — routes extraction
-    LLM calls through the governed gateway entry point."""
+def _extract_cmd(name: str) -> tuple[list[str], dict]:
+    """Build the `graphify extract` argv + env.
+
+    Code is parsed locally via tree-sitter with no API calls. Only when a gateway
+    key is configured do we select `--backend openai` (routing doc/PDF/media
+    semantic extraction through the governed cache entry point). Without a key we
+    run fully offline — `--backend openai` would otherwise hard-fail
+    ("requires OPENAI_API_KEY"), so a code-only repo must not force it.
+    """
+    args = ["graphify", "extract", src_dir(name), "--out", repo_dir(name)]
     env = dict(os.environ)
-    env["OPENAI_BASE_URL"] = settings.graphify_openai_base_url
-    env["OPENAI_API_KEY"] = settings.graphify_gateway_key
-    env["OPENAI_MODEL"] = settings.graphify_openai_model
     # Query logging writes to ~/.cache; disable it in the container.
     env["GRAPHIFY_QUERY_LOG_DISABLE"] = "1"
-    return env
+    if settings.graphify_gateway_key:
+        args += ["--backend", "openai"]
+        env["OPENAI_BASE_URL"] = settings.graphify_openai_base_url
+        env["OPENAI_API_KEY"] = settings.graphify_gateway_key
+        env["OPENAI_MODEL"] = settings.graphify_openai_model
+    return args, env
 
 
 def _count_graph(name: str) -> tuple[int | None, int | None]:
@@ -133,16 +142,11 @@ async def run_build(name: str, github_url: str, ref: str) -> dict:
 
     # `--out <repo_dir>` makes graphify write artefacts to <repo_dir>/graphify-out/
     # (db.graph_dir) regardless of cwd, so build and query agree on the location.
+    extract_args, extract_env = _extract_cmd(name)
     rc, extract_log = await _run(
-        "graphify",
-        "extract",
-        src_dir(name),
-        "--backend",
-        "openai",
-        "--out",
-        repo_dir(name),
+        *extract_args,
         cwd=repo_dir(name),
-        env=_extract_env(),
+        env=extract_env,
         timeout=3600.0,
     )
     log_tail = (clone_log + "\n" + extract_log)[-_MAX_OUTPUT_BYTES:]
