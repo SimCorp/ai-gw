@@ -59,8 +59,11 @@ async def app_and_client():
 
     mock_http = AsyncMock()
 
+    mock_pool = AsyncMock()
+
     app.state.redis = mock_redis
     app.state.http = mock_http
+    app.state.pool = mock_pool
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         yield app, c
@@ -264,7 +267,7 @@ class TestChatCompletions:
         with (
             patch("app.exact.get", new=AsyncMock(return_value=None)),
             patch("app.semantic.embed", new=AsyncMock(return_value=[0.1, 0.2, 0.3])),
-            patch("app.semantic.get", new=AsyncMock(return_value=sem_cached)),
+            patch("app.semantic.get", new=AsyncMock(return_value=(sem_cached, 0.95))),
         ):
             resp = await client.post(
                 "/v1/chat/completions",
@@ -596,7 +599,7 @@ class TestStreamingCacheHits:
         with (
             patch("app.exact.get", new=AsyncMock(return_value=None)),
             patch("app.semantic.embed", new=AsyncMock(return_value=[0.1, 0.2, 0.3])),
-            patch("app.semantic.get", new=AsyncMock(return_value=_CACHED_RESPONSE)),
+            patch("app.semantic.get", new=AsyncMock(return_value=(_CACHED_RESPONSE, 0.95))),
         ):
             resp = await client.post(
                 "/v1/chat/completions",
