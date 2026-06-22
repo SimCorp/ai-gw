@@ -58,7 +58,8 @@ pip install \
   -e "services/agent-relay[dev]" \
   -e "services/graphify[dev]"
 
-pytest services/ -v
+# Run each service's suite from its own directory (see note below):
+(cd services/admin && pytest tests/ -v)
 ```
 
 CI runs the suites per-service (`pytest tests/` inside each `services/<svc>`), which is
