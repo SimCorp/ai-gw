@@ -203,7 +203,7 @@ export default function ModelsPage() {
 
   async function toggleEnabled(m: Model) {
     try {
-      await apiFetch(`/models/${m.id}`, {
+      await apiFetch(`/models/${m.model_id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled: !m.enabled }),
