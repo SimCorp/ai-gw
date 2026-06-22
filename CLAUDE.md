@@ -8,7 +8,7 @@ promotion — CI/CD workflows for ACA are archived in `.github/workflows/_archiv
 
 | | Value |
 |---|---|
-| **Host** | `vm-aigw-dev-sdc` — `10.179.231.68` (Sweden Central) |
+| **Host** | `vm-aigw-dev-sdc` — `10.179.231.68` (Sweden Central). RG `RG-SPOKE-PLATFORMAITOOLING-DEV-SDC-001`, NSG `nsg-aigw-vm-dev`, subnet `snet-pe-aigw-dev`, no public IP. (Note: `rg-aigw-dev-sdc` in the ACA/V2 tables below is a *different*, archived RG.) |
 | **Access** | `dev.aigw.scdom.net` via ZPA (corp VPN) — HTTPS 443, SSH 22 |
 | **SSH** | `ssh-aigw` helper (pass key `ssh/dev.aigw.scdom.net`) — see `~/.bashrc` on AZWESU0005 |
 | **Compose files** | `/home/azureuser/ai-gw/infra/docker-compose.yml` + `docker-compose.host.yml` on the VM |
