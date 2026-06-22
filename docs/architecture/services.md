@@ -31,11 +31,11 @@ inbound requests by path prefix; services call each other by container name on t
          ├─ /agent-relay/* → Agent Relay (agent-relay:8007)  [WebSocket]
          └─ /api/<svc>/*  → backend service APIs (prefix stripped by Caddy):
               admin:8005 · cache:8002 · litellm:8003 · identity:8006
-              librarian:8008 · memory:8009 · league:8010 · observability:8004
+              librarian:8008 · memory:8009 · league:8010 · graphify:8012 · observability:8004
 ```
 
-Background workers run as containers with **no ingress**: `scanner` (security scanning) and
-`workflow-worker`.
+Background workers run as containers with **no ingress**: `scanner` (security scanning),
+`workflow-worker`, and `graphify-worker` (clones repos and runs `graphify extract`).
 
 ## Core Infrastructure
 
@@ -279,6 +279,29 @@ Client → cache:8002 → litellm:8003 → OpenAI/Anthropic
 
 ---
 
+### Graphify Service (:8012)
+
+**Role:** Knowledge-graph service — registers GitHub repos, builds a queryable semantic
+graph of each codebase, and exposes query APIs (and MCP tools) for navigating a repo by
+concept. Splits into the `graphify` query API and the `graphify-worker` build runner.
+
+**Features:**
+- Repo registry + FIFO build queue (`graph_repos` / `graph_builds`)
+- Build pipeline: shallow git clone/pull → `graphify extract` → node/edge counts + artefacts
+- Query surface: `GET /query` plus MCP tools (`graph_query`, `graph_path`, `graph_explain`,
+  `graph_stats`, `list_repos`) — pure local retrieval, no LLM at query time
+- Gateway governance: build-time extraction routes through `cache:8002` with a `sk-*` key;
+  direct provider keys are stripped from the build env
+
+**Dependencies:**
+- PostgreSQL (registry + build queue)
+- `auth:8001` (sk-* validation) and `cache:8002` (build-time extraction LLM)
+- Shared `graphify_out` volume for build artefacts
+
+See [Graphify design spec](../superpowers/specs/2026-06-22-graphify-knowledge-graph-design.md).
+
+---
+
 ### Scanner Service (`scanner`, no ingress)
 
 **Role:** Security scanning (Garak, Nuclei, Nmap, ZAP). Runs as a background worker container
@@ -367,10 +390,10 @@ Standard flow for a user request to generate code:
 3. Cache Service
    ├─ Validate Authorization header (Bearer token)
    ├─ Query Redis for session: session:{token}
-   ├─ Check can_access(user, /org/path, "developer")
+   ├─ Check can_access(user, /org/path, "engineer")
    ├─ Retrieve user's node-scoped policy (cache_ttl, rate_limit, allowed_models)
    │
-   ├─ Check semantic cache (Redis) for similar prompt
+   ├─ Check semantic cache (Postgres/pgvector, HNSW) for similar prompt
    │  └─ Hit? Return cached response + log to observability
    │
    ├─ Check exact cache

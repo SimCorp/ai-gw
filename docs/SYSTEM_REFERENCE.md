@@ -77,9 +77,11 @@ target each service instead runs as an Azure Container App named `ca-<service>-d
 | librarian | `librarian` | 8008 | `GET /health` | AI Librarian: shared research knowledge base with semantic search |
 | memory | `memory` | 8009 | `GET /health` | Persistent agent memory scoped to user/team |
 | league | `league` | 8010 | `GET /health` | AI-League gamified challenge platform |
+| graphify | `graphify` | 8012 | `GET /health` | Knowledge-graph service — repo registry, code-graph builds, MCP query tools |
 | admin-portal | `admin-portal` | 3001 | — | Admin Next.js UI |
 | portal | `portal` | 3002 | — | Developer portal Next.js UI |
 | scanner | `scanner` | none | — | Guardrail/security scanning worker (no ingress) |
+| graphify-worker | `graphify-worker` | none | — | Graphify build runner (no ingress) |
 | workflow-worker | `workflow-worker` | none | — | Async DAG executor (no ingress) |
 
 ### 1.3 Infrastructure Dependencies
@@ -92,7 +94,8 @@ PostgreSQL, Service Bus, and Key Vault secret references — describe the deferr
 target (see §17); on the single host the same configuration values are provided directly as
 environment variables to the Compose services rather than resolved from Key Vault.
 
-**Azure Cache for Redis (Premium P1, RediSearch enabled for semantic cache)** — used for:
+**Azure Cache for Redis (Premium P1)** — used for (the semantic cache itself now
+lives in PostgreSQL/pgvector, see §3.3; Redis retains the exact cache and counters):
 - Rate limit counters: `ratelimit:{team_id}:{model}` (60-second fixed window)
 - Budget counters: `budget:team:{team_id}:{month}`, `budget:key:{key_id}:{month}`, `budget:org:{month}`
 - Budget limits: `budget_limit:team:{team_id}`, `budget_limit:key:{key_id}`, `budget_limit:org`
@@ -335,17 +338,22 @@ TTL (default 3600 seconds, ±10% jitter to prevent thundering-herd expiry).
 ### 3.3 Semantic Cache
 
 When an exact match is not found, the cache embeds the prompt text using an
-OpenAI-compatible embedding API and computes cosine similarity against stored
-embeddings in Redis.
+OpenAI-compatible embedding API and finds the nearest stored embedding via a
+single HNSW-indexed vector query in PostgreSQL (pgvector), then verifies the
+cosine similarity passes the threshold.
 
-**Redis key pattern:**
-```
-sem:{team_id}:{project_id}:{entry_id}:emb   — stored embedding vector (JSON)
-sem:{team_id}:{project_id}:{entry_id}:resp  — stored response (JSON)
-```
+**Storage (`cache_entries` table, pgvector):** each row holds the embedding
+(`vector`), the stored response, and the `(team_id, project_id)` scope. An HNSW
+index on the embedding serves approximate-nearest-neighbour lookups in
+sub-linear time, replacing the former O(N) Redis keyspace scan (migration 0035).
+Expired rows are removed by a background expiry loop (every ~10 minutes) in
+addition to TTL filtering at query time.
 
 Match returns the stored response when `cosine_similarity >= similarity_threshold`
 (default 0.90). This threshold is configurable per team via the Admin policy API.
+On a below-threshold near miss, the highest similarity seen is carried into the
+observability event as `similarity_score` (null on a clean miss) to baseline the
+opportunity for a future LLM-judge tier.
 
 **Circuit breaker:** after 5 consecutive embedding failures, the circuit trips and
 all semantic cache operations are bypassed for 120 seconds. The circuit state is
@@ -916,7 +924,7 @@ Returns the team's current policy or `{}` if none is set.
   "id": "...",
   "team_id": "...",
   "cache_ttl_seconds": 3600,
-  "cache_similarity_threshold": 0.95,
+  "cache_similarity_threshold": 0.90,
   "cache_opt_out": false,
   "embedding_model": "text-embedding-3-small",
   "rate_limit_rpm": 1000,
@@ -3841,8 +3849,8 @@ user_roles (
   id          UUID PRIMARY KEY,
   user_id     UUID REFERENCES users(id) ON DELETE CASCADE,
   role        TEXT CHECK (role IN (
-                'platform_admin', 'area_owner', 'team_admin',
-                'developer', 'viewer', 'service_account')),
+                'gateway_admin', 'area_owner', 'team_admin',
+                'engineer', 'reporter', 'service_account')),
   scope_type  TEXT CHECK (scope_type IN ('global', 'area', 'team')),
   scope_id    UUID,          -- area.id or team.id when scope_type != 'global'
   granted_at  TIMESTAMPTZ,
@@ -3887,7 +3895,7 @@ Sessions are stored in Redis at key `session:{token}` with the following payload
   "email": "user@simcorp.com",
   "display_name": "Full Name",
   "roles": [
-    {"role": "developer", "scope_type": "global", "scope_id": null}
+    {"role": "engineer", "scope_type": "global", "scope_id": null}
   ],
   "primary_team_id": "uuid | null",
   "team_name": "Engineering | null"
@@ -3908,10 +3916,10 @@ TTL: 8 hours (admins) / 7 days (developers). Extended to 30 days with `remember_
 Organisation (SimCorp — single tenant)
   └── Areas  (area_owner role — scoped to area.id)
         └── Teams  (team_admin role — scoped to team.id)
-              └── Users  (developer / viewer roles — global scope)
+              └── Users  (engineer / reporter roles — global scope)
 ```
 
-`platform_admin` users have access to all areas and teams. `area_owner` and `team_admin` roles include a `scope_id` FK that restricts their authority to a specific area or team.
+`gateway_admin` users have access to all areas and teams. `area_owner` and `team_admin` roles include a `scope_id` FK that restricts their authority to a specific area or team.
 
 ### 18.6 SSO / OIDC flow
 
@@ -3922,7 +3930,7 @@ Browser  →  GET /auth/oidc/login
          →  GET /auth/oidc/callback?code=...&state=...
          →  backend exchanges code for id_token
          →  extracts email + display_name claims
-         →  finds or creates users row (developer role if new)
+         →  finds or creates users row (engineer role if new)
          →  issues Redis session
          →  302 to /admin?sso_token=<token> or /?sso_token=<token>
          →  frontend stores token, strips query param

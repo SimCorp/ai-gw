@@ -13,7 +13,7 @@ The Auth service manages:
 
 Session tokens are stored in Redis with TTLs:
 - Standard user: 7 days
-- Admin (platform_admin): 8 hours (or 30 days if "remember me")
+- Admin (gateway_admin): 8 hours (or 30 days if "remember me")
 
 ## Core Concepts
 
@@ -31,12 +31,12 @@ can_access(user, target_path, min_role) → bool
 - `/root-id/area-id/unit-id/team-id/`
 
 **Role Power Hierarchy** (highest to lowest):
-- `platform_admin`: 6 — full system access
+- `gateway_admin`: 6 — full system access
 - `area_owner`: 5 — manage an area and all descendants
 - `unit_lead`: 4 — lead a unit
 - `team_admin`: 3 — administer a team
-- `developer`: 2 — developer access
-- `viewer`: 1 — read-only access
+- `engineer`: 2 — engineer access
+- `reporter`: 1 — read-only access
 
 ### Session Payload
 
@@ -328,7 +328,7 @@ POST /auth/admin/force-password-reset
 Admin-initiated password reset. Generates out-of-band reset token and flags user to change password on next login.
 
 **Headers:**
-- `Authorization: Bearer {admin-token}` (requires `platform_admin` role)
+- `Authorization: Bearer {admin-token}` (requires `gateway_admin` role)
 
 **Request Body:**
 ```json
@@ -352,7 +352,7 @@ Admin-initiated password reset. Generates out-of-band reset token and flags user
 
 **Status Code:** 200 OK
 
-**Required Permission:** `platform_admin`
+**Required Permission:** `gateway_admin`
 
 **Notes:**
 - Invalidates all existing sessions for the target user
@@ -446,7 +446,7 @@ GET /auth/users
 List all users in the system with their roles and status.
 
 **Headers:**
-- `Authorization: Bearer {admin-token}` (requires `platform_admin` role)
+- `Authorization: Bearer {admin-token}` (requires `gateway_admin` role)
 
 **Response:**
 ```json
@@ -461,7 +461,7 @@ List all users in the system with their roles and status.
     "created_at": "2024-01-15T10:30:00Z",
     "roles": [
       {
-        "role": "platform_admin",
+        "role": "gateway_admin",
         "scope_type": "global",
         "scope_id": null
       }
@@ -472,7 +472,7 @@ List all users in the system with their roles and status.
 
 **Status Code:** 200 OK
 
-**Required Permission:** `platform_admin`
+**Required Permission:** `gateway_admin`
 
 ---
 
@@ -485,7 +485,7 @@ PATCH /auth/users/{user_id}/status
 Suspend or activate a user account. Suspending invalidates all sessions.
 
 **Headers:**
-- `Authorization: Bearer {admin-token}` (requires `platform_admin` role)
+- `Authorization: Bearer {admin-token}` (requires `gateway_admin` role)
 
 **Query Parameters:**
 - `status` (string, required): One of `active`, `suspended`
@@ -499,7 +499,7 @@ Suspend or activate a user account. Suspending invalidates all sessions.
 
 **Status Code:** 200 OK
 
-**Required Permission:** `platform_admin`
+**Required Permission:** `gateway_admin`
 
 ---
 
@@ -512,7 +512,7 @@ PATCH /auth/users/{user_id}/profile
 Update user display name and primary node assignment.
 
 **Headers:**
-- `Authorization: Bearer {admin-token}` (requires `platform_admin` role)
+- `Authorization: Bearer {admin-token}` (requires `gateway_admin` role)
 
 **Request Body:**
 ```json
@@ -535,7 +535,7 @@ Update user display name and primary node assignment.
 
 **Status Code:** 200 OK
 
-**Required Permission:** `platform_admin`
+**Required Permission:** `gateway_admin`
 
 ---
 
@@ -550,7 +550,7 @@ PATCH /auth/users/{user_id}/contractor
 Set contractor status, access expiry date, and allowed models.
 
 **Headers:**
-- `Authorization: Bearer {admin-token}` (requires `platform_admin` role)
+- `Authorization: Bearer {admin-token}` (requires `gateway_admin` role)
 
 **Request Body:**
 ```json
@@ -575,7 +575,7 @@ Set contractor status, access expiry date, and allowed models.
 
 **Status Code:** 200 OK
 
-**Required Permission:** `platform_admin`
+**Required Permission:** `gateway_admin`
 
 ---
 
@@ -590,13 +590,13 @@ POST /auth/invitations
 Generate a one-time invitation link for a new user.
 
 **Headers:**
-- `Authorization: Bearer {token}` (requires `platform_admin` or `team_admin`)
+- `Authorization: Bearer {token}` (requires `gateway_admin` or `team_admin`)
 
 **Request Body:**
 ```json
 {
   "email": "newuser@simcorp.com",
-  "role": "developer",
+  "role": "engineer",
   "scope_type": "global",
   "scope_id": null
 }
@@ -604,7 +604,7 @@ Generate a one-time invitation link for a new user.
 
 **Request Fields:**
 - `email` (string, required): Invitee email
-- `role` (string, optional, default=`developer`): One of valid roles
+- `role` (string, optional, default=`engineer`): One of valid roles
 - `scope_type` (string, optional, default=`global`): One of `global`, `team`
 - `scope_id` (string, optional): Node UUID for team scope
 
@@ -613,7 +613,7 @@ Generate a one-time invitation link for a new user.
 {
   "invite_id": "invite-uuid",
   "email": "newuser@simcorp.com",
-  "role": "developer",
+  "role": "engineer",
   "expires_at": "2024-01-22T10:30:00Z",
   "accept_url": "http://portal-url/accept-invite?token=...",
   "token": "raw-invitation-token"
@@ -623,8 +623,8 @@ Generate a one-time invitation link for a new user.
 **Status Code:** 201 Created
 
 **Permissions:**
-- `platform_admin`: can invite any role to global scope
-- `team_admin`: can invite `developer` or `viewer` to their team only
+- `gateway_admin`: can invite any role to global scope
+- `team_admin`: can invite `engineer` or `reporter` to their team only
 
 **Notes:**
 - Token valid for 48 hours
@@ -642,7 +642,7 @@ GET /auth/invitations
 List all active and accepted invitations.
 
 **Headers:**
-- `Authorization: Bearer {token}` (requires `platform_admin` or `team_admin`)
+- `Authorization: Bearer {token}` (requires `gateway_admin` or `team_admin`)
 
 **Response:**
 ```json
@@ -650,7 +650,7 @@ List all active and accepted invitations.
   {
     "id": "invite-uuid",
     "email": "newuser@simcorp.com",
-    "role": "developer",
+    "role": "engineer",
     "scope_type": "global",
     "scope_id": null,
     "expires_at": "2024-01-22T10:30:00Z",
@@ -664,7 +664,7 @@ List all active and accepted invitations.
 **Status Code:** 200 OK
 
 **Permissions:**
-- `platform_admin`: see all invitations
+- `gateway_admin`: see all invitations
 - `team_admin`: see invitations for teams they manage
 
 ---
@@ -678,7 +678,7 @@ DELETE /auth/invitations/{invite_id}
 Revoke an unaccepted invitation.
 
 **Headers:**
-- `Authorization: Bearer {token}` (requires `platform_admin` or `team_admin`)
+- `Authorization: Bearer {token}` (requires `gateway_admin` or `team_admin`)
 
 **Status Code:** 204 No Content
 
@@ -715,7 +715,7 @@ Accept an invitation and create the user account.
     "email": "newuser@simcorp.com",
     "display_name": "Bob Johnson",
     "roles": [{
-      "role": "developer",
+      "role": "engineer",
       "scope_type": "global",
       "scope_id": null
     }],
@@ -741,10 +741,10 @@ POST /auth/invitations/bulk
 Invite multiple users from a CSV file.
 
 **Headers:**
-- `Authorization: Bearer {admin-token}` (requires `platform_admin`)
+- `Authorization: Bearer {admin-token}` (requires `gateway_admin`)
 
 **Multipart Form:**
-- `file` (file, required): CSV with columns: `email`, `role` (optional, default=`developer`), `scope_type` (optional), `scope_id` (optional)
+- `file` (file, required): CSV with columns: `email`, `role` (optional, default=`engineer`), `scope_type` (optional), `scope_id` (optional)
 
 **Response:**
 ```json
@@ -765,7 +765,7 @@ Invite multiple users from a CSV file.
 **CSV Format:**
 ```
 email,role,scope_type,scope_id
-alice@simcorp.com,developer,global,
+alice@simcorp.com,engineer,global,
 bob@simcorp.com,team_admin,team,12345678-1234-1234-1234-123456789012
 ```
 

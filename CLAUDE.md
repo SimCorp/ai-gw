@@ -34,8 +34,10 @@ request path and is exposed via Caddy on port 443.
 | librarian | 8008 | Knowledge ingestion, chunking, semantic search |
 | memory | 8009 | Persistent agent memory scoped to user/team |
 | league | 8010 | AI-League gamified challenge platform |
+| graphify | 8012 | Knowledge-graph service — registers repos, builds queryable code graphs, MCP query tools |
 | scanner | — | Security scanning worker (background) |
 | workflow-worker | — | Agentic workflow runner (background) |
+| graphify-worker | — | Graphify build runner (clone + `graphify extract`); isolated so heavy builds can't OOM the query API |
 
 Request path: `caller → Caddy:443 → cache(8002) → [cache calls auth(8001) to validate token] → litellm(8003) → provider`
 
@@ -53,10 +55,15 @@ pip install \
   -e "services/observability[dev]" \
   -e "services/admin[dev]" \
   -e "services/identity[dev]" \
-  -e "services/agent-relay[dev]"
+  -e "services/agent-relay[dev]" \
+  -e "services/graphify[dev]"
 
 pytest services/ -v
 ```
+
+CI runs the suites per-service (`pytest tests/` inside each `services/<svc>`), which is
+also the reliable way to run them locally — a combined `pytest services/` run can collide
+on the shared top-level `app` package across services.
 
 ## Linting
 

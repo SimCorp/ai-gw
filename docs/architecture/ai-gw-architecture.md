@@ -39,7 +39,7 @@ see [`environments.md`](environments.md).
 | **Hosting (current)** | **Docker Compose on Linux VM** | Single-host; `vm-aigw-dev-sdc` (10.179.231.68) |
 | **Hosting (deferred V2)** | **Azure Container Apps** | Serverless containers, internal ACA env, scale-to-N |
 | Datastore | **PostgreSQL** (pgvector:pg16) | Teams, API keys, registries, memory; Docker volume in dev, Flexible Server in prod |
-| Cache | **Redis** (redis-stack) | Exact + semantic response cache, rate-limit counters; Docker volume in dev |
+| Cache | **Redis** (redis-stack) + **Postgres/pgvector** | Exact response cache + rate-limit counters in Redis; semantic cache in Postgres (pgvector, HNSW); Docker volume in dev |
 | Secrets | **`.env` file** (current) / **Azure Key Vault** (V2) | Provider keys + service config |
 | Edge access | **Zscaler ZPA** | Brokers corp clients to the VNet (no public internet) |
 | CI / images | **GitHub Actions** + **GHCR** | `master` push → build/push images → VM pulls |
@@ -201,7 +201,7 @@ flowchart LR
 **Dev (current):** all data services run as Docker containers on the same VM with local volumes.
 
 - **postgres** (`pgvector/pgvector:pg16`) — the system of record: organization nodes, API keys, agent registry, persistent memory, league data. Most services use SQLAlchemy + asyncpg; litellm uses Prisma (note: it needs a plain `postgresql://` URL — no `+asyncpg` driver prefix).
-- **redis** (`redis/redis-stack:7.2.0-v14`) — exact + semantic response cache, rate-limit counters, developer session tokens.
+- **redis** (`redis/redis-stack:7.2.0-v14`) — exact response cache, rate-limit counters, developer session tokens. (The semantic cache moved to Postgres/pgvector — HNSW vector search.)
 - **dex** (`dexidp/dex:v2.40.0`) — local OIDC provider for portal/admin dev authentication.
 
 **Target (Phase 2 — Azure managed PaaS):** PostgreSQL Flexible Server, Cache for Redis, and Service Bus, all behind private endpoints. Connection strings injected from Key Vault via managed identity — no secrets on disk.
@@ -268,7 +268,9 @@ archived in `.github/workflows/_archived/` and do not run. See
 | librarian | 8008 | Knowledge ingestion, chunking, semantic search |
 | memory | 8009 | Persistent agent memory scoped to user/team |
 | league | 8010 | AI-League gamified challenge platform |
+| graphify | 8012 | Knowledge-graph service — repo registry, code-graph builds, MCP query tools |
 | portal | 3002 | Developer-facing Next.js app |
 | admin-portal | 3001 | Admin Next.js app |
 | scanner | — | Background security-scanning worker |
 | workflow-worker | — | Background agentic-workflow runner |
+| graphify-worker | — | Background graphify build runner (isolated, mem-capped) |
