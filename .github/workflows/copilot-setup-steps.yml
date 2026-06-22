@@ -1,0 +1,71 @@
+name: "Copilot Setup Steps"
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/copilot-setup-steps.yml
+  pull_request:
+    paths:
+      - .github/workflows/copilot-setup-steps.yml
+
+jobs:
+  copilot-setup-steps:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ── Python 3.12 + all service dev dependencies ──────────────────────────
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install ruff
+        run: pip install --quiet ruff
+
+      - name: Install all service dev dependencies
+        run: |
+          pip install --quiet \
+            -e "services/auth[dev]" \
+            -e "services/cache[dev]" \
+            -e "services/observability[dev]" \
+            -e "services/admin[dev]" \
+            -e "services/identity[dev]" \
+            -e "services/agent-relay[dev]" \
+            -e "services/librarian[dev]" \
+            -e "services/memory[dev]" \
+            -e "services/league[dev]" \
+            -e "services/scanner[dev]" \
+            -e "services/workflow-worker[dev]" \
+            -e "services/graphify[dev]"
+
+      # ── Node 20 + pnpm@9 + frontend dependencies ────────────────────────────
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Enable pnpm via corepack
+        run: corepack enable && corepack prepare pnpm@9 --activate
+
+      - name: Get pnpm store path
+        id: pnpm-cache
+        run: echo "dir=$(pnpm store path)" >> $GITHUB_OUTPUT
+
+      - uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.dir }}
+          key: pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: pnpm-store-
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
