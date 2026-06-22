@@ -354,7 +354,7 @@ provisioned environment), SSH to the VM and run:
 
 ```bash
 ssh-aigw
-docker exec -it ai-gateway-admin-1 python3 - <<'EOF'
+docker exec -i ai-gateway-admin-1 python3 - <<'EOF'
 import bcrypt, asyncio, os
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy import text
