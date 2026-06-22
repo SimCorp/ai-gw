@@ -9,6 +9,12 @@ class Settings(BaseSettings):
     # Auth service — validates the sk-* Bearer on the query/management surface.
     auth_url: str
 
+    # Shared secret for trusted service-to-service callers (e.g. the admin
+    # backend proxying the portal's Knowledge Graphs page). A request bearing
+    # X-Service-Token matching this value bypasses the user sk-* check. Empty
+    # disables the bypass (sk-* required). Mirrors librarian's X-Service-Token.
+    graphify_service_token: str = ""
+
     # Build-time LLM routing. `graphify extract` parses code locally (tree-sitter,
     # no API calls); only docs/PDF/images/audio/video go to an LLM. We point its
     # OpenAI backend at the gateway's governed entry point (cache:8002/v1) so

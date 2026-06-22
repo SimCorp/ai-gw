@@ -89,3 +89,18 @@ async def test_query_requires_auth(noauth_client):
 async def test_discovery_public_even_without_auth(noauth_client):
     # Discovery stays open so admin's registry can ping it.
     assert (await noauth_client.get("/mcp/manifest")).status_code == 200
+
+
+async def test_service_token_bypasses_sk_auth(noauth_client, monkeypatch):
+    # The admin backend proxies with X-Service-Token instead of a user sk-*.
+    # A matching token authorizes even when sk-* validation would deny (401).
+    from app import main
+
+    monkeypatch.setattr(main.settings, "graphify_service_token", "svc-secret")
+    ok = await noauth_client.get("/repos", headers={"X-Service-Token": "svc-secret"})
+    assert ok.status_code == 200
+    # Wrong/missing token still falls through to sk-* (denied here).
+    assert (
+        await noauth_client.get("/repos", headers={"X-Service-Token": "nope"})
+    ).status_code == 401
+    assert (await noauth_client.get("/repos")).status_code == 401
