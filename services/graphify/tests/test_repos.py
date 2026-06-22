@@ -66,9 +66,7 @@ async def test_query_rejects_path_traversal(client):
 
 
 async def test_mcp_tool_rejects_path_traversal(client):
-    resp = await client.post(
-        "/mcp/tools/graph_query", json={"repo": "../secret", "question": "x"}
-    )
+    resp = await client.post("/mcp/tools/graph_query", json={"repo": "../secret", "question": "x"})
     assert resp.status_code == 422
 
 
