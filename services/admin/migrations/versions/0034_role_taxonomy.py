@@ -19,29 +19,31 @@ depends_on = None
 
 
 def upgrade():
-    # ── 1. Rename roles ───────────────────────────────────────────────────────
+    # ── 1. Drop old CHECK constraint first so renames are accepted ────────────
+    op.execute("ALTER TABLE role_assignments DROP CONSTRAINT IF EXISTS role_assignments_role_check")
+
+    # ── 2. Rename roles ───────────────────────────────────────────────────────
     op.execute("UPDATE role_assignments SET role = 'gateway_admin' WHERE role = 'platform_admin'")
     op.execute("UPDATE role_assignments SET role = 'engineer'       WHERE role = 'developer'")
     op.execute("UPDATE role_assignments SET role = 'reporter'       WHERE role = 'viewer'")
 
-    # ── 2. Replace role CHECK constraint ─────────────────────────────────────
-    op.execute("ALTER TABLE role_assignments DROP CONSTRAINT IF EXISTS role_assignments_role_check")
+    # ── 3. Add new role CHECK constraint ─────────────────────────────────────
     op.execute("""
         ALTER TABLE role_assignments
         ADD CONSTRAINT role_assignments_role_check
         CHECK (role IN ('gateway_admin','area_owner','unit_lead','team_admin','engineer','reporter'))
     """)
 
-    # ── 3. Make entra_group_id nullable (user-based rows won't have it) ───────
+    # ── 4. Make entra_group_id nullable (user-based rows won't have it) ───────
     op.execute("ALTER TABLE role_assignments ALTER COLUMN entra_group_id DROP NOT NULL")
 
-    # ── 4. Add user_id column ─────────────────────────────────────────────────
+    # ── 5. Add user_id column ─────────────────────────────────────────────────
     op.execute("""
         ALTER TABLE role_assignments
         ADD COLUMN user_id UUID REFERENCES users(id) ON DELETE CASCADE
     """)
 
-    # ── 5. Mutual exclusion: exactly one subject ──────────────────────────────
+    # ── 6. Mutual exclusion: exactly one subject ──────────────────────────────
     op.execute("""
         ALTER TABLE role_assignments
         ADD CONSTRAINT role_assignments_subject_check
@@ -51,7 +53,7 @@ def upgrade():
         )
     """)
 
-    # ── 6. Indexes for user_id lookups ────────────────────────────────────────
+    # ── 7. Indexes for user_id lookups ────────────────────────────────────────
     op.execute("CREATE INDEX IF NOT EXISTS idx_role_assignments_user ON role_assignments(user_id)")
     op.execute("""
         CREATE UNIQUE INDEX IF NOT EXISTS idx_ra_user_role_node
