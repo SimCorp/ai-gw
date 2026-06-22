@@ -77,6 +77,9 @@ from app.routers import (
     genai_adoption as genai_adoption_router,
 )
 from app.routers import (
+    graphify as graphify_router,
+)
+from app.routers import (
     guardrails as guardrails_router,
 )
 from app.routers import (
@@ -120,9 +123,6 @@ from app.routers import (
 )
 from app.routers import (
     skills as skills_router,
-)
-from app.routers import (
-    graphify as graphify_router,
 )
 from app.routers import (
     tools as tools_router,
