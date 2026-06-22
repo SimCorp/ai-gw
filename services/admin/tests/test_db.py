@@ -833,7 +833,7 @@ async def test_local_account_with_group_gets_platform_admin(session):
     await session.execute(
         text("""
             INSERT INTO role_assignments (entra_group_id, role, node_id)
-            VALUES (:g, 'platform_admin', CAST(:n AS uuid))
+            VALUES (:g, 'gateway_admin', CAST(:n AS uuid))
         """),
         {"g": group_id, "n": root_id},
     )
@@ -846,7 +846,7 @@ async def test_local_account_with_group_gets_platform_admin(session):
     )
 
     role_names = [r["role"] for r in result["user"]["roles"]]
-    assert "platform_admin" in role_names
+    assert "gateway_admin" in role_names
     assert result["user"]["is_platform_admin"] is True
     # Roles are shaped like the Entra path (same keys).
     assert set(result["user"]["roles"][0].keys()) == {

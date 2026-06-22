@@ -86,13 +86,13 @@ from app.routers import (
     insights as insights_router,
 )
 from app.routers import (
+    local_groups as local_groups_router,
+)
+from app.routers import (
     mcp as mcp_router,
 )
 from app.routers import (
     memory_admin as memory_admin_router,
-)
-from app.routers import (
-    local_groups as local_groups_router,
 )
 from app.routers import (
     nodes as nodes_router,

@@ -242,7 +242,7 @@ export default function GroupsPage() {
         <div>
           <h1 style={{ fontSize: 20, fontWeight: 700, color: 'var(--fg-1)', margin: 0 }}>Groups</h1>
           <p style={{ fontSize: 13, color: 'var(--fg-3)', margin: '4px 0 0' }}>
-            Local identity groups. Add members and assign them roles on org nodes via each node's Access tab.
+            Local identity groups. Add members and assign them roles on org nodes via each node&apos;s Access tab.
           </p>
         </div>
         <button

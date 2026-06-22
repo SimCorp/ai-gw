@@ -237,13 +237,14 @@ async def test_get_node_detail(node_client):
 
     nid = str(uuid.uuid4())
     row = _node_row(node_id=nid, name="Detail Node", parent_id=None)
-    # get_node: _get_node_row, children, member_count, spend_mtd
+    # get_node: _get_node_row, children, member_count, spend_mtd, direct_admins
     # (parent branch skipped because parent_id is None)
     sess = _sequence(
         _result_mappings_first(row),  # _get_node_row
         _result_mappings_all([]),  # children
         _result_scalar(0),  # member_count
         _result_scalar(0),  # spend_mtd
+        _result_mappings_all([]),  # direct_admins
     )
 
     async def override():
@@ -281,7 +282,10 @@ async def test_list_permissions(node_client):
         "id": str(uuid.uuid4()),
         "entra_group_id": "grp-1",
         "entra_group_name": "Engineers",
-        "role": "developer",
+        "user_id": None,
+        "user_email": None,
+        "user_display_name": None,
+        "role": "engineer",
         "node_id": nid,
         "granted_at": None,
         "granted_by": None,
@@ -302,7 +306,7 @@ async def test_list_permissions(node_client):
     body = resp.json()
     assert len(body) == 1
     assert body[0]["entra_group_id"] == "grp-1"
-    assert body[0]["role"] == "developer"
+    assert body[0]["role"] == "engineer"
 
 
 async def test_add_permission_returns_201(node_client):
