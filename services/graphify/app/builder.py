@@ -83,17 +83,42 @@ async def _clone_or_pull(name: str, github_url: str, ref: str) -> tuple[bool, st
     return rc == 0, log
 
 
+# Provider credentials that graphify auto-detects to pick a backend. The build
+# container inherits the stack's .env (env_file), so these would otherwise let
+# graphify route extraction *directly* to a provider — bypassing the gateway
+# (governance hole) and often failing (e.g. the anthropic package isn't in the
+# image). We strip them so extraction can ONLY go through our gateway.
+_PROVIDER_ENV_KEYS = (
+    "ANTHROPIC_API_KEY",
+    "ANTHROPIC_BASE_URL",
+    "ANTHROPIC_MODEL",
+    "OPENAI_API_KEY",
+    "OPENAI_BASE_URL",
+    "OPENAI_MODEL",
+    "GEMINI_API_KEY",
+    "GOOGLE_API_KEY",
+    "DEEPSEEK_API_KEY",
+    "MOONSHOT_API_KEY",
+    "OLLAMA_BASE_URL",
+    "OLLAMA_MODEL",
+    "AWS_ACCESS_KEY_ID",
+    "AWS_SECRET_ACCESS_KEY",
+    "AWS_SESSION_TOKEN",
+)
+
+
 def _extract_cmd(name: str) -> tuple[list[str], dict]:
     """Build the `graphify extract` argv + env.
 
-    Code is parsed locally via tree-sitter with no API calls. Only when a gateway
-    key is configured do we select `--backend openai` (routing doc/PDF/media
-    semantic extraction through the governed cache entry point). Without a key we
-    run fully offline — `--backend openai` would otherwise hard-fail
-    ("requires OPENAI_API_KEY"), so a code-only repo must not force it.
+    Code is parsed locally via tree-sitter with no API calls. We start from a
+    provider-key-free env so graphify can't auto-detect a direct provider; only
+    when a gateway key is configured do we select `--backend openai` (routing
+    doc/PDF/media semantic extraction through the governed cache entry point).
+    Without a key, extract runs offline — a code-only repo builds with no key;
+    a repo containing docs fails clearly ("no LLM API key"), which is correct.
     """
     args = ["graphify", "extract", src_dir(name), "--out", repo_dir(name)]
-    env = dict(os.environ)
+    env = {k: v for k, v in os.environ.items() if k not in _PROVIDER_ENV_KEYS}
     # Query logging writes to ~/.cache; disable it in the container.
     env["GRAPHIFY_QUERY_LOG_DISABLE"] = "1"
     if settings.graphify_gateway_key:
