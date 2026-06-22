@@ -55,6 +55,9 @@ SSH="ssh -o IdentityAgent=$SSH_AUTH_SOCK $VM_HOST"
 echo "==> Logging the VM into GHCR as $GHCR_USER"
 pass show "$GHCR_PASS_ENTRY" | head -1 | $SSH "docker login ghcr.io -u '$GHCR_USER' --password-stdin"
 
+echo "==> Running db-migrate (alembic upgrade head — no-op if already at head)"
+$SSH "cd ~/ai-gw/infra && IMAGE_TAG='$IMAGE_TAG' $COMPOSE run --rm db-migrate"
+
 echo "==> Updating ${SERVICES[*]} (IMAGE_TAG=$IMAGE_TAG) — base left untouched"
 $SSH "cd ~/ai-gw/infra \
   && IMAGE_TAG='$IMAGE_TAG' $COMPOSE pull ${SERVICES[*]} \
