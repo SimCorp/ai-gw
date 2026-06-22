@@ -603,12 +603,12 @@ List all Entra groups and their role assignments on this node.
 POST /nodes/{node_id}/permissions
 ```
 
-Grant a role to an Entra group on this node.
+Grant a role on this node to **either** an Entra/local group **or** a single user.
 
 **Path Parameters:**
 - `node_id` (string, required): Node UUID
 
-**Request Body:**
+**Request Body (group grant):**
 ```json
 {
   "entra_group_id": "12345678-1234-1234-1234-123456789012",
@@ -617,10 +617,22 @@ Grant a role to an Entra group on this node.
 }
 ```
 
+**Request Body (direct user grant):**
+```json
+{
+  "user_id": "00000000-0000-0000-0000-000000000001",
+  "role": "engineer"
+}
+```
+
 **Request Fields:**
-- `entra_group_id` (string, required): Entra group GUID
+- `entra_group_id` (string): Entra/local group id (a local group's id is `lcl-<uuid>`)
 - `entra_group_name` (string, optional): Human-readable group name
+- `user_id` (string): User UUID, for a direct (non-group) grant
 - `role` (string, required): One of: `gateway_admin`, `area_owner`, `unit_lead`, `team_admin`, `engineer`, `reporter`
+
+Exactly **one** of `entra_group_id` or `user_id` must be supplied — providing both, or
+neither, returns **422**.
 
 **Response:**
 ```json

@@ -2,7 +2,7 @@
 
 Local groups bundle local-account users so admins can assign them roles on org
 nodes. Endpoints authenticate via unified_auth.get_current_user and gate on
-can_access; we override get_current_user with a fake platform_admin scoped to "/"
+can_access; we override get_current_user with a fake gateway_admin scoped to "/"
 (a prefix of every path) and supply a sequenced mock session.
 """
 
@@ -15,7 +15,7 @@ FAKE_USER = {
     "user_id": str(uuid.uuid4()),
     "email": "admin@simcorp.com",
     "display_name": "Admin",
-    "roles": [{"role": "platform_admin", "node_path": "/"}],
+    "roles": [{"role": "gateway_admin", "node_path": "/"}],
 }
 
 
