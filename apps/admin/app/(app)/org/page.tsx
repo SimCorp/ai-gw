@@ -5,7 +5,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '../../../lib/apiClient';
 import { LoadingState, ErrorState } from '../_components/PageStates';
 import { OrgTree, collectAllIds } from '../_components/OrgTree';
-import { OrgNode } from '../_components/nodeTypes';
+import { OrgNode, typeBadgeColor } from '../_components/nodeTypes';
+import { NodePanel, PanelTab } from './_components/NodePanel';
 
 const NODE_TYPES = ['area', 'unit', 'team'] as const;
 
@@ -13,6 +14,12 @@ const NODE_TYPE_META: Record<string, { label: string; description: string }> = {
   area:  { label: 'Area',  description: 'Top-level division (e.g. Engineering, Data). An area_owner here has access to everything below it.' },
   unit:  { label: 'Unit',  description: 'Group of related teams within an area (e.g. Platform, Mobile). Has a unit_lead role.' },
   team:  { label: 'Team',  description: 'Leaf node where engineers are members. Inherits policies and budgets from nodes above it.' },
+};
+
+const CHILD_TYPE: Record<string, typeof NODE_TYPES[number]> = {
+  area: 'unit',
+  unit: 'team',
+  team: 'team',
 };
 
 interface CreateNodeForm {
@@ -27,18 +34,20 @@ function CreateNodeModal({
   rootId,
   preselectedParentId,
   preselectedParentName,
+  initialType,
   onClose,
   onCreated,
 }: {
   rootId: string;
   preselectedParentId?: string;
   preselectedParentName?: string;
+  initialType?: typeof NODE_TYPES[number];
   onClose: () => void;
   onCreated: () => void;
 }) {
   const [form, setForm] = useState<CreateNodeForm>({
     name: '',
-    type: 'area',
+    type: initialType ?? 'area',
     parent_id: preselectedParentId ?? rootId,
     description: '',
     location: '',
@@ -199,8 +208,10 @@ export default function OrgTreePage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<PanelTab>('overview');
   const [showCreate, setShowCreate] = useState(false);
-  const [createParent, setCreateParent] = useState<{ id: string; name: string } | null>(null);
+  const [createParent, setCreateParent] = useState<{ id: string; name: string; type: string } | null>(null);
 
   const { data: tree, isLoading, error } = useQuery<OrgNode>({
     queryKey: ['node-tree'],
@@ -228,14 +239,33 @@ export default function OrgTreePage() {
     setExpandedIds(new Set());
   }
 
-  function openCreate(parent?: { id: string; name: string }) {
+  function handleSelect(node: OrgNode) {
+    setSelectedId(node.id);
+    setActiveTab('overview');
+    if ((node.children?.length ?? 0) > 0) {
+      setExpandedIds(prev => new Set([...prev, node.id]));
+    }
+  }
+
+  function handleAssignMember(node: OrgNode) {
+    setSelectedId(node.id);
+    setActiveTab('members');
+    setExpandedIds(prev => new Set([...prev, node.id]));
+  }
+
+  function handleSelectById(nodeId: string) {
+    setSelectedId(nodeId);
+    setActiveTab('overview');
+    setExpandedIds(prev => new Set([...prev, nodeId]));
+  }
+
+  function openCreate(parent?: { id: string; name: string; type: string }) {
     setCreateParent(parent ?? null);
     setShowCreate(true);
   }
 
   function onCreated() {
     queryClient.invalidateQueries({ queryKey: ['node-tree'] });
-    // Auto-expand the parent so the new child is visible
     if (createParent) {
       setExpandedIds(prev => new Set([...prev, createParent.id]));
     }
@@ -246,15 +276,46 @@ export default function OrgTreePage() {
 
   return (
     <div>
-      <div style={{ marginBottom: 24 }}>
+      {/* Page header */}
+      <div style={{ marginBottom: 16 }}>
         <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--fg-1)', margin: 0 }}>
           Org Tree
         </h1>
         <p style={{ fontSize: 13, color: 'var(--fg-3)', margin: '4px 0 0' }}>
-          Full hierarchy. Click any node to view its details. Roles are inherited downward.
+          Full hierarchy. Click any node to view its details. Roles and budgets inherit downward.
         </p>
       </div>
 
+      {/* Type legend */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
+        {NODE_TYPES.map((t, i) => {
+          const color = typeBadgeColor(t);
+          return (
+            <React.Fragment key={t}>
+              <span
+                title={NODE_TYPE_META[t].description}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  padding: '3px 8px 3px 6px', borderRadius: 5,
+                  background: `${color}1a`, border: `1px solid ${color}44`,
+                  fontSize: 12, color, fontWeight: 500, cursor: 'default',
+                }}
+              >
+                <span style={{ width: 8, height: 8, borderRadius: 2, background: color, display: 'inline-block' }} />
+                {NODE_TYPE_META[t].label}
+              </span>
+              {i < NODE_TYPES.length - 1 && (
+                <span style={{ fontSize: 12, color: 'var(--fg-3)' }}>→</span>
+              )}
+            </React.Fragment>
+          );
+        })}
+        <span style={{ fontSize: 11, color: 'var(--fg-3)', marginLeft: 4 }}>
+          Hover legend items for description
+        </span>
+      </div>
+
+      {/* Search + controls */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
         <input
           type="text"
@@ -262,7 +323,7 @@ export default function OrgTreePage() {
           value={search}
           onChange={e => setSearch(e.target.value)}
           style={{
-            flex: '1 1 240px', padding: '7px 12px', fontSize: 13,
+            flex: '1 1 200px', padding: '7px 12px', fontSize: 13,
             background: 'var(--surface-2)', border: '1px solid var(--rule)',
             borderRadius: 6, color: 'var(--fg-1)',
           }}
@@ -285,18 +346,53 @@ export default function OrgTreePage() {
         </button>
       </div>
 
-      <OrgTree
-        expandedIds={expandedIds}
-        onToggle={toggle}
-        onAddChild={node => openCreate({ id: node.id, name: node.name })}
-        searchQuery={search}
-      />
+      {/* Split-pane */}
+      <div style={{ display: 'flex', gap: 0, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+        {/* Left: tree */}
+        <div style={{
+          flex: '1 1 320px', minWidth: 260,
+          borderRight: selectedId ? '1px solid var(--rule)' : 'none',
+          paddingRight: selectedId ? 0 : 0,
+        }}>
+          <OrgTree
+            expandedIds={expandedIds}
+            onToggle={toggle}
+            onSelect={handleSelect}
+            onAddChild={node => openCreate({ id: node.id, name: node.name, type: node.type })}
+            onAssignMember={handleAssignMember}
+            selectedId={selectedId ?? undefined}
+            searchQuery={search}
+          />
+        </div>
 
+        {/* Right: detail panel */}
+        {selectedId && (
+          <div style={{
+            flex: '2 1 440px', minWidth: 0,
+            background: 'var(--surface)', border: '1px solid var(--rule)',
+            borderLeft: 'none', borderRadius: '0 8px 8px 0',
+            overflow: 'hidden',
+            minHeight: 480,
+          }}>
+            <NodePanel
+              nodeId={selectedId}
+              activeTab={activeTab}
+              onTabChange={setActiveTab}
+              onSelectNode={handleSelectById}
+              onAddChild={node => openCreate({ id: node.id, name: node.name, type: node.type })}
+              onClose={() => setSelectedId(null)}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Create modal */}
       {showCreate && rootId && (
         <CreateNodeModal
           rootId={rootId}
           preselectedParentId={createParent?.id}
           preselectedParentName={createParent?.name}
+          initialType={createParent?.type ? CHILD_TYPE[createParent.type] : 'area'}
           onClose={() => setShowCreate(false)}
           onCreated={onCreated}
         />
