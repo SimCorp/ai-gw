@@ -8,8 +8,8 @@ Autovacuum note: this table has high churn (rows expire and are deleted by the
 cache service's background cleanup loop). Set a tighter scale factor so dead
 tuples are reclaimed promptly.
 
-Revision ID: 0034
-Revises: 0033
+Revision ID: 0035
+Revises: 0034
 Create Date: 2026-06-22
 """
 
@@ -19,8 +19,8 @@ from typing import Sequence, Union
 
 from alembic import op
 
-revision: str = "0034"
-down_revision: Union[str, None] = "0033"
+revision: str = "0035"
+down_revision: Union[str, None] = "0034"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
