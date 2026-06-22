@@ -343,25 +343,35 @@ az containerapp env show -n cae-aigw-dev-sdc -g rg-aigw-dev-sdc
 
 ### First login (admin portal)
 
-The default admin account is seeded automatically on first boot when `ENVIRONMENT=development`:
-
 | Field | Value |
 |-------|-------|
-| URL | https://aigw-dev.lab.cloud.scdom.net/admin/ |
-| Email | `admin@simcorp.com` |
-| Password | set by the `_default_hash` in `services/admin/app/main.py` |
+| URL | https://dev.aigw.scdom.net/admin |
+| Email | `admin@aigw.scdom.net` |
+| Password | `pass show aigw/admin-portal` |
 
-The plaintext password is not stored in the repo. If you don't know it (e.g. on a freshly
-provisioned environment), reset it directly against the Flexible Server from a VNet-connected host:
+The plaintext password is not stored in the repo. If you need to reset it (e.g. on a freshly
+provisioned environment), SSH to the VM and run:
 
 ```bash
-python3 - <<'EOF'
-import bcrypt, subprocess
-NEW_PASSWORD = "SimCorp1!"   # change to whatever you want
+ssh-aigw
+docker exec -it ai-gateway-admin-1 python3 - <<'EOF'
+import bcrypt, asyncio, os
+from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy import text
+
+NEW_PASSWORD = "..."   # set to whatever you want
 h = bcrypt.hashpw(NEW_PASSWORD.encode(), bcrypt.gensalt(12)).decode()
-sql = f"UPDATE users SET password_hash = '{h}', must_change_password = false WHERE email = 'admin@simcorp.com';"
-subprocess.run(["psql", "-h", "<flexible-server-fqdn>", "-U", "aigateway", "-d", "aigateway", "-c", sql])
-print(f"Password reset to: {NEW_PASSWORD}")
+
+async def run():
+    engine = create_async_engine(os.environ["DATABASE_URL"])
+    async with engine.begin() as conn:
+        await conn.execute(
+            text("UPDATE users SET password_hash = :h, must_change_password = false WHERE email = 'admin@aigw.scdom.net'"),
+            {"h": h},
+        )
+    print("Password reset.")
+
+asyncio.run(run())
 EOF
 ```
 
