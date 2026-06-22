@@ -8,6 +8,7 @@ The heavy CLI always runs out-of-process so it never blocks an event loop.
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import logging
 import os
@@ -22,13 +23,16 @@ _log = logging.getLogger(__name__)
 _MAX_OUTPUT_BYTES = 200_000
 
 
-def _authed_clone_url(github_url: str) -> str:
-    """Inject the read-only PAT into an https clone URL. The token is never
-    logged — callers log `github_url` (the unauthenticated form) only."""
+def _auth_args() -> list[str]:
+    """Per-invocation git auth header for HTTPS. Passing the PAT via
+    `-c http.extraHeader` (not token-in-URL) keeps it out of the persisted
+    .git/config remote, so no credential is left at rest on the shared volume.
+    git does not echo the header, so it never reaches captured output."""
     token = settings.github_token
-    if token and github_url.startswith("https://"):
-        return github_url.replace("https://", f"https://x-access-token:{token}@", 1)
-    return github_url
+    if not token:
+        return []
+    cred = base64.b64encode(f"x-access-token:{token}".encode()).decode()
+    return ["-c", f"http.extraHeader=Authorization: Basic {cred}"]
 
 
 def _scrub(text: str) -> str:
@@ -63,16 +67,19 @@ async def _clone_or_pull(name: str, github_url: str, ref: str) -> tuple[bool, st
     """Clone the repo (or pull if already present). Returns (ok, log)."""
     src = src_dir(name)
     os.makedirs(repo_dir(name), exist_ok=True)
-    url = _authed_clone_url(github_url)
 
     if os.path.isdir(os.path.join(src, ".git")):
-        rc, log = await _run("git", "-C", src, "fetch", "--depth", "1", "origin", ref, timeout=600)
+        rc, log = await _run(
+            "git", "-C", src, *_auth_args(), "fetch", "--depth", "1", "origin", ref, timeout=600
+        )
         if rc != 0:
             return False, log
         rc2, log2 = await _run("git", "-C", src, "checkout", "-f", "FETCH_HEAD", timeout=120)
         return rc2 == 0, log + log2
 
-    rc, log = await _run("git", "clone", "--depth", "1", "--branch", ref, url, src, timeout=600)
+    rc, log = await _run(
+        "git", *_auth_args(), "clone", "--depth", "1", "--branch", ref, github_url, src, timeout=600
+    )
     return rc == 0, log
 
 

@@ -59,6 +59,19 @@ async def test_delete_repo(client):
     assert (await client.delete("/repos/ims")).status_code == 404
 
 
+async def test_query_rejects_path_traversal(client):
+    # `..` must never reach a filesystem path — validated at the choke-point.
+    resp = await client.get("/query", params={"repo": "../etc", "q": "x"})
+    assert resp.status_code == 422
+
+
+async def test_mcp_tool_rejects_path_traversal(client):
+    resp = await client.post(
+        "/mcp/tools/graph_query", json={"repo": "../secret", "question": "x"}
+    )
+    assert resp.status_code == 422
+
+
 async def test_query_unbuilt_repo_returns_409(client, monkeypatch):
 
     # No graph.json on disk → GraphNotReady → 409.

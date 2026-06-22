@@ -236,6 +236,8 @@ async def query_graph(
         result = await query.query(repo, q, budget=budget, dfs=dfs)
     except query.GraphNotReady as exc:
         raise HTTPException(status_code=409, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"query failed: {exc}")
     return {"repo": repo, "result": result}
@@ -244,6 +246,7 @@ async def query_graph(
 @app.get("/repos/{name}/report")
 async def repo_report(name: str, request: Request):
     await _require_caller(request)
+    _validate_repo_name(name)
     report_path = os.path.join(db.graph_dir(name), "GRAPH_REPORT.md")
     if not os.path.exists(report_path):
         raise HTTPException(status_code=404, detail="no report — build the graph first")
@@ -253,6 +256,7 @@ async def repo_report(name: str, request: Request):
 @app.get("/repos/{name}/graph.html")
 async def repo_graph_html(name: str, request: Request):
     await _require_caller(request)
+    _validate_repo_name(name)
     html_path = os.path.join(db.graph_dir(name), "graph.html")
     if not os.path.exists(html_path):
         raise HTTPException(status_code=404, detail="no graph.html — build the graph first")
@@ -451,11 +455,9 @@ async def mcp_jsonrpc(body: dict, request: Request, session_id: str | None = Non
                 return Response(status_code=202)
         return response
 
-    try:
-        await resolve_caller(request)
-    except AuthError as exc:
-        return await _relay_or_return(_err(-32000, exc.detail))
-
+    # Discovery + lifecycle methods are public so admin's MCP registry (which
+    # auto-registers us with auth_type=none) can ping + sync the tool list.
+    # Only tools/call — which actually touches data — requires a valid sk-*.
     if method == "initialize":
         if is_notification:
             return Response(status_code=204)
@@ -480,6 +482,10 @@ async def mcp_jsonrpc(body: dict, request: Request, session_id: str | None = Non
     if method == "tools/call":
         if is_notification:
             return Response(status_code=204)
+        try:
+            await resolve_caller(request)
+        except AuthError as exc:
+            return await _relay_or_return(_err(-32000, exc.detail))
         tool_name = params.get("name", "")
         arguments = params.get("arguments") or {}
         handler = _TOOL_HANDLERS.get(tool_name)

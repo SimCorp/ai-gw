@@ -14,7 +14,7 @@ import logging
 import os
 from collections import Counter
 
-from app.db import graph_json_path
+from app.db import REPO_NAME_RE, graph_json_path
 
 _log = logging.getLogger(__name__)
 
@@ -26,6 +26,11 @@ class GraphNotReady(Exception):
 
 
 def _require_graph(repo: str) -> str:
+    # Defense-in-depth choke-point: `repo` becomes part of a filesystem path, so
+    # reject anything that isn't a plain repo name (blocks `..` traversal) before
+    # touching disk. Covers every query/path/explain/stats caller, incl. MCP.
+    if not REPO_NAME_RE.match(repo):
+        raise ValueError(f"invalid repo name: {repo!r}")
     path = graph_json_path(repo)
     if not os.path.exists(path):
         raise GraphNotReady(f"no graph built for repo '{repo}'")
