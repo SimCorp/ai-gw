@@ -117,7 +117,7 @@ function OverviewTab({ node }: { node: OrgNode }) {
   const queryClient = useQueryClient();
   const [showAddChild, setShowAddChild] = useState(false);
 
-  const { data: members } = useQuery<{ total: number; items: Member[] }>({
+  const { data: members } = useQuery<Member[]>({
     queryKey: ['node-members', node.id],
     queryFn: () => apiFetch(`/nodes/${node.id}/members?limit=5`),
     staleTime: 60_000,
@@ -125,7 +125,7 @@ function OverviewTab({ node }: { node: OrgNode }) {
 
   const children = node.children ?? [];
   const childCount = children.length;
-  const memberCount = node.member_count ?? members?.total ?? 0;
+  const memberCount = node.member_count ?? members?.length ?? 0;
   const spendMtd = node.spend_mtd;
 
   return (
@@ -167,15 +167,15 @@ function OverviewTab({ node }: { node: OrgNode }) {
       )}
 
       {/* Members preview */}
-      {members && members.items.length > 0 && (
+      {members && members.length > 0 && (
         <section>
           <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg-1)', marginBottom: 10 }}>Members</div>
           <div style={{ background: 'var(--surface)', border: '1px solid var(--rule)', borderRadius: 8, overflow: 'hidden' }}>
-            {members.items.map((m, i) => (
+            {members.map((m, i) => (
               <div key={m.id} style={{
                 display: 'flex', alignItems: 'center', gap: 10,
                 padding: '8px 14px',
-                borderBottom: i < Math.min(members.items.length, 5) - 1 ? '1px solid var(--rule)' : 'none',
+                borderBottom: i < Math.min(members.length, 5) - 1 ? '1px solid var(--rule)' : 'none',
                 fontSize: 13, color: 'var(--fg-1)',
               }}>
                 <div style={{
@@ -193,9 +193,9 @@ function OverviewTab({ node }: { node: OrgNode }) {
               </div>
             ))}
           </div>
-          {members.total > 5 && (
+          {(node.member_count ?? 0) > 5 && (
             <div style={{ marginTop: 8, fontSize: 12, color: 'var(--accent)', cursor: 'pointer' }}>
-              + {members.total - 5} more members
+              + {(node.member_count ?? 0) - 5} more members
             </div>
           )}
         </section>
@@ -269,7 +269,7 @@ export default function NodeDetailPage({ params }: { params: Promise<{ id: strin
   const editMutation = useMutation({
     mutationFn: () =>
       apiFetch<OrgNode>(`/nodes/${id}`, {
-        method: 'PATCH',
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: editName.trim(),
