@@ -345,7 +345,7 @@ sem:{team_id}:{project_id}:{entry_id}:resp  — stored response (JSON)
 ```
 
 Match returns the stored response when `cosine_similarity >= similarity_threshold`
-(default 0.95). This threshold is configurable per team via the Admin policy API.
+(default 0.90). This threshold is configurable per team via the Admin policy API.
 
 **Circuit breaker:** after 5 consecutive embedding failures, the circuit trips and
 all semantic cache operations are bypassed for 120 seconds. The circuit state is
@@ -413,7 +413,7 @@ Fields:
 | Field | Default | Description |
 |---|---|---|
 | `ttl_seconds` | 3600 | Cache entry TTL (±10% jitter applied) |
-| `similarity_threshold` | 0.95 | Minimum cosine similarity for a semantic cache hit |
+| `similarity_threshold` | 0.90 | Minimum cosine similarity for a semantic cache hit |
 | `opt_out` | false | Disables caching entirely for this team |
 | `embedding_model` | `text-embedding-3-small` | Model used for semantic embedding |
 | `rate_limit_rpm` | 1000 | Requests per minute (per team, per model) |
@@ -557,7 +557,7 @@ Readiness probe — checks Redis connectivity.
 | `EMBEDDING_MODEL` | `text-embedding-3-small` | Default embedding model |
 | `EMBEDDING_API_KEY` | Key Vault ref | Gateway API key for embedding calls (routed via LiteLLM) |
 | `EMBEDDING_BASE_URL` | `http://litellm/v1` | Base URL for the embedding API (via LiteLLM) |
-| `DEFAULT_SIMILARITY_THRESHOLD` | `0.95` | Default cosine threshold for semantic cache hits |
+| `DEFAULT_SIMILARITY_THRESHOLD` | `0.90` | Default cosine threshold for semantic cache hits |
 | `DEFAULT_TTL_SECONDS` | `3600` | Default cache entry TTL |
 | `INTERNAL_API_KEY` | Key Vault ref | Key used when posting events to observability |
 | `CONVERSATION_TURN_LIMIT` | `3` | Max user turns before bypassing semantic cache |
@@ -2714,7 +2714,7 @@ Lists configured AI providers (OpenAI, Anthropic, Google, GitHub Models) with th
 ### `/admin/policies` — Per-Team Cache & Rate Limit Policies
 
 Shows all policy overrides with their team association. Policies control:
-- Semantic cache similarity threshold (override of the global default `0.95`).
+- Semantic cache similarity threshold (override of the global default `0.90`).
 - Cache TTL (seconds).
 - Rate limit (requests per minute).
 - Per-model rate limits.
@@ -3032,7 +3032,7 @@ Full environment variable reference across all services. Variables common to mul
 | `EMBEDDING_MODEL` | `text-embedding-3-small` | Embedding model for semantic similarity |
 | `EMBEDDING_API_KEY` | Key Vault ref | Gateway API key for embedding calls (routed via LiteLLM) |
 | `EMBEDDING_BASE_URL` | `http://litellm/v1` | Base URL for embedding API (via LiteLLM) |
-| `DEFAULT_SIMILARITY_THRESHOLD` | `0.95` | Cosine similarity threshold for cache hits |
+| `DEFAULT_SIMILARITY_THRESHOLD` | `0.90` | Cosine similarity threshold for cache hits |
 | `DEFAULT_TTL_SECONDS` | `3600` | Cache entry TTL in seconds |
 
 ### Observability service (port 8004)

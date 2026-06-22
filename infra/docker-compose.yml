@@ -197,11 +197,14 @@ services:
     env_file: ../.env
     environment:
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-change-me-internal-key}
+      DATABASE_URL: "postgresql+asyncpg://aigateway:aigateway@postgres:5432/aigateway"
     depends_on:
       redis:
         condition: service_healthy
       litellm:
         condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8002/ready')\" 2>/dev/null || exit 1"]
       interval: 10s
