@@ -81,6 +81,7 @@ export const ADMIN_NAV: NavDomain[] = [
     href: '/mcp',
     pages: [
       { href: '/mcp', label: 'MCP servers' },
+      { href: '/knowledge-graphs', label: 'Knowledge Graphs' },
       { href: '/memory', label: 'Memory' },
       { href: '/skills', label: 'Skills' },
       { href: '/plugins', label: 'Plugins' },

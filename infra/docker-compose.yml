@@ -241,6 +241,9 @@ services:
     environment:
       ENVIRONMENT: development
       MCP_ALLOW_LOCAL_URLS: "true"
+      # Knowledge Graphs admin page proxies graphify; token must match graphify's.
+      GRAPHIFY_URL: "http://graphify:8012"
+      GRAPHIFY_SERVICE_TOKEN: ${GRAPHIFY_SERVICE_TOKEN:-${INTERNAL_API_KEY:-change-me-internal-key}}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -335,6 +338,9 @@ services:
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
       GITHUB_ORG: ${GITHUB_ORG:-SimCorp}
       GRAPHIFY_OUT_DIR: /graphify-out
+      # Shared secret so the admin backend can proxy the portal's Knowledge
+      # Graphs page without a user sk-*. Defaults to the stack internal key.
+      GRAPHIFY_SERVICE_TOKEN: ${GRAPHIFY_SERVICE_TOKEN:-${INTERNAL_API_KEY:-change-me-internal-key}}
       CORS_ORIGINS: "*"
     volumes:
       - graphify_out:/graphify-out

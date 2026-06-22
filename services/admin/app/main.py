@@ -122,6 +122,9 @@ from app.routers import (
     skills as skills_router,
 )
 from app.routers import (
+    graphify as graphify_router,
+)
+from app.routers import (
     tools as tools_router,
 )
 from app.routers import (
@@ -576,6 +579,7 @@ app.include_router(settings_router.router, dependencies=_auth)
 app.include_router(dashboard.router, dependencies=_auth)
 app.include_router(nodes_router.router, dependencies=_auth)
 app.include_router(local_groups_router.router, dependencies=_auth)
+app.include_router(graphify_router.router, dependencies=_auth)
 # members.py router (legacy /teams/{id}/members) is omitted — teams table removed.
 # Use /nodes/{id}/members instead.
 app.include_router(developers_router.router, dependencies=_auth)

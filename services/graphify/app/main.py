@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 import os
+import secrets
 import shutil
 from contextlib import asynccontextmanager
 from typing import Any
@@ -44,7 +45,16 @@ async def get_pool() -> asyncpg.Pool:
 
 
 async def _require_caller(request: Request) -> None:
-    """Gate a request on a valid sk-* Bearer; map AuthError → HTTP error."""
+    """Gate a request: a trusted internal service token (X-Service-Token) or a
+    valid sk-* Bearer. Maps AuthError → HTTP error."""
+    # Service-to-service (e.g. admin proxying the portal): a matching shared
+    # secret bypasses the user sk-* validation. Constant-time compare; no-op
+    # when the token is unset.
+    token = settings.graphify_service_token
+    if token:
+        provided = request.headers.get("X-Service-Token", "")
+        if provided and secrets.compare_digest(provided, token):
+            return
     try:
         await resolve_caller(request)
     except AuthError as exc:
