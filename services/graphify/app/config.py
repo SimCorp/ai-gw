@@ -5,7 +5,6 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     database_url: str
-    redis_url: str
 
     # Auth service — validates the sk-* Bearer on the query/management surface.
     auth_url: str

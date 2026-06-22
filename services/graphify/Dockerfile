@@ -7,17 +7,22 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends git ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
+# Whisper model name + cache location. The dev VM has no public-IP egress to
+# HuggingFace, so we bake the weights into the image at build time (CI runners
+# do have egress). Pin the model name so the baked weights match what graphify
+# requests at runtime (graphify reads GRAPHIFY_WHISPER_MODEL, default "base").
+ENV HF_HOME=/opt/whisper-cache
+ENV GRAPHIFY_WHISPER_MODEL=base
+ENV GRAPHIFY_OUT_DIR=/graphify-out
+
 COPY pyproject.toml .
 RUN pip install --no-cache-dir -e .
 
-COPY app/ app/
+# Pre-download the Whisper "base" weights into HF_HOME so the first video/audio
+# extraction on the no-egress VM does not attempt a (failing) network fetch.
+RUN python -c "from faster_whisper import WhisperModel; WhisperModel('base', device='cpu', compute_type='int8')"
 
-# Pre-bake the Whisper model into the image: the dev VM has no public IP and
-# cannot reach HuggingFace at runtime. Pin the model so first video extraction
-# does not attempt a (failing) network download. faster-whisper caches under
-# HF_HOME; we set it to a baked-in path.
-ENV HF_HOME=/opt/whisper-cache
-ENV GRAPHIFY_OUT_DIR=/graphify-out
+COPY app/ app/
 
 EXPOSE 8012
 
