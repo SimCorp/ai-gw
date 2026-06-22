@@ -53,6 +53,9 @@
 	handle_path /api/memory/* {
 		reverse_proxy memory:8009
 	}
+	handle_path /api/graphify/* {
+		reverse_proxy graphify:8012
+	}
 	handle_path /api/league/* {
 		reverse_proxy league:8010
 	}

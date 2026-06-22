@@ -1,0 +1,35 @@
+[project]
+name = "ai-gateway-graphify"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi~=0.111",
+    "uvicorn[standard]>=0.30",
+    "pydantic-settings>=2.4",
+    "asyncpg>=0.29",
+    "httpx>=0.27",
+    "prometheus-client>=0.20",
+    "python-json-logger>=2.0,<3",
+    # The knowledge-graph engine. Full scope: code (tree-sitter, offline) plus
+    # docs/PDF/office/SQL/audio/video extraction. `openai` lets `graphify extract`
+    # route extraction LLM calls at our gateway (OPENAI_BASE_URL=cache:8002/v1).
+    "graphifyy[openai,pdf,office,video,sql]>=0.8",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "testcontainers[postgres]>=4.0",
+    "httpx>=0.27",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]

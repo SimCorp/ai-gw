@@ -128,7 +128,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [auth, cache, observability, admin, identity, agent-relay, league, librarian, memory, scanner, workflow-worker]
+        service: [auth, cache, observability, admin, identity, agent-relay, league, librarian, memory, scanner, workflow-worker, graphify]
 
     steps:
       - uses: actions/checkout@v4
@@ -178,7 +178,7 @@ jobs:
             # e.g. --ignore-vuln GHSA-xxxx-xxxx-xxxx  # no fixed version yet (dep X)
           )
           fail=0
-          for svc in auth cache observability admin librarian memory scanner identity agent-relay league workflow-worker; do
+          for svc in auth cache observability admin librarian memory scanner identity agent-relay league workflow-worker graphify; do
             echo "::group::pip-audit $svc"
             # Project mode: resolves and audits the service's DECLARED deps from
             # pyproject.toml — not the ambient env / pip-audit's own deps.
@@ -234,6 +234,8 @@ jobs:
             context: services/scanner
           - name: workflow-worker
             context: services/workflow-worker
+          - name: graphify
+            context: services/graphify
           - name: litellm
             context: services/litellm
           # Next.js portals: pnpm-monorepo Dockerfiles at repo root, root build
