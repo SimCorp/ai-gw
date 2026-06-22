@@ -70,15 +70,32 @@ def test_extract_cmd_offline_without_key(monkeypatch):
     assert "OPENAI_API_KEY" not in env
 
 
+def test_extract_cmd_scrubs_inherited_provider_keys(monkeypatch):
+    # Stack .env provider keys must NOT leak into the build env, else graphify
+    # auto-routes to a direct provider (governance hole + failure).
+    from app import builder
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-leak")
+    monkeypatch.setenv("GEMINI_API_KEY", "gm-leak")
+    monkeypatch.setattr(builder.settings, "graphify_gateway_key", "")
+    _, env = builder._extract_cmd("six")
+    assert "ANTHROPIC_API_KEY" not in env
+    assert "GEMINI_API_KEY" not in env
+
+
 def test_extract_cmd_uses_gateway_when_key_set(monkeypatch):
     from app import builder
 
+    # Even with a stray inherited OpenAI key, the gateway values win and the
+    # inherited one is scrubbed first.
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-leak")
     monkeypatch.setattr(builder.settings, "graphify_gateway_key", "sk-test")
     monkeypatch.setattr(builder.settings, "graphify_openai_base_url", "http://cache:8002/v1")
     args, env = builder._extract_cmd("six")
     assert args[-2:] == ["--backend", "openai"]
     assert env["OPENAI_API_KEY"] == "sk-test"
     assert env["OPENAI_BASE_URL"] == "http://cache:8002/v1"
+    assert "ANTHROPIC_API_KEY" not in env
 
 
 def test_stats_parses_node_link_graph(tmp_path, monkeypatch):
