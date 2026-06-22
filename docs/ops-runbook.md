@@ -261,7 +261,7 @@ All PaaS services are reached over **private endpoints** in `snet-pe-aigw-dev`. 
 | Component | Azure resource | Role |
 |-----------|----------------|------|
 | PostgreSQL | Azure Database for PostgreSQL Flexible Server (databases `aigateway` + `litellm`) | Teams, API keys, policies, cost records, audit log, developers; LiteLLM state |
-| Redis | Azure Cache for Redis Premium P1 | Rate limit counters, semantic cache, admin portal sessions |
+| Redis | Azure Cache for Redis Premium P1 | Rate limit counters, exact cache, admin portal sessions (semantic cache moved to Postgres/pgvector) |
 | Secrets | Azure Key Vault | All service secrets and connection strings |
 | Event bus | Azure Service Bus (queue `observability-events`) | Async observability event delivery |
 | Telemetry | Application Insights + Log Analytics workspace `law-aca-dev-sdc` | Metrics, traces, container logs |
@@ -1047,7 +1047,7 @@ column describes what each variable points at in the dev environment.
 
 | Variable | Value / source | Description |
 |----------|----------------|-------------|
-| `REDIS_URL` | Redis Premium (from Key Vault) | Redis for semantic cache storage |
+| `REDIS_URL` | Redis Premium (from Key Vault) | Exact cache, rate-limit counters, sessions (semantic cache uses Postgres/pgvector) |
 | `LITELLM_URL` | `http://ca-litellm-dev-sdc:8003` | Upstream for cache misses |
 | `LITELLM_MASTER_KEY` | from Key Vault | Bearer token for LiteLLM API |
 | `AUTH_URL` | `http://ca-auth-dev-sdc:8001` | Auth service for upstream validation |
@@ -1055,7 +1055,7 @@ column describes what each variable points at in the dev environment.
 | `EMBEDDING_MODEL` | `text-embedding-3-small` | Model used for semantic similarity |
 | `EMBEDDING_API_KEY` | from Key Vault | API key for embedding calls |
 | `EMBEDDING_BASE_URL` | `http://ca-litellm-dev-sdc:8003/v1` | Base URL for embedding API (embeddings go via the gateway / litellm) |
-| `DEFAULT_SIMILARITY_THRESHOLD` | `0.95` | Cosine similarity threshold for cache hits |
+| `DEFAULT_SIMILARITY_THRESHOLD` | `0.90` | Cosine similarity threshold for cache hits |
 | `DEFAULT_TTL_SECONDS` | `3600` | Cache entry TTL (1 hour) |
 
 ### Observability Service (`ca-observability-dev-sdc`, :8004)

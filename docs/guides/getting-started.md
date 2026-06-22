@@ -42,7 +42,7 @@ Authentication is **Azure Entra ID only** (tenant `aa81b43f-3969-4fd4-80c9-84c41
 - **Issuer:** `https://login.microsoftonline.com/aa81b43f-3969-4fd4-80c9-84c411508d82/v2.0`
 - **Redirect URI:** `https://dev.aigw.scdom.net/auth/oidc/callback`
 
-After signing in you have no assigned roles by default; ask a `platform_admin` to
+After signing in you have no assigned roles by default; ask a `gateway_admin` to
 grant permissions on the org nodes you need.
 
 ### Inference API
@@ -141,7 +141,7 @@ curl -X POST "https://dev.aigw.scdom.net/api/admin/nodes/{node_id}/permissions" 
   -d '{
     "entra_group_id": "12345678-1234-1234-1234-123456789012",
     "entra_group_name": "platform-admins@simcorp.com",
-    "role": "platform_admin"
+    "role": "gateway_admin"
   }'
 ```
 

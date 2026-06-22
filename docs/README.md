@@ -91,12 +91,12 @@ SimCorp (root)
 ### Roles & Permissions
 
 ```
-platform_admin (6) ─ System access
+gateway_admin (6) ─ System access
 area_owner (5)     ─ Area + descendants
 unit_lead (4)      ─ Unit management
 team_admin (3)     ─ Team management
-developer (2)      ─ Developer access
-viewer (1)         ─ Read-only
+engineer (2)       ─ Engineer access
+reporter (1)       ─ Read-only
 ```
 
 **Permission Check:**
@@ -146,6 +146,7 @@ container names (`http://<service>:<port>`).
 | **Librarian** | `librarian` | 8008 | Knowledge & embeddings |
 | **Memory** | `memory` | 8009 | Agent memory service |
 | **League** | `league` | 8010 | Gamified challenges |
+| **Graphify** | `graphify` | 8012 | Knowledge-graph service for navigating repos |
 | **Scanner** | `scanner` | — (background) | Security scanning worker |
 | **Admin Portal** | `admin-portal` | 3001 | Admin dashboard |
 | **Developer Portal** | `portal` | 3002 | Main user interface |

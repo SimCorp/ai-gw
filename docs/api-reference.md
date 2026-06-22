@@ -951,7 +951,7 @@ POST /auth/login
     "user_id": "uuid",
     "email": "dev@simcorp.com",
     "display_name": "Dev User",
-    "roles": [{"role": "developer", "scope_type": "global", "scope_id": null}],
+    "roles": [{"role": "engineer", "scope_type": "global", "scope_id": null}],
     "primary_team_id": "uuid | null",
     "team_name": "Engineering | null"
   },
@@ -1030,7 +1030,7 @@ GET /auth/oidc/callback?code=...&state=...
 ```
 
 Exchanges the authorization code for an id_token, extracts `email` and `name` claims, then:
-- Finds the existing user record by email, or creates a new one with the `developer` role
+- Finds the existing user record by email, or creates a new one with the `engineer` role
 - Issues a session token
 - Redirects to `/admin?sso_token=<token>` (for admin-role users) or `/?sso_token=<token>` (for developers)
 
@@ -1044,19 +1044,19 @@ Invite links are the only way to onboard users when `ALLOWED_EMAIL_DOMAINS` is n
 
 ```
 POST /auth/invitations
-Authorization: Bearer <token>    (platform_admin or team_admin)
+Authorization: Bearer <token>    (gateway_admin or team_admin)
 ```
 
 ```json
 {
   "email": "newdev@simcorp.com",
-  "role": "developer",
+  "role": "engineer",
   "scope_type": "global",
   "scope_id": null
 }
 ```
 
-`team_admin` callers: `role` must be `developer` or `viewer`; `scope_type` must be `team` and `scope_id` must be a team the caller manages.
+`team_admin` callers: `role` must be `engineer` or `reporter`; `scope_type` must be `team` and `scope_id` must be a team the caller manages.
 
 **Response** — includes a ready-to-copy `accept_url`:
 
@@ -1064,7 +1064,7 @@ Authorization: Bearer <token>    (platform_admin or team_admin)
 {
   "invite_id": "uuid",
   "email": "newdev@simcorp.com",
-  "role": "developer",
+  "role": "engineer",
   "expires_at": "2026-05-15T10:00:00+00:00",
   "accept_url": "https://dev.aigw.scdom.net/api/admin/auth/invitations/accept?token=...",
   "token": "<raw-token>"
@@ -1142,7 +1142,7 @@ PATCH  /auth/service-accounts/{id}/status?status=suspended
 POST   /auth/service-accounts/{id}/rotate-key
 ```
 
-### 11.9 User management (platform_admin only)
+### 11.9 User management (gateway_admin only)
 
 ```
 GET    /auth/users                          List all users
@@ -1160,11 +1160,11 @@ GET  /admin/users/{id}                                    User detail with roles
 
 | Role | Scope | Capabilities |
 |---|---|---|
-| `platform_admin` | global | All admin APIs, all portals |
+| `gateway_admin` | global | All admin APIs, all portals |
 | `area_owner` | area | Manage teams + policies within their area |
-| `team_admin` | team | Manage team members, keys, budgets; invite developers/viewers to their team |
-| `developer` | global | Developer portal; personal API keys; transformation stats |
-| `viewer` | global | Read-only developer portal |
+| `team_admin` | team | Manage team members, keys, budgets; invite engineers/reporters to their team |
+| `engineer` | global | Developer portal; personal API keys; transformation stats |
+| `reporter` | global | Read-only developer portal |
 | `service_account` | — | API key bearer only; no portal access |
 
 ---

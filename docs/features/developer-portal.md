@@ -390,7 +390,7 @@ Account and workspace configuration.
 ### Team Membership Check
 - Portal endpoints verify developer is a member of `{team_id}`
 - Membership from `team_members` table
-- If membership removed or user promoted to platform_admin, session remains valid but API calls fail with 403
+- If membership removed or user promoted to gateway_admin, session remains valid but API calls fail with 403
 
 ### Developer Role
 - Developers have limited scope (read own profile, create/revoke own keys)
