@@ -54,6 +54,10 @@ services:
     image: ghcr.io/simcorp/ai-gw/scanner:${IMAGE_TAG:-latest}
   workflow-worker:
     image: ghcr.io/simcorp/ai-gw/workflow-worker:${IMAGE_TAG:-latest}
+  graphify:
+    image: ghcr.io/simcorp/ai-gw/graphify:${IMAGE_TAG:-latest}
+  graphify-worker:
+    image: ghcr.io/simcorp/ai-gw/graphify:${IMAGE_TAG:-latest}
   admin-portal:
     image: ghcr.io/simcorp/ai-gw/admin-portal:${IMAGE_TAG:-latest}
   portal:

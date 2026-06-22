@@ -312,6 +312,71 @@ services:
       retries: 10
     restart: unless-stopped
 
+  # Graphify — knowledge-graph build + query for navigating repos. The API and
+  # the build worker are two containers from one image: the worker runs the heavy
+  # `graphify extract` so a large/Whisper build can't OOM the query API.
+  graphify:
+    build:
+      context: ../services/graphify
+    ports:
+      - "127.0.0.1:8012:8012"
+    env_file: ../.env
+    environment:
+      DATABASE_URL: "postgresql+asyncpg://aigateway:aigateway@postgres:5432/aigateway"
+      REDIS_URL: "redis://redis:6379/0"
+      AUTH_URL: "http://auth:8001"
+      # Build-time extraction LLM calls route through the governed gateway entry
+      # point. The key must be a real sk-* registered in auth, tied to a team.
+      GRAPHIFY_OPENAI_BASE_URL: ${GRAPHIFY_OPENAI_BASE_URL:-http://cache:8002/v1}
+      GRAPHIFY_OPENAI_MODEL: ${GRAPHIFY_OPENAI_MODEL:-gpt-4o-mini}
+      GRAPHIFY_GATEWAY_KEY: ${GRAPHIFY_GATEWAY_KEY:-}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      GITHUB_ORG: ${GITHUB_ORG:-SimCorp}
+      GRAPHIFY_OUT_DIR: /graphify-out
+      CORS_ORIGINS: "*"
+    volumes:
+      - graphify_out:/graphify-out
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8012/health')\" 2>/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  graphify-worker:
+    build:
+      context: ../services/graphify
+    command: ["python", "-m", "app.worker"]
+    env_file: ../.env
+    environment:
+      DATABASE_URL: "postgresql+asyncpg://aigateway:aigateway@postgres:5432/aigateway"
+      REDIS_URL: "redis://redis:6379/0"
+      AUTH_URL: "http://auth:8001"
+      GRAPHIFY_OPENAI_BASE_URL: ${GRAPHIFY_OPENAI_BASE_URL:-http://cache:8002/v1}
+      GRAPHIFY_OPENAI_MODEL: ${GRAPHIFY_OPENAI_MODEL:-gpt-4o-mini}
+      GRAPHIFY_GATEWAY_KEY: ${GRAPHIFY_GATEWAY_KEY:-}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      GITHUB_ORG: ${GITHUB_ORG:-SimCorp}
+      GRAPHIFY_OUT_DIR: /graphify-out
+      WORKER_ID: "graphify-worker-1"
+    volumes:
+      - graphify_out:/graphify-out
+    # Isolate a runaway extraction: OOM-kill the worker in its own cgroup rather
+    # than letting it take the API down.
+    mem_limit: 4g
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
   admin-portal:
     build:
       context: ..
@@ -611,6 +676,7 @@ volumes:
   obs_loki_data:
   obs_prometheus_data:
   obs_grafana_data:
+  graphify_out:
 
 networks:
   default:
