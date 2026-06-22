@@ -52,9 +52,7 @@ def upgrade():
     """)
 
     # ── 6. Indexes for user_id lookups ────────────────────────────────────────
-    op.execute(
-        "CREATE INDEX IF NOT EXISTS idx_role_assignments_user ON role_assignments(user_id)"
-    )
+    op.execute("CREATE INDEX IF NOT EXISTS idx_role_assignments_user ON role_assignments(user_id)")
     op.execute("""
         CREATE UNIQUE INDEX IF NOT EXISTS idx_ra_user_role_node
         ON role_assignments(user_id, role, node_id)

@@ -42,12 +42,15 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 # ---------------------------------------------------------------------------
 
 _ROLE_POWER = {
-    "gateway_admin": 6, "platform_admin": 6,   # alias — old sessions in Redis
+    "gateway_admin": 6,
+    "platform_admin": 6,  # alias — old sessions in Redis
     "area_owner": 5,
     "unit_lead": 4,
     "team_admin": 3,
-    "engineer": 2, "developer": 2,              # alias — old sessions in Redis
-    "reporter": 1, "viewer": 1,                 # alias — old sessions in Redis
+    "engineer": 2,
+    "developer": 2,  # alias — old sessions in Redis
+    "reporter": 1,
+    "viewer": 1,  # alias — old sessions in Redis
 }
 
 # Sets used for role checks that must work with both old and new session names
