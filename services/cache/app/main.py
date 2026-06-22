@@ -31,6 +31,10 @@ async def lifespan(app: FastAPI):
     _expire_task = asyncio.create_task(_expire_loop(app.state.pool))
     yield
     _expire_task.cancel()
+    try:
+        await _expire_task
+    except asyncio.CancelledError:
+        pass
     await app.state.pool.close()
     await app.state.redis.aclose()
     await app.state.http.aclose()
