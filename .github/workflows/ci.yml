@@ -250,6 +250,28 @@ jobs:
           gitleaks detect --source . --redact --no-banner
 
   # ────────────────────────────────────────────────────────────────────────────
+  # Dependency review — flags PRs that introduce known-vulnerable dependencies.
+  # Advisory: not a required status check, so it never blocks a merge (yet); it
+  # surfaces high-severity vulns with a PR comment. Promote to a required gate by
+  # adding "Dependency review" to the branch ruleset's required_status_checks.
+  # ────────────────────────────────────────────────────────────────────────────
+  dependency-review:
+    name: Dependency review
+    needs: changes
+    if: github.event_name == 'pull_request' && needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: on-failure
+
+  # ────────────────────────────────────────────────────────────────────────────
   # Build & push all images to GHCR
   # Only runs on push (not PRs). Uses GitHub Actions cache for layer reuse.
   # ────────────────────────────────────────────────────────────────────────────
