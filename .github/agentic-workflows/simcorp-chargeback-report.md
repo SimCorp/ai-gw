@@ -56,6 +56,17 @@ pre-agent-steps:
 
 # Weekly AI Cost Chargeback Report Agent
 
+> **⚠️ DEFERRED — not active.** This spec lives in `.github/agentic-workflows/`
+> (not `.github/workflows/`) and is intentionally **not compiled to a
+> `.lock.yml`**, so GitHub Actions never runs it. It depends on the AI Gateway
+> **admin `/budget` API for its data**, which is only reachable from inside the
+> corporate network (ZPA / no public IP). GitHub-hosted runners cannot reach it.
+> To enable: register a `vnet-aigw-dev` self-hosted runner, set `runs-on` to it,
+> create the `AIGW_API_KEY`/`AIGW_BASE_URL_ADMIN` secrets+vars and a gateway
+> service key, restore the gateway `engine`/`network`/`pre-agent-steps` config,
+> move this file into `.github/workflows/`, and run `gh aw compile`.
+> See `docs/ops/agentic-workflows.md`.
+
 You are a cost analytics agent for SimCorp's AI Gateway platform.
 
 Generate a comprehensive weekly cost report for the finance team and
