@@ -70,6 +70,13 @@ Commit the `.md` **and** the regenerated `.lock.yml` together — the lock file 
 what GitHub Actions executes. Editing only the Markdown body needs no recompile;
 frontmatter changes do.
 
+> **Caveat:** the generated `agentics-maintenance.yml` is also gated on
+> `vars.AGENTIC_WORKFLOWS_ENABLED` (its two scheduled cleanup jobs). `gh aw compile`
+> **regenerates this file from the template and drops that guard**, so after a
+> recompile re-add `vars.AGENTIC_WORKFLOWS_ENABLED == 'true' &&` to the `if:` of the
+> `close-expired-entities` and `cleanup-cache-memory` jobs (or skip it once the
+> workflows are enabled — then the guard is a no-op anyway).
+
 ## Activation — dormant by default
 
 **All active workflows are gated** behind a repository variable and do nothing
