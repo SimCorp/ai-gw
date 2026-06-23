@@ -120,6 +120,8 @@ export function MembersTab({ nodeId }: MembersTabProps) {
                   </div>
                   <Link
                     href={`/admin/users?search=${encodeURIComponent(m.email)}`}
+                    aria-label="Open in Users page"
+                    title="Open in Users page"
                     style={{
                       padding: '3px 6px', fontSize: 11, background: 'transparent',
                       border: 'none', borderRadius: 4, cursor: 'pointer', flexShrink: 0,

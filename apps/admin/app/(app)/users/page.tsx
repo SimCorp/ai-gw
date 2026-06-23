@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { LoadingState, ErrorState } from '../_components/PageStates';
@@ -134,7 +134,7 @@ function flattenTree(node: OrgNode, map: Map<string, string>) {
 function InviteModal({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient();
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState('developer');
+  const [role, setRole] = useState('engineer');
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ accept_url: string; token: string } | null>(null);
   const [copied, setCopied] = useState(false);
@@ -148,7 +148,7 @@ function InviteModal({ onClose }: { onClose: () => void }) {
       body: JSON.stringify({
         email,
         role,
-        scope_type: selectedNode ? 'node' : 'global',
+        scope_type: selectedNode ? selectedNode.type : 'global',
         scope_id: selectedNode?.id ?? null,
       }),
     }),
@@ -231,11 +231,11 @@ function InviteModal({ onClose }: { onClose: () => void }) {
                 style={{ width: '100%', padding: '8px 10px', fontSize: 13,
                   background: 'var(--surface-2)', border: '1px solid var(--rule)', borderRadius: 6,
                   color: 'var(--fg-1)', fontFamily: 'inherit' }}>
-                <option value="developer">Developer</option>
-                <option value="viewer">Viewer</option>
+                <option value="engineer">Engineer</option>
+                <option value="reporter">Reporter</option>
                 <option value="team_admin">Team Admin</option>
                 <option value="area_owner">Area Owner</option>
-                <option value="platform_admin">Platform Admin</option>
+                <option value="gateway_admin">Gateway Admin</option>
               </select>
             </div>
             <div style={{ marginBottom: 20 }}>
@@ -307,6 +307,10 @@ export default function UsersPage() {
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [showInvite, setShowInvite] = useState(false);
 
+  useEffect(() => {
+    setSearch(searchParams.get('search') ?? '');
+  }, [searchParams]);
+
   const usersQuery = useQuery<UsersResponse>({
     queryKey: ['admin-users', search, statusFilter],
     queryFn: async () => {
@@ -318,7 +322,7 @@ export default function UsersPage() {
   });
 
   const nodesTreeQuery = useQuery<OrgNode[]>({
-    queryKey: ['node-tree'],
+    queryKey: ['nodes-tree-list'],
     queryFn: () => apiFetch<OrgNode[]>('/nodes/tree').catch(() => []),
   });
 

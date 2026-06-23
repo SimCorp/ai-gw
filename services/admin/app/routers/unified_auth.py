@@ -26,6 +26,7 @@ import json
 import re
 import secrets
 from datetime import timedelta
+from uuid import UUID
 
 import bcrypt
 from fastapi import APIRouter, Depends, File, Header, HTTPException, Request, UploadFile
@@ -1646,6 +1647,12 @@ async def list_service_accounts(
     caller: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
+    if team_id is not None:
+        try:
+            UUID(team_id)
+        except ValueError:
+            raise HTTPException(status_code=422, detail="team_id must be a valid UUID")
+
     roles = {r["role"] for r in caller.get("roles", [])}
     is_platform_admin = bool(roles & _GATEWAY_ADMIN_ROLES)
 
