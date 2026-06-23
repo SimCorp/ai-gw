@@ -318,15 +318,13 @@ export default function UsersPage() {
   });
 
   const nodesTreeQuery = useQuery<OrgNode[]>({
-    queryKey: ['nodes-tree'],
+    queryKey: ['node-tree'],
     queryFn: () => apiFetch<OrgNode[]>('/nodes/tree').catch(() => []),
   });
 
   const nodeMap = useMemo(() => {
     const map = new Map<string, string>();
-    if (nodesTreeQuery.data && nodesTreeQuery.data.length > 0) {
-      flattenTree(nodesTreeQuery.data[0], map);
-    }
+    nodesTreeQuery.data?.forEach(root => flattenTree(root, map));
     return map;
   }, [nodesTreeQuery.data]);
 

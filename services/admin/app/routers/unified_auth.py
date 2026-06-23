@@ -1249,7 +1249,7 @@ async def create_invitation(
         team_scopes = [
             r.get("scope_id") for r in caller.get("roles", []) if r["role"] == "team_admin"
         ]
-        if body.scope_id not in team_scopes:
+        if str(body.scope_id).lower() not in [str(s).lower() for s in team_scopes if s]:
             raise HTTPException(status_code=403, detail="You do not manage that team")
 
     import uuid as _uuid
@@ -1675,7 +1675,7 @@ async def list_service_accounts(
             r.get("scope_id") for r in caller.get("roles", []) if r["role"] == "team_admin"
         ]
         if team_id:
-            if team_id not in [s for s in team_scopes if s]:
+            if str(team_id).lower() not in [str(s).lower() for s in team_scopes if s]:
                 raise HTTPException(status_code=403, detail="Not authorized for this team")
             effective_scopes = [team_id]
         else:
