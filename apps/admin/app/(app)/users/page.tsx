@@ -242,7 +242,7 @@ export default function UsersPage() {
 
   const nodesTreeQuery = useQuery<OrgNode[]>({
     queryKey: ['nodes-tree'],
-    queryFn: () => apiFetch<OrgNode[]>('/admin/nodes/tree').catch(() => []),
+    queryFn: () => apiFetch<OrgNode[]>('/nodes/tree').catch(() => []),
   });
 
   const nodeMap = useMemo(() => {
