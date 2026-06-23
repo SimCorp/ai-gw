@@ -678,7 +678,7 @@ services:
   gatus:
     image: ghcr.io/twin/gatus:stable
     volumes:
-      - ./gatus:/config:ro
+      - ./gatus:/app/config:ro
       - gatus_data:/data
     networks:
       - default
