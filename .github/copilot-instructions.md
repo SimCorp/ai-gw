@@ -22,7 +22,7 @@ services/          # Python FastAPI backend services (one dir per service)
   league/          # AI-League gamified challenge platform    (:8010)
   scanner/         # Security scanning worker (no ingress)
   workflow-worker/ # Agentic workflow runner (no ingress)
-  graphify/        # Graph-building service
+  graphify/        # Graph-building service                   (:8012)
 apps/
   admin/           # Admin Next.js portal  (:3001)
   portal/          # Developer Next.js portal (:3002)
