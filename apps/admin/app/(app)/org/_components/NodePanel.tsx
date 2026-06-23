@@ -10,7 +10,7 @@ import { BudgetPanel } from '../../nodes/[id]/_components/BudgetPanel';
 import { MembersTab } from './MembersTab';
 import { AccessTab } from './AccessTab';
 
-export type PanelTab = 'overview' | 'members' | 'policy' | 'budget' | 'access';
+export type PanelTab = 'overview' | 'members' | 'policy' | 'budget' | 'access' | 'service-accounts';
 
 interface NodeDetail extends OrgNode {
   member_count: number;
@@ -27,12 +27,13 @@ export interface NodePanelProps {
   onClose: () => void;
 }
 
-const TABS: { id: PanelTab; label: string }[] = [
+const TABS: { id: PanelTab; label: string; teamOnly?: boolean }[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'members', label: 'Members' },
   { id: 'policy', label: 'Policy' },
   { id: 'budget', label: 'Budget' },
   { id: 'access', label: 'Access' },
+  { id: 'service-accounts', label: 'Service Accounts', teamOnly: true },
 ];
 
 function KpiCard({ label, value, muted }: { label: string; value: string; muted?: boolean }) {
@@ -218,7 +219,7 @@ export function NodePanel({ nodeId, activeTab, onTabChange, onSelectNode, onAddC
 
         {/* Tabs */}
         <div style={{ display: 'flex', gap: 0, overflowX: 'auto' }}>
-          {TABS.map(t => (
+          {TABS.filter(t => !t.teamOnly || node.type === 'team').map(t => (
             <button
               key={t.id}
               onClick={() => onTabChange(t.id)}
@@ -246,8 +247,79 @@ export function NodePanel({ nodeId, activeTab, onTabChange, onSelectNode, onAddC
         {activeTab === 'policy' && <PolicyPanel nodeId={nodeId} nodeName={node.name} />}
         {activeTab === 'budget' && <BudgetPanel nodeId={nodeId} />}
         {activeTab === 'access' && <AccessTab nodeId={nodeId} />}
+        {activeTab === 'service-accounts' && node.type === 'team' && <ServiceAccountsTab nodeId={nodeId} />}
       </div>
     </div>
+  );
+}
+
+function formatDateTime(iso: string | null | undefined) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
+function ServiceAccountsTab({ nodeId }: { nodeId: string }) {
+  const qc = useQueryClient();
+  const { data, isLoading } = useQuery<Record<string, unknown>[]>({
+    queryKey: ['node-service-accounts', nodeId],
+    queryFn: () => apiFetch<Record<string, unknown>[]>(`/auth/service-accounts?team_id=${nodeId}`).catch(() => []),
+  });
+  const revokeMut = useMutation({
+    mutationFn: (id: string) => apiFetch(`/auth/service-accounts/${id}/status?status=revoked`, { method: 'PATCH' }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['node-service-accounts', nodeId] }),
+  });
+
+  if (isLoading) return <LoadingState rows={3} />;
+  const items = data ?? [];
+  return (
+    <table className="tbl">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Key prefix</th>
+          <th>Last used</th>
+          <th>Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {items.map((sa: Record<string, unknown>) => (
+          <tr key={sa.id as string}>
+            <td>
+              <div className="cell-2">
+                <span style={{ fontWeight: 500 }}>{sa.name as string}</span>
+                {Boolean(sa.description) && <span style={{ color: 'var(--fg-3)', fontSize: 12 }}>{sa.description as string}</span>}
+              </div>
+            </td>
+            <td style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 12, color: 'var(--fg-2)' }}>
+              {sa.key_prefix as string}…
+            </td>
+            <td style={{ fontSize: 12.5, color: 'var(--fg-3)' }}>{formatDateTime(sa.last_used_at as string | null)}</td>
+            <td>
+              {sa.status === 'active'
+                ? <span className="pill pill--good"><span className="dot" />Active</span>
+                : sa.status === 'suspended'
+                  ? <span className="pill pill--warn"><span className="dot" />Suspended</span>
+                  : <span className="pill pill--bad"><span className="dot" />Revoked</span>
+              }
+            </td>
+            <td>
+              <button
+                className="btn btn--sm btn--ghost"
+                style={{ color: 'var(--bad)' }}
+                disabled={sa.status === 'revoked'}
+                onClick={() => revokeMut.mutate(sa.id as string)}
+              >Revoke</button>
+            </td>
+          </tr>
+        ))}
+        {items.length === 0 && (
+          <tr><td colSpan={5} style={{ textAlign: 'center', padding: '40px 24px', color: 'var(--fg-3)' }}>
+            No service accounts for this team.
+          </td></tr>
+        )}
+      </tbody>
+    </table>
   );
 }
 
