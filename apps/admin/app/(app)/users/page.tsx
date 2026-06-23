@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { LoadingState, ErrorState } from '../_components/PageStates';
+import { OrgNode } from '../_components/nodeTypes';
 import { apiFetch, BASE } from '../../../lib/apiClient';
 
 // ── Types ─────────────────────────────────────────────────────────────────
@@ -94,6 +95,13 @@ function StatusPill({ status }: { status: UserStatus }) {
     case 'suspended': return <span className="pill pill--bad"><span className="dot" />Suspended</span>;
     default:          return <span className="pill"><span className="dot" />{status}</span>;
   }
+}
+
+// ── Node tree flattening ──────────────────────────────────────────────────
+
+function flattenTree(node: OrgNode, map: Map<string, string>) {
+  map.set(node.id, node.name);
+  node.children?.forEach(c => flattenTree(c, map));
 }
 
 // ── Invite modal ──────────────────────────────────────────────────────────
@@ -231,6 +239,19 @@ export default function UsersPage() {
       return apiFetch(`/admin/users?${params}`);
     },
   });
+
+  const nodesTreeQuery = useQuery<OrgNode[]>({
+    queryKey: ['nodes-tree'],
+    queryFn: () => apiFetch<OrgNode[]>('/admin/nodes/tree').catch(() => []),
+  });
+
+  const nodeMap = useMemo(() => {
+    const map = new Map<string, string>();
+    if (nodesTreeQuery.data && nodesTreeQuery.data.length > 0) {
+      flattenTree(nodesTreeQuery.data[0], map);
+    }
+    return map;
+  }, [nodesTreeQuery.data]);
 
   const invitesQuery = useQuery<Invitation[]>({
     queryKey: ['invitations'],
