@@ -35,6 +35,11 @@ class Settings(BaseSettings):
     loki_url: str = "http://obs-loki:3100"
     prometheus_url: str = "http://obs-prometheus:9090"
 
+    # GitHub — read-only token (actions:read) used by the agentic-workflows
+    # status page to list gh-aw workflow runs. Empty disables the feature.
+    github_token: str = ""
+    github_repo: str = "SimCorp/ai-gw"
+
     # Secret used to encrypt the RSA identity signing key stored in Redis.
     # Use a long random string in production (e.g. openssl rand -hex 32).
     identity_key_secret: str
