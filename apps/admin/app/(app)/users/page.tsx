@@ -234,6 +234,7 @@ function InviteModal({ onClose }: { onClose: () => void }) {
                 <option value="engineer">Engineer</option>
                 <option value="reporter">Reporter</option>
                 <option value="team_admin">Team Admin</option>
+                <option value="unit_lead">Unit Lead</option>
                 <option value="area_owner">Area Owner</option>
                 <option value="gateway_admin">Gateway Admin</option>
               </select>

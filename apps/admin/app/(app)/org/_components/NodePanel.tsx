@@ -260,7 +260,7 @@ function formatDateTime(iso: string | null | undefined) {
 
 function ServiceAccountsTab({ nodeId }: { nodeId: string }) {
   const qc = useQueryClient();
-  const { data, isLoading, isError, error } = useQuery<Record<string, unknown>[]>({
+  const { data, isLoading, isError } = useQuery<Record<string, unknown>[]>({
     queryKey: ['node-service-accounts', nodeId],
     queryFn: () => apiFetch<Record<string, unknown>[]>(`/auth/service-accounts?team_id=${nodeId}`),
   });
