@@ -6,6 +6,7 @@ description: >-
   secret scanning alerts, or Dependabot alerts — pulls open findings from a
   repo, groups them by severity and rule, and opens one GitHub issue per source
   (code scanning, secret scanning, Dependabot) for another agent to fix.
+disable-model-invocation: true
 ---
 
 # triage-code-findings
