@@ -280,7 +280,7 @@ alembic upgrade head
 
 ```
 Browser → Caddy:443 → cache:8002
-  cache: validates ****** (calls auth:8001 → POST /validate)
+  cache: validates token (calls auth:8001 → POST /validate)
   cache: checks semantic/exact cache (Redis)
   cache hit: return cached response + log to observability:8004
   cache miss: forward to litellm:8003 → provider (OpenAI/Anthropic/etc.)
