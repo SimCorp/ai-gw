@@ -26,6 +26,7 @@ import json
 import re
 import secrets
 from datetime import timedelta
+from uuid import UUID
 
 import bcrypt
 from fastapi import APIRouter, Depends, File, Header, HTTPException, Request, UploadFile
@@ -1249,7 +1250,7 @@ async def create_invitation(
         team_scopes = [
             r.get("scope_id") for r in caller.get("roles", []) if r["role"] == "team_admin"
         ]
-        if body.scope_id not in team_scopes:
+        if str(body.scope_id).lower() not in [str(s).lower() for s in team_scopes if s]:
             raise HTTPException(status_code=403, detail="You do not manage that team")
 
     import uuid as _uuid
@@ -1642,9 +1643,16 @@ async def create_service_account(
 
 @router.get("/service-accounts")
 async def list_service_accounts(
+    team_id: str | None = None,
     caller: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
+    if team_id is not None:
+        try:
+            UUID(team_id)
+        except ValueError:
+            raise HTTPException(status_code=422, detail="team_id must be a valid UUID")
+
     roles = {r["role"] for r in caller.get("roles", [])}
     is_platform_admin = bool(roles & _GATEWAY_ADMIN_ROLES)
 
@@ -1660,8 +1668,10 @@ async def list_service_accounts(
             FROM service_accounts sa
             LEFT JOIN organization_nodes t ON t.id = sa.team_id
             LEFT JOIN users u ON u.id = sa.owner_user_id
+            WHERE (CAST(:team_id AS uuid) IS NULL OR sa.team_id = CAST(:team_id AS uuid))
             ORDER BY sa.created_at DESC
-        """)
+        """),
+                    {"team_id": team_id},
                 )
             )
             .mappings()
@@ -1671,6 +1681,12 @@ async def list_service_accounts(
         team_scopes = [
             r.get("scope_id") for r in caller.get("roles", []) if r["role"] == "team_admin"
         ]
+        if team_id:
+            if str(team_id).lower() not in [str(s).lower() for s in team_scopes if s]:
+                raise HTTPException(status_code=403, detail="Not authorized for this team")
+            effective_scopes = [team_id]
+        else:
+            effective_scopes = [s for s in team_scopes if s]
         rows = (
             (
                 await session.execute(
@@ -1685,7 +1701,7 @@ async def list_service_accounts(
                 WHERE sa.team_id = ANY(CAST(:scopes AS uuid[]))
                 ORDER BY sa.created_at DESC
             """),
-                    {"scopes": [s for s in team_scopes if s]},
+                    {"scopes": effective_scopes},
                 )
             )
             .mappings()
