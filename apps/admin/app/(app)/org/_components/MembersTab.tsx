@@ -118,19 +118,18 @@ export function MembersTab({ nodeId }: MembersTabProps) {
                       </div>
                     )}
                   </div>
-                  <Link href={`/admin/users?search=${encodeURIComponent(m.email)}`}>
-                    <button
-                      style={{
-                        padding: '3px 6px', fontSize: 11, background: 'transparent',
-                        border: 'none', borderRadius: 4, cursor: 'pointer', flexShrink: 0,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        opacity: 0.5, transition: 'opacity 0.2s',
-                      }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = '1'; }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = '0.5'; }}
-                    >
-                      <ExternalLink size={14} color="var(--fg-1)" />
-                    </button>
+                  <Link
+                    href={`/admin/users?search=${encodeURIComponent(m.email)}`}
+                    style={{
+                      padding: '3px 6px', fontSize: 11, background: 'transparent',
+                      border: 'none', borderRadius: 4, cursor: 'pointer', flexShrink: 0,
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      opacity: 0.5, transition: 'opacity 0.2s',
+                    }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.opacity = '1'; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.opacity = '0.5'; }}
+                  >
+                    <ExternalLink size={14} color="var(--fg-1)" />
                   </Link>
                   <button
                     onClick={() => removeMutation.mutate(m.user_id)}
