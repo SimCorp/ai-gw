@@ -1,6 +1,9 @@
 {
 	admin off
-	auto_https off
+	# disable_redirects keeps the explicit :80→:443 redirect working while
+	# still allowing tls internal on named-host vhosts (rybbit, future hosts).
+	# "auto_https off" suppresses tls internal cert issuance — verified broken.
+	auto_https disable_redirects
 }
 
 # Plain HTTP -> redirect to HTTPS (port 80 is open for this + future config needs).
