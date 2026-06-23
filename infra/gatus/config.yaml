@@ -92,8 +92,15 @@ endpoints:
       - "[STATUS] == 200"
       - "[RESPONSE_TIME] < 500"
 
+  - name: scanner
+    url: http://scanner:8011/health
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 500"
+
   - name: admin-portal
-    url: http://admin-portal:3001/
+    url: http://admin-portal:3001/admin/login
     interval: 30s
     conditions:
       - "[STATUS] == 200"
