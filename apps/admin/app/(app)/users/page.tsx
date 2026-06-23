@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { LoadingState, ErrorState } from '../_components/PageStates';
 import { OrgNode } from '../_components/nodeTypes';
+import { OrgTree } from '../_components/OrgTree';
 import { apiFetch, BASE } from '../../../lib/apiClient';
 
 // ── Types ─────────────────────────────────────────────────────────────────
@@ -137,12 +138,19 @@ function InviteModal({ onClose }: { onClose: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ accept_url: string; token: string } | null>(null);
   const [copied, setCopied] = useState(false);
+  const [selectedNode, setSelectedNode] = useState<OrgNode | null>(null);
+  const [showNodePicker, setShowNodePicker] = useState(false);
 
   const inviteMut = useMutation({
     mutationFn: async () => apiFetch<{ accept_url: string; token: string }>('/auth/invitations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, role, scope_type: 'global' }),
+      body: JSON.stringify({
+        email,
+        role,
+        scope_type: selectedNode ? 'node' : 'global',
+        scope_id: selectedNode?.id ?? null,
+      }),
     }),
     onSuccess: (data) => {
       setResult(data);
@@ -217,7 +225,7 @@ function InviteModal({ onClose }: { onClose: () => void }) {
                   color: 'var(--fg-1)', fontFamily: 'inherit' }}
               />
             </div>
-            <div style={{ marginBottom: 20 }}>
+            <div style={{ marginBottom: 14 }}>
               <label style={{ display: 'block', fontSize: 12.5, fontWeight: 500, marginBottom: 6 }}>Role</label>
               <select value={role} onChange={e => setRole(e.target.value)}
                 style={{ width: '100%', padding: '8px 10px', fontSize: 13,
@@ -229,6 +237,50 @@ function InviteModal({ onClose }: { onClose: () => void }) {
                 <option value="area_owner">Area Owner</option>
                 <option value="platform_admin">Platform Admin</option>
               </select>
+            </div>
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ display: 'block', fontSize: 12.5, fontWeight: 500, marginBottom: 6 }}>Org scope (optional)</label>
+              {!selectedNode && !showNodePicker && (
+                <button
+                  type="button"
+                  className="btn btn--ghost"
+                  style={{ fontSize: 12.5 }}
+                  onClick={() => setShowNodePicker(true)}
+                >
+                  Select team (optional)
+                </button>
+              )}
+              {showNodePicker && (
+                <div>
+                  <div style={{ maxHeight: 300, overflowY: 'auto', marginBottom: 6 }}>
+                    <OrgTree
+                      onSelect={(n) => { setSelectedNode(n); setShowNodePicker(false); }}
+                      selectedId={selectedNode?.id}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn--ghost"
+                    style={{ fontSize: 12.5 }}
+                    onClick={() => setShowNodePicker(false)}
+                  >
+                    × Cancel
+                  </button>
+                </div>
+              )}
+              {selectedNode && !showNodePicker && (
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6,
+                  padding: '4px 10px', borderRadius: 6, fontSize: 12.5,
+                  background: 'var(--surface-2)', border: '1px solid var(--rule)' }}>
+                  <span style={{ color: 'var(--fg-1)' }}>{selectedNode.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedNode(null)}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer',
+                      color: 'var(--fg-3)', fontSize: 14, lineHeight: 1, padding: 0 }}
+                  >×</button>
+                </div>
+              )}
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
               <button type="submit" className="btn btn--primary" style={{ flex: 1 }} disabled={inviteMut.isPending}>
