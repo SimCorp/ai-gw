@@ -1,6 +1,7 @@
 # services/league/app/routers/submissions.py
 import hashlib
 import json
+import logging
 import time
 from uuid import UUID
 
@@ -24,6 +25,8 @@ from app.scoring import (
     score_quality_exact,
     score_robustness,
 )
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(tags=["submissions"])
 
@@ -96,6 +99,7 @@ async def _run_test_suite(
                 }
             )
         except Exception as exc:
+            log.warning("Test case execution failed: %s", exc)
             results.append(
                 {
                     "input": case["input"],
@@ -105,7 +109,7 @@ async def _run_test_suite(
                     "latency_ms": 0,
                     "cost_usd": 0.0,
                     "weight": case.get("weight", 1.0),
-                    "error": str(exc),
+                    "error": "Test execution failed",
                 }
             )
     return results

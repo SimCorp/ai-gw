@@ -213,7 +213,7 @@ async def create_workflow_version(
     # node id becomes a path segment in the shared run share ({run_id}/{node_id});
     # restrict it so it can't traverse into another run's directory.
     _NODE_ID_RE = re.compile(r"^[A-Za-z0-9._-]+$")
-    _CONDITION_RE = re.compile(r"^[\w.]+\s*(==|!=|>|>=|<|<=)\s*.+$")
+    _CONDITION_RE = re.compile(r"^[\w.]+[ \t]*(==|!=|>=|<=|>|<)[ \t]*\S[^\n]*$")
     _MAX_NODES = 50
     _MAX_LOOP_ITERATIONS = 10
 

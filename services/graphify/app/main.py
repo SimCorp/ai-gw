@@ -94,6 +94,15 @@ def _validate_repo_name(name: str) -> None:
         )
 
 
+def _safe_path(name: str, *parts: str) -> str:
+    """Return a path under the graphify output volume, rejecting traversal attempts."""
+    base = os.path.realpath(settings.graphify_out_dir)
+    candidate = os.path.realpath(os.path.join(settings.graphify_out_dir, name, *parts))
+    if not candidate.startswith(base + os.sep):
+        raise HTTPException(status_code=422, detail="invalid repo path")
+    return candidate
+
+
 def _normalize_github_url(name: str, github_url: str | None) -> str:
     """Accept a full https URL, or build one from the configured org + repo name."""
     if github_url:
@@ -225,7 +234,7 @@ async def remove_repo(name: str, request: Request):
     if not deleted:
         raise HTTPException(status_code=404, detail=f"repo '{name}' not found")
     # Remove artefacts from the volume (best-effort).
-    shutil.rmtree(db.repo_dir(name), ignore_errors=True)
+    shutil.rmtree(_safe_path(name), ignore_errors=True)
 
 
 # ---------------------------------------------------------------------------
@@ -257,7 +266,7 @@ async def query_graph(
 async def repo_report(name: str, request: Request):
     await _require_caller(request)
     _validate_repo_name(name)
-    report_path = os.path.join(db.graph_dir(name), "GRAPH_REPORT.md")
+    report_path = _safe_path(name, "graphify-out", "GRAPH_REPORT.md")
     if not os.path.exists(report_path):
         raise HTTPException(status_code=404, detail="no report — build the graph first")
     return FileResponse(report_path, media_type="text/markdown")
@@ -267,7 +276,7 @@ async def repo_report(name: str, request: Request):
 async def repo_graph_html(name: str, request: Request):
     await _require_caller(request)
     _validate_repo_name(name)
-    html_path = os.path.join(db.graph_dir(name), "graph.html")
+    html_path = _safe_path(name, "graphify-out", "graph.html")
     if not os.path.exists(html_path):
         raise HTTPException(status_code=404, detail="no graph.html — build the graph first")
     return FileResponse(html_path, media_type="text/html")
@@ -508,8 +517,8 @@ async def mcp_jsonrpc(body: dict, request: Request, session_id: str | None = Non
         except ValueError as exc:
             return await _relay_or_return(_err(-32602, str(exc)))
         except Exception as exc:
-            _log.exception("MCP tool %s error", tool_name)
-            return await _relay_or_return(_err(-32603, f"Tool execution error: {exc}"))
+            _log.exception("MCP tool %s error: %s", tool_name, exc)
+            return await _relay_or_return(_err(-32603, "Tool execution error"))
         return await _relay_or_return(
             _ok({"content": [{"type": "text", "text": _json_m.dumps(result)}]})
         )

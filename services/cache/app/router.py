@@ -277,7 +277,7 @@ async def _validate_token(
     On auth-service errors (network, 5xx), falls back to a 45-second in-process
     identity cache so agents survive rolling deploys and brief outages.
     """
-    token_key = hashlib.sha256(token.encode()).hexdigest()
+    token_key = hashlib.sha256(token.encode(), usedforsecurity=False).hexdigest()
 
     try:
         resp = await client.post(

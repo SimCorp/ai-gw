@@ -18,6 +18,9 @@ on:
   schedule:
     - cron: "0 3 * * *" # nightly 03:00 UTC
 
+permissions:
+  contents: read
+
 concurrency:
   group: e2e-quality-${{ github.ref }}
   cancel-in-progress: true

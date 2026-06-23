@@ -46,12 +46,15 @@ async def list_insights(
 ):
     """List all recent AI optimization insights (admin)."""
     filters = ["generated_at >= NOW() - INTERVAL '25 hours'"]
+    params: dict = {}
     if not include_dismissed:
         filters.append("dismissed = FALSE")
     if category:
-        filters.append(f"category = '{category.replace(chr(39), '')}'")
+        filters.append("category = :category")
+        params["category"] = category
     if severity:
-        filters.append(f"severity = '{severity.replace(chr(39), '')}'")
+        filters.append("severity = :severity")
+        params["severity"] = severity
 
     where = " AND ".join(filters)
     rows = (
@@ -65,7 +68,8 @@ async def list_insights(
         ORDER BY
             CASE severity WHEN 'critical' THEN 0 WHEN 'warning' THEN 1 ELSE 2 END,
             generated_at DESC
-    """)
+    """),
+                params,
             )
         )
         .mappings()
