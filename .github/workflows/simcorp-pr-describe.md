@@ -2,24 +2,20 @@
 name: "PR Description Generator"
 description: >
   Generates a structured SimCorp PR description when an engineer applies
-  the 'ai-describe' label. Routes inference through the AI Gateway for
-  caching, cost attribution, and guardrails.
+  the 'ai-describe' label. Runs on the GitHub Copilot engine.
 
 on:
   label_command: ai-describe
   status-comment: true
 
-engine:
-  id: codex
-  model: claude-haiku-4-5
-  env:
-    OPENAI_BASE_URL: ${{ vars.AIGW_BASE_URL }}
-    OPENAI_API_KEY: ${{ secrets.AIGW_API_KEY }}
+# Dormant until enabled: set repo variable AGENTIC_WORKFLOWS_ENABLED=true
+# after GitHub Copilot is enabled and labels are synced. See
+# docs/ops/agentic-workflows.md.
+if: ${{ vars.AGENTIC_WORKFLOWS_ENABLED == 'true' }}
 
-network:
-  allowed:
-    - defaults
-    - aigw.simcorp.internal
+engine: copilot
+
+network: defaults
 
 tools:
   github:
@@ -34,6 +30,7 @@ permissions:
   contents: read
   pull-requests: read
   issues: read
+  copilot-requests: write
 
 safe-outputs:
   update-pull-request:

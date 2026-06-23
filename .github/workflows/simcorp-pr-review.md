@@ -1,9 +1,9 @@
 ---
-name: "AI Code Review with CodeMate"
+name: "AI Code Review"
 description: >
-  Reviews pull requests using SimCorp's codebase context via CodeMate.
-  Routes inference through the AI Gateway for caching, cost attribution,
-  and guardrails. Triggered by 'eyes' reaction or review label.
+  Reviews pull requests for security, correctness, quality, and compliance
+  issues using the repository context available through the GitHub toolset.
+  Runs on the GitHub Copilot engine. Triggered by 'eyes' reaction or review label.
 
 on:
   pull_request:
@@ -13,17 +13,14 @@ on:
   skip-if-check-failing: true
   roles: [write, maintain, admin]
 
-engine:
-  id: codex
-  model: claude-sonnet-4-6
-  env:
-    OPENAI_BASE_URL: ${{ vars.AIGW_BASE_URL }}
-    OPENAI_API_KEY: ${{ secrets.AIGW_API_KEY }}
+# Dormant until enabled: set repo variable AGENTIC_WORKFLOWS_ENABLED=true
+# after GitHub Copilot is enabled and labels are synced. See
+# docs/ops/agentic-workflows.md.
+if: ${{ vars.AGENTIC_WORKFLOWS_ENABLED == 'true' }}
 
-network:
-  allowed:
-    - defaults
-    - aigw.simcorp.internal
+engine: copilot
+
+network: defaults
 
 tools:
   github:
@@ -34,24 +31,11 @@ tools:
       - issues
     read-only: true
 
-# MCP server: CodeMate codebase search via the AI Gateway proxy
-mcp:
-  servers:
-    - name: codemate
-      url: ${{ vars.AIGW_BASE_URL_ADMIN }}/mcp/codemate
-      type: sse
-      headers:
-        Authorization: "Bearer ${{ secrets.AIGW_API_KEY }}"
-    - name: ai-librarian
-      url: ${{ vars.AIGW_LIBRARIAN_URL }}/mcp
-      type: sse
-      headers:
-        Authorization: "Bearer ${{ secrets.AIGW_API_KEY }}"
-
 permissions:
   contents: read
   pull-requests: read
   issues: read
+  copilot-requests: write
 
 safe-outputs:
   submit-pull-request-review:
@@ -61,29 +45,22 @@ safe-outputs:
     max: 3
   add-comment:
     max: 1
-
-threat-detection:
-  post-steps:
-    - name: Semgrep security scan
-      uses: returntocorp/semgrep-action@v1
-      with:
-        config: auto
 ---
 
 # SimCorp AI Code Review Agent
 
-You are a senior SimCorp engineer performing a code review. You have access
-to CodeMate (the SimCorp codebase search MCP server) and the AI Librarian
-(the internal knowledge base MCP server).
+You are a senior SimCorp engineer performing a code review. Use the GitHub
+tools to read the PR diff and to search the rest of the repository for
+related code.
 
 ## Review Process
 
 1. Read the full PR diff and all changed files
-2. For each changed symbol/function/class, use CodeMate to find:
-   - Other places in the SimCorp codebase that reference it
-   - Related system objects (forms, workflows, data models)
-3. Check the AI Librarian for any relevant internal guidelines or prior art
-4. Identify issues across these categories:
+2. For each changed symbol/function/class, search the repository (via the
+   GitHub code-search tools) for:
+   - Other places in the codebase that reference it
+   - Existing utilities or patterns the change should reuse or stay consistent with
+3. Identify issues across these categories:
 
 ### Security (block-level findings → REQUEST_CHANGES)
 - Hardcoded credentials, API keys, or secrets
@@ -100,7 +77,7 @@ to CodeMate (the SimCorp codebase search MCP server) and the AI Librarian
 
 ### Quality (suggest-level → COMMENT)
 - Missing tests for new behaviour
-- Code that duplicates existing utilities (flag via CodeMate search)
+- Code that duplicates existing utilities (flag via repository code search)
 - Type errors or missing type annotations
 - Performance concerns in hot paths
 
