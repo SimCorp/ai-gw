@@ -52,8 +52,21 @@ function ghJSON(path) {
   }
 }
 
-const repo = flag("repo") || execFileSync("gh", ["repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"], { encoding: "utf8" }).trim();
-const include = flag("include", "code,secret,dependabot").split(",").map((s) => s.trim());
+let repo = flag("repo");
+if (!repo) {
+  try {
+    repo = execFileSync(
+      "gh",
+      ["repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"],
+      { encoding: "utf8" },
+    ).trim();
+  } catch (e) {
+    const msg = (e.stderr || e.message || "").toString().trim().split("\n")[0];
+    throw new Error(
+      `Unable to determine target repo. Run from a git checkout or pass --repo owner/name. ${msg}`,
+    );
+  }
+}
 const minSev = flag("severity");
 const extraLabels = flag("label");
 const assignee = flag("assignee");
