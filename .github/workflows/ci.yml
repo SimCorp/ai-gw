@@ -48,7 +48,9 @@ jobs:
             echo "code=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          files="$(git diff --name-only "$BASE" "$HEAD")"
+          # Three-dot (merge-base) diff matches GitHub's PR file-list semantics, so
+          # base-branch commits made after this PR branched don't leak into the diff.
+          files="$(git diff --name-only "$BASE...$HEAD")"
           printf 'Changed files:\n%s\n' "$files"
           # Patterns mirror the push trigger's paths-ignore. Any file that is not
           # doc-ish flips code=true, so a mixed code+docs PR runs full CI.
