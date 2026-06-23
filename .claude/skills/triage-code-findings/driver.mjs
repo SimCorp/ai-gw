@@ -192,7 +192,7 @@ if (!has("create")) {
 // ensure labels exist (idempotent) so `gh issue create --label` can't fail
 const COLORS = { security: "b60205", "code-scanning": "d93f0b", "secret-scanning": "5319e7", dependencies: "0366d6" };
 for (const name of new Set(issues.flatMap((i) => i.labels))) {
-  try { execFileSync("gh", ["label", "create", name, "--repo", repo, "--color", COLORS[name] || "ededed", "--force"], { stdio: "ignore" }); } catch {}
+  try { execFileSync("gh", ["label", "create", name, "--repo", repo, "--color", COLORS[name] || "ededed"], { stdio: "ignore" }); } catch {}
 }
 for (const it of issues) {
   const a = ["issue", "create", "--repo", repo, "--title", it.title, "--body", it.body, "--label", it.labels.join(",")];
