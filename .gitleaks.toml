@@ -8,6 +8,13 @@ useDefault = true
 
 [allowlist]
 description = "Documentation example tokens and frontend mock data — not real secrets"
+commits = [
+  # Commit ef3a549 added a mock/placeholder Stripe key to apps/portal/.../keys/page.tsx.
+  # The value was removed in a later refactor so the current tree is clean, but gitleaks
+  # scans full git history and still sees it. Allowlisting the commit (rather than
+  # embedding the key pattern here) keeps GitHub secret-scanning quiet on this file.
+  "ef3a54984501ff428a18d3b74d43d87118ba3d40",
+]
 paths = [
   # API docs that intentionally contain example JWTs / api_key samples.
   '''docs/api/auth\.md''',
