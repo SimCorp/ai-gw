@@ -1,6 +1,7 @@
 """Provider API key management — store keys in DB, push to LiteLLM at runtime."""
 
 import base64
+import logging
 import os
 
 import httpx
@@ -13,6 +14,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.db import get_session
+
+log = logging.getLogger(__name__)
 
 _LEGACY_SALT = b"ai-gw-provider-keys"
 _CIPHERTEXT_PREFIX = b"gAA"  # Fernet tokens start with this when base64-decoded
@@ -48,11 +51,7 @@ def _decrypt_value(stored: str) -> str:
     try:
         return _make_fernet(_LEGACY_SALT).decrypt(stored.encode()).decode()
     except (InvalidToken, Exception):
-        import logging
-
-        logging.getLogger(__name__).warning(
-            "Failed to decrypt provider key — value may be corrupted"
-        )
+        log.warning("Failed to decrypt provider key — value may be corrupted")
         raise InvalidToken("Could not decrypt stored provider API key")
 
 
@@ -370,7 +369,8 @@ async def test_provider(env_var: str, session: AsyncSession = Depends(get_sessio
     except httpx.TimeoutException:
         return {"ok": False, "error": "Request timed out after 20s"}
     except Exception as exc:
-        return {"ok": False, "error": str(exc)}
+        log.warning("Provider connectivity test failed: %s", exc)
+        return {"ok": False, "error": "connectivity test failed"}
 
 
 async def _fetch_provider_models(provider: dict, key: str, stored: dict[str, str]) -> list[dict]:

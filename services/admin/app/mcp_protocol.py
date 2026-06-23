@@ -112,8 +112,8 @@ class MCPServer:
         try:
             result = await handler(arguments, request)
         except Exception as exc:
-            _log.exception("Tool %s raised an exception", tool_name)
-            return self._error(request_id, -32603, f"Tool execution error: {exc}")
+            _log.exception("Tool %s raised an exception: %s", tool_name, exc)
+            return self._error(request_id, -32603, "Tool execution error")
 
         return self._ok(
             request_id,

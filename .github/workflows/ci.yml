@@ -15,6 +15,9 @@ on:
     # `changes` job below detects doc-only PRs and the heavy jobs skip via `if:` —
     # a conditionally-skipped job reports "Success", so required checks still pass.
 
+permissions:
+  contents: read
+
 # Cancel in-flight runs for the same ref (saves minutes on fast-moving PRs)
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

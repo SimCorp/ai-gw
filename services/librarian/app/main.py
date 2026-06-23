@@ -1109,9 +1109,9 @@ async def mcp_jsonrpc(body: dict, request: Request, session_id: str | None = Non
             return await _relay_or_return(_err(-32601, f"Tool not found: {tool_name}"))
         try:
             result = await handler(arguments)
-        except Exception as exc:
+        except Exception:
             _log.exception("MCP tool %s error", tool_name)
-            return await _relay_or_return(_err(-32603, f"Tool execution error: {exc}"))
+            return await _relay_or_return(_err(-32603, "Tool execution error"))
 
         return await _relay_or_return(
             _ok({"content": [{"type": "text", "text": _json_m.dumps(result)}]})

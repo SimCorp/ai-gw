@@ -109,6 +109,10 @@ def test_stats_parses_node_link_graph(tmp_path, monkeypatch):
     graph_file = tmp_path / "graph.json"
     graph_file.write_text(json.dumps(graph))
     monkeypatch.setattr(query, "graph_json_path", lambda repo: str(graph_file))
+    # Point graphify_out_dir at tmp_path so the realpath containment check passes.
+    from app.config import settings as _s
+
+    monkeypatch.setattr(_s, "graphify_out_dir", str(tmp_path))
 
     result = query.stats("ims", top_n=2)
     assert result["nodes"] == 3

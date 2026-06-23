@@ -36,12 +36,12 @@ async def adoption_summary(
     rows = (
         (
             await session.execute(
-                text(f"""
+                text("""
         WITH active_devs AS (
             SELECT developer_id,
                    COUNT(DISTINCT date) AS active_days
             FROM developer_activity_log
-            WHERE date >= CURRENT_DATE - INTERVAL '{period_days} days'
+            WHERE date >= CURRENT_DATE - (:period_days || ' days')::INTERVAL
             GROUP BY developer_id
         )
         SELECT
@@ -50,7 +50,8 @@ async def adoption_summary(
             COUNT(CASE WHEN active_days BETWEEN 4 AND 14 THEN 1 END) AS occasional,
             COUNT(CASE WHEN active_days >= 15            THEN 1 END) AS regular
         FROM active_devs
-    """)
+    """),
+                {"period_days": str(period_days)},
             )
         )
         .mappings()
@@ -79,12 +80,12 @@ async def adoption_by_team(
     rows = (
         (
             await session.execute(
-                text(f"""
+                text("""
         WITH active_devs AS (
             SELECT developer_id,
                    COUNT(DISTINCT date) AS active_days
             FROM developer_activity_log
-            WHERE date >= CURRENT_DATE - INTERVAL '{period_days} days'
+            WHERE date >= CURRENT_DATE - (:period_days || ' days')::INTERVAL
             GROUP BY developer_id
         ),
         team_licensed AS (
@@ -108,7 +109,8 @@ async def adoption_by_team(
         WHERE t.type = 'team'
         GROUP BY t.id, t.name, tl.licensed_count
         ORDER BY active_users DESC NULLS LAST
-    """)
+    """),
+                {"period_days": str(period_days)},
             )
         )
         .mappings()
@@ -142,15 +144,16 @@ async def adoption_trend(
     rows = (
         (
             await session.execute(
-                text(f"""
+                text("""
         SELECT
             date_trunc('week', date::timestamptz) AS week_start,
             COUNT(DISTINCT developer_id)          AS active_users
         FROM developer_activity_log
-        WHERE date >= CURRENT_DATE - INTERVAL '{period_days} days'
+        WHERE date >= CURRENT_DATE - (:period_days || ' days')::INTERVAL
         GROUP BY week_start
         ORDER BY week_start
-    """)
+    """),
+                {"period_days": str(period_days)},
             )
         )
         .mappings()
@@ -174,12 +177,12 @@ async def productivity_summary(
     rows = (
         (
             await session.execute(
-                text(f"""
+                text("""
         WITH cohorts AS (
             SELECT developer_id,
                    COUNT(DISTINCT date) AS active_days
             FROM developer_activity_log
-            WHERE date >= CURRENT_DATE - INTERVAL '{period_days} days'
+            WHERE date >= CURRENT_DATE - (:period_days || ' days')::INTERVAL
             GROUP BY developer_id
         ),
         session_stats AS (
@@ -191,7 +194,7 @@ async def productivity_summary(
                 AVG(s.tool_invocations)      AS avg_tools,
                 COUNT(s.session_trace_id)    AS sessions
             FROM sessions s
-            WHERE s.first_request_at >= NOW() - INTERVAL '{period_days} days'
+            WHERE s.first_request_at >= NOW() - (:period_days || ' days')::INTERVAL
               AND s.developer_id IS NOT NULL
             GROUP BY s.developer_id
         )
@@ -206,7 +209,8 @@ async def productivity_summary(
         JOIN cohorts c ON c.developer_id = ss.developer_id
         WHERE c.active_days >= 15 OR c.active_days < 4
         GROUP BY cohort
-    """)
+    """),
+                {"period_days": str(period_days)},
             )
         )
         .mappings()
@@ -234,7 +238,7 @@ async def productivity_by_team(
     rows = (
         (
             await session.execute(
-                text(f"""
+                text("""
         SELECT
             t.id                                                   AS team_id,
             t.name                                                 AS team_name,
@@ -244,11 +248,12 @@ async def productivity_by_team(
             COUNT(s.session_trace_id)                              AS session_count
         FROM organization_nodes t
         LEFT JOIN sessions s ON CAST(t.id AS TEXT) = s.team_id
-          AND s.first_request_at >= NOW() - INTERVAL '{period_days} days'
+          AND s.first_request_at >= NOW() - (:period_days || ' days')::INTERVAL
         WHERE t.type = 'team'
         GROUP BY t.id, t.name
         ORDER BY avg_quality_score DESC NULLS LAST
-    """)
+    """),
+                {"period_days": str(period_days)},
             )
         )
         .mappings()
@@ -276,11 +281,11 @@ async def productivity_trend(
     rows = (
         (
             await session.execute(
-                text(f"""
+                text("""
         WITH cohorts AS (
             SELECT developer_id, COUNT(DISTINCT date) AS active_days
             FROM developer_activity_log
-            WHERE date >= CURRENT_DATE - INTERVAL '{period_days} days'
+            WHERE date >= CURRENT_DATE - (:period_days || ' days')::INTERVAL
             GROUP BY developer_id
         )
         SELECT
@@ -291,10 +296,11 @@ async def productivity_trend(
                 THEN s.quality_score END)::numeric, 2) AS low_adoption_quality
         FROM sessions s
         LEFT JOIN cohorts c ON c.developer_id = s.developer_id
-        WHERE s.first_request_at >= NOW() - INTERVAL '{period_days} days'
+        WHERE s.first_request_at >= NOW() - (:period_days || ' days')::INTERVAL
         GROUP BY week_start
         ORDER BY week_start
-    """)
+    """),
+                {"period_days": str(period_days)},
             )
         )
         .mappings()
@@ -322,11 +328,11 @@ async def quality_summary(
     rows = (
         (
             await session.execute(
-                text(f"""
+                text("""
         WITH cohorts AS (
             SELECT developer_id, COUNT(DISTINCT date) AS active_days
             FROM developer_activity_log
-            WHERE date >= CURRENT_DATE - INTERVAL '{period_days} days'
+            WHERE date >= CURRENT_DATE - (:period_days || ' days')::INTERVAL
             GROUP BY developer_id
         ),
         session_stats AS (
@@ -337,7 +343,7 @@ async def quality_summary(
                 AVG(CASE WHEN s.turn_count > 0
                     THEN s.retry_count::float / s.turn_count END) AS retry_rate
             FROM sessions s
-            WHERE s.first_request_at >= NOW() - INTERVAL '{period_days} days'
+            WHERE s.first_request_at >= NOW() - (:period_days || ' days')::INTERVAL
               AND s.developer_id IS NOT NULL
             GROUP BY s.developer_id
         ),
@@ -346,7 +352,7 @@ async def quality_summary(
                 developer_id,
                 SUM(cache_hits)::float / GREATEST(SUM(request_count), 1) AS cache_hit_rate
             FROM developer_activity_log
-            WHERE date >= CURRENT_DATE - INTERVAL '{period_days} days'
+            WHERE date >= CURRENT_DATE - (:period_days || ' days')::INTERVAL
             GROUP BY developer_id
         )
         SELECT
@@ -359,7 +365,8 @@ async def quality_summary(
         LEFT JOIN cache_stats cs ON cs.developer_id = ss.developer_id
         WHERE c.active_days >= 15 OR c.active_days < 4
         GROUP BY cohort
-    """)
+    """),
+                {"period_days": str(period_days)},
             )
         )
         .mappings()
@@ -385,7 +392,7 @@ async def quality_by_team(
     rows = (
         (
             await session.execute(
-                text(f"""
+                text("""
         SELECT
             t.id AS team_id,
             t.name AS team_name,
@@ -399,14 +406,15 @@ async def quality_by_team(
             COUNT(DISTINCT s.session_trace_id) AS session_count
         FROM organization_nodes t
         LEFT JOIN sessions s ON CAST(t.id AS TEXT) = s.team_id
-          AND s.first_request_at >= NOW() - INTERVAL '{period_days} days'
+          AND s.first_request_at >= NOW() - (:period_days || ' days')::INTERVAL
         LEFT JOIN developers d ON d.team_id = t.id
         LEFT JOIN developer_activity_log dal ON dal.developer_id = d.id
-          AND dal.date >= CURRENT_DATE - INTERVAL '{period_days} days'
+          AND dal.date >= CURRENT_DATE - (:period_days || ' days')::INTERVAL
         WHERE t.type = 'team'
         GROUP BY t.id, t.name
         ORDER BY avg_error_rate_pct ASC NULLS LAST
-    """)
+    """),
+                {"period_days": str(period_days)},
             )
         )
         .mappings()
@@ -437,11 +445,11 @@ async def quality_trend(
     rows = (
         (
             await session.execute(
-                text(f"""
+                text("""
         WITH cohorts AS (
             SELECT developer_id, COUNT(DISTINCT date) AS active_days
             FROM developer_activity_log
-            WHERE date >= CURRENT_DATE - INTERVAL '{period_days} days'
+            WHERE date >= CURRENT_DATE - (:period_days || ' days')::INTERVAL
             GROUP BY developer_id
         )
         SELECT
@@ -454,10 +462,11 @@ async def quality_trend(
                 AS low_adoption_error_pct
         FROM sessions s
         LEFT JOIN cohorts c ON c.developer_id = s.developer_id
-        WHERE s.first_request_at >= NOW() - INTERVAL '{period_days} days'
+        WHERE s.first_request_at >= NOW() - (:period_days || ' days')::INTERVAL
         GROUP BY week_start
         ORDER BY week_start
-    """)
+    """),
+                {"period_days": str(period_days)},
             )
         )
         .mappings()
@@ -503,6 +512,7 @@ Rules:
 
 async def _gather_metrics(session: AsyncSession, period_days: int) -> dict:
     """Fetch all adoption/productivity/quality metrics in parallel."""
+    pd = str(period_days)
 
     async def _adoption_summary():
         total_row = await session.execute(text("SELECT COUNT(*) FROM developers"))
@@ -510,11 +520,11 @@ async def _gather_metrics(session: AsyncSession, period_days: int) -> dict:
         row = (
             (
                 await session.execute(
-                    text(f"""
+                    text("""
             WITH a AS (
                 SELECT developer_id, COUNT(DISTINCT date) AS active_days
                 FROM developer_activity_log
-                WHERE date >= CURRENT_DATE - INTERVAL '{period_days} days'
+                WHERE date >= CURRENT_DATE - (:period_days || ' days')::INTERVAL
                 GROUP BY developer_id
             )
             SELECT COUNT(*) AS active_users,
@@ -522,7 +532,8 @@ async def _gather_metrics(session: AsyncSession, period_days: int) -> dict:
                    COUNT(CASE WHEN active_days BETWEEN 4 AND 14 THEN 1 END) AS occasional,
                    COUNT(CASE WHEN active_days >= 15            THEN 1 END) AS regular
             FROM a
-        """)
+        """),
+                    {"period_days": pd},
                 )
             )
             .mappings()
@@ -542,11 +553,11 @@ async def _gather_metrics(session: AsyncSession, period_days: int) -> dict:
         rows = (
             (
                 await session.execute(
-                    text(f"""
+                    text("""
             WITH cohorts AS (
                 SELECT developer_id, COUNT(DISTINCT date) AS active_days
                 FROM developer_activity_log
-                WHERE date >= CURRENT_DATE - INTERVAL '{period_days} days'
+                WHERE date >= CURRENT_DATE - (:period_days || ' days')::INTERVAL
                 GROUP BY developer_id
             ),
             ss AS (
@@ -556,7 +567,7 @@ async def _gather_metrics(session: AsyncSession, period_days: int) -> dict:
                     AVG(s.turn_count) AS turns,
                     COUNT(s.session_trace_id) AS sessions
                 FROM sessions s
-                WHERE s.first_request_at >= NOW() - INTERVAL '{period_days} days'
+                WHERE s.first_request_at >= NOW() - (:period_days || ' days')::INTERVAL
                   AND s.developer_id IS NOT NULL
                 GROUP BY s.developer_id
             )
@@ -568,7 +579,8 @@ async def _gather_metrics(session: AsyncSession, period_days: int) -> dict:
             FROM ss JOIN cohorts c ON c.developer_id = ss.developer_id
             WHERE c.active_days >= 15 OR c.active_days < 4
             GROUP BY cohort
-        """)
+        """),
+                    {"period_days": pd},
                 )
             )
             .mappings()
@@ -588,11 +600,11 @@ async def _gather_metrics(session: AsyncSession, period_days: int) -> dict:
         rows = (
             (
                 await session.execute(
-                    text(f"""
+                    text("""
             WITH cohorts AS (
                 SELECT developer_id, COUNT(DISTINCT date) AS active_days
                 FROM developer_activity_log
-                WHERE date >= CURRENT_DATE - INTERVAL '{period_days} days'
+                WHERE date >= CURRENT_DATE - (:period_days || ' days')::INTERVAL
                 GROUP BY developer_id
             ),
             ss AS (
@@ -600,7 +612,7 @@ async def _gather_metrics(session: AsyncSession, period_days: int) -> dict:
                     AVG(CASE WHEN s.turn_count > 0 THEN s.error_count::float / s.turn_count END) AS er,
                     AVG(CASE WHEN s.turn_count > 0 THEN s.retry_count::float / s.turn_count END) AS rr
                 FROM sessions s
-                WHERE s.first_request_at >= NOW() - INTERVAL '{period_days} days'
+                WHERE s.first_request_at >= NOW() - (:period_days || ' days')::INTERVAL
                   AND s.developer_id IS NOT NULL
                 GROUP BY s.developer_id
             ),
@@ -608,7 +620,7 @@ async def _gather_metrics(session: AsyncSession, period_days: int) -> dict:
                 SELECT developer_id,
                     SUM(cache_hits)::float / GREATEST(SUM(request_count), 1) AS chr
                 FROM developer_activity_log
-                WHERE date >= CURRENT_DATE - INTERVAL '{period_days} days'
+                WHERE date >= CURRENT_DATE - (:period_days || ' days')::INTERVAL
                 GROUP BY developer_id
             )
             SELECT CASE WHEN c.active_days >= 15 THEN 'high' ELSE 'low' END AS cohort,
@@ -619,7 +631,8 @@ async def _gather_metrics(session: AsyncSession, period_days: int) -> dict:
             LEFT JOIN cs ON cs.developer_id = ss.developer_id
             WHERE c.active_days >= 15 OR c.active_days < 4
             GROUP BY cohort
-        """)
+        """),
+                    {"period_days": pd},
                 )
             )
             .mappings()
@@ -638,11 +651,11 @@ async def _gather_metrics(session: AsyncSession, period_days: int) -> dict:
         rows = (
             (
                 await session.execute(
-                    text(f"""
+                    text("""
             WITH active_devs AS (
                 SELECT developer_id, COUNT(DISTINCT date) AS active_days
                 FROM developer_activity_log
-                WHERE date >= CURRENT_DATE - INTERVAL '{period_days} days'
+                WHERE date >= CURRENT_DATE - (:period_days || ' days')::INTERVAL
                 GROUP BY developer_id
             )
             SELECT t.name AS team_name,
@@ -655,13 +668,14 @@ async def _gather_metrics(session: AsyncSession, period_days: int) -> dict:
             LEFT JOIN developers d ON d.team_id = t.id
             LEFT JOIN active_devs ad ON ad.developer_id = d.id
             LEFT JOIN sessions s ON CAST(t.id AS TEXT) = s.team_id
-              AND s.first_request_at >= NOW() - INTERVAL '{period_days} days'
+              AND s.first_request_at >= NOW() - (:period_days || ' days')::INTERVAL
             WHERE t.type = 'team'
             GROUP BY t.id, t.name
             HAVING COUNT(DISTINCT d.id) > 0
             ORDER BY active_users DESC NULLS LAST
             LIMIT 10
-        """)
+        """),
+                    {"period_days": pd},
                 )
             )
             .mappings()

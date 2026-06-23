@@ -917,9 +917,14 @@ async def update_user_profile(
     updates = {k: v for k, v in body.items() if k in allowed}
     if not updates:
         raise HTTPException(status_code=422, detail="No valid fields to update")
-    set_clause = ", ".join(f"{k} = :{k}" for k in updates)
+    # Build static SET clause from hardcoded column names — no user input in template.
+    _clause_map = {
+        "display_name": "display_name = :display_name",
+        "primary_node_id": "primary_node_id = :primary_node_id",
+    }
+    set_clause = ", ".join(_clause_map[k] for k in updates)
     await session.execute(
-        text(f"UPDATE users SET {set_clause}, updated_at=NOW() WHERE id = CAST(:uid AS uuid)"),
+        text("UPDATE users SET " + set_clause + ", updated_at=NOW() WHERE id = CAST(:uid AS uuid)"),
         {**updates, "uid": user_id},
     )
     await session.commit()

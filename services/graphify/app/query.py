@@ -31,7 +31,14 @@ def _require_graph(repo: str) -> str:
     # touching disk. Covers every query/path/explain/stats caller, incl. MCP.
     if not REPO_NAME_RE.match(repo):
         raise ValueError(f"invalid repo name: {repo!r}")
-    path = graph_json_path(repo)
+    raw = graph_json_path(repo)
+    # Realpath containment: verify the resolved path stays within the output volume.
+    from app.config import settings as _settings
+
+    base = os.path.realpath(_settings.graphify_out_dir)
+    path = os.path.realpath(raw)
+    if not path.startswith(base + os.sep):
+        raise ValueError(f"invalid repo path: {repo!r}")
     if not os.path.exists(path):
         raise GraphNotReady(f"no graph built for repo '{repo}'")
     return path
