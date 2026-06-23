@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { LoadingState, ErrorState } from '../_components/PageStates';
 import { OrgNode } from '../_components/nodeTypes';
@@ -248,8 +249,9 @@ type TabId = 'users' | 'invitations' | 'service-accounts';
 
 export default function UsersPage() {
   const qc = useQueryClient();
+  const searchParams = useSearchParams();
   const [tab, setTab] = useState<TabId>('users');
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(searchParams.get('search') ?? '');
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [showInvite, setShowInvite] = useState(false);
 
