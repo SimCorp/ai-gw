@@ -1,8 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import type { ColumnDef } from '@tanstack/react-table';
-import { PageHead, KpiGrid, KpiCard, DataTable, Pill, EmptyState } from '@aigw/ui';
+import { PageHead, KpiGrid, KpiCard, DataTable, Pill, EmptyState, type ColumnDef } from '@aigw/ui';
 import { apiFetch } from '../../../lib/apiClient';
 
 interface Run {

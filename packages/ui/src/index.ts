@@ -10,6 +10,9 @@ export * from "./components/FilterBar";
 export * from "./components/KpiCard";
 export * from "./components/KpiGrid";
 export * from "./components/DataTable";
+// Re-export so consumers can type DataTable columns without depending on
+// @tanstack/react-table directly.
+export type { ColumnDef } from "@tanstack/react-table";
 export * from "./components/Pill";
 export * from "./components/StatusDot";
 export * from "./components/MetricBar";
