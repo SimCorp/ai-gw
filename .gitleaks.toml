@@ -17,8 +17,6 @@ paths = [
 regexes = [
   # React object key flagged by generic-api-key (apps/admin .../activity/page.tsx)
   '''contributions_30d''',
-  # Mock Stripe-style key rendered in the portal keys page (UI placeholder)
-  '''sk_live_8a31fc02e1b4d57f0c9a2e8d4f6b1a7e3d8c5b9f2e''',
   # Azure built-in role ID for Key Vault Secrets User — public MSFT constant, not a secret
   '''4633458b-17de-408a-b874-0445c86b69e6''',
 ]
