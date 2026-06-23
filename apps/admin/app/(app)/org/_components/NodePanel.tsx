@@ -321,7 +321,9 @@ function OverviewTab({ node, onSelectNode, onAddChild, onShowMembers }: {
       )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10 }}>
-        <KpiCard label="Members" value={String(node.member_count ?? 0)} />
+        <div title={node.type === 'team' ? undefined : 'Direct members only. Sub-team members counted in their team.'}>
+          <KpiCard label={node.type === 'team' ? 'Members' : 'Direct members'} value={String(node.member_count ?? 0)} />
+        </div>
         <KpiCard label="Children" value={String(node.children?.length ?? 0)} />
         <KpiCard label="Spend MTD" value={node.spend_mtd ? `$${node.spend_mtd.toLocaleString()}` : '$0'} muted={!node.spend_mtd} />
         {node.location && <KpiCard label="Location" value={node.location} muted />}
