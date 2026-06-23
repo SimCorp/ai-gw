@@ -73,10 +73,14 @@ if (!repo) {
     );
   }
 }
-const minSev = flag("severity");
+const minSevRaw = flag("severity");
+const minSev = minSevRaw ? minSevRaw.toLowerCase() : null;
+if (minSev && !["critical", "high", "medium", "low"].includes(minSev)) {
+  throw new Error(`Invalid --severity '${minSevRaw}'. Expected one of: critical|high|medium|low.`);
+}
 const include = (flag("include", "code,secret,dependabot") || "code,secret,dependabot")
   .split(",")
-  .map((s) => s.trim())
+  .map((s) => s.trim().toLowerCase())
   .filter(Boolean);
 const extraLabels = flag("label");
 const assignee = flag("assignee");
