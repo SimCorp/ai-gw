@@ -10,10 +10,10 @@ on:
       - ".github/dependabot.yml"
   pull_request:
     branches: [main, master]
-    paths-ignore:
-      - "**.md"
-      - "docs/**"
-      - ".github/dependabot.yml"
+    # No paths-ignore here on purpose: a workflow skipped via path filtering leaves
+    # its required status checks stuck "Pending" and blocks the PR. Instead the
+    # `changes` job below detects doc-only PRs and the heavy jobs skip via `if:` —
+    # a conditionally-skipped job reports "Success", so required checks still pass.
 
 # Cancel in-flight runs for the same ref (saves minutes on fast-moving PRs)
 concurrency:
@@ -22,10 +22,56 @@ concurrency:
 
 jobs:
   # ────────────────────────────────────────────────────────────────────────────
+  # Detect whether a PR touches anything other than docs. Heavy jobs gate on this
+  # so doc-only PRs skip CI (and, since they skip via `if:`, their required checks
+  # still report "Success" and the PR stays mergeable — no admin override needed).
+  # On push/tag events there is no PR diff, so this always reports code=true.
+  # ────────────────────────────────────────────────────────────────────────────
+  changes:
+    name: Detect non-doc changes
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.detect.outputs.code }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: detect
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if [ -z "${BASE:-}" ]; then
+            echo "Not a pull_request event — running full CI."
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Three-dot (merge-base) diff matches GitHub's PR file-list semantics, so
+          # base-branch commits made after this PR branched don't leak into the diff.
+          files="$(git diff --name-only "$BASE...$HEAD")"
+          printf 'Changed files:\n%s\n' "$files"
+          # Patterns mirror the push trigger's paths-ignore. Any file that is not
+          # doc-ish flips code=true, so a mixed code+docs PR runs full CI.
+          code=false
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            case "$f" in
+              *.md|docs/*|.github/dependabot.yml) : ;;
+              *) code=true ;;
+            esac
+          done <<< "$files"
+          echo "Non-doc changes present: $code"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+
+  # ────────────────────────────────────────────────────────────────────────────
   # Python lint
   # ────────────────────────────────────────────────────────────────────────────
   lint-python:
     name: Lint (Python)
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -49,6 +95,8 @@ jobs:
   # ────────────────────────────────────────────────────────────────────────────
   lint-frontend:
     name: Lint + build (frontend)
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -90,6 +138,8 @@ jobs:
   # ────────────────────────────────────────────────────────────────────────────
   test-frontend:
     name: Unit tests (frontend)
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -124,6 +174,8 @@ jobs:
   # ────────────────────────────────────────────────────────────────────────────
   unit-tests:
     name: Unit tests — ${{ matrix.service }}
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -155,6 +207,8 @@ jobs:
   # ────────────────────────────────────────────────────────────────────────────
   security:
     name: Security scan
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -194,6 +248,28 @@ jobs:
           curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz \
             | tar -xz -C /usr/local/bin gitleaks
           gitleaks detect --source . --redact --no-banner
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Dependency review — flags PRs that introduce known-vulnerable dependencies.
+  # Advisory: not a required status check, so it never blocks a merge (yet); it
+  # surfaces high-severity vulns with a PR comment. Promote to a required gate by
+  # adding "Dependency review" to the branch ruleset's required_status_checks.
+  # ────────────────────────────────────────────────────────────────────────────
+  dependency-review:
+    name: Dependency review
+    needs: changes
+    if: github.event_name == 'pull_request' && needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: on-failure
 
   # ────────────────────────────────────────────────────────────────────────────
   # Build & push all images to GHCR
