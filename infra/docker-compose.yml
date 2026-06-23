@@ -671,6 +671,19 @@ services:
       - obs-grafana
     restart: unless-stopped
 
+  # Gatus — endpoint health monitor. Probes all gateway service /health endpoints
+  # from inside the Docker network (external perspective vs Docker healthchecks).
+  # UI at https://dev.aigw.scdom.net/status/ — served by Caddy, independent of
+  # the admin portal so it stays up even when the portal container is down.
+  gatus:
+    image: ghcr.io/twin/gatus:stable
+    volumes:
+      - ./gatus:/config:ro
+      - gatus_data:/data
+    networks:
+      - default
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   ollama_data:
@@ -680,6 +693,7 @@ volumes:
   obs_prometheus_data:
   obs_grafana_data:
   graphify_out:
+  gatus_data:
 
 networks:
   default:

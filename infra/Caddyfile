@@ -89,6 +89,12 @@
 		reverse_proxy obs-grafana:3000
 	}
 
+	# Gatus status page — served directly by Caddy so it stays up even if the
+	# admin portal container is down. ZPA-protected like the rest of the gateway.
+	handle /status/* {
+		reverse_proxy gatus:8080
+	}
+
 	# Dev portal at the root — catch-all for everything not matched above
 	# (Next.js app with no basePath: /, /keys, /docs, /_next/*, assets, …).
 	handle {

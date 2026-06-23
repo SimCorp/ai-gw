@@ -99,6 +99,7 @@ prometheus.scrape "gateway" {
 		{"__address__" = "memory:8009", "service" = "memory"},
 		{"__address__" = "league:8010", "service" = "league"},
 		{"__address__" = "scanner:8011", "service" = "scanner"},
+		{"__address__" = "gatus:8080",   "service" = "gatus"},
 	]
 	metrics_path    = "/metrics"
 	scrape_interval = "30s"
