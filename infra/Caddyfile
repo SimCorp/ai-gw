@@ -118,3 +118,21 @@
 		reverse_proxy portal:3002
 	}
 }
+
+# Rybbit analytics — dedicated subdomain (no sub-path support in Rybbit).
+# tls internal uses Caddy's built-in CA; replace with a corp cert when available.
+# DNS prerequisite: CNAME rybbit.aigw.scdom.net → vm-aigw-dev-sdc.
+rybbit.aigw.scdom.net:443 {
+	encode gzip
+	tls internal
+
+	# Backend API (tracker, auth, data endpoints)
+	handle /api/* {
+		reverse_proxy rybbit-backend:3001
+	}
+
+	# Rybbit web app (Next.js client, port 3002 internally)
+	handle {
+		reverse_proxy rybbit-client:3002
+	}
+}
