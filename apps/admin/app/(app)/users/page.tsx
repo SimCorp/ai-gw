@@ -72,12 +72,18 @@ function avatarInitials(u: User) {
 }
 
 const ROLE_META: Record<string, { label: string; color: string }> = {
-  platform_admin: { label: 'Platform Admin', color: 'var(--cat-purple)' },
+  // Current canonical role names
+  gateway_admin:  { label: 'Gateway Admin',  color: 'var(--cat-purple)' },
   area_owner:     { label: 'Area Owner',     color: 'var(--accent)' },
+  unit_lead:      { label: 'Unit Lead',      color: 'var(--cat-teal)' },
   team_admin:     { label: 'Team Admin',     color: 'var(--cat-teal)' },
+  engineer:       { label: 'Engineer',       color: 'var(--good)' },
+  reporter:       { label: 'Reporter',       color: 'var(--fg-2)' },
+  service_account:{ label: 'Service Acct',  color: 'var(--cat-orange)' },
+  // Legacy aliases — kept for backward compat with old Redis sessions
+  platform_admin: { label: 'Platform Admin', color: 'var(--cat-purple)' },
   developer:      { label: 'Developer',      color: 'var(--good)' },
   viewer:         { label: 'Viewer',         color: 'var(--fg-2)' },
-  service_account:{ label: 'Service Acct',  color: 'var(--cat-orange)' },
 };
 
 function RoleBadge({ role }: { role: string }) {
