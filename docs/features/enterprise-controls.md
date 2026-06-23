@@ -2,7 +2,7 @@
 
 The Admin Portal provides enterprise-grade controls for identity management, access governance, budget enforcement, and audit logging. These features are designed for large organizations (~2000 engineers) with hierarchical governance, contractor onboarding, and regulatory compliance requirements.
 
-**Access:** https://aigw-dev.lab.cloud.scdom.net/admin-portal/ (over the corporate VPN, Entra ID SSO)
+**Access:** https://dev.aigw.scdom.net/admin (over the corporate VPN, Entra ID SSO)
 
 ---
 
@@ -12,8 +12,8 @@ The platform distinguishes between three user categories, each with different co
 
 | User Type | Contractor? | Access Expiry | Model Restrictions | Role Examples |
 |-----------|-------------|---------------|--------------------|---|
-| **Regular employee** | No | None | Team-scoped | developer, team_admin, area_owner, platform_admin |
-| **Contractor** | Yes (`is_contractor=true`) | `access_expires_at` (datetime) | Explicit allow list (`allowed_models`) | developer (read-only) |
+| **Regular employee** | No | None | Team-scoped | engineer, team_admin, area_owner, gateway_admin |
+| **Contractor** | Yes (`is_contractor=true`) | `access_expires_at` (datetime) | Explicit allow list (`allowed_models`) | engineer (read-only) |
 | **Service account** | No | None | Custom scopes | integration, bot |
 
 ---
@@ -79,7 +79,7 @@ Two distinct flows: self-service (forgot password) and admin-initiated.
 2. Enters email
 3. System checks if user exists and is active
 4. Generates one-time token (UUID, stored in Redis with 15-minute TTL)
-5. Sends email with reset link: `https://aigw-dev.lab.cloud.scdom.net/portal/reset?token=<uuid>`
+5. Sends email with reset link: `https://dev.aigw.scdom.net/reset?token=<uuid>`
 6. User clicks link, enters new password
 7. Validate password strength (12+ chars, uppercase, lowercase, digit, special char)
 8. Update `users.password_hash`, set `must_change_password=false`
@@ -233,7 +233,7 @@ CREATE TABLE users (
 2. Set `is_contractor=true`
 3. Set `access_expires_at` (e.g., "2026-06-30T23:59:59Z" for 3-month contract)
 4. Set `allowed_models` (e.g., "claude-sonnet-4-6,gpt-4o" for specific model whitelist)
-5. Add to team with "developer" role (read-only, cannot create keys)
+5. Add to team with "engineer" role (read-only, cannot create keys)
 
 ### Before Expiry
 - **30-day warning email** sent to contractor + team admin
@@ -256,12 +256,12 @@ Permissions are tree-structured: roles grant power over organization nodes.
 
 ### Role Hierarchy
 ```
-platform_admin (power=6)
+gateway_admin (power=6)
   ├─ area_owner (power=5)
   │  └─ unit_lead (power=4)
   │     └─ team_admin (power=3)
-  │        └─ developer (power=2)
-  │           └─ viewer (power=1)
+  │        └─ engineer (power=2)
+  │           └─ reporter (power=1)
 ```
 
 ### Role Assignment Structure
@@ -269,7 +269,7 @@ platform_admin (power=6)
 CREATE TABLE role_assignments (
   id UUID PRIMARY KEY,
   user_id UUID,
-  role VARCHAR,  -- 'developer', 'team_admin', 'area_owner', etc.
+  role VARCHAR,  -- 'engineer', 'team_admin', 'area_owner', etc.
   organization_node_id UUID,  -- path: /org, /org/area, /org/area/unit, etc.
   expires_at TIMESTAMP NULL,  -- time-bounded role grant
   created_at TIMESTAMP
@@ -364,9 +364,9 @@ Onboard multiple users at once via CSV upload.
 ### CSV Format
 ```csv
 email,display_name,team_name,role,is_contractor,access_expires_at,allowed_models
-john.doe@company.com,John Doe,Engineering,developer,false,,
+john.doe@company.com,John Doe,Engineering,engineer,false,,
 jane.smith@company.com,Jane Smith,Engineering,team_admin,false,,
-vendor@contractor.io,Vendor Eng,Engineering,developer,true,2026-09-30,claude-sonnet-4-6
+vendor@contractor.io,Vendor Eng,Engineering,engineer,true,2026-09-30,claude-sonnet-4-6
 ```
 
 ### Import Flow
@@ -398,7 +398,7 @@ Subject: "Welcome to AI Gateway"
 Hi John,
 
 You've been added to the Engineering team in the AI Gateway.
-Click here to set your password: https://aigw-dev.lab.cloud.scdom.net/portal/reset?token=xxx
+Click here to set your password: https://dev.aigw.scdom.net/reset?token=xxx
 
 This link expires in 15 minutes.
 
@@ -628,7 +628,7 @@ SMTP_TLS=true
 ### For Admins
 1. **Audit regularly:** Check audit log for suspicious login patterns, bulk role changes
 2. **Contractor onboarding:** Always set `access_expires_at`; don't forget to revoke
-3. **Role delegation:** Avoid granting `platform_admin` to multiple people; use `area_owner` instead
+3. **Role delegation:** Avoid granting `gateway_admin` to multiple people; use `area_owner` instead
 4. **Session revocation:** If account compromised, immediately revoke all sessions
 5. **SCIM token rotation:** Change `SCIM_BEARER_TOKEN` quarterly
 
@@ -695,7 +695,7 @@ SMTP_TLS=true
 ### Model Access Denied
 1. Verify user's `allowed_models` list includes that model
 2. Check if access request is pending (not yet approved)
-3. Verify role has `developer` power or higher
+3. Verify role has `engineer` power or higher
 4. Check budget: if team capped out with `action=block`, all models denied
 
 ### Contractor Still Has Access After Expiry

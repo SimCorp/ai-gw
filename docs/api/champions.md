@@ -655,5 +655,5 @@ All endpoints follow REST conventions:
 
 All endpoints are relative to the gateway base URL:
 ```
-https://aigw-dev.lab.cloud.scdom.net/admin
+https://dev.aigw.scdom.net/api/admin
 ```

@@ -7,7 +7,7 @@ flowchart TB
   end
 
   subgraph VNET["Azure spoke VNet · 10.179.231.0/25 · Sweden Central"]
-    subgraph VM["vm-aigw-dev-sdc · 10.179.231.68 (static)\nDocker Compose single-host (dev / stabilisation phase)"]
+    subgraph VM["vm-aigw-dev-sdc · 10.179.231.68 (static)\nDocker Compose single-host"]
       gw["Caddy :443\nTLS front-door · path router"]
       subgraph SVC["Containers — Compose network (no external ports)"]
         auth["auth :8001\nkey/JWT validation, rate limit"]

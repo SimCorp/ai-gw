@@ -75,12 +75,32 @@ CREATE INDEX idx_role_assignments_node ON role_assignments(node_id);
 - `id`: UUID primary key
 - `entra_group_id`: Azure AD / Entra ID group GUID (e.g., `12345678-1234-1234-1234-123456789012`)
 - `entra_group_name`: Display name for the group (e.g., `platform-admins@simcorp.com`)
-- `role`: Authorization level; valid values: `platform_admin`, `area_owner`, `unit_lead`, `team_admin`, `developer`, `viewer`
+- `role`: Authorization level; valid values: `gateway_admin`, `area_owner`, `unit_lead`, `team_admin`, `engineer`, `reporter`
 - `node_id`: Target organization node
 - `granted_at`: When the assignment was created
 - `granted_by`: User who made the assignment (for audit)
 
 **Unique Constraint:** Prevents duplicate (entra_group_id, role, node_id) tuples
+
+#### Direct user assignments & local groups (2026-06-22)
+
+A role can now be granted to a **single user** as well as to a group. An assignment
+carries exactly one subject: either `entra_group_id` (a group grant) or `user_id`
+(a direct grant) — supplying both, or neither, is a 422 from
+`POST /nodes/{id}/permissions`. The node detail response surfaces direct admins as
+`direct_admins` (falling back to `parent_direct_admins` when a node has none), and
+`GET /nodes/{id}/permissions?include_inherited=true` returns ancestor assignments
+alongside the node's own (each tagged `inherited` with a `source_node_name`).
+
+**Local groups** (`local_groups` + `local_group_members`, managed via
+`/admin/local-groups`) let admins bundle local-account users under an `lcl-<uuid>`
+id and assign that id roles exactly like an Entra group — so non-OIDC users can be
+granted access through the same `role_assignments` table.
+
+**Role taxonomy rename (migration 0034):** `platform_admin → gateway_admin`,
+`developer → engineer`, `viewer → reporter` (powers unchanged; `area_owner`,
+`unit_lead`, `team_admin` keep their names). The auth layer keeps the old names as
+aliases so sessions issued before the rename remain valid until their TTL rolls over.
 
 **Access Flow:**
 1. User authenticates via OIDC (Azure Entra ID)
@@ -130,12 +150,12 @@ Roles are ranked by power level:
 
 ```python
 _ROLE_POWER = {
-    "platform_admin": 6,    # System-wide access
+    "gateway_admin": 6,     # System-wide access
     "area_owner": 5,        # Manage an area and all descendants
     "unit_lead": 4,         # Lead a unit
     "team_admin": 3,        # Administer a team
-    "developer": 2,         # Developer access
-    "viewer": 1,            # Read-only
+    "engineer": 2,          # Engineer access
+    "reporter": 1,          # Read-only
 }
 ```
 
@@ -183,10 +203,10 @@ User Alice has roles:
 ```
 
 Permission checks:
-- `can_access(alice, "/root-id/area-id", "viewer")` → True (area_owner >= viewer)
+- `can_access(alice, "/root-id/area-id", "reporter")` → True (area_owner >= reporter)
 - `can_access(alice, "/root-id/area-id/unit-id", "team_admin")` → True (area_owner >= team_admin, path matches)
-- `can_access(alice, "/root-id/other-area", "viewer")` → False (path doesn't start with `/root-id/area-id`)
-- `can_access(alice, "/root-id/area-id", "platform_admin")` → False (area_owner < platform_admin)
+- `can_access(alice, "/root-id/other-area", "reporter")` → False (path doesn't start with `/root-id/area-id`)
+- `can_access(alice, "/root-id/area-id", "gateway_admin")` → False (area_owner < gateway_admin)
 
 ---
 
@@ -194,7 +214,7 @@ Permission checks:
 
 ### Creating a Node
 
-User must have `team_admin` at the parent path, or `platform_admin` at `/` for root-level.
+User must have `team_admin` at the parent path, or `gateway_admin` at `/` for root-level.
 
 ```python
 if body.parent_id:
@@ -202,9 +222,9 @@ if body.parent_id:
     if not can_access(user, parent.path, "team_admin"):
         raise Forbidden("Cannot create child node here")
 else:
-    # Creating a root-level node requires platform_admin
-    if not can_access(user, "/", "platform_admin"):
-        raise Forbidden("Only platform admins can create root nodes")
+    # Creating a root-level node requires gateway_admin
+    if not can_access(user, "/", "gateway_admin"):
+        raise Forbidden("Only gateway admins can create root nodes")
 ```
 
 ### Updating Budget

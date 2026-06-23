@@ -197,11 +197,14 @@ services:
     env_file: ../.env
     environment:
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-change-me-internal-key}
+      DATABASE_URL: "postgresql://aigateway:aigateway@postgres:5432/aigateway"
     depends_on:
       redis:
         condition: service_healthy
       litellm:
         condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8002/ready')\" 2>/dev/null || exit 1"]
       interval: 10s
@@ -238,6 +241,9 @@ services:
     environment:
       ENVIRONMENT: development
       MCP_ALLOW_LOCAL_URLS: "true"
+      # Knowledge Graphs admin page proxies graphify; token must match graphify's.
+      GRAPHIFY_URL: "http://graphify:8012"
+      GRAPHIFY_SERVICE_TOKEN: ${GRAPHIFY_SERVICE_TOKEN:-${INTERNAL_API_KEY:-change-me-internal-key}}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -312,6 +318,68 @@ services:
       retries: 10
     restart: unless-stopped
 
+  # Graphify — knowledge-graph build + query for navigating repos. The API and
+  # the build worker are two containers from one image: the worker runs the heavy
+  # `graphify extract` so a large/Whisper build can't OOM the query API.
+  graphify:
+    build:
+      context: ../services/graphify
+    ports:
+      - "127.0.0.1:8012:8012"
+    env_file: ../.env
+    environment:
+      DATABASE_URL: "postgresql+asyncpg://aigateway:aigateway@postgres:5432/aigateway"
+      AUTH_URL: "http://auth:8001"
+      # Build-time extraction LLM calls route through the governed gateway entry
+      # point. The key must be a real sk-* registered in auth, tied to a team.
+      GRAPHIFY_OPENAI_BASE_URL: ${GRAPHIFY_OPENAI_BASE_URL:-http://cache:8002/v1}
+      GRAPHIFY_OPENAI_MODEL: ${GRAPHIFY_OPENAI_MODEL:-gpt-4o-mini}
+      GRAPHIFY_GATEWAY_KEY: ${GRAPHIFY_GATEWAY_KEY:-}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      GITHUB_ORG: ${GITHUB_ORG:-SimCorp}
+      GRAPHIFY_OUT_DIR: /graphify-out
+      # Shared secret so the admin backend can proxy the portal's Knowledge
+      # Graphs page without a user sk-*. Defaults to the stack internal key.
+      GRAPHIFY_SERVICE_TOKEN: ${GRAPHIFY_SERVICE_TOKEN:-${INTERNAL_API_KEY:-change-me-internal-key}}
+      CORS_ORIGINS: "*"
+    volumes:
+      - graphify_out:/graphify-out
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8012/health')\" 2>/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  graphify-worker:
+    build:
+      context: ../services/graphify
+    command: ["python", "-m", "app.worker"]
+    env_file: ../.env
+    environment:
+      DATABASE_URL: "postgresql+asyncpg://aigateway:aigateway@postgres:5432/aigateway"
+      AUTH_URL: "http://auth:8001"
+      GRAPHIFY_OPENAI_BASE_URL: ${GRAPHIFY_OPENAI_BASE_URL:-http://cache:8002/v1}
+      GRAPHIFY_OPENAI_MODEL: ${GRAPHIFY_OPENAI_MODEL:-gpt-4o-mini}
+      GRAPHIFY_GATEWAY_KEY: ${GRAPHIFY_GATEWAY_KEY:-}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      GITHUB_ORG: ${GITHUB_ORG:-SimCorp}
+      GRAPHIFY_OUT_DIR: /graphify-out
+      WORKER_ID: "graphify-worker-1"
+    volumes:
+      - graphify_out:/graphify-out
+    # A real video build (large-v3 Whisper + big tree-sitter parse) can exceed
+    # this; the limit is isolation (OOM-kill the worker, not the API), tunable.
+    mem_limit: 4g
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
   admin-portal:
     build:
       context: ..
@@ -320,12 +388,13 @@ services:
       - "127.0.0.1:3001:3001"
     environment:
       NEXT_TELEMETRY_DISABLED: "1"
-      NEXT_PUBLIC_ADMIN_API: "https://dev.aigw.scdom.net/admin"
+      NEXT_PUBLIC_ADMIN_API: "https://dev.aigw.scdom.net/api/admin"
+      NEXT_PUBLIC_LEAGUE_API: "https://dev.aigw.scdom.net/api/league"
     depends_on:
       admin:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3001/admin-portal/ || exit 1"]
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3001/admin/login || exit 1"]
       interval: 15s
       timeout: 10s
       retries: 10
@@ -340,18 +409,19 @@ services:
       - "127.0.0.1:3002:3002"
     environment:
       NEXT_TELEMETRY_DISABLED: "1"
-      NEXT_PUBLIC_ADMIN_BASE_URL: "https://dev.aigw.scdom.net/admin"
-      NEXT_PUBLIC_CACHE_BASE_URL: "https://dev.aigw.scdom.net/cache"
-      NEXT_PUBLIC_IDENTITY_BASE_URL: "https://dev.aigw.scdom.net/identity"
-      NEXT_PUBLIC_LIBRARIAN_BASE_URL: "https://dev.aigw.scdom.net/librarian"
-      NEXT_PUBLIC_MEMORY_BASE_URL: "https://dev.aigw.scdom.net/memory"
-      NEXT_PUBLIC_LITELLM_BASE_URL: "https://dev.aigw.scdom.net/litellm"
+      NEXT_PUBLIC_ADMIN_BASE_URL: "https://dev.aigw.scdom.net/api/admin"
+      NEXT_PUBLIC_CACHE_BASE_URL: "https://dev.aigw.scdom.net/api/cache"
+      NEXT_PUBLIC_IDENTITY_BASE_URL: "https://dev.aigw.scdom.net/api/identity"
+      NEXT_PUBLIC_LIBRARIAN_BASE_URL: "https://dev.aigw.scdom.net/api/librarian"
+      NEXT_PUBLIC_MEMORY_BASE_URL: "https://dev.aigw.scdom.net/api/memory"
+      NEXT_PUBLIC_LITELLM_BASE_URL: "https://dev.aigw.scdom.net/api/litellm"
+      NEXT_PUBLIC_LEAGUE_API: "https://dev.aigw.scdom.net/api/league"
       NEXT_PUBLIC_LITELLM_KEY: "sk-litellm-local-dev"
     depends_on:
       admin:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3002/portal/ || exit 1"]
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3002/ || exit 1"]
       interval: 15s
       timeout: 10s
       retries: 10
@@ -510,10 +580,106 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # ── Observability (single-host: logs + metrics for humans + the DevOps agent) ──
+  # Open-standard stack: Alloy (OTel-native collector) ingests container logs +
+  # host/cAdvisor metrics + (Phase 2) services' OTLP, and exports to standalone
+  # Loki + Prometheus; Grafana is the UI. Each backend binds 0.0.0.0 so Alloy
+  # pushes work AND the DevOps agent can query LogQL/PromQL directly. Migrating to
+  # a company observability portal later = repoint Alloy's exporter (OTLP). Upstream
+  # public images — base compose only (NOT in host.yml, NOT in the CI build matrix).
+  # No inter-obs service_healthy gating (healthchecks are advisory) — a missing
+  # probe tool must never abort a deploy.
+  obs-loki:
+    image: grafana/loki:3.3.2
+    command: ["-config.file=/etc/loki/local-config.yaml"]
+    ports:
+      - "127.0.0.1:3100:3100"   # Loki push + LogQL query
+    volumes:
+      - obs_loki_data:/loki   # named volume: Docker inits with the image's uid (10001), avoids root-owned bind-mount crash
+    restart: unless-stopped
+
+  obs-prometheus:
+    image: prom/prometheus:v3.1.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${OBS_PROM_RETENTION:-14d}
+      - --web.enable-remote-write-receiver
+      - --web.enable-otlp-receiver
+    ports:
+      - "127.0.0.1:9090:9090"   # Prometheus PromQL query + remote-write/OTLP receiver
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - obs_prometheus_data:/prometheus   # named volume (image uid 65534)
+    restart: unless-stopped
+
+  obs-grafana:
+    image: grafana/grafana:11.4.0
+    ports:
+      - "127.0.0.1:3000:3000"   # Grafana UI
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_SERVER_ROOT_URL: "https://dev.aigw.scdom.net/grafana/"
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - obs_grafana_data:/var/lib/grafana   # named volume (image uid 472)
+    depends_on:
+      - obs-prometheus
+      - obs-loki
+    restart: unless-stopped
+
+  obs-alloy:
+    image: grafana/alloy:latest
+    privileged: true   # cAdvisor needs containerd socket + cgroup access on this VM
+    env_file: ../.env  # for LITELLM_MASTER_KEY (litellm /metrics scrape auth)
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    ports:
+      - "127.0.0.1:12345:12345"   # Alloy UI / debug
+    volumes:
+      - ./observability/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /run/containerd/containerd.sock:/run/containerd/containerd.sock:ro
+      - /:/rootfs:ro
+      - /sys:/sys:ro
+      - /proc:/proc:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - obs_alloy_data:/var/lib/alloy/data
+    depends_on:
+      - obs-loki
+      - obs-prometheus
+    restart: unless-stopped
+
+  # Grafana MCP server — lets MCP-aware agents (Claude Code, the devops agent)
+  # query logs/metrics/dashboards as tools. Needs a Grafana service-account token
+  # (GRAFANA_SA_TOKEN, from pass aigw/grafana-sa-token) — starts without it but
+  # authed calls fail until set. SSE on :8013 (bound to localhost).
+  obs-grafana-mcp:
+    image: mcp/grafana:latest
+    command: ["-t", "sse", "--address", ":8000"]
+    ports:
+      - "127.0.0.1:8013:8000"
+    environment:
+      GRAFANA_URL: "http://obs-grafana:3000"
+      GRAFANA_SERVICE_ACCOUNT_TOKEN: ${GRAFANA_SA_TOKEN:-}
+    depends_on:
+      - obs-grafana
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   ollama_data:
   redis_master_data:
+  obs_alloy_data:
+  obs_loki_data:
+  obs_prometheus_data:
+  obs_grafana_data:
+  graphify_out:
 
 networks:
   default:

@@ -1,15 +1,14 @@
 import asyncio
 import json
 import random
-import uuid
+from datetime import datetime, timedelta, timezone
 
-import numpy as np
+import asyncpg
 from openai import AsyncOpenAI
 from redis.asyncio import Redis
 
 from app.config import settings as _settings
 
-_PREFIX = "sem:"
 _CIRCUIT_KEY = "embedding:circuit_open"
 _CIRCUIT_COOLDOWN = 120  # seconds before auto-reset
 
@@ -45,10 +44,13 @@ async def reset_circuit(redis: Redis | None = None) -> None:
         await redis.delete(_CIRCUIT_KEY)
 
 
-def _cosine(a: list[float], b: list[float]) -> float:
-    va, vb = np.array(a), np.array(b)
-    denom = np.linalg.norm(va) * np.linalg.norm(vb)
-    return float(np.dot(va, vb) / denom) if denom else 0.0
+def _emb_to_str(embedding: list[float]) -> str:
+    """Encode a float list as a pgvector literal '[x,y,...]'.
+
+    Avoids requiring the pgvector Python package — asyncpg accepts the string
+    literal and casts it with $n::vector.
+    """
+    return "[" + ",".join(map(str, embedding)) + "]"
 
 
 async def embed(text: str, model: str | None = None) -> list[float]:
@@ -62,37 +64,56 @@ async def embed(text: str, model: str | None = None) -> list[float]:
 async def get(
     embedding: list[float],
     threshold: float,
+    pool: asyncpg.Pool,
     redis: Redis,
     team_id: str = "",
     project_id: str = "",
-) -> dict | None:
+) -> tuple[dict | None, float]:
+    """Return (cached_response, best_similarity_score).
+
+    Uses a single HNSW-indexed query to find the nearest neighbor, then checks
+    the score in Python.  This replaces the previous O(N) Redis key scan.
+
+    similarity_score is 0.0 when the circuit is open or no live entries exist
+    for the team/project.  When response is None and score > 0, it is a
+    near-miss (below threshold) — the caller can log it for baseline metrics.
+    """
     if await is_circuit_open(redis):
-        return None
+        return None, 0.0
 
-    pattern = f"{_PREFIX}{team_id}:{project_id}:*:emb"
-    keys = await redis.keys(pattern)
-    best_score, best_key = 0.0, None
-    for key in keys:
-        raw = await redis.get(key)
-        if raw is None:
-            continue
-        stored = json.loads(raw)
-        score = _cosine(embedding, stored)
-        if score > best_score:
-            best_score, best_key = score, key
+    row = await pool.fetchrow(
+        """
+        SELECT response, 1 - (embedding <=> $1::vector) AS similarity
+        FROM cache_entries
+        WHERE team_id = $2
+          AND project_id = $3
+          AND expires_at > NOW()
+        ORDER BY embedding <=> $1::vector
+        LIMIT 1
+        """,
+        _emb_to_str(embedding),
+        team_id,
+        project_id,
+    )
+    if row is None:
+        return None, 0.0
 
-    if best_score < threshold or best_key is None:
-        return None
-
-    resp_key = best_key.replace(":emb", ":resp")
-    raw_resp = await redis.get(resp_key)
-    return json.loads(raw_resp) if raw_resp else None
+    score = float(row["similarity"])
+    response_raw = row["response"]
+    # asyncpg may return JSONB as str or dict depending on codec configuration;
+    # normalise to dict unconditionally.
+    if isinstance(response_raw, str):
+        response_raw = json.loads(response_raw)
+    if score >= threshold:
+        return response_raw, score
+    return None, score  # near-miss: caller logs score for P2 instrumentation
 
 
 async def set(
     embedding: list[float],
     response: dict,
     ttl: int,
+    pool: asyncpg.Pool,
     redis: Redis,
     team_id: str = "",
     project_id: str = "",
@@ -101,8 +122,18 @@ async def set(
         return
 
     # ±10% jitter prevents thundering-herd expiry
-    jittered_ttl = max(1, ttl + random.randint(-ttl // 10, ttl // 10))
-    entry_id = str(uuid.uuid4())
-    prefix = f"{_PREFIX}{team_id}:{project_id}:{entry_id}"
-    await redis.setex(f"{prefix}:emb", jittered_ttl, json.dumps(embedding))
-    await redis.setex(f"{prefix}:resp", jittered_ttl, json.dumps(response))
+    jitter = random.randint(-ttl // 10, ttl // 10)
+    jittered_ttl = max(1, ttl + jitter)
+    expires_at = datetime.now(timezone.utc) + timedelta(seconds=jittered_ttl)
+
+    await pool.execute(
+        """
+        INSERT INTO cache_entries (team_id, project_id, embedding, response, expires_at)
+        VALUES ($1, $2, $3::vector, $4::jsonb, $5)
+        """,
+        team_id,
+        project_id,
+        _emb_to_str(embedding),
+        json.dumps(response),
+        expires_at,
+    )

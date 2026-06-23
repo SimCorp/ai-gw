@@ -51,7 +51,7 @@ List organization nodes with optional filtering.
 ]
 ```
 
-**Required Permission:** `viewer` (any role) on the node or ancestor
+**Required Permission:** `reporter` (any role) on the node or ancestor
 
 ---
 
@@ -104,7 +104,7 @@ Retrieve the full organization tree as nested JSON, ordered by materialized path
 ]
 ```
 
-**Required Permission:** `viewer` (any role)
+**Required Permission:** `reporter` (any role)
 
 ---
 
@@ -114,7 +114,7 @@ Retrieve the full organization tree as nested JSON, ordered by materialized path
 POST /nodes
 ```
 
-Create a new organization node. Root-level nodes require `platform_admin`; child nodes require `team_admin` on the parent.
+Create a new organization node. Root-level nodes require `gateway_admin`; child nodes require `team_admin` on the parent.
 
 **Request Body:**
 ```json
@@ -141,7 +141,7 @@ Create a new organization node. Root-level nodes require `platform_admin`; child
 **Status Code:** 201 Created
 
 **Required Permission:**
-- `platform_admin` at `/` for root-level nodes
+- `gateway_admin` at `/` for root-level nodes
 - `team_admin` on the parent node for child nodes
 
 ---
@@ -195,7 +195,7 @@ Retrieve a single node with parent, children, member count, and month-to-date sp
 }
 ```
 
-**Required Permission:** `viewer` on the node
+**Required Permission:** `reporter` on the node
 
 ---
 
@@ -291,7 +291,7 @@ Retrieve the breadcrumb path (all ancestors) for a node, ordered root-first.
 ]
 ```
 
-**Required Permission:** `viewer` on the node
+**Required Permission:** `reporter` on the node
 
 ---
 
@@ -308,7 +308,7 @@ List direct children of a node.
 
 **Response:** Array of child nodes (same schema as List Nodes)
 
-**Required Permission:** `viewer` on the node
+**Required Permission:** `reporter` on the node
 
 ---
 
@@ -344,7 +344,7 @@ List all team members directly assigned to this node.
 ]
 ```
 
-**Required Permission:** `viewer` on the node
+**Required Permission:** `reporter` on the node
 
 ---
 
@@ -436,7 +436,7 @@ Retrieve the node's policy settings, including inherited values from ancestors.
 }
 ```
 
-**Required Permission:** `viewer` on the node
+**Required Permission:** `reporter` on the node
 
 ---
 
@@ -520,7 +520,7 @@ Retrieve budget allocation and spend tracking for the node and its subtree.
 - `parent_budget`: Parent node's budget (for comparison)
 - `alert_threshold`: Threshold at which to alert (default 0.80 = 80%)
 
-**Required Permission:** `viewer` on the node
+**Required Permission:** `reporter` on the node
 
 ---
 
@@ -603,12 +603,12 @@ List all Entra groups and their role assignments on this node.
 POST /nodes/{node_id}/permissions
 ```
 
-Grant a role to an Entra group on this node.
+Grant a role on this node to **either** an Entra/local group **or** a single user.
 
 **Path Parameters:**
 - `node_id` (string, required): Node UUID
 
-**Request Body:**
+**Request Body (group grant):**
 ```json
 {
   "entra_group_id": "12345678-1234-1234-1234-123456789012",
@@ -617,10 +617,22 @@ Grant a role to an Entra group on this node.
 }
 ```
 
+**Request Body (direct user grant):**
+```json
+{
+  "user_id": "00000000-0000-0000-0000-000000000001",
+  "role": "engineer"
+}
+```
+
 **Request Fields:**
-- `entra_group_id` (string, required): Entra group GUID
+- `entra_group_id` (string): Entra/local group id (a local group's id is `lcl-<uuid>`)
 - `entra_group_name` (string, optional): Human-readable group name
-- `role` (string, required): One of: `platform_admin`, `area_owner`, `unit_lead`, `team_admin`, `developer`, `viewer`
+- `user_id` (string): User UUID, for a direct (non-group) grant
+- `role` (string, required): One of: `gateway_admin`, `area_owner`, `unit_lead`, `team_admin`, `engineer`, `reporter`
+
+Exactly **one** of `entra_group_id` or `user_id` must be supplied — providing both, or
+neither, returns **422**.
 
 **Response:**
 ```json

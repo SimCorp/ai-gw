@@ -44,6 +44,13 @@ You can:
 - Review team budgets and identify overspend or waste
 - Inspect recent admin actions in the audit log
 - Identify at-risk developers and struggling sessions
+- Search live container logs (query_logs — Loki) to find WHY a service failed
+- Query time-series metrics (query_metrics — PromQL) for resource trends
+- Summarise per-container health (get_container_state) — memory, CPU, restarts
+
+When a service is unhealthy or erroring, use query_logs to read its actual error
+output and get_container_state / query_metrics to check for OOM, CPU saturation, or
+restarts — don't stop at "it's down", find the root cause.
 
 When asked to "inspect", "troubleshoot", or "optimise" the gateway:
 1. Call the relevant tools first to gather live data
@@ -179,6 +186,90 @@ _TOOLS = [
                         "description": "Time window",
                     },
                     "limit": {"type": "integer", "description": "Number of teams to return"},
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_logs",
+            "description": (
+                "Search container logs (Loki) — the live stdout/stderr of every gateway "
+                "service. Use this to find WHY something failed: errors, stack traces, "
+                "startup problems. Logs are structured JSON with a request_id."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "service": {
+                        "type": "string",
+                        "description": (
+                            "Compose service name to filter (e.g. cache, auth, litellm, "
+                            "admin, observability). Omit to search all services."
+                        ),
+                    },
+                    "grep": {
+                        "type": "string",
+                        "description": "Optional substring to filter log lines (e.g. 'error', a request_id).",
+                    },
+                    "since": {
+                        "type": "string",
+                        "enum": ["15m", "1h", "6h", "24h"],
+                        "description": "Look-back window (default 1h).",
+                    },
+                    "limit": {"type": "integer", "description": "Max lines (default 50, max 200)."},
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_metrics",
+            "description": (
+                "Run a PromQL query against Prometheus for time-series metrics: per-container "
+                "CPU/memory (cAdvisor), host metrics, and service request metrics. Use for "
+                "resource trends, leaks, and saturation."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "promql": {
+                        "type": "string",
+                        "description": (
+                            "PromQL expression, e.g. "
+                            'container_memory_usage_bytes{name="ai-gateway-cache-1"} or '
+                            "rate(container_cpu_usage_seconds_total[5m])."
+                        ),
+                    },
+                    "range": {
+                        "type": "string",
+                        "enum": ["instant", "15m", "1h", "6h", "24h"],
+                        "description": "Instant query, or a range (default instant).",
+                    },
+                },
+                "required": ["promql"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_container_state",
+            "description": (
+                "Summarise per-container health from metrics: restart counts, memory, and CPU "
+                "for each gateway container. Use to spot a crashing/OOMing/CPU-bound service."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "service": {
+                        "type": "string",
+                        "description": "Optional container/service name substring to filter.",
+                    },
                 },
                 "required": [],
             },
@@ -467,6 +558,114 @@ async def _tool_get_top_teams_by_spend(
         return [{"error": str(exc)}]
 
 
+# --- Observability tools (Loki logs + Prometheus metrics) ---
+
+_SINCE_SECONDS = {"15m": 900, "1h": 3600, "6h": 21600, "24h": 86400}
+
+
+async def _tool_query_logs(
+    service: str | None = None,
+    grep: str | None = None,
+    since: str = "1h",
+    limit: int = 50,
+) -> dict:
+    """Search container logs via Loki LogQL."""
+    limit = max(1, min(limit, 200))
+    secs = _SINCE_SECONDS.get(since, 3600)
+    selector = f'{{compose_service="{service}"}}' if service else '{compose_project="ai-gateway"}'
+    if grep:
+        safe = grep.replace("\\", "\\\\").replace('"', '\\"')
+        selector += f' |= "{safe}"'
+    end = time.time()
+    try:
+        async with httpx.AsyncClient(timeout=_TOOL_TIMEOUT) as client:
+            r = await client.get(
+                f"{settings.loki_url}/loki/api/v1/query_range",
+                params={
+                    "query": selector,
+                    "start": str(int((end - secs) * 1e9)),
+                    "end": str(int(end * 1e9)),
+                    "limit": str(limit),
+                    "direction": "backward",
+                },
+            )
+            r.raise_for_status()
+            streams = r.json().get("data", {}).get("result", [])
+        lines = []
+        for stream in streams:
+            svc = stream.get("stream", {}).get("compose_service", "?")
+            for _ts, line in stream.get("values", []):
+                lines.append({"service": svc, "line": line[:500]})
+        return {"count": len(lines[:limit]), "lines": lines[:limit]}
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+async def _tool_query_metrics(promql: str, time_range: str = "instant") -> dict:
+    """Run a PromQL query against Prometheus (instant or range)."""
+    try:
+        async with httpx.AsyncClient(timeout=_TOOL_TIMEOUT) as client:
+            if time_range == "instant":
+                r = await client.get(
+                    f"{settings.prometheus_url}/api/v1/query", params={"query": promql}
+                )
+            else:
+                secs = _SINCE_SECONDS.get(time_range, 3600)
+                end = time.time()
+                r = await client.get(
+                    f"{settings.prometheus_url}/api/v1/query_range",
+                    params={
+                        "query": promql,
+                        "start": str(end - secs),
+                        "end": str(end),
+                        "step": str(max(15, secs // 60)),
+                    },
+                )
+            r.raise_for_status()
+            res = r.json().get("data", {}).get("result", [])
+        out = []
+        for s in res[:20]:
+            if "value" in s:
+                out.append({"labels": s.get("metric", {}), "value": s["value"][1]})
+            else:
+                vals = s.get("values", [])
+                out.append(
+                    {
+                        "labels": s.get("metric", {}),
+                        "points": len(vals),
+                        "last": vals[-1][1] if vals else None,
+                    }
+                )
+        return {"series": len(res), "result": out}
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+async def _tool_get_container_state(service: str | None = None) -> list:
+    """Per-container memory / CPU / restart summary from cAdvisor metrics."""
+    sel = f'{{name=~"ai-gateway-.*{service}.*"}}' if service else '{name=~"ai-gateway-.*"}'
+    queries = {
+        "memory_mb": f"container_memory_usage_bytes{sel} / 1024 / 1024",
+        "cpu_pct": f"rate(container_cpu_usage_seconds_total{sel}[5m]) * 100",
+        "restarts_1h": f"changes(container_last_seen{sel}[1h])",
+    }
+    out: dict[str, dict] = {}
+    try:
+        async with httpx.AsyncClient(timeout=_TOOL_TIMEOUT) as client:
+            for metric, q in queries.items():
+                r = await client.get(f"{settings.prometheus_url}/api/v1/query", params={"query": q})
+                if r.status_code != 200:
+                    continue
+                for s in r.json().get("data", {}).get("result", []):
+                    name = s.get("metric", {}).get("name", "?")
+                    out.setdefault(name, {"container": name})[metric] = round(
+                        float(s["value"][1]), 2
+                    )
+        return list(out.values())
+    except Exception as exc:
+        return [{"error": str(exc)}]
+
+
 # ---------------------------------------------------------------------------
 # Tool dispatch
 # ---------------------------------------------------------------------------
@@ -509,6 +708,25 @@ async def _dispatch_tool(
                     session, args.get("period", "mtd"), args.get("limit", 10)
                 ),
                 _TOOL_TIMEOUT,
+            )
+        elif name == "query_logs":
+            result = await asyncio.wait_for(
+                _tool_query_logs(
+                    args.get("service"),
+                    args.get("grep"),
+                    args.get("since", "1h"),
+                    args.get("limit", 50),
+                ),
+                _TOOL_TIMEOUT,
+            )
+        elif name == "query_metrics":
+            result = await asyncio.wait_for(
+                _tool_query_metrics(args.get("promql", ""), args.get("range", "instant")),
+                _TOOL_TIMEOUT,
+            )
+        elif name == "get_container_state":
+            result = await asyncio.wait_for(
+                _tool_get_container_state(args.get("service")), _TOOL_TIMEOUT
             )
         else:
             result = {"error": f"Unknown tool: {name}"}

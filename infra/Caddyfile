@@ -12,59 +12,86 @@
 	encode gzip
 	tls /etc/caddy/cert.pem /etc/caddy/key.pem
 
-	# Agent inference (OpenAI-compatible): cache validates the sk- key, then auth -> litellm.
+	# Keep service /metrics internal: only /api/<svc>/* (handle_path strips the prefix)
+	# could reach a service-root /metrics. This matcher is more specific than
+	# /api/<svc>/* so Caddy evaluates it first (verified via `caddy adapt`). Alloy
+	# scrapes /metrics over the internal aigateway network, never through Caddy.
+	@apimetrics path /api/*/metrics
+	handle @apimetrics {
+		respond 404
+	}
+
+	# Inference — frozen external contracts (OpenAI + Anthropic SDKs).
 	handle /v1/* {
 		reverse_proxy cache:8002
 	}
-
-	# Browser apps (Next.js basePath — keep the prefix).
-	handle /portal* {
-		reverse_proxy portal:3002
+	handle /anthropic/* {
+		reverse_proxy cache:8002
 	}
-	handle /admin-portal* {
+
+	# Admin portal (Next.js basePath /admin — keep the prefix).
+	handle /admin* {
 		reverse_proxy admin-portal:3001
 	}
 
-	# API services (strip the /prefix/ -> service root).
-	handle_path /admin/* {
+	# Backend service APIs — strip /api/<svc>/ -> service root.
+	handle_path /api/admin/* {
 		reverse_proxy admin:8005
 	}
-	handle_path /cache/* {
+	handle_path /api/cache/* {
 		reverse_proxy cache:8002
 	}
-	handle_path /litellm/* {
+	handle_path /api/litellm/* {
 		reverse_proxy litellm:8003
 	}
-	handle_path /identity/* {
+	handle_path /api/identity/* {
 		reverse_proxy identity:8006
 	}
-	handle_path /librarian/* {
+	handle_path /api/librarian/* {
 		reverse_proxy librarian:8008
 	}
-	handle_path /memory/* {
+	handle_path /api/memory/* {
 		reverse_proxy memory:8009
 	}
-	handle_path /league/* {
+	handle_path /api/graphify/* {
+		reverse_proxy graphify:8012
+	}
+	handle_path /api/league/* {
 		reverse_proxy league:8010
 	}
-	handle_path /observability/* {
+	handle_path /api/observability/* {
 		reverse_proxy observability:8004
 	}
 
-	# WebSocket relay bus for agentic workflows.
+	# WebSocket relay bus (internal; prefix kept).
 	handle /agent-relay/* {
 		reverse_proxy agent-relay:8007
 	}
 
-	# Direct login convenience — admin serves /auth/* at its root.
+	# OIDC / login — frozen (keeps the OIDC redirect URI /auth/oidc/callback stable).
 	handle /auth/* {
 		reverse_proxy admin:8005
 	}
 
-	handle / {
-		redir /portal/ 302
+	# Gateway health. /healthz kept as an alias for existing probes.
+	handle /health {
+		respond "ok" 200
 	}
 	handle /healthz {
 		respond "ok" 200
+	}
+
+	# Observability — Grafana UI (sub-path; obs-grafana sets GF_SERVER_ROOT_URL +
+	# serve_from_sub_path). Behind Grafana's own login + the corp ZPA boundary.
+	# Off-VM agents query logs/metrics via Grafana's API (or mcp-grafana / SSH tunnel);
+	# raw Loki/Prometheus are intentionally NOT exposed.
+	handle /grafana/* {
+		reverse_proxy obs-grafana:3000
+	}
+
+	# Dev portal at the root — catch-all for everything not matched above
+	# (Next.js app with no basePath: /, /keys, /docs, /_next/*, assets, …).
+	handle {
+		reverse_proxy portal:3002
 	}
 }

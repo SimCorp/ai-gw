@@ -2,13 +2,13 @@
 
 The Developer Portal (Next.js app at `apps/portal/`) is the primary interface for developers to interact with the AI Gateway. It provides a unified dashboard for model access, API key management, agent registration, and team collaboration.
 
-**Access:** https://aigw-dev.lab.cloud.scdom.net/portal/ (over the corporate VPN, Entra ID SSO)
+**Access:** https://dev.aigw.scdom.net/ (over the corporate VPN, Entra ID SSO)
 
 ---
 
 ## Home Dashboard
 
-The home page (`/portal/`) is the entry point for authenticated developers.
+The home page (`/`) is the entry point for authenticated developers.
 
 ### Components
 - **Welcome hero** — personalized greeting with team name and quick action buttons
@@ -35,7 +35,7 @@ The sidebar component (`TeamSelector`) displays all team memberships. Developer 
 
 ---
 
-## API Keys (`/portal/keys`)
+## API Keys (`/keys`)
 
 Manage scoped API keys for programmatic access to the gateway.
 
@@ -74,21 +74,21 @@ Verify a key before deployment:
 
 ### Code Samples
 Language-specific examples (curl, Python, TypeScript, Anthropic SDK):
-- Base URL: `https://aigw.simcorp.internal/v1` (OpenAI-compatible)
+- Base URL: `https://dev.aigw.scdom.net/v1` (OpenAI-compatible)
 - Anthropic-shaped: `/anthropic` path
 - All samples assume key in `$AIGW_KEY` environment variable
 - Copyable code blocks with single-click copy to clipboard
 
 ### API Contract
-- `GET /portal/teams/{team_id}/keys` — list active keys (Bearer token required)
-- `POST /portal/teams/{team_id}/keys` — create key (Bearer token + name in body)
-- `DELETE /portal/teams/{team_id}/keys/{key_id}` — revoke key (Bearer token)
+- `GET /teams/{team_id}/keys` — list active keys (Bearer token required)
+- `POST /teams/{team_id}/keys` — create key (Bearer token + name in body)
+- `DELETE /teams/{team_id}/keys/{key_id}` — revoke key (Bearer token)
 
 Authentication: developer session token (stored in Redis as `dev_session:{token}`)
 
 ---
 
-## Playground (`/portal/playground`)
+## Playground (`/playground`)
 
 Interactive chat interface for testing models before integration.
 
@@ -126,7 +126,7 @@ Interactive chat interface for testing models before integration.
 
 ---
 
-## Models (`/portal/models`)
+## Models (`/models`)
 
 Unified model catalogue showing all available LLMs and their providers.
 
@@ -153,7 +153,7 @@ Logic in `detectProvider()` maps model IDs to upstream services:
 
 ---
 
-## Agents (`/portal/agents`)
+## Agents (`/agents`)
 
 Agent registry and discovery interface.
 
@@ -186,7 +186,7 @@ Button links to agent builder or creation form (UI structure TBD).
 
 ---
 
-## Workflows (`/portal/workflows`)
+## Workflows (`/workflows`)
 
 Workflow designer and execution interface (placeholder in current version).
 
@@ -199,7 +199,7 @@ Workflow designer and execution interface (placeholder in current version).
 
 ---
 
-## Usage & Spend (`/portal/usage`)
+## Usage & Spend (`/usage`)
 
 Consumption tracking and cost attribution.
 
@@ -218,7 +218,7 @@ Consumption tracking and cost attribution.
 
 ---
 
-## Prompts (`/portal/prompts`)
+## Prompts (`/prompts`)
 
 Prompt library and version control.
 
@@ -232,7 +232,7 @@ Prompt library and version control.
 
 ---
 
-## Tools / MCP Servers (`/portal/tools` and `/portal/mcp`)
+## Tools / MCP Servers (`/tools` and `/mcp`)
 
 Tool and Model Context Protocol (MCP) server management.
 
@@ -253,7 +253,7 @@ Tool and Model Context Protocol (MCP) server management.
 
 ---
 
-## Plugins & Skills (`/portal/plugins` and `/portal/skills`)
+## Plugins & Skills (`/plugins` and `/skills`)
 
 Extension ecosystem for custom integrations.
 
@@ -271,7 +271,7 @@ Extension ecosystem for custom integrations.
 
 ---
 
-## Security Scanner (`/portal/security`)
+## Security Scanner (`/security`)
 
 Developer-side security scanning and compliance features.
 
@@ -284,7 +284,7 @@ Developer-side security scanning and compliance features.
 
 ---
 
-## AI Transformation (`/portal/transformation`)
+## AI Transformation (`/transformation`)
 
 Personal transformation tracking and gamification.
 
@@ -297,7 +297,7 @@ Personal transformation tracking and gamification.
 
 ---
 
-## League (`/portal/league`)
+## League (`/league`)
 
 Gamified challenge platform and community engagement.
 
@@ -310,7 +310,7 @@ Gamified challenge platform and community engagement.
 
 ---
 
-## Champions (`/portal/champions`)
+## Champions (`/champions`)
 
 Community expert network and knowledge sharing.
 
@@ -338,7 +338,7 @@ Community expert network and knowledge sharing.
 
 ---
 
-## Settings (`/portal/settings`)
+## Settings (`/settings`)
 
 Account and workspace configuration.
 
@@ -390,7 +390,7 @@ Account and workspace configuration.
 ### Team Membership Check
 - Portal endpoints verify developer is a member of `{team_id}`
 - Membership from `team_members` table
-- If membership removed or user promoted to platform_admin, session remains valid but API calls fail with 403
+- If membership removed or user promoted to gateway_admin, session remains valid but API calls fail with 403
 
 ### Developer Role
 - Developers have limited scope (read own profile, create/revoke own keys)

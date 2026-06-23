@@ -237,13 +237,14 @@ async def test_get_node_detail(node_client):
 
     nid = str(uuid.uuid4())
     row = _node_row(node_id=nid, name="Detail Node", parent_id=None)
-    # get_node: _get_node_row, children, member_count, spend_mtd
+    # get_node: _get_node_row, children, member_count, spend_mtd, direct_admins
     # (parent branch skipped because parent_id is None)
     sess = _sequence(
         _result_mappings_first(row),  # _get_node_row
         _result_mappings_all([]),  # children
         _result_scalar(0),  # member_count
         _result_scalar(0),  # spend_mtd
+        _result_mappings_all([]),  # direct_admins
     )
 
     async def override():
@@ -281,7 +282,10 @@ async def test_list_permissions(node_client):
         "id": str(uuid.uuid4()),
         "entra_group_id": "grp-1",
         "entra_group_name": "Engineers",
-        "role": "developer",
+        "user_id": None,
+        "user_email": None,
+        "user_display_name": None,
+        "role": "engineer",
         "node_id": nid,
         "granted_at": None,
         "granted_by": None,
@@ -302,7 +306,7 @@ async def test_list_permissions(node_client):
     body = resp.json()
     assert len(body) == 1
     assert body[0]["entra_group_id"] == "grp-1"
-    assert body[0]["role"] == "developer"
+    assert body[0]["role"] == "engineer"
 
 
 async def test_add_permission_returns_201(node_client):
@@ -368,6 +372,166 @@ async def test_remove_permission_returns_204(node_client):
 
     resp = await node_client.delete(f"/nodes/{nid}/permissions/{aid}")
     assert resp.status_code == 204
+
+
+# ---------------------------------------------------------------------------
+# Permissions — direct user assignments + inheritance (added 2026-06-22)
+# ---------------------------------------------------------------------------
+
+
+async def test_add_permission_with_user_id_returns_201(node_client):
+    from app.db import get_session
+    from app.main import app
+
+    nid = str(uuid.uuid4())
+    node = _node_row(node_id=nid)
+    sess = _sequence(
+        _result_mappings_first(node),  # _get_node_row
+        MagicMock(),  # INSERT (user_id branch)
+    )
+
+    async def override():
+        yield sess
+
+    app.dependency_overrides[get_session] = override
+
+    resp = await node_client.post(
+        f"/nodes/{nid}/permissions",
+        json={"user_id": str(uuid.uuid4()), "role": "engineer"},
+    )
+    assert resp.status_code == 201
+    assert resp.json()["ok"] is True
+
+
+async def test_add_permission_requires_a_subject(node_client):
+    from app.db import get_session
+    from app.main import app
+
+    nid = str(uuid.uuid4())
+    sess = _sequence(
+        _result_mappings_first(_node_row(node_id=nid))
+    )  # role check passes, subject missing
+
+    async def override():
+        yield sess
+
+    app.dependency_overrides[get_session] = override
+
+    resp = await node_client.post(f"/nodes/{nid}/permissions", json={"role": "engineer"})
+    assert resp.status_code == 422
+
+
+async def test_add_permission_rejects_both_subjects(node_client):
+    from app.db import get_session
+    from app.main import app
+
+    nid = str(uuid.uuid4())
+    sess = _sequence(_result_mappings_first(_node_row(node_id=nid)))
+
+    async def override():
+        yield sess
+
+    app.dependency_overrides[get_session] = override
+
+    resp = await node_client.post(
+        f"/nodes/{nid}/permissions",
+        json={"user_id": str(uuid.uuid4()), "entra_group_id": "grp-1", "role": "engineer"},
+    )
+    assert resp.status_code == 422
+
+
+async def test_list_permissions_marks_direct_user_assignment(node_client):
+    from app.db import get_session
+    from app.main import app
+
+    nid = str(uuid.uuid4())
+    node = _node_row(node_id=nid)
+    user_assignment = {
+        "id": str(uuid.uuid4()),
+        "entra_group_id": None,
+        "entra_group_name": None,
+        "user_id": str(uuid.uuid4()),
+        "user_email": "dev@simcorp.com",
+        "user_display_name": "Dev",
+        "role": "engineer",
+        "node_id": nid,
+        "granted_at": None,
+        "granted_by": None,
+        "granted_by_email": None,
+    }
+    sess = _sequence(
+        _result_mappings_first(node),  # _get_node_row
+        _result_mappings_all([user_assignment]),  # direct assignments
+    )
+
+    async def override():
+        yield sess
+
+    app.dependency_overrides[get_session] = override
+
+    resp = await node_client.get(f"/nodes/{nid}/permissions")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body) == 1
+    assert body[0]["subject"] == "user"
+    assert body[0]["user_email"] == "dev@simcorp.com"
+    assert body[0]["inherited"] is False
+
+
+async def test_list_permissions_include_inherited_adds_ancestor_rows(node_client):
+    from app.db import get_session
+    from app.main import app
+
+    parent = str(uuid.uuid4())
+    nid = str(uuid.uuid4())
+    node = _node_row(node_id=nid, path=f"/{parent}/{nid}")  # has an ancestor
+    direct = {
+        "id": str(uuid.uuid4()),
+        "entra_group_id": "grp-direct",
+        "entra_group_name": "Direct",
+        "user_id": None,
+        "user_email": None,
+        "user_display_name": None,
+        "role": "team_admin",
+        "node_id": nid,
+        "granted_at": None,
+        "granted_by": None,
+        "granted_by_email": None,
+    }
+    ancestor = {
+        "id": str(uuid.uuid4()),
+        "entra_group_id": "grp-parent",
+        "entra_group_name": "Parent",
+        "user_id": None,
+        "user_email": None,
+        "user_display_name": None,
+        "role": "area_owner",
+        "node_id": parent,
+        "granted_at": None,
+        "granted_by": None,
+        "granted_by_email": None,
+        "source_node_name": "Parent Node",
+    }
+    sess = _sequence(
+        _result_mappings_first(node),  # _get_node_row
+        _result_mappings_all([direct]),  # direct assignments
+        _result_mappings_all([ancestor]),  # ancestor assignments
+    )
+
+    async def override():
+        yield sess
+
+    app.dependency_overrides[get_session] = override
+
+    resp = await node_client.get(f"/nodes/{nid}/permissions?include_inherited=true")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body) == 2
+    direct_out = next(p for p in body if not p["inherited"])
+    inherited_out = next(p for p in body if p["inherited"])
+    assert direct_out["entra_group_id"] == "grp-direct"
+    assert inherited_out["entra_group_id"] == "grp-parent"
+    assert inherited_out["source_node_name"] == "Parent Node"
 
 
 # ===========================================================================

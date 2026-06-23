@@ -15,19 +15,23 @@
 #               `scripts/deploy-vm.sh sha-abc1234`.
 #
 # Env overrides:
+#   SMOKE=1     After a successful deploy, run the browser E2E quality
+#               walkthrough (scripts/e2e-quality.sh) against the VM and fail if
+#               it does. A post-deploy smoke gate — does NOT gate PR merges.
 #   VM_HOST     SSH target (default: azureuser@10.179.231.68)
 #   GHCR_USER   GitHub username that owns the GHCR read token (default: the
-#               `login` field of the `github/ghcr-pat-aigw` pass entry)
+#               `login` field of the `api/GHCR PAT aigw` pass entry)
 #   SSH_PASS_ENTRY   pass entry holding the VM SSH key (default: ssh/dev.aigw.scdom.net)
 #   GHCR_PASS_ENTRY  pass entry holding the GHCR read:packages PAT
-#                    (default: github/ghcr-pat-aigw; first line = token)
+#                    (default: api/GHCR PAT aigw; first line = token)
 #
 set -euo pipefail
 
 IMAGE_TAG="${1:-latest}"
 VM_HOST="${VM_HOST:-azureuser@10.179.231.68}"
+GATEWAY_FQDN="${GATEWAY_FQDN:-dev.aigw.scdom.net}"
 SSH_PASS_ENTRY="${SSH_PASS_ENTRY:-ssh/dev.aigw.scdom.net}"
-GHCR_PASS_ENTRY="${GHCR_PASS_ENTRY:-github/ghcr-pat-aigw}"
+GHCR_PASS_ENTRY="${GHCR_PASS_ENTRY:-api/GHCR PAT aigw}"
 COMPOSE="docker compose -f docker-compose.yml -f docker-compose.host.yml"
 
 command -v pass >/dev/null || { echo "error: 'pass' not found on this host" >&2; exit 1; }
@@ -46,11 +50,53 @@ echo "==> Logging the VM into GHCR as $GHCR_USER"
 pass show "$GHCR_PASS_ENTRY" | head -1 \
   | $SSH "docker login ghcr.io -u '$GHCR_USER' --password-stdin"
 
-echo "==> Pulling source + images (IMAGE_TAG=$IMAGE_TAG) and restarting on $VM_HOST"
-$SSH "cd ~/ai-gw/infra \
-  && git pull origin master \
-  && IMAGE_TAG='$IMAGE_TAG' $COMPOSE pull \
-  && IMAGE_TAG='$IMAGE_TAG' $COMPOSE up -d"
+echo "==> Pulling source + images (IMAGE_TAG=$IMAGE_TAG) and updating on $VM_HOST"
+$SSH "set -e; cd ~/ai-gw/infra
+  before=\$(md5sum Caddyfile 2>/dev/null | awk '{print \$1}')
+  git pull origin master
+  after=\$(md5sum Caddyfile 2>/dev/null | awk '{print \$1}')
+  IMAGE_TAG='$IMAGE_TAG' $COMPOSE pull
+  IMAGE_TAG='$IMAGE_TAG' $COMPOSE up -d
+  # Caddy's Caddyfile is a read-only bind-mount, and 'compose up -d' only recreates
+  # changed *images* — so a Caddyfile-only change needs an explicit reload (and the
+  # Caddyfile sets 'admin off', so 'caddy reload' via the admin API is unavailable).
+  # Validate the new config against the running container's mounted certs, then restart.
+  if [ \"\$before\" != \"\$after\" ]; then
+    echo '==> Caddyfile changed — validating new config'
+    if $COMPOSE exec -T caddy caddy validate --config /etc/caddy/Caddyfile; then
+      echo '==> Valid — restarting caddy to load new routes'
+      $COMPOSE restart caddy
+    else
+      echo 'ERROR: new Caddyfile failed validation — caddy NOT restarted (still serving previous config)' >&2
+      exit 1
+    fi
+  else
+    echo '==> Caddyfile unchanged — caddy left running'
+  fi"
 
 echo "==> Done. Current status:"
 $SSH "cd ~/ai-gw/infra && $COMPOSE ps"
+
+# TLS chain completeness check. A leaf-only cert.pem (missing the SimCorp Issuing CA
+# intermediate) passes curl -k / Playwright ignoreHTTPSErrors but FAILS in real
+# browsers ("authenticity of received data could not be verified"). This checks the
+# served chain WITHOUT needing the SimCorp root in the local trust store: verify
+# code 21 = "unable to verify first cert" = missing intermediate. (Code 0 or 20 = OK.)
+echo "==> Checking TLS chain on $GATEWAY_FQDN"
+if command -v openssl >/dev/null; then
+  _tls=$(echo | openssl s_client -connect "$GATEWAY_FQDN:443" -servername "$GATEWAY_FQDN" -showcerts 2>/dev/null)
+  _ncerts=$(printf '%s' "$_tls" | grep -c 'BEGIN CERTIFICATE')
+  if printf '%s' "$_tls" | grep -q 'Verify return code: 21' || [ "$_ncerts" -lt 2 ]; then
+    echo "  ⚠️  WARNING: incomplete TLS chain ($_ncerts cert(s) served) — the intermediate is" >&2
+    echo "      missing; browsers will reject it. Install cert.pem as a FULLCHAIN" >&2
+    echo "      (leaf + SimCorp Issuing CA). See docs/ops-runbook.md 'TLS certificate'." >&2
+  else
+    echo "  ✓ TLS chain complete ($_ncerts certs served)"
+  fi
+fi
+
+# Optional post-deploy smoke: walk the portals and fail the deploy if broken.
+if [ "${SMOKE:-0}" = "1" ]; then
+  echo "==> Running post-deploy E2E quality walkthrough"
+  "$(dirname "${BASH_SOURCE[0]}")/e2e-quality.sh"
+fi

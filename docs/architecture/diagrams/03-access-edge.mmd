@@ -1,13 +1,13 @@
 flowchart LR
-  dev["Developer workstation\nhttps://dev.aigw.scdom.net/portal/"]
+  dev["Developer workstation\nhttps://dev.aigw.scdom.net/"]
 
   subgraph DNSZ["DNS — internal SimCorp zone  ✅ active"]
-    int["dev.aigw.scdom.net A → 100.64.1.34\n(ZPA virtual IP → VM 10.179.231.68)\nconfirmed resolving 2026-06-18"]
+    int["dev.aigw.scdom.net A → 100.64.1.34\n(ZPA virtual IP → VM 10.179.231.68)\nmanaged by SimCorp IT (scdom.net)"]
   end
 
-  subgraph ZPA["Zscaler ZPA  ✅ TCP routing active"]
+  subgraph ZPA["Zscaler ZPA  ✅ TCP routing + TLS passthrough active"]
     zcc["ZPA Client Connector\n(dev workstation)"]
-    zac["ZPA App Connector\ndev.aigw.scdom.net · TCP 443+80+22 ✅\n⚠ TLS passthrough needed on port 443"]
+    zac["ZPA App Connector\ndev.aigw.scdom.net · TCP 443+80+22 ✅\nTLS passthrough (no inspection)"]
   end
 
   subgraph NSG["NSG nsg-aigw-vm-dev"]
@@ -17,21 +17,17 @@ flowchart LR
   vm["vm-aigw-dev-sdc\n10.179.231.68 (static private IP)\nno public IP"]
   caddy["Caddy :443\ntls cert.pem key.pem\n*.aigw.scdom.net"]
 
-  cert_issued["TLS cert *.aigw.scdom.net\nSimCorp Internal CA\n⚠ pending GIT form ①"]
-  cert_interim["Self-signed stand-in\nCN=*.aigw.scdom.net\n30-day, on VM at infra/certs/"]
+  cert["TLS cert *.aigw.scdom.net\nSimCorp Issuing CA · valid to 2028\ninstalled on VM at infra/certs/  ✅"]
 
   dev -. "1 resolve" .-> int
   dev --> zcc
   int --> zac
   zcc -->|"2 ZPA tunnel"| zac -->|"3 TCP 443"| nsg --> vm --> caddy
-  cert_issued -. "swap in when issued (docker compose restart caddy)" .-> caddy
-  cert_interim -. "in use now" .-> caddy
+  cert -. "in use" .-> caddy
 
   classDef dns fill:#fff3e0,stroke:#cc8a2e,color:#5a3b0a;
   classDef net fill:#e6f0ff,stroke:#3b6fb0,color:#10243e;
-  classDef pending fill:#fff8e6,stroke:#e6a817,color:#6b4f00;
   classDef active fill:#eef7ee,stroke:#4a8a4a,color:#1d3a1d;
   class int dns;
   class dev,zcc,zac,nsg,vm,caddy net;
-  class cert_issued pending;
-  class cert_interim active;
+  class cert active;

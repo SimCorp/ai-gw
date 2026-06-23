@@ -1,21 +1,20 @@
 # Getting Started Guide
 
 Welcome to the AI Gateway platform. This guide explains how to access and use the
-deployed gateway, run the test suite on your machine, and ship changes to Azure.
+deployed gateway, run the test suite on your machine, and ship changes.
 
-The platform runs on **Azure Container Apps (ACA)** in the SimCorp Landing Zone
-(Sweden Central). There is no local stack — every service is a Container App with
-**internal ingress**, and the environment has no public IP. Access requires the
-**corporate VPN**.
+The platform runs as a **Docker Compose stack on a single Linux VM** in the SimCorp dev
+landing zone (Sweden Central), fronted by **Caddy** for TLS termination on port 443.
+The gateway is reached at `https://dev.aigw.scdom.net` over the **corporate VPN (ZPA)**.
+Services discover each other by container name on the internal Compose network.
 
 ## Prerequisites
 
-- **Corporate VPN** access (the ACA environment is internal-only, no public IP)
-- A **SimCorp Entra ID** account (SSO is the only sign-in method)
+- **Corporate VPN (ZPA)** access (the gateway is reachable only over the corporate network)
+- A **SimCorp Entra ID** account (SSO is the only sign-in method for the portals)
 - An `sk-*` **API key** for programmatic / inference access (issued via the admin portal)
 - Python 3.11+ — to run the test suite locally
 - **Docker** — only for the testcontainers-based suites (`identity`, `admin`)
-- **Azure CLI** (`az`) — only if you deploy or run migration jobs
 - Git
 
 ## Accessing the Deployed Platform
@@ -23,27 +22,27 @@ The platform runs on **Azure Container Apps (ACA)** in the SimCorp Landing Zone
 The dev environment is reachable over the VPN at:
 
 ```
-https://aigw-dev.lab.cloud.scdom.net
+https://dev.aigw.scdom.net
 ```
 
 ### Portals
 
-The admin and developer portals are reachable over the VPN. Sign in with **Entra ID
-SSO** — there is no local/password login.
+The developer portal is served at the root (`/`) and the admin portal at `/admin`. Sign
+in with **Entra ID SSO** — there is no local/password login.
 
-| Interface | How to access |
-|-----------|---------------|
-| **Admin Portal** | Reachable over VPN; sign in with Entra ID SSO |
-| **Developer Portal** | Reachable over VPN; sign in with Entra ID SSO |
+| Interface | URL |
+|-----------|-----|
+| **Developer Portal** | `https://dev.aigw.scdom.net/` |
+| **Admin Portal** | `https://dev.aigw.scdom.net/admin` |
 
 ### SSO (Azure Entra ID)
 
 Authentication is **Azure Entra ID only** (tenant `aa81b43f-3969-4fd4-80c9-84c411508d82`).
 
 - **Issuer:** `https://login.microsoftonline.com/aa81b43f-3969-4fd4-80c9-84c411508d82/v2.0`
-- **Redirect URI:** `https://aigw-dev.lab.cloud.scdom.net/auth/oidc/callback`
+- **Redirect URI:** `https://dev.aigw.scdom.net/auth/oidc/callback`
 
-After signing in you have no assigned roles by default; ask a `platform_admin` to
+After signing in you have no assigned roles by default; ask a `gateway_admin` to
 grant permissions on the org nodes you need.
 
 ### Inference API
@@ -53,13 +52,13 @@ gateway FQDN. Authenticate with your `sk-*` API key as a Bearer token.
 
 | API | Base URL |
 |-----|----------|
-| OpenAI-compatible | `https://aigw-dev.lab.cloud.scdom.net/v1` |
-| Anthropic-compatible | `https://aigw-dev.lab.cloud.scdom.net/anthropic` |
+| OpenAI-compatible | `https://dev.aigw.scdom.net/v1` |
+| Anthropic-compatible | `https://dev.aigw.scdom.net/anthropic` |
 
 **Test chat completions:**
 
 ```bash
-curl -X POST https://aigw-dev.lab.cloud.scdom.net/v1/chat/completions \
+curl -X POST https://dev.aigw.scdom.net/v1/chat/completions \
   -H "Authorization: Bearer sk-YOUR-API-KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -74,36 +73,37 @@ curl -X POST https://aigw-dev.lab.cloud.scdom.net/v1/chat/completions \
 
 ## Service Topology
 
-Each service is a Container App named `ca-<service>-dev-sdc` with **internal ingress**.
-Service-to-service traffic uses internal DNS (`http://ca-<service>-dev-sdc`). These
-hosts are only reachable from within the VNet; external callers use the gateway FQDN
-for inference and the portals for the UI.
+Each service is a Compose service reached by its container name on the internal Compose
+network (`http://<service>:<port>`). Only Caddy is published to the host; all other
+services are internal. External callers use the gateway FQDN for inference and the
+portals for the UI.
 
-| Service | Container App | Internal Port | Purpose |
-|---------|---------------|---------------|---------|
-| **Admin API** | `ca-admin-dev-sdc` | 8005 | Organization & user management |
-| **Auth** | `ca-auth-dev-sdc` | 8001 | Login, sessions, permissions |
-| **Cache** | `ca-cache-dev-sdc` | 8002 | Semantic + exact caching |
-| **LiteLLM** | `ca-litellm-dev-sdc` | 8003 | Model provider routing |
-| **Observability** | `ca-observability-dev-sdc` | 8004 | Usage tracking, audit logs |
-| **Identity** | `ca-identity-dev-sdc` | 8006 | Agent registry, discovery |
-| **Agent Relay** | `ca-agent-relay-dev-sdc` | 8007 | WebSocket relay for agents |
-| **Librarian** | `ca-librarian-dev-sdc` | 8008 | Knowledge, embeddings, RAG |
-| **Memory** | `ca-memory-dev-sdc` | 8009 | Agent conversation memory |
-| **League** | `ca-league-dev-sdc` | 8010 | Gamified challenges |
-| **Scanner** | `ca-scanner-dev-sdc` | — (no ingress) | Security scanning worker |
-| **Admin Portal** | `ca-admin-portal-dev-sdc` | 3001 | Admin dashboard (Next.js) |
-| **Developer Portal** | `ca-portal-dev-sdc` | 3002 | Main user interface (Next.js) |
+| Service | Container | Port | Purpose |
+|---------|-----------|------|---------|
+| **Admin API** | `admin` | 8005 | Organization & user management |
+| **Auth** | `auth` | 8001 | Login, sessions, permissions |
+| **Cache** | `cache` | 8002 | Semantic + exact caching |
+| **LiteLLM** | `litellm` | 8003 | Model provider routing |
+| **Observability** | `observability` | 8004 | Usage tracking, audit logs |
+| **Identity** | `identity` | 8006 | Agent registry, discovery |
+| **Agent Relay** | `agent-relay` | 8007 | WebSocket relay for agents |
+| **Librarian** | `librarian` | 8008 | Knowledge, embeddings, RAG |
+| **Memory** | `memory` | 8009 | Agent conversation memory |
+| **League** | `league` | 8010 | Gamified challenges |
+| **Scanner** | `scanner` | — (no port) | Security scanning worker |
+| **Admin Portal** | `admin-portal` | 3001 | Admin dashboard (Next.js) |
+| **Developer Portal** | `portal` | 3002 | Main user interface (Next.js) |
 
-Scanner and the workflow worker run without ingress (background workers). PostgreSQL
-and Redis are managed Azure resources, not Container Apps.
+Scanner and the workflow worker run as background workers with no exposed port.
+PostgreSQL and Redis run as containers in the same Compose stack.
 
 ---
 
 ## Common Tasks
 
-These calls hit internal service ingress and must originate from inside the VNet (e.g.
-a VNet-connected runner or a bastion). Replace `$TOKEN` with a valid session token.
+These calls go through the gateway under the `/api/<svc>/*` prefix (Caddy strips the
+`/api/<svc>` segment before forwarding to the service). Reach them over the VPN at
+`https://dev.aigw.scdom.net`. Replace `$TOKEN` with a valid session token.
 
 ### Create a New Organization Node
 
@@ -111,7 +111,7 @@ a VNet-connected runner or a bastion). Replace `$TOKEN` with a valid session tok
 TOKEN="your-session-token"
 
 # Create an area under root
-curl -X POST http://ca-admin-dev-sdc/nodes \
+curl -X POST https://dev.aigw.scdom.net/api/admin/nodes \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -126,7 +126,7 @@ curl -X POST http://ca-admin-dev-sdc/nodes \
 ### Get Organization Tree
 
 ```bash
-curl http://ca-admin-dev-sdc/nodes/tree \
+curl https://dev.aigw.scdom.net/api/admin/nodes/tree \
   -H "Authorization: Bearer $TOKEN" | jq '.'
 ```
 
@@ -135,27 +135,27 @@ curl http://ca-admin-dev-sdc/nodes/tree \
 Use the Entra group GUID for the group you want to grant:
 
 ```bash
-curl -X POST "http://ca-admin-dev-sdc/nodes/{node_id}/permissions" \
+curl -X POST "https://dev.aigw.scdom.net/api/admin/nodes/{node_id}/permissions" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "entra_group_id": "12345678-1234-1234-1234-123456789012",
     "entra_group_name": "platform-admins@simcorp.com",
-    "role": "platform_admin"
+    "role": "gateway_admin"
   }'
 ```
 
 ### View Audit Log
 
 ```bash
-curl http://ca-observability-dev-sdc/audit-log \
+curl https://dev.aigw.scdom.net/api/observability/audit-log \
   -H "Authorization: Bearer $TOKEN" | jq '.'
 ```
 
 ### Check User Permissions
 
 ```bash
-curl http://ca-auth-dev-sdc/me \
+curl https://dev.aigw.scdom.net/auth/me \
   -H "Authorization: Bearer $TOKEN" | jq '.roles'
 ```
 
@@ -163,11 +163,12 @@ curl http://ca-auth-dev-sdc/me \
 
 ## Development Workflow
 
-The code is developed and tested locally, then deployed to Azure via container images.
+The code is developed and tested locally, then deployed to the VM via container images
+built and pushed by CI.
 
 ### Running Tests
 
-Fast unit and integration tests run **locally** without Azure:
+Fast unit and integration tests run **locally**:
 
 ```bash
 # Install test dependencies
@@ -186,8 +187,8 @@ pytest services/admin/tests/ -v --cov
 > `testcontainers[postgres]` and require a running Docker daemon. The rest of the
 > test suite runs without Docker.
 
-**End-to-end smoke tests** run against the deployed Azure environment from a
-VNet-connected runner (see `deploy.yml`), not from a developer machine.
+**End-to-end smoke tests** run against the deployed gateway at `dev.aigw.scdom.net`
+over the VPN, not from a developer machine.
 
 ### Code Quality
 
@@ -213,35 +214,31 @@ alembic revision --autogenerate -m "describe your change"
 # Review and edit migrations/versions/xxxx_description.py
 ```
 
-Migrations are applied in Azure by a dedicated Container Apps job (see Deployment
-below), not on service startup.
+Migrations are applied on the VM by a dedicated one-off migration container (see
+Deployment below), not on service startup.
 
 ---
 
 ## Deployment
 
-Deployments are driven by Bicep templates and are idempotent. Build a container image,
-then deploy by pinning its tag.
+Deployment is pull-based. Push to `master` → CI builds and pushes images to GHCR → the
+VM pulls them. From the VM (`vm-aigw-dev-sdc`), in `/home/azureuser/ai-gw`:
 
 ```bash
-az deployment group create \
-  --resource-group rg-aigw-dev-sdc \
-  --template-file infra/bicep/environments/dev/main.bicep \
-  --parameters infra/bicep/environments/dev/main.bicepparam \
-  --parameters imageTag=sha-<git-sha>
+# Routine single-service update (static base untouched)
+scripts/update-service.sh <service>
+
+# Full stack deploy
+scripts/deploy-vm.sh
 ```
 
-**Rollback:** redeploy the previous `imageTag`.
+Both wrap `docker compose -f docker-compose.yml -f docker-compose.host.yml` under
+`infra/`. **Rollback:** redeploy the previous image tag.
 
 ### Database Migrations
 
-Run migrations against the deployed database via the migration job:
-
-```bash
-az containerapp job start \
-  --name job-db-migrate-dev-sdc \
-  --resource-group rg-aigw-dev-sdc
-```
+Migrations run on the VM via a one-off migration container against the Compose Postgres
+service (see `scripts/deploy-vm.sh`), not on service startup.
 
 ---
 
@@ -249,9 +246,9 @@ az containerapp job start \
 
 ### Configuration & Secrets
 
-Configuration comes from **Azure Key Vault**, surfaced through ACA native secret
-references using the service's managed identity. Services **fail fast** when a required
-environment variable is missing — there are no local defaults.
+Configuration is supplied to the Compose stack via environment variables (sourced from
+the VM's deploy-time secrets, not committed in plaintext). Services **fail fast** when a
+required environment variable is missing — there are no local defaults.
 
 ### Path-Based Permissions
 
@@ -284,11 +281,11 @@ Budget alerts trigger when spend exceeds `budget_alert_threshold` (default 0.80 
 
 ### Cannot reach the gateway or portals
 
-**Cause:** The ACA environment is internal-only (no public IP).
+**Cause:** The gateway is reachable only over the corporate VPN (ZPA).
 
 **Solution:** Confirm you are connected to the corporate VPN. The gateway FQDN
-(`https://aigw-dev.lab.cloud.scdom.net`) and the portals are only resolvable and
-reachable from inside the corporate network.
+(`https://dev.aigw.scdom.net`) and the portals are only resolvable and reachable from
+inside the corporate network.
 
 ### "Session expired or invalid" after login
 

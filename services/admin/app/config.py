@@ -26,6 +26,15 @@ class Settings(BaseSettings):
     librarian_url: str
     librarian_service_token: str = ""
 
+    # Graphify service — proxied by the Knowledge Graphs admin page. The token
+    # must match graphify's GRAPHIFY_SERVICE_TOKEN (defaults to the stack key).
+    graphify_url: str = "http://graphify:8012"
+    graphify_service_token: str = ""
+
+    # Observability backends queried by the DevOps agent (defaults = single-host stack).
+    loki_url: str = "http://obs-loki:3100"
+    prometheus_url: str = "http://obs-prometheus:9090"
+
     # Secret used to encrypt the RSA identity signing key stored in Redis.
     # Use a long random string in production (e.g. openssl rand -hex 32).
     identity_key_secret: str

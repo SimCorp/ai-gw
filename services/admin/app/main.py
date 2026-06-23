@@ -8,11 +8,13 @@ from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from prometheus_client import make_asgi_app
 from sqlalchemy import text
 
 from app.auth import require_admin_auth
 from app.config import settings as app_settings
 from app.db import engine
+from app.logging_config import CorrelationIdMiddleware, init_logging
 
 # Import all ORM models so they're available to routers and Alembic env
 from app.models import (  # noqa: F401
@@ -75,6 +77,9 @@ from app.routers import (
     genai_adoption as genai_adoption_router,
 )
 from app.routers import (
+    graphify as graphify_router,
+)
+from app.routers import (
     guardrails as guardrails_router,
 )
 from app.routers import (
@@ -82,6 +87,9 @@ from app.routers import (
 )
 from app.routers import (
     insights as insights_router,
+)
+from app.routers import (
+    local_groups as local_groups_router,
 )
 from app.routers import (
     mcp as mcp_router,
@@ -524,6 +532,8 @@ async def lifespan(app: FastAPI):
 
 _is_dev = os.getenv("ENVIRONMENT", "production") in ("development", "test", "ci")
 
+init_logging("admin")
+
 app = FastAPI(
     title="AI Gateway — Admin Portal",
     lifespan=lifespan,
@@ -531,6 +541,9 @@ app = FastAPI(
     redoc_url="/redoc" if _is_dev else None,
     openapi_url="/openapi.json" if _is_dev else None,
 )
+
+app.add_middleware(CorrelationIdMiddleware)
+app.mount("/metrics", make_asgi_app())
 
 from app.observability import init_observability  # noqa: E402
 
@@ -565,6 +578,8 @@ app.include_router(users_router.router, dependencies=_auth)  # admin user manage
 app.include_router(settings_router.router, dependencies=_auth)
 app.include_router(dashboard.router, dependencies=_auth)
 app.include_router(nodes_router.router, dependencies=_auth)
+app.include_router(local_groups_router.router, dependencies=_auth)
+app.include_router(graphify_router.router, dependencies=_auth)
 # members.py router (legacy /teams/{id}/members) is omitted — teams table removed.
 # Use /nodes/{id}/members instead.
 app.include_router(developers_router.router, dependencies=_auth)

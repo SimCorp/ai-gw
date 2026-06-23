@@ -20,7 +20,6 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  basePath: "/portal",
   output: "standalone",
   transpilePackages: ["@aigw/ui", "@aigw/charts", "@aigw/hooks", "@aigw/contracts"],
   async headers() {

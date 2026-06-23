@@ -3,10 +3,12 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from prometheus_client import make_asgi_app
 
 from app.bus import make_bus
 from app.config import settings
 from app.github_webhook import router as github_router
+from app.logging_config import CorrelationIdMiddleware, init_logging
 from app.redis_utils import make_redis
 from app.router import router
 from app.workers import insights, postgres
@@ -45,7 +47,11 @@ async def lifespan(app: FastAPI):
     await redis.aclose()
 
 
+init_logging("observability")
+
 app = FastAPI(title="AI Gateway — Observability Service", lifespan=lifespan)
+app.add_middleware(CorrelationIdMiddleware)
+app.mount("/metrics", make_asgi_app())
 app.include_router(router)
 app.include_router(github_router)
 

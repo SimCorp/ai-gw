@@ -2,7 +2,7 @@
 
 An enterprise API gateway that centralises access to hosted LLMs for ~2,000 engineers. It enforces authentication, rate limits, and cost policy before every request reaches a provider, and caches responses to cut spend.
 
-The platform runs on **Azure Container Apps** in the SimCorp Landing Zone (Sweden Central). Developers reach it over the corporate VPN at the gateway's dev FQDN; operators manage everything through the admin portal. There is no local stack — see [Deploying & running](#deploying--running).
+Today the platform runs as a **single Linux VM** (`vm-aigw-dev-sdc`, Azure Sweden Central) via **Docker Compose** behind **Caddy** (TLS). Developers reach it over the corporate VPN (ZPA) at `https://dev.aigw.scdom.net`; operators manage everything through the admin portal. The Azure Container Apps (ACA) Bicep IaC remains in-repo as the deferred V2/prod target — see [Deploying & running](#deploying--running).
 
 ---
 
@@ -13,25 +13,26 @@ The platform runs on **Azure Container Apps** in the SimCorp Landing Zone (Swede
                         │      Developer / CI caller (corp VPN)        │
                         └──────────────────┬──────────────────────────┘
                                            │  sk-*  API key or JWT
-                                           │  https://aigw-dev.lab.cloud.scdom.net
+                                           │  https://dev.aigw.scdom.net
                                            ▼
                         ┌──────────────────────────────────┐
-                        │   auth  (ca-auth)                 │
-                        │   • validates sk-* / JWT          │
-                        │   • rate-limit (Redis fixed-win)  │
-                        │   • injects team identity header  │
+                        │   caddy  (:443)                   │
+                        │   • TLS termination               │
+                        │   • reverse proxy                 │
                         └──────────────────┬───────────────┘
                                            ▼
                         ┌──────────────────────────────────┐
-                        │   cache  (ca-cache)               │
+                        │   cache  (:8002)                  │
                         │   • exact-match cache (Redis)     │
                         │   • semantic cache (embeddings)   │
-                        │   • OpenAI + Anthropic endpoints  │
+                        │   • calls auth (:8001) to         │
+                        │     validate sk-* / JWT + rate    │
+                        │     limit per team                │
                         └──────────────────┬───────────────┘
                                            │ cache miss
                                            ▼
                         ┌──────────────────────────────────┐
-                        │   litellm  (ca-litellm)           │
+                        │   litellm  (:8003)                │
                         │   • provider routing              │
                         │   • retries + fallbacks           │
                         │   • model name normalisation      │
@@ -48,23 +49,22 @@ The platform runs on **Azure Container Apps** in the SimCorp Landing Zone (Swede
       │  cost accounting    │        │  developer portal     │
       └─────────────────────┘        └─────────────────────┘
 
-      ──────────────── managed PaaS (private endpoints) ─────────────
-        Azure Database for PostgreSQL    Azure Cache for Redis
-        Azure Key Vault                  Azure Service Bus
+      ─────────────────── backing stores (containers) ──────────────
+        PostgreSQL                       Redis
 ```
 
-Each service is a Container App (`ca-<service>-dev-sdc`) with internal ingress; the ACA environment is `internal: true` (no public IP). The `auth` app fronts the inference request path and is exposed on the custom domain. PaaS dependencies (PostgreSQL Flexible Server, Cache for Redis, Key Vault, Service Bus) are reached over private endpoints. See [`docs/superpowers/specs/2026-06-08-azure-enterprise-deployment-design.md`](docs/superpowers/specs/2026-06-08-azure-enterprise-deployment-design.md) for the full deployment design.
+Each service runs as a container and the services discover each other by container name (e.g. `http://cache:8002`). Caddy terminates TLS on port 443 and reverse-proxies the inference path: `caller → Caddy:443 → cache(8002) → [cache calls auth(8001) to validate the token] → litellm(8003) → provider`. PostgreSQL and Redis run as backing-store containers. See [`docs/superpowers/specs/2026-05-05-ai-gateway-design.md`](docs/superpowers/specs/2026-05-05-ai-gateway-design.md) for the service design and [`docs/superpowers/specs/2026-06-08-azure-enterprise-deployment-design.md`](docs/superpowers/specs/2026-06-08-azure-enterprise-deployment-design.md) for the deferred ACA/V2 deployment design.
 
 ---
 
 ## Access
 
-The gateway is **VNet-only**, reachable over the corporate VPN. There is no public endpoint.
+The gateway is reachable over the corporate VPN (ZPA). There is no public endpoint.
 
-| Environment | Gateway FQDN | Subscription | Region |
+| Environment | Gateway URL | Host | Region |
 |---|---|---|---|
-| Dev | `https://aigw-dev.lab.cloud.scdom.net` | SC LZ PlatformAITooling Dev | Sweden Central |
-| Test | (provisioned in Phase 4) | SC LZ PlatformAITooling Test | Sweden Central |
+| Dev (current) | `https://dev.aigw.scdom.net` | `vm-aigw-dev-sdc` (10.179.231.68) | Sweden Central |
+| ACA dev/test (deferred V2) | `https://aigw-{dev,test}.lab.cloud.scdom.net` | Azure Container Apps | Sweden Central |
 
 Sign in to the portals with your SimCorp identity via **Entra ID SSO**.
 
@@ -77,7 +77,7 @@ All API calls go to the gateway FQDN and are authenticated with an `sk-*` API ke
 ### OpenAI-compatible
 
 ```bash
-curl https://aigw-dev.lab.cloud.scdom.net/v1/chat/completions \
+curl https://dev.aigw.scdom.net/v1/chat/completions \
   -H "Authorization: Bearer sk-your-team-key" \
   -H "Content-Type: application/json" \
   -d '{
@@ -92,7 +92,7 @@ curl https://aigw-dev.lab.cloud.scdom.net/v1/chat/completions \
 from openai import OpenAI
 
 client = OpenAI(
-    base_url="https://aigw-dev.lab.cloud.scdom.net/v1",
+    base_url="https://dev.aigw.scdom.net/v1",
     api_key="sk-your-team-key",
 )
 response = client.chat.completions.create(
@@ -107,7 +107,7 @@ response = client.chat.completions.create(
 import anthropic
 
 client = anthropic.Anthropic(
-    base_url="https://aigw-dev.lab.cloud.scdom.net/anthropic",
+    base_url="https://dev.aigw.scdom.net/anthropic",
     api_key="sk-your-team-key",
 )
 message = client.messages.create(model="claude-sonnet-4-6", max_tokens=1024,
@@ -118,24 +118,25 @@ message = client.messages.create(model="claude-sonnet-4-6", max_tokens=1024,
 
 ## Services
 
-| Service | Container App | Internal port | Purpose |
+| Service | Container | Port | Purpose |
 |---|---|---|---|
-| auth | `ca-auth-dev-sdc` | 8001 | API key / JWT validation, per-team rate limiting; inference entry point |
-| cache | `ca-cache-dev-sdc` | 8002 | Semantic + exact cache proxy; OpenAI/Anthropic endpoints |
-| litellm | `ca-litellm-dev-sdc` | 8003 | Provider routing, retries, fallbacks (OpenAI-compatible) |
-| observability | `ca-observability-dev-sdc` | 8004 | Async event ingestion, cost accounting |
-| admin | `ca-admin-dev-sdc` | 8005 | Operator + developer portal backend |
-| identity | `ca-identity-dev-sdc` | 8006 | Agent registry — DNS-style resolve, heartbeat TTL |
-| agent-relay | `ca-agent-relay-dev-sdc` | 8007 | WebSocket relay bus for agentic workflows |
-| librarian | `ca-librarian-dev-sdc` | 8008 | Knowledge ingestion, chunking, semantic search |
-| memory | `ca-memory-dev-sdc` | 8009 | Persistent agent memory scoped to user/team |
-| league | `ca-league-dev-sdc` | 8010 | AI-League gamified challenge platform |
-| scanner | `ca-scanner-dev-sdc` | — | Security scanning worker (background) |
-| workflow-worker | `ca-workflow-worker-dev-sdc` | — | Agentic workflow runner (background, scale-to-zero) |
-| admin-portal | `ca-admin-portal-dev-sdc` | 3001 | Admin Next.js app |
-| portal | `ca-portal-dev-sdc` | 3002 | Developer Next.js app |
+| caddy | `caddy` | 80/443 | TLS termination, reverse proxy |
+| auth | `auth` | 8001 | API key / JWT validation, per-team rate limiting; called internally by cache |
+| cache | `cache` | 8002 | Semantic + exact cache proxy; inference entry point after Caddy |
+| litellm | `litellm` | 8003 | Provider routing, retries, fallbacks (OpenAI-compatible) |
+| observability | `observability` | 8004 | Async event ingestion, cost accounting |
+| admin | `admin` | 8005 | Operator + developer portal backend |
+| identity | `identity` | 8006 | Agent registry — DNS-style resolve, heartbeat TTL |
+| agent-relay | `agent-relay` | 8007 | WebSocket relay bus for agentic workflows |
+| librarian | `librarian` | 8008 | Knowledge ingestion, chunking, semantic search |
+| memory | `memory` | 8009 | Persistent agent memory scoped to user/team |
+| league | `league` | 8010 | AI-League gamified challenge platform |
+| scanner | `scanner` | — | Security scanning worker (background) |
+| workflow-worker | `workflow-worker` | — | Agentic workflow runner (background) |
+| admin-portal | `admin-portal` | 3001 | Admin Next.js app |
+| portal | `portal` | 3002 | Developer Next.js app |
 
-Services discover each other over the ACA environment's internal DNS (`http://ca-<service>-dev-sdc`). Managed PaaS — PostgreSQL, Redis, Key Vault, Service Bus — is reached over private endpoints; connection strings are injected from Key Vault via each app's managed identity.
+Services discover each other by container name (`http://<service>:<port>`). PostgreSQL and Redis run as backing-store containers on the same Compose network. (In the deferred ACA/V2 path these become managed PaaS reached over private endpoints — see the deployment design.)
 
 ---
 
@@ -180,7 +181,7 @@ The platform uses a unified identity model — one `users` table for all human p
 
 ### SSO configuration
 
-Authentication is handled by **Azure Entra ID**. The OIDC settings are supplied to the `auth` and `admin` Container Apps from Key Vault:
+Authentication is handled by **Azure Entra ID**. The OIDC settings are supplied to the `auth` and `admin` services as environment variables (from Key Vault in the deferred ACA/V2 path):
 
 ```ini
 OIDC_ISSUER=https://login.microsoftonline.com/aa81b43f-3969-4fd4-80c9-84c411508d82/v2.0
@@ -188,13 +189,13 @@ OIDC_CLIENT_ID=<app-registration-client-id>
 OIDC_CLIENT_SECRET=<client-secret>   # Key Vault secret ref
 ```
 
-The redirect URI registered in Entra ID: `https://aigw-dev.lab.cloud.scdom.net/auth/oidc/callback`
+The redirect URI registered in Entra ID: `https://dev.aigw.scdom.net/auth/oidc/callback`
 
 ---
 
 ## Admin Portal
 
-Reachable over the VPN (Admin Container App). Sign in with your SimCorp identity via Entra ID SSO.
+Reachable over the VPN at `https://dev.aigw.scdom.net/admin`. Sign in with your SimCorp identity via Entra ID SSO.
 
 | Page | Path | Function |
 |---|---|---|
@@ -224,7 +225,7 @@ Reachable over the VPN (Admin Container App). Sign in with your SimCorp identity
 
 ## Developer Portal
 
-Reachable over the VPN (Developer Container App). Sign in with **Entra ID (SSO)**.
+Reachable over the VPN at `https://dev.aigw.scdom.net/`. Sign in with **Entra ID (SSO)**.
 
 - Generate `sk-*` API keys scoped to your team
 - View personal usage stats, cost per PR, and cache hit rate
@@ -246,7 +247,7 @@ The "Stay signed in for 30 days" checkbox on login stores the session token in `
 
 The platform classifies every session as **interactive**, **agentic**, or **autonomous** based on turn count, inter-request timing, and tool invocation density.
 
-### Developer view (`/portal/transformation`)
+### Developer view (`/transformation`)
 
 - Agentic score (0–100) with SVG ring visualisation
 - Weekly bar chart: agentic vs interactive sessions
@@ -266,7 +267,7 @@ The platform classifies every session as **interactive**, **agentic**, or **auto
 Run manually or on a schedule:
 
 ```bash
-curl -s -X POST https://aigw-dev.lab.cloud.scdom.net/admin/transformation/classify \
+curl -s -X POST https://dev.aigw.scdom.net/api/admin/transformation/classify \
   -H "Authorization: Bearer <admin-token>"
 ```
 
@@ -293,9 +294,27 @@ curl -s -X POST https://aigw-dev.lab.cloud.scdom.net/admin/transformation/classi
 
 ## Deploying & running
 
-The platform is deployed via Bicep to Azure Container Apps. CI builds and pushes service images; `deploy.yml` deploys them on a `master` push.
+The platform runs as Docker Compose on the dev VM. A `git push` to `master` triggers CI,
+which builds and pushes service images to GHCR; the VM then pulls them. The Compose stack
+always uses both files: `docker compose -f docker-compose.yml -f docker-compose.host.yml`.
 
-### Deploy (dev)
+### Deploy (dev VM — current)
+
+```bash
+# Routine single-service update (static base untouched)
+scripts/update-service.sh <svc>
+
+# Full stack deploy
+scripts/deploy-vm.sh
+```
+
+Host stand-up is intentionally manual (not IaC) — see [`docs/ops-runbook.md`](docs/ops-runbook.md)
+for the host stand-up procedure, log streaming, and rollback.
+
+### Deploy (ACA / V2 — deferred)
+
+The Azure Container Apps Bicep IaC is in-repo and ready for V2/prod promotion; its CI/CD
+workflows are archived in `.github/workflows/_archived/` and do not run. When promoted:
 
 ```bash
 az deployment group create \
@@ -305,7 +324,9 @@ az deployment group create \
   --parameters imageTag=sha-<git-sha>
 ```
 
-Deployments are idempotent; rollback is a re-deploy with the previous `imageTag` (ACA revisions are atomic). See [`docs/ops-runbook.md`](docs/ops-runbook.md) for revision management, log streaming, and scale rules.
+ACA deployments are idempotent; rollback is a re-deploy with the previous `imageTag` (ACA
+revisions are atomic). See [`docs/architecture/environments.md`](docs/architecture/environments.md)
+for the full ACA environment guide.
 
 ### Run tests
 
@@ -323,7 +344,8 @@ pip install \
 pytest services/ -v
 ```
 
-End-to-end smoke tests run against the deployed Azure environment from a VNet-connected runner (see `deploy.yml`).
+End-to-end tests are a standalone `@playwright/test` suite in `e2e/`, run against the deployed
+gateway as a post-deploy quality check (not a CI gate).
 
 ### Lint
 
@@ -367,7 +389,10 @@ docs/
 
 ## Configuration
 
-Runtime configuration is supplied to each Container App from **Azure Key Vault** via native ACA secret references, resolved by the app's managed identity. Services fail fast on startup if a required value is missing — there are no local defaults.
+On the current single-host VM, runtime configuration is supplied to each service as environment
+variables via Docker Compose. In the deferred ACA/V2 path the same values are supplied from
+**Azure Key Vault** via native ACA secret references, resolved by the app's managed identity.
+Services fail fast on startup if a required value is missing — there are no local defaults.
 
 | Variable | Source | Description |
 |---|---|---|
@@ -381,13 +406,18 @@ Runtime configuration is supplied to each Container App from **Azure Key Vault**
 | `ANTHROPIC_API_KEY` / `GEMINI_API_KEY` / `GITHUB_MODELS_API_KEY` | KV | Provider keys |
 | `ALLOWED_EMAIL_DOMAINS` | env | Comma-separated list; restricts self-registration |
 
-Secrets are written to Key Vault by the `keyVault` Bicep module and never appear in IaC output or CI logs. See the deployment design for the full secret inventory.
+The `Source` column above shows the deferred ACA/V2 origin (Key Vault); on the current VM the
+same values are provided as Compose environment variables and never committed. Secrets are
+written to Key Vault by the `keyVault` Bicep module and never appear in IaC output or CI logs.
+See the deployment design for the full secret inventory.
 
 ---
 
 ## Database Migrations
 
-Migrations are managed by Alembic and applied by the `job-db-migrate-dev-sdc` Container Apps Job, triggered as part of `deploy.yml` after each deploy.
+Migrations are managed by Alembic and run against the gateway's PostgreSQL on deploy. In the
+deferred ACA/V2 path they are applied by the `job-db-migrate-dev-sdc` Container Apps Job,
+triggered after each ACA deploy.
 
 | Migration | Description |
 |---|---|
@@ -397,7 +427,7 @@ Migrations are managed by Alembic and applied by the `job-db-migrate-dev-sdc` Co
 | 0010 | Unified identity: `users` + `user_roles` tables; migrates `admin_users` + `developers` |
 | 0011 | `user_invitations` + `service_accounts` tables |
 
-To run manually against the deployed environment:
+To run the migration job manually in the deferred ACA/V2 environment:
 
 ```bash
 az containerapp job start --name job-db-migrate-dev-sdc --resource-group rg-aigw-dev-sdc

@@ -24,7 +24,7 @@
 
 ## 1. 5-minute quickstart
 
-> **Access:** The gateway is deployed to Azure Container Apps (SimCorp Landing Zone, Sweden Central) with internal ingress only. You must be on the corporate VPN to reach it. The dev gateway FQDN is **https://aigw-dev.lab.cloud.scdom.net**. SSO uses Azure Entra ID.
+> **Access:** The gateway runs on a single Linux VM (Azure, Sweden Central) behind Caddy (TLS), reachable over ZPA / the corporate VPN only — not the public internet. You must be on the corporate VPN to reach it. The dev gateway FQDN is **https://dev.aigw.scdom.net**. SSO uses Azure Entra ID.
 
 ### Step 1 — Get an API key
 
@@ -41,7 +41,7 @@ Keys are provisioned instantly.
 Replace `sk-YOUR-KEY-HERE` with the key you just created.
 
 ```bash
-curl https://aigw-dev.lab.cloud.scdom.net/v1/chat/completions \
+curl https://dev.aigw.scdom.net/v1/chat/completions \
   -H "Authorization: Bearer sk-YOUR-KEY-HERE" \
   -H "Content-Type: application/json" \
   -d '{
@@ -72,14 +72,14 @@ LiteLLM proxy (:8003)  — routes to provider, injects provider API key
 Provider (Anthropic / Google / GitHub / Azure)
 ```
 
-Each service runs as an internal Container App (`ca-<service>-dev-sdc`); callers only ever reach the gateway FQDN.
+Each service runs as a Docker Compose container and they discover each other by container name; callers only ever reach the gateway FQDN.
 
 ### Two endpoints
 
 | Endpoint | URL | Use with |
 |---|---|---|
-| OpenAI-compatible | `https://aigw-dev.lab.cloud.scdom.net/v1` | All models, all frameworks with OpenAI support |
-| Anthropic-compatible | `https://aigw-dev.lab.cloud.scdom.net/anthropic` | Claude models, Anthropic SDK, Claude Code CLI |
+| OpenAI-compatible | `https://dev.aigw.scdom.net/v1` | All models, all frameworks with OpenAI support |
+| Anthropic-compatible | `https://dev.aigw.scdom.net/anthropic` | Claude models, Anthropic SDK, Claude Code CLI |
 
 ---
 
@@ -122,7 +122,7 @@ All examples below use the recommended `claude-sonnet-4-6`. Swap in any model ID
 ### curl
 
 ```bash
-curl https://aigw-dev.lab.cloud.scdom.net/v1/chat/completions \
+curl https://dev.aigw.scdom.net/v1/chat/completions \
   -H "Authorization: Bearer sk-YOUR-KEY-HERE" \
   -H "Content-Type: application/json" \
   -d '{
@@ -139,7 +139,7 @@ GitHub Copilot models use the same syntax — just swap the model ID:
 
 ```bash
 # GitHub Copilot via gateway
-curl https://aigw-dev.lab.cloud.scdom.net/v1/chat/completions \
+curl https://dev.aigw.scdom.net/v1/chat/completions \
   -H "Authorization: Bearer sk-YOUR-KEY-HERE" \
   -H "Content-Type: application/json" \
   -d '{"model": "copilot-gpt-4o", "messages": [{"role": "user", "content": "Hello"}]}'
@@ -149,7 +149,7 @@ Azure AI Foundry models work the same way:
 
 ```bash
 # Azure AI Foundry via gateway
-curl https://aigw-dev.lab.cloud.scdom.net/v1/chat/completions \
+curl https://dev.aigw.scdom.net/v1/chat/completions \
   -H "Authorization: Bearer sk-YOUR-KEY-HERE" \
   -H "Content-Type: application/json" \
   -d '{"model": "azure-gpt-4o", "messages": [{"role": "user", "content": "Hello"}]}'
@@ -164,7 +164,7 @@ from openai import OpenAI
 
 client = OpenAI(
     api_key="sk-YOUR-KEY-HERE",
-    base_url="https://aigw-dev.lab.cloud.scdom.net/v1",
+    base_url="https://dev.aigw.scdom.net/v1",
 )
 
 response = client.chat.completions.create(
@@ -187,7 +187,7 @@ from openai import OpenAI
 
 client = OpenAI(
     api_key=os.environ["SIMCORP_GATEWAY_KEY"],
-    base_url="https://aigw-dev.lab.cloud.scdom.net/v1",
+    base_url="https://dev.aigw.scdom.net/v1",
 )
 ```
 
@@ -200,7 +200,7 @@ import anthropic
 
 client = anthropic.Anthropic(
     api_key="sk-YOUR-KEY-HERE",
-    base_url="https://aigw-dev.lab.cloud.scdom.net/anthropic",
+    base_url="https://dev.aigw.scdom.net/anthropic",
 )
 
 message = client.messages.create(
@@ -225,7 +225,7 @@ npm install -g @anthropic-ai/claude-code
 
 # Add to ~/.bashrc or ~/.zshrc
 export ANTHROPIC_API_KEY=sk-YOUR-KEY-HERE
-export ANTHROPIC_BASE_URL=https://aigw-dev.lab.cloud.scdom.net/anthropic
+export ANTHROPIC_BASE_URL=https://dev.aigw.scdom.net/anthropic
 
 # Verify
 claude --version
@@ -236,7 +236,7 @@ Inline (no env var required):
 
 ```bash
 ANTHROPIC_API_KEY=sk-YOUR-KEY-HERE \
-ANTHROPIC_BASE_URL=https://aigw-dev.lab.cloud.scdom.net/anthropic \
+ANTHROPIC_BASE_URL=https://dev.aigw.scdom.net/anthropic \
 claude "Summarise the last 10 commits"
 ```
 
@@ -247,7 +247,7 @@ CI / GitHub Actions:
 - name: AI code review
   env:
     ANTHROPIC_API_KEY: ${{ secrets.SIMCORP_GATEWAY_KEY }}
-    ANTHROPIC_BASE_URL: https://aigw-dev.lab.cloud.scdom.net/anthropic
+    ANTHROPIC_BASE_URL: https://dev.aigw.scdom.net/anthropic
   run: |
     claude --output-format json \
       "Review the changes in this PR for security issues" \
@@ -260,7 +260,7 @@ Project-wide config — place a `CLAUDE.md` at your repo root and Claude Code re
 # CLAUDE.md
 
 This project uses the SimCorp AI Gateway.
-Set ANTHROPIC_BASE_URL=https://aigw-dev.lab.cloud.scdom.net/anthropic in your environment.
+Set ANTHROPIC_BASE_URL=https://dev.aigw.scdom.net/anthropic in your environment.
 API keys: developer portal (over the corporate VPN, Entra ID SSO)
 ```
 
@@ -274,7 +274,7 @@ from langchain_openai import ChatOpenAI
 llm = ChatOpenAI(
     model="claude-sonnet-4-6",
     openai_api_key="sk-YOUR-KEY-HERE",
-    openai_api_base="https://aigw-dev.lab.cloud.scdom.net/v1",
+    openai_api_base="https://dev.aigw.scdom.net/v1",
     temperature=0.2,
 )
 
@@ -290,7 +290,7 @@ from langchain_anthropic import ChatAnthropic
 llm = ChatAnthropic(
     model="claude-sonnet-4-6",
     anthropic_api_key="sk-YOUR-KEY-HERE",
-    anthropic_api_url="https://aigw-dev.lab.cloud.scdom.net/anthropic",
+    anthropic_api_url="https://dev.aigw.scdom.net/anthropic",
     max_tokens=4096,
 )
 ```
@@ -305,11 +305,11 @@ from langchain_community.vectorstores import FAISS
 llm = ChatOpenAI(
     model="claude-sonnet-4-6",
     openai_api_key="sk-YOUR-KEY-HERE",
-    openai_api_base="https://aigw-dev.lab.cloud.scdom.net/v1",
+    openai_api_base="https://dev.aigw.scdom.net/v1",
 )
 embeddings = OpenAIEmbeddings(
     openai_api_key="sk-YOUR-KEY-HERE",
-    openai_api_base="https://aigw-dev.lab.cloud.scdom.net/v1",
+    openai_api_base="https://dev.aigw.scdom.net/v1",
 )
 vectorstore = FAISS.load_local("my_index", embeddings)
 qa_chain = RetrievalQA.from_chain_type(
@@ -334,7 +334,7 @@ from llama_index.core import Settings
 llm = OpenAI(
     model="claude-sonnet-4-6",
     api_key="sk-YOUR-KEY-HERE",
-    api_base="https://aigw-dev.lab.cloud.scdom.net/v1",
+    api_base="https://dev.aigw.scdom.net/v1",
     temperature=0.1,
     max_tokens=4096,
 )
@@ -351,12 +351,12 @@ from llama_index.core import VectorStoreIndex, SimpleDirectoryReader, Settings
 Settings.llm = OpenAI(
     model="claude-sonnet-4-6",
     api_key="sk-YOUR-KEY-HERE",
-    api_base="https://aigw-dev.lab.cloud.scdom.net/v1",
+    api_base="https://dev.aigw.scdom.net/v1",
 )
 Settings.embed_model = OpenAIEmbedding(
     model="text-embedding-3-small",
     api_key="sk-YOUR-KEY-HERE",
-    api_base="https://aigw-dev.lab.cloud.scdom.net/v1",
+    api_base="https://dev.aigw.scdom.net/v1",
 )
 
 documents = SimpleDirectoryReader("./docs").load_data()
@@ -379,7 +379,7 @@ from openai import AsyncOpenAI
 
 gateway_client = AsyncOpenAI(
     api_key="sk-YOUR-KEY-HERE",
-    base_url="https://aigw-dev.lab.cloud.scdom.net/v1",
+    base_url="https://dev.aigw.scdom.net/v1",
 )
 model = OpenAIChatCompletionsModel(
     model="claude-sonnet-4-6",
@@ -400,7 +400,7 @@ Agent with tools:
 from agents import Agent, Runner, OpenAIChatCompletionsModel, function_tool
 from openai import AsyncOpenAI
 
-gateway_client = AsyncOpenAI(api_key="sk-YOUR-KEY-HERE", base_url="https://aigw-dev.lab.cloud.scdom.net/v1")
+gateway_client = AsyncOpenAI(api_key="sk-YOUR-KEY-HERE", base_url="https://dev.aigw.scdom.net/v1")
 model = OpenAIChatCompletionsModel(model="claude-sonnet-4-6", openai_client=gateway_client)
 
 @function_tool
@@ -425,7 +425,7 @@ Multi-agent handoff — route cheap model to expensive model only when needed:
 from agents import Agent, Runner, OpenAIChatCompletionsModel, handoff
 from openai import AsyncOpenAI
 
-client = AsyncOpenAI(api_key="sk-YOUR-KEY-HERE", base_url="https://aigw-dev.lab.cloud.scdom.net/v1")
+client = AsyncOpenAI(api_key="sk-YOUR-KEY-HERE", base_url="https://dev.aigw.scdom.net/v1")
 
 def make_model(m):
     return OpenAIChatCompletionsModel(model=m, openai_client=client)
@@ -460,7 +460,7 @@ pytest services/ -v
 
 The `identity` and `admin` suites use `testcontainers` and need a running Docker daemon; the rest run without it. End-to-end smoke tests run against the deployed environment.
 
-To point Claude Code at the gateway, set `ANTHROPIC_BASE_URL=https://aigw-dev.lab.cloud.scdom.net/anthropic` and `ANTHROPIC_API_KEY=sk-your-team-key` (see [Claude Code CLI](#claude-code-cli) above).
+To point Claude Code at the gateway, set `ANTHROPIC_BASE_URL=https://dev.aigw.scdom.net/anthropic` and `ANTHROPIC_API_KEY=sk-your-team-key` (see [Claude Code CLI](#claude-code-cli) above).
 
 ---
 
@@ -479,7 +479,7 @@ You can attach optional headers to any inference request to improve analytics at
 No prompt text is stored from these headers — they are used only for grouping and attribution in the analytics pipeline. Sessions are tracked per `X-Session-Trace-Id` and aggregated with a quality score (1–5) based on session signals.
 
 ```bash
-curl https://aigw-dev.lab.cloud.scdom.net/v1/chat/completions \
+curl https://dev.aigw.scdom.net/v1/chat/completions \
   -H "Authorization: Bearer sk-YOUR-KEY-HERE" \
   -H "X-Session-Trace-Id: my-session-abc123" \
   -H "X-Repo: simcorp/investment-engine" \
@@ -493,7 +493,7 @@ curl https://aigw-dev.lab.cloud.scdom.net/v1/chat/completions \
 Developers can query their own usage and cost metrics without admin access:
 
 ```
-GET https://aigw-dev.lab.cloud.scdom.net/admin/dev-auth/me/stats
+GET https://dev.aigw.scdom.net/api/admin/dev-auth/me/stats
 Authorization: Bearer <portal-session-token>
 ```
 
@@ -522,7 +522,7 @@ from openai import OpenAI
 
 client = OpenAI(
     api_key="sk-YOUR-KEY-HERE",
-    base_url="https://aigw-dev.lab.cloud.scdom.net/v1",
+    base_url="https://dev.aigw.scdom.net/v1",
 )
 
 with client.chat.completions.stream(
@@ -541,7 +541,7 @@ import anthropic
 
 client = anthropic.Anthropic(
     api_key="sk-YOUR-KEY-HERE",
-    base_url="https://aigw-dev.lab.cloud.scdom.net/anthropic",
+    base_url="https://dev.aigw.scdom.net/anthropic",
 )
 
 with client.messages.stream(
@@ -592,14 +592,14 @@ The response will carry `x-cache: BYPASS` (instead of `MISS`) to confirm the byp
 
 ```bash
 # Option 1 — Cache-Control
-curl https://aigw-dev.lab.cloud.scdom.net/v1/chat/completions \
+curl https://dev.aigw.scdom.net/v1/chat/completions \
   -H "Authorization: Bearer sk-YOUR-KEY-HERE" \
   -H "Cache-Control: no-cache" \
   -H "Content-Type: application/json" \
   -d '{"model": "claude-sonnet-4-6", "messages": [{"role": "user", "content": "What is today'\''s date?"}]}'
 
 # Option 2 — x-cache: bypass
-curl https://aigw-dev.lab.cloud.scdom.net/v1/chat/completions \
+curl https://dev.aigw.scdom.net/v1/chat/completions \
   -H "Authorization: Bearer sk-YOUR-KEY-HERE" \
   -H "x-cache: bypass" \
   -H "Content-Type: application/json" \
@@ -613,7 +613,7 @@ import httpx
 # Using x-cache: bypass
 client = OpenAI(
     api_key="sk-YOUR-KEY-HERE",
-    base_url="https://aigw-dev.lab.cloud.scdom.net/v1",
+    base_url="https://dev.aigw.scdom.net/v1",
     http_client=httpx.Client(headers={"x-cache": "bypass"}),
 )
 ```
@@ -646,7 +646,7 @@ from openai import OpenAI, RateLimitError
 
 client = OpenAI(
     api_key="sk-YOUR-KEY-HERE",
-    base_url="https://aigw-dev.lab.cloud.scdom.net/v1",
+    base_url="https://dev.aigw.scdom.net/v1",
 )
 
 def call_with_backoff(messages, model="claude-sonnet-4-6", max_retries=5):
@@ -681,7 +681,7 @@ def call_with_backoff(messages, model="claude-sonnet-4-6", max_retries=5):
 
 ### 1. Wrong hostname or not on the VPN
 
-The gateway is reachable only at `https://aigw-dev.lab.cloud.scdom.net`, and only from the corporate VPN. Connections from outside the VPN time out or are refused — confirm your VPN is up before debugging anything else.
+The gateway is reachable only at `https://dev.aigw.scdom.net`, and only from the corporate VPN. Connections from outside the VPN time out or are refused — confirm your VPN is up before debugging anything else.
 
 ### 2. Wrong base_url for the SDK
 
@@ -689,15 +689,15 @@ The two endpoints use different wire protocols. Using the wrong one gives 400 or
 
 | SDK | Correct base_url |
 |---|---|
-| `openai` Python SDK | `https://aigw-dev.lab.cloud.scdom.net/v1` |
-| `anthropic` Python SDK | `https://aigw-dev.lab.cloud.scdom.net/anthropic` |
-| Claude Code CLI (`ANTHROPIC_BASE_URL`) | `https://aigw-dev.lab.cloud.scdom.net/anthropic` |
-| LangChain `ChatOpenAI` | `https://aigw-dev.lab.cloud.scdom.net/v1` (via `openai_api_base=`) |
-| LangChain `ChatAnthropic` | `https://aigw-dev.lab.cloud.scdom.net/anthropic` (via `anthropic_api_url=`) |
-| LlamaIndex `OpenAI` class | `https://aigw-dev.lab.cloud.scdom.net/v1` (via `api_base=`) |
-| OpenAI Agents SDK | `https://aigw-dev.lab.cloud.scdom.net/v1` (via `base_url=` on `AsyncOpenAI`) |
+| `openai` Python SDK | `https://dev.aigw.scdom.net/v1` |
+| `anthropic` Python SDK | `https://dev.aigw.scdom.net/anthropic` |
+| Claude Code CLI (`ANTHROPIC_BASE_URL`) | `https://dev.aigw.scdom.net/anthropic` |
+| LangChain `ChatOpenAI` | `https://dev.aigw.scdom.net/v1` (via `openai_api_base=`) |
+| LangChain `ChatAnthropic` | `https://dev.aigw.scdom.net/anthropic` (via `anthropic_api_url=`) |
+| LlamaIndex `OpenAI` class | `https://dev.aigw.scdom.net/v1` (via `api_base=`) |
+| OpenAI Agents SDK | `https://dev.aigw.scdom.net/v1` (via `base_url=` on `AsyncOpenAI`) |
 
-Do not append `/v1` twice. `https://aigw-dev.lab.cloud.scdom.net/v1/v1/chat/completions` is a 404.
+Do not append `/v1` twice. `https://dev.aigw.scdom.net/v1/v1/chat/completions` is a 404.
 
 ### 3. Wrong model ID
 
@@ -733,8 +733,8 @@ If your prompt text stays the same but the underlying data changes (e.g. you upd
 |---|---|
 | Developer portal (keys, usage, docs) | Over the corporate VPN (Entra ID SSO) |
 | Admin portal (teams, guardrails, audit) | Over the corporate VPN (Entra ID SSO) |
-| Gateway health status | https://aigw-dev.lab.cloud.scdom.net/health |
-| Admin API health | https://aigw-dev.lab.cloud.scdom.net/admin/health |
+| Gateway health status | https://dev.aigw.scdom.net/health |
+| Admin API health | https://dev.aigw.scdom.net/api/admin/health |
 
 ### Quick health check
 
@@ -744,7 +744,7 @@ Run this before debugging any framework issue — it confirms your key and the g
 import httpx
 
 resp = httpx.post(
-    "https://aigw-dev.lab.cloud.scdom.net/v1/chat/completions",
+    "https://dev.aigw.scdom.net/v1/chat/completions",
     headers={"Authorization": "Bearer sk-YOUR-KEY-HERE"},
     json={
         "model": "claude-haiku-4-5",

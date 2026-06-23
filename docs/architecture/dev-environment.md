@@ -13,10 +13,10 @@
 
 | Surface | URL | Credentials |
 |---|---|---|
-| Developer portal | `https://dev.aigw.scdom.net/portal/` | `pass show aigw/dev-portal` → `developer@aigw.scdom.net` |
-| Admin portal | `https://dev.aigw.scdom.net/admin-portal/` | `pass show aigw/admin-portal` → `admin@aigw.scdom.net` |
+| Developer portal | `https://dev.aigw.scdom.net/` | `pass show aigw/dev-portal` → `developer@aigw.scdom.net` |
+| Admin portal | `https://dev.aigw.scdom.net/admin` | `pass show aigw/admin-portal` → `admin@aigw.scdom.net` |
 | Inference API | `https://dev.aigw.scdom.net/v1/` | `sk-*` key — create via admin portal |
-| Health check | `https://dev.aigw.scdom.net/healthz` | — |
+| Health check | `https://dev.aigw.scdom.net/health` | — |
 
 ---
 
@@ -107,21 +107,14 @@ docker compose -f docker-compose.yml -f docker-compose.host.yml <command>
 
 | Path | Target | Mode | Notes |
 |---|---|---|---|
-| `/v1/*` | `cache:8002` | `handle` | Inference entry — prefix kept |
-| `/portal*` | `portal:3002` | `handle` | Next.js basePath must be kept |
-| `/admin-portal*` | `admin-portal:3001` | `handle` | Next.js basePath must be kept |
-| `/admin/*` | `admin:8005` | `handle_path` | Prefix stripped |
-| `/auth/*` | `admin:8005` | `handle` | Admin serves login/OIDC at `/auth/*` |
-| `/cache/*` | `cache:8002` | `handle_path` | Prefix stripped |
-| `/litellm/*` | `litellm:8003` | `handle_path` | Prefix stripped |
-| `/identity/*` | `identity:8006` | `handle_path` | Prefix stripped |
-| `/librarian/*` | `librarian:8008` | `handle_path` | Prefix stripped |
-| `/memory/*` | `memory:8009` | `handle_path` | Prefix stripped |
-| `/league/*` | `league:8010` | `handle_path` | Prefix stripped |
-| `/observability/*` | `observability:8004` | `handle_path` | Prefix stripped |
+| `/v1/*`, `/anthropic/*` | `cache:8002` | `handle` | Inference entry (OpenAI/Anthropic) — **frozen** contracts |
+| `/admin*` | `admin-portal:3001` | `handle` | Admin portal (Next.js basePath `/admin`) |
+| `/api/admin/*` | `admin:8005` | `handle_path` | Admin API — prefix stripped |
+| `/api/cache,litellm,identity,librarian,memory,league,observability/*` | each service | `handle_path` | Service APIs — prefix stripped |
+| `/auth/*` | `admin:8005` | `handle` | Login/OIDC — **frozen** (keeps OIDC redirect URI stable) |
 | `/agent-relay/*` | `agent-relay:8007` | `handle` | WebSocket — prefix kept |
-| `/healthz` | `"ok" 200` | — | Caddy synthetic health probe |
-| `/` | redirect `/portal/` | — | |
+| `/health`, `/healthz` | `"ok" 200` | — | Gateway health (`/healthz` kept as alias) |
+| `/` (and all else) | `portal:3002` | `handle` | Dev portal — catch-all (no basePath; `/`, `/keys`, `/_next/*`, …) |
 
 ---
 
@@ -183,8 +176,12 @@ docker compose -f docker-compose.yml -f docker-compose.host.yml pull
 docker compose -f docker-compose.yml -f docker-compose.host.yml up -d
 ```
 
-Prefer `scripts/deploy-vm.sh [IMAGE_TAG]` from an in-VNet host — it handles the GHCR
-login (token from `pass`), `git pull`, image pull, and rolling restart in one step.
+Prefer the scripts from an in-VNet host (both pull the GHCR token from `pass`):
+
+- **`scripts/update-service.sh <svc…>`** — the routine, light path: pull + `up -d --no-deps` for
+  just the named gateway service(s); the static base (postgres/redis/dex/caddy) is never touched.
+- **`scripts/deploy-vm.sh [IMAGE_TAG]`** — the full path (`git pull` + pull-all + `up -d`) for
+  multi-service, base, or compose changes.
 
 ---
 
@@ -267,12 +264,12 @@ flowchart TB
       litellm["litellm :8003\nprovider routing"]
     end
 
-    subgraph PORTALS["/portal*  /admin-portal*"]
+    subgraph PORTALS["/ (dev)  /admin* (admin)"]
       portal["portal :3002\nDeveloper portal"]
       adminportal["admin-portal :3001\nAdmin portal"]
     end
 
-    subgraph APIS["/name/* (prefix stripped)"]
+    subgraph APIS["/api/&lt;svc&gt;/* (prefix stripped)"]
       admin["admin :8005\norg nodes · API keys · auth"]
     end
 
@@ -285,10 +282,10 @@ flowchart TB
   ext["Anthropic · Azure AI · Gemini · GitHub"]
 
   dev --> zcc --> zpa -->|"443"| caddy
-  caddy -->|"/v1/*"| cache
-  caddy -->|"/portal*"| portal
-  caddy -->|"/admin-portal*"| adminportal
-  caddy -->|"/admin/*"| admin
+  caddy -->|"/v1/*  ·  /anthropic/*"| cache
+  caddy -->|"/  (catch-all)"| portal
+  caddy -->|"/admin*"| adminportal
+  caddy -->|"/api/admin/*"| admin
   cache -->|"POST /validate"| auth
   cache -->|"MISS"| litellm
   litellm --> ext

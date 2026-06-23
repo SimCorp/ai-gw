@@ -6,7 +6,7 @@ Complete developer documentation for the SimCorp AI Gateway platform serving ~20
 
 **New to the project?** Start here:
 
-1. [Getting Started Guide](guides/getting-started.md) — Access the deployed gateway, run tests, deploy
+1. [Getting Started Guide](guides/getting-started.md) — Access the deployed gateway at `https://dev.aigw.scdom.net`, run tests, deploy
 2. [Permission Model Guide](guides/permission-model.md) — Understand path-based access control
 3. [Services Architecture](architecture/services.md) — Overview of all microservices
 
@@ -34,10 +34,10 @@ Complete developer documentation for the SimCorp AI Gateway platform serving ~20
 ### System Design
 
 - **[Services Overview](architecture/services.md)** — All microservices and their roles
-  - Request path flow (Auth → Cache → LiteLLM → Provider)
+  - Request path flow (Caddy → Cache → [Cache calls Auth] → LiteLLM → Provider)
   - Data flows and dependencies
   - Service port map
-  - Container Apps topology
+  - Docker Compose topology (deferred ACA/V2 topology in the deployment design)
 
 - **[Organization Model](architecture/org-model.md)** — Deep dive into the org hierarchy
   - Materialized path tree structure
@@ -51,7 +51,7 @@ Complete developer documentation for the SimCorp AI Gateway platform serving ~20
 ### Essential Guides
 
 - **[Getting Started](guides/getting-started.md)**
-  - Accessing the Azure-deployed platform (VPN + Entra ID SSO)
+  - Accessing the deployed gateway at `https://dev.aigw.scdom.net` (corp VPN/ZPA + Entra ID SSO)
   - Inference API endpoints and `sk-*` keys
   - Common tasks (create node, grant role, etc.)
   - Running tests locally and deploying
@@ -91,12 +91,12 @@ SimCorp (root)
 ### Roles & Permissions
 
 ```
-platform_admin (6) ─ System access
+gateway_admin (6) ─ System access
 area_owner (5)     ─ Area + descendants
 unit_lead (4)      ─ Unit management
 team_admin (3)     ─ Team management
-developer (2)      ─ Developer access
-viewer (1)         ─ Read-only
+engineer (2)       ─ Engineer access
+reporter (1)       ─ Read-only
 ```
 
 **Permission Check:**
@@ -130,33 +130,35 @@ All permission checks use path prefixes (memory, no DB).
 
 ## Services Map
 
-Each service is a Container App named `ca-<service>-dev-sdc` with internal ingress.
-Service-to-service traffic uses internal DNS (`http://ca-<service>-dev-sdc`).
+Each service runs as a container in the Docker Compose stack. Service-to-service traffic uses
+container names (`http://<service>:<port>`).
 
-| Service | Container App | Internal Port | Purpose |
-|---------|---------------|---------------|---------|
-| **Admin API** | `ca-admin-dev-sdc` | 8005 | Org management backend |
-| **Auth** | `ca-auth-dev-sdc` | 8001 | Authentication & sessions |
-| **Cache** | `ca-cache-dev-sdc` | 8002 | Semantic + exact caching |
-| **LiteLLM** | `ca-litellm-dev-sdc` | 8003 | Model provider routing |
-| **Observability** | `ca-observability-dev-sdc` | 8004 | Usage tracking & audit |
-| **Identity** | `ca-identity-dev-sdc` | 8006 | Agent registry |
-| **Agent Relay** | `ca-agent-relay-dev-sdc` | 8007 | WebSocket relay bus |
-| **Librarian** | `ca-librarian-dev-sdc` | 8008 | Knowledge & embeddings |
-| **Memory** | `ca-memory-dev-sdc` | 8009 | Agent memory service |
-| **League** | `ca-league-dev-sdc` | 8010 | Gamified challenges |
-| **Scanner** | `ca-scanner-dev-sdc` | — (no ingress) | Security scanning worker |
-| **Admin Portal** | `ca-admin-portal-dev-sdc` | 3001 | Admin dashboard |
-| **Developer Portal** | `ca-portal-dev-sdc` | 3002 | Main user interface |
+| Service | Container | Port | Purpose |
+|---------|-----------|------|---------|
+| **Caddy** | `caddy` | 80/443 | TLS termination, reverse proxy |
+| **Admin API** | `admin` | 8005 | Org management backend |
+| **Auth** | `auth` | 8001 | Authentication & sessions |
+| **Cache** | `cache` | 8002 | Semantic + exact caching |
+| **LiteLLM** | `litellm` | 8003 | Model provider routing |
+| **Observability** | `observability` | 8004 | Usage tracking & audit |
+| **Identity** | `identity` | 8006 | Agent registry |
+| **Agent Relay** | `agent-relay` | 8007 | WebSocket relay bus |
+| **Librarian** | `librarian` | 8008 | Knowledge & embeddings |
+| **Memory** | `memory` | 8009 | Agent memory service |
+| **League** | `league` | 8010 | Gamified challenges |
+| **Graphify** | `graphify` | 8012 | Knowledge-graph service for navigating repos |
+| **Scanner** | `scanner` | — (background) | Security scanning worker |
+| **Admin Portal** | `admin-portal` | 3001 | Admin dashboard |
+| **Developer Portal** | `portal` | 3002 | Main user interface |
 
-External callers reach inference via the gateway FQDN (`https://aigw-dev.lab.cloud.scdom.net/v1`
+External callers reach inference via the gateway URL (`https://dev.aigw.scdom.net/v1`
 and `/anthropic`); the portals are reachable over the corporate VPN with Entra ID SSO.
 
 ## Common Tasks
 
 ### Create an Organization Node
 ```bash
-curl -X POST http://ca-admin-dev-sdc/nodes \
+curl -X POST http://admin:8005/nodes \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -170,7 +172,7 @@ See [Getting Started](guides/getting-started.md) for examples.
 
 ### Grant User Permission
 ```bash
-curl -X POST "http://ca-admin-dev-sdc/nodes/{node_id}/permissions" \
+curl -X POST "http://admin:8005/nodes/{node_id}/permissions" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -183,7 +185,7 @@ See [Nodes API Reference](api/nodes.md) for all permission endpoints.
 
 ### Check User Permissions
 ```bash
-curl http://ca-auth-dev-sdc/me \
+curl http://auth:8001/me \
   -H "Authorization: Bearer $TOKEN" | jq '.roles'
 ```
 
@@ -191,7 +193,8 @@ See [Permission Model Guide](guides/permission-model.md) for understanding resul
 
 ## Testing & Development
 
-The code is developed and tested locally, then deployed to Azure as container images.
+The code is developed and tested locally, then deployed to the dev VM as container images
+(`git push` master → CI builds + pushes to GHCR → VM pulls).
 See [Getting Started](guides/getting-started.md) for access, testing, and deployment.
 
 ### Running Tests
@@ -201,8 +204,8 @@ pytest services/ -v
 ```
 
 > The raw-SQL suites (`identity`, `admin`) use `testcontainers[postgres]` and need a
-> running Docker daemon. E2E smoke tests run against the deployed Azure environment
-> from a VNet-connected runner (`deploy.yml`).
+> running Docker daemon. End-to-end tests are a standalone `@playwright/test` suite in
+> `e2e/`, run against the deployed gateway as a post-deploy quality check (not a CI gate).
 
 ### Linting & Formatting
 ```bash
@@ -210,7 +213,15 @@ ruff check services/
 ruff format services/
 ```
 
-### Deploy
+### Deploy (dev VM — current)
+```bash
+scripts/update-service.sh <svc>   # routine single-service update
+scripts/deploy-vm.sh              # full stack deploy
+```
+The Compose stack always uses both files:
+`docker compose -f docker-compose.yml -f docker-compose.host.yml`.
+
+### Deploy (ACA / V2 — deferred)
 ```bash
 az deployment group create \
   --resource-group rg-aigw-dev-sdc \
@@ -218,7 +229,8 @@ az deployment group create \
   --parameters infra/bicep/environments/dev/main.bicepparam \
   --parameters imageTag=sha-<git-sha>
 ```
-Rollback by redeploying the previous `imageTag`.
+Rollback by redeploying the previous `imageTag`. See
+[`architecture/environments.md`](architecture/environments.md) for the ACA env guide.
 
 ## Database
 

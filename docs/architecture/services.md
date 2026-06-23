@@ -1,51 +1,53 @@
 # Services Architecture Overview
 
-The AI Gateway is a distributed, microservices-based platform serving ~2000 SimCorp engineers. It is
-deployed to **Azure Container Apps** (ACA) in the SimCorp Landing Zone (resource group
-`rg-aigw-dev-sdc`, Sweden Central). Each service runs as a Container App named `ca-<service>-dev-sdc`
-in the ACA environment `cae-aigw-dev-sdc`. The environment is `internal: true` — VNet-only, reachable
-from the corporate VPN, with a static internal IP `10.179.231.6`.
+The AI Gateway is a distributed, microservices-based platform serving ~2000 SimCorp engineers. It
+currently runs as a **single-host Docker Compose** deployment on one Linux VM (`vm-aigw-dev-sdc`,
+`10.179.231.68`, Azure Sweden Central), behind a Caddy reverse proxy doing TLS. Reached at
+`https://dev.aigw.scdom.net` over Zscaler ZPA (corp VPN). Each service runs as a container; services
+discover each other by container name (e.g. `http://litellm:8003`).
+
+> **Deferred V2 (ACA):** the Azure Container Apps deployment — Container Apps named
+> `ca-<service>-dev-sdc`, managed PostgreSQL/Redis/Key Vault, private endpoints — is in-repo and
+> ready for promotion but **not currently running**. See [`environments.md`](environments.md). The
+> data-store sections below describe the V2 managed-PaaS shape; in the current single-host
+> deployment those run as containers (postgres, redis) on the VM.
 
 ## Service Map
 
-The developer-facing entry point is the gateway FQDN **https://aigw-dev.lab.cloud.scdom.net**. ACA
-ingress routes inbound requests by path to each Container App; services call each other over ACA
-internal DNS at `http://ca-<service>-dev-sdc`.
+The developer-facing entry point is **https://dev.aigw.scdom.net**. Caddy terminates TLS and routes
+inbound requests by path prefix; services call each other by container name on the Compose network.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│        Gateway FQDN: https://aigw-dev.lab.cloud.scdom.net        │
-│              ACA ingress routes by path to services             │
+│           Gateway: https://dev.aigw.scdom.net (Caddy :443)        │
+│              routes by path prefix to each container              │
 └─────────────────────────────────────────────────────────────────┘
          │
-         ├─ /admin → Admin Service (ca-admin-dev-sdc:8005)
-         ├─ /auth → Auth Service (ca-auth-dev-sdc:8001)
-         ├─ /cache → Cache Service (ca-cache-dev-sdc:8002)
-         ├─ /litellm → LiteLLM (ca-litellm-dev-sdc:8003)
-         ├─ /observability → Observability (ca-observability-dev-sdc:8004)
-         ├─ /identity → Identity Service (ca-identity-dev-sdc:8006)
-         ├─ /agent-relay → Agent Relay (ca-agent-relay-dev-sdc:8007)
-         ├─ /librarian → Librarian (ca-librarian-dev-sdc:8008)
-         ├─ /memory → Memory Service (ca-memory-dev-sdc:8009)
-         ├─ /league → League Service (ca-league-dev-sdc:8010)
-         ├─ /admin-portal → Admin Portal (ca-admin-portal-dev-sdc:3001)
-         ├─ /portal → Developer Portal (ca-portal-dev-sdc:3002)
-         └─ /tools-app → IT Tools
+         ├─ /            → Developer Portal (portal:3002)
+         ├─ /admin       → Admin Portal (admin-portal:3001)
+         ├─ /v1/*        → Cache (cache:8002)  [OpenAI-compatible inference]
+         ├─ /anthropic/* → Cache (cache:8002)  [Anthropic inference]
+         ├─ /auth/*       → Admin Service (admin:8005)  [login / OIDC]
+         ├─ /agent-relay/* → Agent Relay (agent-relay:8007)  [WebSocket]
+         └─ /api/<svc>/*  → backend service APIs (prefix stripped by Caddy):
+              admin:8005 · cache:8002 · litellm:8003 · identity:8006
+              librarian:8008 · memory:8009 · league:8010 · graphify:8012 · observability:8004
 ```
 
-Background workers run as Container Apps with **no ingress**: `ca-scanner-dev-sdc` (security
-scanning) and `ca-workflow-worker-dev-sdc`.
+Background workers run as containers with **no ingress**: `scanner` (security scanning),
+`workflow-worker`, and `graphify-worker` (clones repos and runs `graphify extract`).
 
 ## Core Infrastructure
 
-All PaaS dependencies run as managed Azure services reached over **private endpoints** in
-`snet-pe-aigw-dev`. Their connection strings and secrets are stored in **Azure Key Vault** and
-injected into each Container App via the app's managed identity.
+In the current single-host deployment, PostgreSQL and Redis run as containers on the VM with secrets
+from a VM-local `.env`. The descriptions below cover both the running shape and the deferred V2
+managed-PaaS target.
 
-### PostgreSQL — Azure Database for PostgreSQL Flexible Server
+### PostgreSQL
 
 Multi-tenant database. Application services share the `aigateway` database; LiteLLM uses a separate
-`litellm` database on the same Flexible Server.
+`litellm` database. Current: `pgvector/pgvector:pg16` container on the VM. V2 target: Azure Database
+for PostgreSQL Flexible Server.
 
 **Key Tables:**
 - `organization_nodes` — hierarchical org structure (path-based)
@@ -59,11 +61,13 @@ Multi-tenant database. Application services share the `aigateway` database; Lite
 - `user_invitations` — pending invites
 - And service-specific tables (league, scanner, etc.)
 
-**Migrations:** Alembic (services/admin/migrations/) applied via the `job-db-migrate-dev-sdc` ACA job.
+**Migrations:** Alembic (services/admin/migrations/). In V2 (ACA) they run via the
+`job-db-migrate-dev-sdc` ACA job.
 
-### Redis — Azure Cache for Redis Premium P1
+### Redis
 
-Cache and session store.
+Cache and session store. Current: `redis/redis-stack` container on the VM. V2 target: Azure Cache
+for Redis Premium P1.
 
 **Key Stores:**
 - `session:{token}` — active session payloads (TTL: 8h admin / 7d dev)
@@ -74,16 +78,23 @@ Cache and session store.
 - `user_node_changed:{user_id}`, `user_team_changed:{user_id}` — cache invalidation flags
 - Provider-specific caches (embeddings, completions, etc.)
 
-### Additional PaaS
+### Secrets, events, and telemetry
 
+Current single-host deployment:
+- **Secrets** — VM-local `.env` (gitignored, mode 0600).
+- **Events** — observability events are delivered async via the `observability` service.
+- **Telemetry** — OpenTelemetry instrumentation is present; export to Application Insights is
+  env-gated and activates in V2.
+
+Deferred V2 (ACA):
 - **Azure Key Vault** — all service secrets and connection strings.
 - **Azure Service Bus** (queue `observability-events`) — async delivery of observability events.
 - **Application Insights + Log Analytics** workspace `law-aca-dev-sdc` — metrics, traces, and container logs.
 
-### Identity provider — Entra ID
+### Identity provider
 
-Authentication uses **Entra ID** (Azure AD). OIDC groups are the source of truth for role
-assignments. OIDC client config is stored in Key Vault.
+OIDC groups are the source of truth for role assignments. Current single-host dev uses a local
+**dex** OIDC provider; V2 uses **Entra ID** (Azure AD) with OIDC client config in Key Vault.
 
 ---
 
@@ -123,7 +134,7 @@ assignments. OIDC client config is stored in Key Vault.
 
 **Request Path:**
 ```
-Client → ca-cache-dev-sdc:8002 → ca-litellm-dev-sdc:8003 → OpenAI/Anthropic
+Client → cache:8002 → litellm:8003 → OpenAI/Anthropic
 ```
 
 **Key Features:**
@@ -134,8 +145,8 @@ Client → ca-cache-dev-sdc:8002 → ca-litellm-dev-sdc:8003 → OpenAI/Anthropi
 
 **Dependencies:**
 - Redis (cache store)
-- LiteLLM (`ca-litellm-dev-sdc:8003`) for cache misses
-- Observability (`ca-observability-dev-sdc:8004`) for cost recording
+- LiteLLM (`litellm:8003`) for cache misses
+- Observability (`observability:8004`) for cost recording
 
 ---
 
@@ -230,7 +241,7 @@ Client → ca-cache-dev-sdc:8002 → ca-litellm-dev-sdc:8003 → OpenAI/Anthropi
 
 **Dependencies:**
 - PostgreSQL (pgvector for embeddings)
-- Embedding API via the gateway (`ca-litellm-dev-sdc:8003`)
+- Embedding API via the gateway (`litellm:8003`)
 - Redis (job queue)
 
 ---
@@ -247,7 +258,7 @@ Client → ca-cache-dev-sdc:8002 → ca-litellm-dev-sdc:8003 → OpenAI/Anthropi
 
 **Dependencies:**
 - PostgreSQL
-- Librarian (`ca-librarian-dev-sdc:8008`) for embeddings
+- Librarian (`librarian:8008`) for embeddings
 
 ---
 
@@ -268,9 +279,32 @@ Client → ca-cache-dev-sdc:8002 → ca-litellm-dev-sdc:8003 → OpenAI/Anthropi
 
 ---
 
-### Scanner Service (`ca-scanner-dev-sdc`, no ingress)
+### Graphify Service (:8012)
 
-**Role:** Security scanning (Garak, Nuclei, Nmap, ZAP). Runs as a background worker Container App
+**Role:** Knowledge-graph service — registers GitHub repos, builds a queryable semantic
+graph of each codebase, and exposes query APIs (and MCP tools) for navigating a repo by
+concept. Splits into the `graphify` query API and the `graphify-worker` build runner.
+
+**Features:**
+- Repo registry + FIFO build queue (`graph_repos` / `graph_builds`)
+- Build pipeline: shallow git clone/pull → `graphify extract` → node/edge counts + artefacts
+- Query surface: `GET /query` plus MCP tools (`graph_query`, `graph_path`, `graph_explain`,
+  `graph_stats`, `list_repos`) — pure local retrieval, no LLM at query time
+- Gateway governance: build-time extraction routes through `cache:8002` with a `sk-*` key;
+  direct provider keys are stripped from the build env
+
+**Dependencies:**
+- PostgreSQL (registry + build queue)
+- `auth:8001` (sk-* validation) and `cache:8002` (build-time extraction LLM)
+- Shared `graphify_out` volume for build artefacts
+
+See [Graphify design spec](../superpowers/specs/2026-06-22-graphify-knowledge-graph-design.md).
+
+---
+
+### Scanner Service (`scanner`, no ingress)
+
+**Role:** Security scanning (Garak, Nuclei, Nmap, ZAP). Runs as a background worker container
 with no ingress; it pulls jobs from the queue rather than serving HTTP.
 
 **Features:**
@@ -300,7 +334,7 @@ with no ingress; it pulls jobs from the queue rather than serving HTTP.
 
 **Technology:** Next.js 20 (Node.js), Server Components
 
-**API Base:** `https://aigw-dev.lab.cloud.scdom.net/admin` (via ACA ingress)
+**API Base:** `https://dev.aigw.scdom.net/admin` (served at `/admin` via Caddy)
 
 ---
 
@@ -323,14 +357,14 @@ with no ingress; it pulls jobs from the queue rather than serving HTTP.
 
 **Technology:** Next.js 20 (Node.js), Shadcn UI
 
-**API Dependencies (via ACA ingress at the gateway FQDN):**
-- Admin (`/admin`) — org/user context
-- Cache (`/cache`) — chat completions
-- Librarian (`/librarian`) — documents/RAG
-- Memory (`/memory`) — conversation history
-- Identity (`/identity`) — agent discovery
-- Agent Relay (`/agent-relay`) — real-time WebSocket
-- League (`/league`) — challenges, leaderboard
+**API Dependencies (via Caddy at `https://dev.aigw.scdom.net`):**
+- Inference (`/v1/*`, `/anthropic/*`) — chat completions, routed to cache
+- Admin (`/api/admin/*`) — org/user context
+- Librarian (`/api/librarian/*`) — documents/RAG
+- Memory (`/api/memory/*`) — conversation history
+- Identity (`/api/identity/*`) — agent discovery
+- Agent Relay (`/agent-relay/*`) — real-time WebSocket
+- League (`/api/league/*`) — challenges, leaderboard
 
 ---
 
@@ -338,7 +372,8 @@ with no ingress; it pulls jobs from the queue rather than serving HTTP.
 
 **Role:** Developer toolbox (terminal, DB clients, etc.).
 
-**Deployment:** Pre-built container image, no ingress of its own (accessed via ACA ingress at `/tools-app/`)
+**Deployment:** Pre-built container image. Not part of the current single-host Compose stack; a
+`/tools-app/` ingress is only contemplated for the deferred V2 (ACA) deployment.
 
 ---
 
@@ -347,18 +382,18 @@ with no ingress; it pulls jobs from the queue rather than serving HTTP.
 Standard flow for a user request to generate code:
 
 ```
-1. Browser: POST https://aigw-dev.lab.cloud.scdom.net/cache/v1/chat/completions
+1. Browser: POST https://dev.aigw.scdom.net/v1/chat/completions
    └─ Body: {model, messages, temperature, ...}
 
-2. ACA ingress routes to Cache (ca-cache-dev-sdc:8002)
+2. Caddy routes /v1/* to Cache (cache:8002)
 
 3. Cache Service
    ├─ Validate Authorization header (Bearer token)
    ├─ Query Redis for session: session:{token}
-   ├─ Check can_access(user, /org/path, "developer")
+   ├─ Check can_access(user, /org/path, "engineer")
    ├─ Retrieve user's node-scoped policy (cache_ttl, rate_limit, allowed_models)
    │
-   ├─ Check semantic cache (Redis) for similar prompt
+   ├─ Check semantic cache (Postgres/pgvector, HNSW) for similar prompt
    │  └─ Hit? Return cached response + log to observability
    │
    ├─ Check exact cache
@@ -366,7 +401,7 @@ Standard flow for a user request to generate code:
    │
    └─ Cache miss → Forward to LiteLLM
 
-4. LiteLLM (ca-litellm-dev-sdc:8003)
+4. LiteLLM (litellm:8003)
    ├─ Route to provider (OpenAI, Anthropic, etc.)
    ├─ Handle rate limiting, retry logic
    └─ Return response
@@ -404,27 +439,32 @@ Standard flow for a user request to generate code:
 
 ## Deploy and Access
 
-**Deploy:** Bicep against the dev resource group (CI runs this via `deploy.yml`):
-```bash
-az deployment group create \
-  --resource-group rg-aigw-dev-sdc \
-  --template-file infra/bicep/environments/dev/main.bicep \
-  --parameters infra/bicep/environments/dev/main.bicepparam \
-  --parameters imageTag=sha-<git-sha>
-```
-Each deploy creates a fresh, atomic revision per Container App. Database migrations run as the
-`job-db-migrate-dev-sdc` ACA job. See the operations runbook for rollback and revision management.
+**Deploy (current single-host):** `git push` to `master` → CI builds + pushes images to GHCR →
+the VM pulls. Routine single-service update: `scripts/update-service.sh <svc>` (static base
+untouched); full deploy: `scripts/deploy-vm.sh`. Compose always runs with both files
+(`docker-compose.yml` + `docker-compose.host.yml`). Host stand-up is intentionally manual, not IaC.
 
-**Service Readiness:** ACA uses each service's `/health`, `/ready`, and `/liveliness` endpoints as
-its liveness/readiness probes; ingress only routes to a revision once it reports ready.
+**Deploy (deferred V2, ACA):** Bicep against the dev resource group, CI via `deploy.yml`
+(archived). See [`environments.md`](environments.md).
 
-**Access (over the corporate VPN):**
-- Admin Portal: https://aigw-dev.lab.cloud.scdom.net/admin-portal/
-- Developer Portal: https://aigw-dev.lab.cloud.scdom.net/portal/
-- API: https://aigw-dev.lab.cloud.scdom.net/{path}/ (internally, services call `http://ca-<service>-dev-sdc`)
+**Service Readiness:** each service exposes `/health`, `/ready`, and `/liveliness` endpoints; in V2
+(ACA) these are the liveness/readiness probes and ingress only routes once a revision reports ready.
+
+**Access (over the corporate VPN, via Zscaler ZPA):**
+- Developer Portal: https://dev.aigw.scdom.net/
+- Admin Portal: https://dev.aigw.scdom.net/admin
+- Inference API: https://dev.aigw.scdom.net/v1/ (internally, services call each other by container name)
 
 ## Deployment Topology
 
+**Current (single-host):**
+- **Compute:** Docker Compose on `vm-aigw-dev-sdc` (static private IP `10.179.231.68`, Sweden Central).
+- **PostgreSQL:** `pgvector/pgvector:pg16` container (databases `aigateway` + `litellm`).
+- **Redis:** `redis/redis-stack` container.
+- **Secrets:** VM-local `.env` (gitignored, mode 0600).
+- **Networking:** only Caddy is exposed (443/80); all services bind `127.0.0.1`; reached via ZPA.
+
+**Deferred V2 (ACA):**
 - **Compute:** Azure Container Apps in environment `cae-aigw-dev-sdc` (`internal: true`, static IP `10.179.231.6`, Sweden Central), resource group `rg-aigw-dev-sdc`.
 - **PostgreSQL:** Azure Database for PostgreSQL Flexible Server (databases `aigateway` + `litellm`).
 - **Redis:** Azure Cache for Redis Premium P1.
@@ -434,5 +474,5 @@ its liveness/readiness probes; ingress only routes to a revision once it reports
 - **Networking:** all PaaS reached via private endpoints in `snet-pe-aigw-dev`; ingress is VNet-only behind the gateway FQDN.
 
 **Authentication:**
-- Entra ID (Azure AD) is the identity provider.
-- OIDC groups are source of truth for role assignments.
+- OIDC groups are the source of truth for role assignments.
+- Current single-host dev uses a local **dex** OIDC provider; V2 uses **Entra ID** (Azure AD).

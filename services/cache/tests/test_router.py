@@ -59,8 +59,11 @@ async def app_and_client():
 
     mock_http = AsyncMock()
 
+    mock_pool = AsyncMock()
+
     app.state.redis = mock_redis
     app.state.http = mock_http
+    app.state.pool = mock_pool
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         yield app, c
@@ -264,7 +267,7 @@ class TestChatCompletions:
         with (
             patch("app.exact.get", new=AsyncMock(return_value=None)),
             patch("app.semantic.embed", new=AsyncMock(return_value=[0.1, 0.2, 0.3])),
-            patch("app.semantic.get", new=AsyncMock(return_value=sem_cached)),
+            patch("app.semantic.get", new=AsyncMock(return_value=(sem_cached, 0.95))),
         ):
             resp = await client.post(
                 "/v1/chat/completions",
@@ -310,6 +313,45 @@ class TestChatCompletions:
         assert any("/events" in url for url in obs_calls), (
             "Expected an observability event POST after cache miss"
         )
+
+    async def test_near_miss_emits_similarity_score(self, app_and_client):
+        """A below-threshold semantic lookup is a miss, but its score must be
+        carried into the observability event as `similarity_score` (P2 near-miss
+        instrumentation)."""
+        app, client = app_and_client
+        events = []
+
+        async def _post_side_effect(url, **kwargs):
+            if "validate" in url:
+                return _auth_response_ok()
+            if "/events" in url:
+                events.append(kwargs.get("json"))
+                return HttpxResponse(200, json={})
+            return _litellm_chat_response("hi")
+
+        app.state.http.post = AsyncMock(side_effect=_post_side_effect)
+
+        with (
+            patch("app.exact.get", new=AsyncMock(return_value=None)),
+            patch("app.semantic.embed", new=AsyncMock(return_value=[0.1, 0.2, 0.3])),
+            # below the 0.90 threshold → no hit, but a positive near-miss score
+            patch("app.semantic.get", new=AsyncMock(return_value=(None, 0.87))),
+            patch("app.exact.set", new=AsyncMock()),
+            patch("app.semantic.set", new=AsyncMock()),
+        ):
+            resp = await client.post(
+                "/v1/chat/completions",
+                json=CHAT_BODY,
+                headers={"Authorization": "Bearer valid"},
+            )
+
+        assert resp.status_code == 200
+        import asyncio
+
+        await asyncio.sleep(0)
+        miss_events = [e for e in events if e and e.get("cache_hit") is False]
+        assert miss_events, "Expected a cache-miss observability event"
+        assert miss_events[0]["similarity_score"] == 0.87
 
     async def test_response_stored_in_exact_cache_after_miss(self, app_and_client):
         """On a successful LiteLLM response the result must be persisted via exact.set."""
@@ -596,7 +638,7 @@ class TestStreamingCacheHits:
         with (
             patch("app.exact.get", new=AsyncMock(return_value=None)),
             patch("app.semantic.embed", new=AsyncMock(return_value=[0.1, 0.2, 0.3])),
-            patch("app.semantic.get", new=AsyncMock(return_value=_CACHED_RESPONSE)),
+            patch("app.semantic.get", new=AsyncMock(return_value=(_CACHED_RESPONSE, 0.95))),
         ):
             resp = await client.post(
                 "/v1/chat/completions",

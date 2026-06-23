@@ -21,8 +21,10 @@ COPY --from=deps /app ./
 COPY . .
 
 # NEXT_PUBLIC_* are baked at build time and must be set before `pnpm build`.
-ARG NEXT_PUBLIC_ADMIN_API=https://dev.aigw.scdom.net/admin
+ARG NEXT_PUBLIC_ADMIN_API=https://dev.aigw.scdom.net/api/admin
+ARG NEXT_PUBLIC_LEAGUE_API=https://dev.aigw.scdom.net/api/league
 ENV NEXT_PUBLIC_ADMIN_API=$NEXT_PUBLIC_ADMIN_API
+ENV NEXT_PUBLIC_LEAGUE_API=$NEXT_PUBLIC_LEAGUE_API
 ENV NEXT_TELEMETRY_DISABLED=1
 
 RUN pnpm --filter @aigw/admin build

@@ -18,8 +18,8 @@
 | SSH | `ssh-aigw` helper on AZWESU0005 (pass key `ssh/dev.aigw.scdom.net`) |
 | Compose dir | `/home/azureuser/ai-gw/infra/` |
 | Compose command | `docker compose -f docker-compose.yml -f docker-compose.host.yml` |
-| Admin portal | `https://dev.aigw.scdom.net/admin-portal/` |
-| Dev portal | `https://dev.aigw.scdom.net/portal/` |
+| Admin portal | `https://dev.aigw.scdom.net/admin/` |
+| Dev portal | `https://dev.aigw.scdom.net/` |
 | Inference | `https://dev.aigw.scdom.net/v1/` |
 
 ### Check service health
@@ -63,6 +63,21 @@ scripts/deploy-vm.sh sha-abc123 # pin a specific build (rollback / controlled de
 The script pulls the SSH key and a GHCR read token from `pass`, logs the VM into GHCR,
 then runs the pull + restart below. See the script header for env overrides.
 
+**Routine gateway update (one or a few services) — the light path:**
+
+Most changes touch a single gateway service. Update just that service and leave the **static
+base** (postgres, redis, dex, caddy) untouched:
+
+```bash
+scripts/update-service.sh auth cache          # pull + `up -d --no-deps` for these only
+scripts/update-service.sh --tag sha-abc123 admin
+```
+
+Use `deploy-vm.sh` (full pull + `up -d`) only for multi-service, base, or compose-file changes —
+and even then `up -d` is **convergent**: it recreates only containers whose image/config changed,
+so unchanged base containers keep running. The base is effectively static; it is updated only by a
+deliberate base/compose change, never as a side effect of a gateway update.
+
 **Manual equivalent — on the VM:**
 
 ```bash
@@ -82,13 +97,72 @@ docker compose -f docker-compose.yml -f docker-compose.host.yml up -d   # rollin
 > docker compose -f docker-compose.yml -f docker-compose.host.yml up -d --no-deps portal admin-portal
 > ```
 
+> **Caddy-reload gotcha:** neither `deploy-vm.sh` nor `docker compose … up -d` reloads Caddy —
+> the Caddyfile is a read-only bind-mount, and `up -d` only recreates containers whose image or
+> config changed. After editing the Caddyfile you must restart Caddy explicitly:
+> ```bash
+> docker compose -f docker-compose.yml -f docker-compose.host.yml restart caddy
+> ```
+
 ### Secrets and `.env`
 
 All provider API keys live in `/home/azureuser/ai-gw/.env` (gitignored, mode 0600). To update a key, pipe it from `pass` on AZWESU0005 via SSH — never write secrets to disk in plaintext. See `docs/architecture/dev-environment.md` for the exact pattern.
 
+The live `.env` carries ~49 keys. The full set is whatever `infra/docker-compose.yml` references; the
+keys that **must** be present (no safe default) are the provider keys + control-plane secrets:
+
+| Group | Keys |
+|---|---|
+| Providers | `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`/`AZURE_API_KEY`+`AZURE_API_BASE`+`AZURE_API_VERSION`, `GEMINI_API_KEY`, `GITHUB_MODELS_API_KEY`, `GITHUB_COPILOT_TOKEN`, `AZURE_AI_FOUNDRY_ENDPOINT`/`_KEY`, `EMBEDDING_API_KEY`/`_BASE_URL`/`_MODEL` |
+| Gateway / admin | `LITELLM_MASTER_KEY`, `ADMIN_TOKEN`, `SECRET_KEY`, `IDENTITY_KEY_SECRET`, `RELAY_SECRET` |
+| Auth / OIDC | `JWKS_URI`, `ENTRA_TENANT_ID`, `ENTRA_CLIENT_ID`, `OIDC_ISSUER`/`OIDC_CLIENT_ID`/`OIDC_CLIENT_SECRET` |
+| Infra | `DATABASE_URL`, `REDIS_URL`, `POSTGRES_DB`/`_USER`/`_PASSWORD`, `BUS_PROVIDER` |
+| Optional | `SMTP_*` (email), `WORKDAY_*` (org sync), `DEV_BYPASS_AUTH` |
+
+> The service-to-service secrets `AGENT_RELAY_SECRET`, `IDENTITY_SERVICE_TOKEN`,
+> `LIBRARIAN_SERVICE_TOKEN`, `SCANNER_WORKER_SECRET`, `INTERNAL_API_KEY`, `ADMIN_INTERNAL_TOKEN`
+> fall back to the non-empty dev defaults baked into `docker-compose.yml` (`${VAR:-…}`); set real
+> values for any hardening. (See §0.)
+
+### Host stand-up (manual, reproducible)
+
+The VM **host is intentionally not infrastructure-as-code** — for a single dev box, full
+Terraform/Bicep-VM would be over-engineering. Provisioning is a manual, reproducible checklist
+(VM creation is also classifier-blocked for agents). To rebuild the host from scratch:
+
+1. **VM + NSG (user):** `az vm create` an Ubuntu VM with a static private IP; NSG inbound `443`+`80`
+   from the ZPA connector range and `22` from ZPA/mgmt.
+2. **IT requests (user):** ① cert `*.aigw.scdom.net` (SimCorp Issuing CA); ② DNS A record
+   `dev.aigw.scdom.net` → the VM IP (internal zone); ③ ZPA route + TLS passthrough on 443/80/22.
+3. **Docker:** install Docker Engine + the compose plugin.
+4. **Repo:** clone to `~/ai-gw` and check out `master`.
+5. **Cert:** install `infra/certs/cert.pem` + `key.pem` from the `pass` PFX entry (see
+   `docs/architecture/dev-environment.md` for the exact pipe-from-pass commands).
+6. **`.env`:** seed `~/ai-gw/.env` (mode 0600) from `pass` — the keys in the table above.
+7. **GHCR + bring up:** `docker login ghcr.io` (read-only PAT from `pass api/GHCR PAT aigw`),
+   then `scripts/deploy-vm.sh` from an in-VNet host (or `docker compose … pull && up -d` on the VM).
+
+The repo is the source of truth for the compose stack, Caddyfile, dex config, and the deploy model;
+the only host-local, gitignored state is `.env` + `infra/certs/` (both sourced from `pass`).
+
 ### TLS certificate
 
 Wildcard cert `*.aigw.scdom.net` (SimCorp Issuing CA, valid until 2028). Stored in `pass` as `certificate/wildcard.aigw.scdom.net.pfx.b64`. Installed at `~/ai-gw/infra/certs/cert.pem` + `key.pem` on the VM. See `docs/architecture/dev-environment.md` for the reinstall procedure.
+
+> **`cert.pem` MUST be a full chain: leaf + the `SimCorp Issuing CA` intermediate** (leaf first).
+> A leaf-only `cert.pem` still passes `curl -k` and the Playwright suite (`ignoreHTTPSErrors: true`),
+> but **real browsers reject it** — *"Secure Connection Failed … the authenticity of the received data
+> could not be verified"* — because they can't build leaf → intermediate → root. The PFX usually
+> contains the chain; when exporting, include it (`openssl pkcs12 -nokeys` emits leaf + chain).
+>
+> Verify the served chain (must show **2 certs** and NOT `Verify return code: 21`):
+> ```bash
+> echo | openssl s_client -connect dev.aigw.scdom.net:443 -servername dev.aigw.scdom.net -showcerts 2>/dev/null \
+>   | grep -cE 'BEGIN CERTIFICATE'           # expect >= 2
+> ```
+> `deploy-vm.sh` now runs this check after every deploy and warns if the chain is incomplete.
+> To repair a leaf-only cert in place: fetch the intermediate from the leaf's AIA URL
+> (`openssl … -text | grep 'CA Issuers'`), convert DER→PEM, append it to `cert.pem`, `restart caddy`.
 
 ### Common failure modes (single-host)
 
@@ -104,6 +178,16 @@ Wildcard cert `*.aigw.scdom.net` (SimCorp Issuing CA, valid until 2028). Stored 
 ---
 
 ## ACA reference (archived — V2/prod path)
+
+> **Everything below this line describes the FUTURE Azure Container Apps (ACA) deployment**, not
+> the current single-host VM. It is kept as the reference for the V2/prod promotion path — `az`
+> commands, container-app revisions, Key Vault secrets, private endpoints, and the
+> `ca-*-dev-sdc` / `aigw-dev.lab.cloud.scdom.net` names all refer to that future target. For
+> operating the live system today, use the **Single-host VM operations** section above. The
+> deployment-agnostic procedures below (database maintenance, team/rate-limit management, the
+> audit-log queries) apply to both — on the single-host VM, reach Postgres and Redis via
+> `docker exec ai-gateway-postgres-1 …` / `ai-gateway-redis-1 …` instead of `az` / private
+> endpoints (see the single-host failure-modes table above for the exact form).
 
 ---
 
@@ -177,7 +261,7 @@ All PaaS services are reached over **private endpoints** in `snet-pe-aigw-dev`. 
 | Component | Azure resource | Role |
 |-----------|----------------|------|
 | PostgreSQL | Azure Database for PostgreSQL Flexible Server (databases `aigateway` + `litellm`) | Teams, API keys, policies, cost records, audit log, developers; LiteLLM state |
-| Redis | Azure Cache for Redis Premium P1 | Rate limit counters, semantic cache, admin portal sessions |
+| Redis | Azure Cache for Redis Premium P1 | Rate limit counters, exact cache, admin portal sessions (semantic cache moved to Postgres/pgvector) |
 | Secrets | Azure Key Vault | All service secrets and connection strings |
 | Event bus | Azure Service Bus (queue `observability-events`) | Async observability event delivery |
 | Telemetry | Application Insights + Log Analytics workspace `law-aca-dev-sdc` | Metrics, traces, container logs |
@@ -259,25 +343,35 @@ az containerapp env show -n cae-aigw-dev-sdc -g rg-aigw-dev-sdc
 
 ### First login (admin portal)
 
-The default admin account is seeded automatically on first boot when `ENVIRONMENT=development`:
-
 | Field | Value |
 |-------|-------|
-| URL | https://aigw-dev.lab.cloud.scdom.net/admin-portal/ |
-| Email | `admin@simcorp.com` |
-| Password | set by the `_default_hash` in `services/admin/app/main.py` |
+| URL | https://dev.aigw.scdom.net/admin |
+| Email | `admin@aigw.scdom.net` |
+| Password | `pass show aigw/admin-portal` |
 
-The plaintext password is not stored in the repo. If you don't know it (e.g. on a freshly
-provisioned environment), reset it directly against the Flexible Server from a VNet-connected host:
+The plaintext password is not stored in the repo. If you need to reset it (e.g. on a freshly
+provisioned environment), SSH to the VM and run:
 
 ```bash
-python3 - <<'EOF'
-import bcrypt, subprocess
-NEW_PASSWORD = "SimCorp1!"   # change to whatever you want
+ssh-aigw
+docker exec -i ai-gateway-admin-1 python3 - <<'EOF'
+import bcrypt, asyncio, os
+from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy import text
+
+NEW_PASSWORD = "..."   # set to whatever you want
 h = bcrypt.hashpw(NEW_PASSWORD.encode(), bcrypt.gensalt(12)).decode()
-sql = f"UPDATE users SET password_hash = '{h}', must_change_password = false WHERE email = 'admin@simcorp.com';"
-subprocess.run(["psql", "-h", "<flexible-server-fqdn>", "-U", "aigateway", "-d", "aigateway", "-c", sql])
-print(f"Password reset to: {NEW_PASSWORD}")
+
+async def run():
+    engine = create_async_engine(os.environ["DATABASE_URL"])
+    async with engine.begin() as conn:
+        await conn.execute(
+            text("UPDATE users SET password_hash = :h, must_change_password = false WHERE email = 'admin@aigw.scdom.net'"),
+            {"h": h},
+        )
+    print("Password reset.")
+
+asyncio.run(run())
 EOF
 ```
 
@@ -287,7 +381,7 @@ On a freshly provisioned environment the areas/units/teams tables are empty. Pop
 hierarchy:
 
 ```bash
-# 1. Log in at https://aigw-dev.lab.cloud.scdom.net/admin-portal/, then in the browser console:
+# 1. Log in at https://aigw-dev.lab.cloud.scdom.net/admin/, then in the browser console:
 #    sessionStorage.getItem('admin_session_token')
 # 2. Copy the token and run (from a VNet-connected host):
 ADMIN_TOKEN=<token> python3 scripts/seed_simcorp_org.py
@@ -310,8 +404,8 @@ The admin portal exposes a built-in health dashboard (reachable over the corp VP
 
 | URL | Format | Notes |
 |-----|--------|-------|
-| `https://aigw-dev.lab.cloud.scdom.net/admin-portal/admin/dashboard` | HTML | Auto-refreshes every 10 seconds |
-| `https://aigw-dev.lab.cloud.scdom.net/admin/system/health` | JSON | Suitable for external monitoring/alerting |
+| `https://aigw-dev.lab.cloud.scdom.net/admin/dashboard` | HTML | Auto-refreshes every 10 seconds |
+| `https://aigw-dev.lab.cloud.scdom.net/api/admin/system/health` | JSON | Suitable for external monitoring/alerting |
 
 **Visual dashboard:** The JSON endpoint is also rendered as a rich visual dashboard at the admin-portal dashboard URL above. It polls every 10 seconds and shows: service status dots with latency bars, Redis memory, Postgres active connections, LiteLLM model count, gateway requests/minute, cache hit rate, and recent error events.
 
@@ -404,6 +498,47 @@ on the developer's machine; the rest run without it.
 **End-to-end smoke tests** run against the deployed dev environment from a VNet-connected CI runner
 as part of `deploy.yml` after a successful deploy. They exercise the gateway FQDN and confirm each
 service responds on `/health` and that the auth → cache → litellm path works end-to-end.
+
+### Quality tests (browser E2E walkthrough)
+
+`e2e/` is a standalone Playwright (`@playwright/test`) project that logs into the **dev + admin
+portals** and walks every route, asserting **no client-side crashes** (uncaught page errors) and
+**no failed backend calls** (HTTP ≥ 400, benign noise filtered). It catches exactly the class of
+breakage that unit tests miss — e.g. a page that renders but whose data fetch 401s/CSP-blocks, or an
+`x.map is not a function` crash. The full walk is fast (~25s; both portals run in parallel). Set
+**`E2E_CLICK=1`** for the thorough pass that also clicks every **non-destructive** button (deny-list
+skips delete/revoke/rotate/etc.; native confirms auto-cancel) — slower, off by default.
+
+It targets a **deployed** environment (reachable only in-VNet / over ZPA) and is **NOT a CI merge
+gate** — gating PR merges on a live-env test would validate the *old* deployment, not the PR, and
+add flake. Run it on demand or as a post-deploy smoke.
+
+```bash
+# On-demand, from an in-VNet host (creds pulled from pass; never written to disk):
+scripts/e2e-quality.sh                       # walk both portals on dev.aigw.scdom.net (~25s)
+scripts/e2e-quality.sh --project dev-portal  # one portal
+E2E_CLICK=1 scripts/e2e-quality.sh           # thorough: also click every safe button (slower)
+E2E_BASE_URL=https://aigw-test.lab.cloud.scdom.net scripts/e2e-quality.sh
+
+# Post-deploy smoke (deploy, then fail if the walkthrough fails):
+SMOKE=1 scripts/deploy-vm.sh
+
+# View the HTML report / traces afterwards:
+pnpm --prefix e2e exec playwright show-report
+```
+
+**Where results land:** the terminal `list` reporter prints each route live; a rich **HTML
+report** (with a screenshot + trace for any failure) is written to `e2e/playwright-report/`; and a
+**machine-readable `e2e/results.json`** (for dashboards/alerts) is emitted. In CI both are uploaded
+as the `playwright-report` artifact.
+
+**Known-benign signals** (allow-listed in `e2e/lib/walk.ts`, not failures): the Radix
+`DialogContent requires a DialogTitle` a11y advisory; the `403 …/developers/{id}/teams` for a test
+account with no team. **Automation:** `.github/workflows/e2e-quality.yml` runs it on
+`workflow_dispatch` + nightly schedule, **non-gating**, on a `vnet-aigw-dev` self-hosted runner —
+dormant until that runner exists and the repo variable `E2E_ENABLED=true` is set. A true hermetic
+PR gate (spin up the full stack in CI and run Playwright against `localhost`) is a planned
+follow-up.
 
 ---
 
@@ -515,12 +650,12 @@ psql -h <flexible-server-fqdn> -U aigateway -d aigateway -c "
 
 # Check LiteLLM model list (should list configured models), via the gateway over VPN
 curl -s -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
-  https://aigw-dev.lab.cloud.scdom.net/litellm/v1/models | python3 -m json.tool
+  https://aigw-dev.lab.cloud.scdom.net/api/litellm/v1/models | python3 -m json.tool
 ```
 
 **Fix:**
 
-1. Open the admin portal settings page at `https://aigw-dev.lab.cloud.scdom.net/admin-portal/admin/dashboard`.
+1. Open the admin portal settings page at `https://aigw-dev.lab.cloud.scdom.net/admin/dashboard`.
 2. Enter the API key for the failing provider in the appropriate field.
 3. Click **Save**. The portal stores the key in `provider_keys` and immediately calls `PATCH /model/update` on LiteLLM — no restart required.
 4. Use the **Test** button on the settings page to verify connectivity. It fires a 1-token completion and reports latency.
@@ -697,7 +832,7 @@ pg_dump -h <flexible-server-fqdn> -U aigateway aigateway | gzip > aigateway-$(da
 
 ### Via the Admin UI (preferred)
 
-1. Open the admin portal at `https://aigw-dev.lab.cloud.scdom.net/admin-portal/admin/dashboard`.
+1. Open the admin portal at `https://aigw-dev.lab.cloud.scdom.net/admin/dashboard`.
 2. Navigate to **Settings** (or go directly to the dashboard URL above).
 3. Find the provider row (Anthropic, OpenAI, Google, or GitHub Models).
 4. Enter the API key in the text field for that provider.
@@ -711,7 +846,7 @@ pg_dump -h <flexible-server-fqdn> -U aigateway aigateway | gzip > aigateway-$(da
 
 ```bash
 curl -s -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
-  https://aigw-dev.lab.cloud.scdom.net/litellm/v1/models | python3 -c "
+  https://aigw-dev.lab.cloud.scdom.net/api/litellm/v1/models | python3 -c "
 import json, sys
 models = json.load(sys.stdin)
 for m in models.get('data', []):
@@ -912,7 +1047,7 @@ column describes what each variable points at in the dev environment.
 
 | Variable | Value / source | Description |
 |----------|----------------|-------------|
-| `REDIS_URL` | Redis Premium (from Key Vault) | Redis for semantic cache storage |
+| `REDIS_URL` | Redis Premium (from Key Vault) | Exact cache, rate-limit counters, sessions (semantic cache uses Postgres/pgvector) |
 | `LITELLM_URL` | `http://ca-litellm-dev-sdc:8003` | Upstream for cache misses |
 | `LITELLM_MASTER_KEY` | from Key Vault | Bearer token for LiteLLM API |
 | `AUTH_URL` | `http://ca-auth-dev-sdc:8001` | Auth service for upstream validation |
@@ -920,7 +1055,7 @@ column describes what each variable points at in the dev environment.
 | `EMBEDDING_MODEL` | `text-embedding-3-small` | Model used for semantic similarity |
 | `EMBEDDING_API_KEY` | from Key Vault | API key for embedding calls |
 | `EMBEDDING_BASE_URL` | `http://ca-litellm-dev-sdc:8003/v1` | Base URL for embedding API (embeddings go via the gateway / litellm) |
-| `DEFAULT_SIMILARITY_THRESHOLD` | `0.95` | Cosine similarity threshold for cache hits |
+| `DEFAULT_SIMILARITY_THRESHOLD` | `0.90` | Cosine similarity threshold for cache hits |
 | `DEFAULT_TTL_SECONDS` | `3600` | Cache entry TTL (1 hour) |
 
 ### Observability Service (`ca-observability-dev-sdc`, :8004)

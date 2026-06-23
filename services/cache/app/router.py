@@ -581,6 +581,7 @@ async def _handle_chat_completions(request: Request, body: dict):
 
     emb: list[float] | None = None
     cache_stage = "bypass" if bypass_cache else "miss"
+    semantic_miss_score: float = 0.0
 
     cache_namespace = f"{team_id}:{project_id or ''}"
 
@@ -633,9 +634,10 @@ async def _handle_chat_completions(request: Request, body: dict):
         emb_start = time.monotonic()
         try:
             emb = await semantic.embed(_prompt_text(body), policy.embedding_model)
-            cached = await semantic.get(
+            cached, sem_score = await semantic.get(
                 emb,
                 policy.similarity_threshold,
+                request.app.state.pool,
                 redis,
                 team_id=team_id,
                 project_id=project_id or "",
@@ -679,6 +681,8 @@ async def _handle_chat_completions(request: Request, body: dict):
                         headers=_hit_headers,
                     )
                 return JSONResponse(cached, headers=_hit_headers)
+            else:
+                semantic_miss_score = sem_score  # near-miss score for observability (P2)
         except Exception:
             semantic.record_embedding_failure(redis)
             emb = None  # embedding failure → treat as miss
@@ -818,6 +822,7 @@ async def _handle_chat_completions(request: Request, body: dict):
                     emb,
                     response_body,
                     policy.ttl_seconds,
+                    request.app.state.pool,
                     redis,
                     team_id=team_id,
                     project_id=project_id or "",
@@ -847,6 +852,7 @@ async def _handle_chat_completions(request: Request, body: dict):
                 "session_purpose": session_purpose,
                 "repo": repo,
                 "request_intent": request_intent,
+                "similarity_score": semantic_miss_score if semantic_miss_score > 0 else None,
             },
         )
     )

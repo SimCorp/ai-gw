@@ -13,8 +13,8 @@ SimCorp (root)
 ├── Platform (area)
 │   ├── Infrastructure (unit)
 │   │   └── Lift (team)
-│   │       ├── Alice (developer)
-│   │       └── Bob (viewer)
+│   │       ├── Alice (engineer)
+│   │       └── Bob (reporter)
 │   └── DevTools (unit)
 │       └── CLI (team)
 └── Science (area)
@@ -38,7 +38,7 @@ Training:           /root-id/science-id/ml-id/training-id
 Roles form a **power hierarchy** (higher number = more power):
 
 ```
-platform_admin (6) ─── System-wide access
+gateway_admin (6) ─── System-wide access
       ↓
 area_owner (5)     ─── Manage an area and all descendants
       ↓
@@ -46,9 +46,9 @@ unit_lead (4)      ─── Lead a unit
       ↓
 team_admin (3)     ─── Administer a team
       ↓
-developer (2)      ─── Developer access
+engineer (2)       ─── Engineer access
       ↓
-viewer (1)         ─── Read-only
+reporter (1)       ─── Read-only
 ```
 
 A higher power level automatically grants all permissions of lower levels.
@@ -60,7 +60,7 @@ Permissions are granted via **Entra groups → role → node**:
 ```
 Entra Group                         Role             Node
 ────────────────────────────────    ──────────────   ────────
-platform-admins@simcorp.com    →    platform_admin  →  /root
+platform-admins@simcorp.com    →    gateway_admin   →  /root
 area-owners-platform@corp      →    area_owner      →  /root/platform
 lift-team-admins@corp          →    team_admin      →  /root/platform/infra/lift
 ```
@@ -131,11 +131,11 @@ def can_access(user: dict, target_path: str, min_role: str) -> bool:
 | Target Path | Check | Min Role | Result |
 |-------------|-------|----------|--------|
 | `/root-id/platform-id` | area_owner >= team_admin? | team_admin | ✓ Yes |
-| `/root-id/platform-id` | area_owner >= viewer? | viewer | ✓ Yes |
-| `/root-id/platform-id/infra-id/lift-id` | path matches? → area_owner >= developer? | developer | ✓ Yes |
+| `/root-id/platform-id` | area_owner >= reporter? | reporter | ✓ Yes |
+| `/root-id/platform-id/infra-id/lift-id` | path matches? → area_owner >= engineer? | engineer | ✓ Yes |
 | `/root-id/platform-id/infra-id/lift-id` | path matches? → area_owner >= area_owner? | area_owner | ✓ Yes |
-| `/root-id/science-id` | path matches (`/root-id/platform-id` not prefix of `/root-id/science-id`) | viewer | ✗ No |
-| `/root-id` | path matches (`/root-id` not prefix of `/root-id/platform-id` but includes it) | platform_admin | ✗ No |
+| `/root-id/science-id` | path matches (`/root-id/platform-id` not prefix of `/root-id/science-id`) | reporter | ✗ No |
+| `/root-id` | path matches (`/root-id` not prefix of `/root-id/platform-id` but includes it) | gateway_admin | ✗ No |
 
 **Interpretation:**
 - Alice can view and manage anything under Platform (area)
@@ -144,7 +144,7 @@ def can_access(user: dict, target_path: str, min_role: str) -> bool:
 
 ---
 
-### Example 2: Bob is Developer on a Specific Team
+### Example 2: Bob is Engineer on a Specific Team
 
 **Bob's session payload:**
 ```json
@@ -153,7 +153,7 @@ def can_access(user: dict, target_path: str, min_role: str) -> bool:
   "email": "bob@simcorp.com",
   "roles": [
     {
-      "role": "developer",
+      "role": "engineer",
       "node_path": "/root-id/platform-id/infra-id/lift-id",
       "node_id": "lift-id",
       "node_name": "Lift"
@@ -166,16 +166,16 @@ def can_access(user: dict, target_path: str, min_role: str) -> bool:
 
 | Target Path | Min Role | Result | Why |
 |-------------|----------|--------|-----|
-| `/root-id/platform-id/infra-id/lift-id` | viewer | ✓ Yes | developer >= viewer, path matches |
-| `/root-id/platform-id/infra-id/lift-id` | developer | ✓ Yes | developer >= developer, path matches |
-| `/root-id/platform-id/infra-id/lift-id` | team_admin | ✗ No | developer < team_admin |
-| `/root-id/platform-id/infra-id` | viewer | ✗ No | Path doesn't start with role's node_path |
-| `/root-id/platform-id/infra-id/lift-id/sub-team` | developer | ✓ Yes | Path starts with `/root-id/.../lift-id`, developer >= developer |
+| `/root-id/platform-id/infra-id/lift-id` | reporter | ✓ Yes | engineer >= reporter, path matches |
+| `/root-id/platform-id/infra-id/lift-id` | engineer | ✓ Yes | engineer >= engineer, path matches |
+| `/root-id/platform-id/infra-id/lift-id` | team_admin | ✗ No | engineer < team_admin |
+| `/root-id/platform-id/infra-id` | reporter | ✗ No | Path doesn't start with role's node_path |
+| `/root-id/platform-id/infra-id/lift-id/sub-team` | engineer | ✓ Yes | Path starts with `/root-id/.../lift-id`, engineer >= engineer |
 
 **Interpretation:**
 - Bob can view and access his team (Lift)
 - Bob can read anything under Lift (due to hierarchical permissions)
-- Bob cannot create teams, manage budget, grant permissions (developer < team_admin)
+- Bob cannot create teams, manage budget, grant permissions (engineer < team_admin)
 - Bob cannot access sibling or parent teams
 
 ---
@@ -195,7 +195,7 @@ def can_access(user: dict, target_path: str, min_role: str) -> bool:
       "node_name": "Lift"
     },
     {
-      "role": "developer",
+      "role": "engineer",
       "node_path": "/root-id/science-id/ml-id/training-id",
       "node_id": "training-id",
       "node_name": "Training"
@@ -209,15 +209,15 @@ def can_access(user: dict, target_path: str, min_role: str) -> bool:
 | Target Path | Min Role | Result | Which Role Grants It |
 |-------------|----------|--------|---------------------|
 | `/root-id/platform-id/infra-id/lift-id` | team_admin | ✓ Yes | Lift team_admin |
-| `/root-id/science-id/ml-id/training-id` | developer | ✓ Yes | Training developer |
-| `/root-id/platform-id/infra-id/lift-id` | developer | ✓ Yes | Lift team_admin (>= developer) |
-| `/root-id/science-id/ml-id/training-id` | team_admin | ✗ No | Only developer there |
-| `/root-id` | viewer | ✗ No | No roles at root |
+| `/root-id/science-id/ml-id/training-id` | engineer | ✓ Yes | Training engineer |
+| `/root-id/platform-id/infra-id/lift-id` | engineer | ✓ Yes | Lift team_admin (>= engineer) |
+| `/root-id/science-id/ml-id/training-id` | team_admin | ✗ No | Only engineer there |
+| `/root-id` | reporter | ✗ No | No roles at root |
 
 **Interpretation:**
 - Charlie can admin the Lift team
 - Charlie can develop on the Training team
-- Charlie cannot cross-manage: he's a developer on Training, not admin
+- Charlie cannot cross-manage: he's an engineer on Training, not admin
 - The check uses `ANY`, so Charlie only needs ONE matching role to succeed
 
 ---
@@ -226,7 +226,7 @@ def can_access(user: dict, target_path: str, min_role: str) -> bool:
 
 ### Creating a Node
 
-**Requirement:** User must have `team_admin` on the parent, or `platform_admin` at root.
+**Requirement:** User must have `team_admin` on the parent, or `gateway_admin` at root.
 
 ```python
 @router.post("/nodes")
@@ -240,8 +240,8 @@ async def create_node(
         if not can_access(current_user, parent.path, "team_admin"):
             raise HTTPException(403, "Insufficient permissions to create child node here")
     else:
-        if not can_access(current_user, "/", "platform_admin"):
-            raise HTTPException(403, "Only platform admins can create root-level nodes")
+        if not can_access(current_user, "/", "gateway_admin"):
+            raise HTTPException(403, "Only gateway admins can create root-level nodes")
 ```
 
 **Example Scenario:**
@@ -278,7 +278,7 @@ async def set_budget(
 
 ### Viewing a Node
 
-**Requirement:** `viewer` (anyone with any role on the node or ancestors).
+**Requirement:** `reporter` (anyone with any role on the node or ancestors).
 
 ```python
 @router.get("/nodes/{node_id}")
@@ -288,15 +288,15 @@ async def get_node(
     session: AsyncSession = Depends(get_session),
 ):
     node = get_node(node_id)
-    if not can_access(current_user, node.path, "viewer"):
+    if not can_access(current_user, node.path, "reporter"):
         raise HTTPException(403, "Insufficient permissions")
 ```
 
 **Example Scenario:**
-- Carol is developer at `/platform/infra/lift` (power 2)
+- Carol is engineer at `/platform/infra/lift` (power 2)
 - She wants to view the Lift team
-- Check: `can_access(carol, "/platform/infra/lift", "viewer")`
-  - Carol's role: developer (2) >= viewer (1)? YES
+- Check: `can_access(carol, "/platform/infra/lift", "reporter")`
+  - Carol's role: engineer (2) >= reporter (1)? YES
   - Path matches: YES
   - Result: ✓ Allowed
 
@@ -348,7 +348,7 @@ A user with roles on multiple teams sees all of them:
 ```python
 # Session has: roles = [
 #   {role: "team_admin", node_path: "/root/platform/infra/lift", ...},
-#   {role: "developer", node_path: "/root/science/ml/training", ...}
+#   {role: "engineer", node_path: "/root/science/ml/training", ...}
 # ]
 
 # Frontend query:
@@ -374,20 +374,20 @@ const visibleNodes = allNodes.filter(n => canAccessNode(currentUser, n.path));
 **Diagnosis:**
 ```bash
 # Get user's session
-curl https://aigw-dev.lab.cloud.scdom.net/auth/me \
+curl https://dev.aigw.scdom.net/auth/me \
   -H "Authorization: Bearer $TOKEN" | jq '.roles'
 
 # Check the node's path
-curl https://aigw-dev.lab.cloud.scdom.net/admin/nodes/{id} \
+curl https://dev.aigw.scdom.net/api/admin/nodes/{id} \
   -H "Authorization: Bearer $TOKEN" | jq '.path'
 
 # Manually run the check
 node_path = "/root-id/platform-id/infra-id/lift-id"
-user_roles = [{role: "developer", node_path: "/root-id/platform-id"}]
+user_roles = [{role: "engineer", node_path: "/root-id/platform-id"}]
 
 # Does any role match?
 user_roles.some(r => node_path.startsWith(r.node_path))
-# False! Developer is at /platform, not /platform/infra/lift
+# False! Engineer is at /platform, not /platform/infra/lift
 ```
 
 **Solution:** User's role is too high in the tree. They need a role closer to the target node.
@@ -412,10 +412,10 @@ Endpoint requires: area_owner (power 5)
 Parent node: /root/area (user has area_owner)
 Child node: /root/area/unit/team
 
-Can user access /root/area/unit/team with viewer?
+Can user access /root/area/unit/team with reporter?
 YES, because:
   - /root/area/unit/team starts with /root/area
-  - area_owner (5) >= viewer (1)
+  - area_owner (5) >= reporter (1)
 ```
 
 **This is correct behavior!** area_owner gets all permissions on descendants.
@@ -434,9 +434,9 @@ If migrating from a flat role model (everyone is either "admin" or "user"):
 
 2. **Map roles to power levels:**
    ```
-   v1 "admin" (any scope) → v2 platform_admin (root)
+   v1 "admin" (any scope) → v2 gateway_admin (root)
    v1 "manager" (team scope) → v2 team_admin (node)
-   v1 "developer" → v2 developer (node)
+   v1 "developer" → v2 engineer (node)
    ```
 
 3. **Test permission checks:**
