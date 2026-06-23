@@ -165,7 +165,7 @@ Services call each other by Docker container name:
 
 ### Authentication / sessions
 
-- ****** are either **JWT** or **`sk-`-prefixed API keys**
+- Tokens are either **JWT** or **`sk-`-prefixed API keys**
 - Sessions stored in Redis at `session:{token}` (TTL: 8h admin / 7d dev)
 - `get_current_user` dependency in `services/admin/app/routers/unified_auth.py` — shared by all admin routers
 - Roles: `gateway_admin` (power 6) > `area_owner` (5) > `unit_lead` (4) > `team_admin` (3) > `engineer`/`developer` (2) > `reporter`/`viewer` (1)
