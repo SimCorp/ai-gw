@@ -32,7 +32,7 @@ const flag = (name, def = null) => {
 };
 const has = (name) => args.includes(`--${name}`);
 
-const SEV_ORDER = ["critical", "high", "medium", "low", "warning", "note", "error", "unknown"];
+const SEV_ORDER = ["critical", "high", "medium", "low", "error", "warning", "note", "unknown"];
 const SEV_RANK = Object.fromEntries(SEV_ORDER.map((s, i) => [s, i]));
 const sevRank = (s) => SEV_RANK[s] ?? SEV_ORDER.length;
 
@@ -68,6 +68,10 @@ if (!repo) {
   }
 }
 const minSev = flag("severity");
+const include = (flag("include", "code,secret,dependabot") || "code,secret,dependabot")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
 const extraLabels = flag("label");
 const assignee = flag("assignee");
 const today = new Date().toISOString().slice(0, 10);
@@ -81,11 +85,12 @@ function fetchCode() {
   if (raw === null) return null;
   return raw.map((a) => {
     const loc = a.most_recent_instance?.location || {};
+    const location = loc.path ? `${loc.path}${loc.start_line ? `:${loc.start_line}` : ""}` : "location unavailable";
     return {
       number: a.number,
       sev: (a.rule?.security_severity_level || a.rule?.severity || "unknown").toLowerCase(),
       ruleId: a.rule?.id || "?", desc: a.rule?.description || a.rule?.name || "",
-      path: loc.path, line: loc.start_line, url: a.html_url,
+      location, url: a.html_url,
     };
   }).filter((f) => sevOK(f.sev));
 }
@@ -102,7 +107,7 @@ function fetchDependabot() {
   if (raw === null) return null;
   return raw.map((a) => ({
     number: a.number, sev: (a.security_advisory?.severity || "unknown").toLowerCase(),
-    pkg: a.dependency?.package?.name, manifest: a.dependency?.manifest_path,
+    pkg: a.dependency?.package?.name, manifest: a.dependency?.manifest_path || "manifest unavailable",
     summary: a.security_advisory?.summary, url: a.html_url,
   })).filter((f) => sevOK(f.sev));
 }
@@ -130,7 +135,7 @@ function buildCode(list) {
     for (const f of bySev[sev]) (m[f.ruleId] ??= { desc: f.desc, items: [] }).items.push(f);
     for (const [ruleId, g] of Object.entries(m).sort((a, b) => b[1].items.length - a[1].items.length)) {
       L.push(`<details><summary><b>${ruleId}</b> — ${g.desc} (${g.items.length})</summary>`, "");
-      for (const f of g.items) L.push(`- [ ] [#${f.number}](${f.url}) — \`${f.path}:${f.line}\``);
+      for (const f of g.items) L.push(`- [ ] [#${f.number}](${f.url}) — \`${f.location}\``);
       L.push("", "</details>", "");
     }
   }
@@ -205,7 +210,14 @@ if (!has("create")) {
 // ensure labels exist (idempotent) so `gh issue create --label` can't fail
 const COLORS = { security: "b60205", "code-scanning": "d93f0b", "secret-scanning": "5319e7", dependencies: "0366d6" };
 for (const name of new Set(issues.flatMap((i) => i.labels))) {
-  try { execFileSync("gh", ["label", "create", name, "--repo", repo, "--color", COLORS[name] || "ededed"], { stdio: "ignore" }); } catch {}
+  try {
+    execFileSync("gh", ["label", "create", name, "--repo", repo, "--color", COLORS[name] || "ededed"], { encoding: "utf8" });
+  } catch (e) {
+    const msg = (e.stderr || e.message || "").toString();
+    if (!/already exists/i.test(msg)) {
+      throw new Error(`gh label create ${name} failed: ${msg.trim().split("\n").slice(0, 2).join(" ")}`);
+    }
+  }
 }
 for (const it of issues) {
   const a = ["issue", "create", "--repo", repo, "--title", it.title, "--body", it.body, "--label", it.labels.join(",")];
