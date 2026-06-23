@@ -1,7 +1,7 @@
 # Copilot Instructions — AI Gateway (SimCorp Developer Platform)
 
 Enterprise AI gateway serving ~2,000 SimCorp engineers.
-FastAPI microservices (Python 3.12) + Next.js frontals (Node 20), running on a single Linux VM via Docker Compose.
+FastAPI microservices (Python 3.12) + Next.js frontends (Node 20), running on a single Linux VM via Docker Compose.
 Azure Container Apps (ACA) Bicep IaC is in-repo but archived — the current running deployment is the VM.
 
 ---
