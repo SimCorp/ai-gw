@@ -88,6 +88,29 @@ function RoleBadge({ role }: { role: string }) {
   );
 }
 
+function ScopedRoleBadge({ role, scopeType, scopeId, nodeMap }: {
+  role: string;
+  scopeType: string;
+  scopeId: string | null;
+  nodeMap: Map<string, string>;
+}) {
+  const meta = ROLE_META[role] ?? { label: role, color: 'var(--fg-2)' };
+  const showScope = scopeId !== null && scopeType !== 'global';
+  const nodeName = showScope ? (nodeMap.get(scopeId!) ?? scopeId) : null;
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'baseline', gap: 3,
+      padding: '2px 7px', borderRadius: 4, fontSize: 11, fontWeight: 600,
+      background: `color-mix(in srgb, ${meta.color} 13%, transparent)`, color: meta.color, marginRight: 4,
+    }}>
+      {meta.label}
+      {nodeName && (
+        <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--fg-3)' }}>@ {nodeName}</span>
+      )}
+    </span>
+  );
+}
+
 function StatusPill({ status }: { status: UserStatus }) {
   switch (status) {
     case 'active':    return <span className="pill pill--good"><span className="dot" />Active</span>;
@@ -398,7 +421,7 @@ export default function UsersPage() {
                           </div>
                         </td>
                         <td>
-                          {u.roles.map(r => <RoleBadge key={`${r.role}-${r.scope_id}`} role={r.role} />)}
+                          {u.roles.map(r => <ScopedRoleBadge key={`${r.role}-${r.scope_id}`} role={r.role} scopeType={r.scope_type} scopeId={r.scope_id} nodeMap={nodeMap} />)}
                           {u.is_contractor && (
                             <span style={{
                               display: 'inline-block', padding: '2px 7px', borderRadius: 4,
