@@ -192,7 +192,7 @@ for (const [name, fetch, build] of sources) {
   if (data === null) { console.error(`note: ${name} not enabled / no analysis for ${repo} — skipped`); continue; }
   const issue = build(data);
   if (!issue) { console.error(`note: ${name} has 0 open findings — no issue`); continue; }
-  if (extraLabels) issue.labels.push(...extraLabels.split(",").map((s) => s.trim()));
+  if (extraLabels) issue.labels.push(...extraLabels.split(",").map((s) => s.trim()).filter(Boolean));
   issues.push(issue);
 }
 

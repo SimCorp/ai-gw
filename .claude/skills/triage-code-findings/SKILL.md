@@ -103,4 +103,4 @@ PR-only reminder, how to verify the alert closes).
 | `Nothing to triage.` | All sources empty/disabled/unreadable. Check `gh auth status` and that scanning is on. |
 | `note: code not enabled / no analysis for <repo> — skipped` | CodeQL hasn't run yet, or no read access. Trigger a scan / use an admin token. |
 | `--create` errors on `--assignee` | Assignee must be a collaborator; drop the flag or use `@me`. |
-| Issue body shows `path:undefined` | Alert had no location instance (rare); the link still points at the alert. |
+| Issue body shows `location unavailable` | Alert had no location instance (rare); the link still points at the alert. |
