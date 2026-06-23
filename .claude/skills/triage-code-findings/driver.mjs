@@ -46,8 +46,14 @@ function ghJSON(path) {
     return Array.isArray(data) ? data : [];
   } catch (e) {
     const msg = (e.stderr || e.message || "").toString();
+
     // Feature off, no analysis yet, or caller lacks read access → skip this source.
-    if (/404|403|no analysis found|not enabled|Not Found|disabled|not authorized|Forbidden|scope/i.test(msg)) return null;
+    const notEnabledOrNoAnalysis = /404|no analysis found|not enabled|Not Found|disabled/i.test(msg);
+    const permissionDenied =
+      /403|not authorized|Forbidden|scope|security_events|Resource not accessible/i.test(msg) &&
+      !/rate limit|abuse detection/i.test(msg);
+    if (notEnabledOrNoAnalysis || permissionDenied) return null;
+
     throw new Error(`gh api ${path} failed: ${msg.trim().split("\n").slice(0, 2).join(" ")}`);
   }
 }
