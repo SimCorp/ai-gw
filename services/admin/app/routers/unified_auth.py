@@ -1642,6 +1642,7 @@ async def create_service_account(
 
 @router.get("/service-accounts")
 async def list_service_accounts(
+    team_id: str | None = None,
     caller: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
@@ -1660,8 +1661,10 @@ async def list_service_accounts(
             FROM service_accounts sa
             LEFT JOIN organization_nodes t ON t.id = sa.team_id
             LEFT JOIN users u ON u.id = sa.owner_user_id
+            WHERE (CAST(:team_id AS uuid) IS NULL OR sa.team_id = CAST(:team_id AS uuid))
             ORDER BY sa.created_at DESC
-        """)
+        """),
+                    {"team_id": team_id},
                 )
             )
             .mappings()
@@ -1671,6 +1674,12 @@ async def list_service_accounts(
         team_scopes = [
             r.get("scope_id") for r in caller.get("roles", []) if r["role"] == "team_admin"
         ]
+        if team_id:
+            if team_id not in [s for s in team_scopes if s]:
+                raise HTTPException(status_code=403, detail="Not authorized for this team")
+            effective_scopes = [team_id]
+        else:
+            effective_scopes = [s for s in team_scopes if s]
         rows = (
             (
                 await session.execute(
@@ -1685,7 +1694,7 @@ async def list_service_accounts(
                 WHERE sa.team_id = ANY(CAST(:scopes AS uuid[]))
                 ORDER BY sa.created_at DESC
             """),
-                    {"scopes": [s for s in team_scopes if s]},
+                    {"scopes": effective_scopes},
                 )
             )
             .mappings()
