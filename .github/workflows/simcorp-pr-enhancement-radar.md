@@ -4,11 +4,11 @@ description: >
   Daily non-blocking agent that reviews recently merged and open pull
   requests, identifies strong enhancement signals, and opens focused
   GitHub issues for improvements that would create system-wide synergy.
-  Only fires when signal is strong — never produces noise. Routes through
-  the AI Gateway.
+  Only fires when signal is strong — never produces noise. Runs on the
+  GitHub Copilot engine.
 
 on:
-  schedule: daily around 08:00 UTC
+  schedule: daily
   workflow_dispatch:
     inputs:
       lookback_days:
@@ -16,17 +16,14 @@ on:
         type: string
         default: "1"
 
-engine:
-  id: codex
-  model: claude-sonnet-4-6
-  env:
-    OPENAI_BASE_URL: ${{ vars.AIGW_BASE_URL }}
-    OPENAI_API_KEY: ${{ secrets.AIGW_API_KEY }}
+# Dormant until enabled: set repo variable AGENTIC_WORKFLOWS_ENABLED=true
+# after GitHub Copilot is enabled and labels are synced. See
+# docs/ops/agentic-workflows.md.
+if: ${{ vars.AGENTIC_WORKFLOWS_ENABLED == 'true' }}
 
-network:
-  allowed:
-    - defaults
-    - aigw.simcorp.internal
+engine: copilot
+
+network: defaults
 
 tools:
   github:
@@ -41,6 +38,7 @@ permissions:
   contents: read
   pull-requests: read
   issues: read
+  copilot-requests: write
 
 safe-outputs:
   create-issue:

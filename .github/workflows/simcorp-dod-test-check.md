@@ -3,23 +3,20 @@ name: "Definition of Done — Test Coverage Check"
 description: >
   Checks every pull request to verify that new or changed production code
   is accompanied by adequate tests. Posts a structured DoD report as a PR
-  review and applies a label when tests are missing. Routes through the AI Gateway.
+  review and applies a label when tests are missing. Runs on the GitHub Copilot engine.
 
 on:
   pull_request:
     types: [opened, synchronize]
 
-engine:
-  id: codex
-  model: claude-haiku-4-5
-  env:
-    OPENAI_BASE_URL: ${{ vars.AIGW_BASE_URL }}
-    OPENAI_API_KEY: ${{ secrets.AIGW_API_KEY }}
+# Dormant until enabled: set repo variable AGENTIC_WORKFLOWS_ENABLED=true
+# after GitHub Copilot is enabled and labels are synced. See
+# docs/ops/agentic-workflows.md.
+if: ${{ vars.AGENTIC_WORKFLOWS_ENABLED == 'true' }}
 
-network:
-  allowed:
-    - defaults
-    - aigw.simcorp.internal
+engine: copilot
+
+network: defaults
 
 tools:
   github:
@@ -32,6 +29,7 @@ tools:
 permissions:
   contents: read
   pull-requests: read
+  copilot-requests: write
 
 safe-outputs:
   submit-pull-request-review:

@@ -4,7 +4,7 @@ description: >
   Detects stale documentation after every push to master. Compares
   recently changed code against README sections, inline comments, and
   docs/ markdown files, then opens a draft PR with the minimal corrections
-  needed to keep documentation in sync. Routes through the AI Gateway.
+  needed to keep documentation in sync. Runs on the GitHub Copilot engine.
 
 on:
   push:
@@ -14,17 +14,14 @@ on:
       - "docs/**"
       - ".github/**"
 
-engine:
-  id: codex
-  model: claude-haiku-4-5
-  env:
-    OPENAI_BASE_URL: ${{ vars.AIGW_BASE_URL }}
-    OPENAI_API_KEY: ${{ secrets.AIGW_API_KEY }}
+# Dormant until enabled: set repo variable AGENTIC_WORKFLOWS_ENABLED=true
+# after GitHub Copilot is enabled and labels are synced. See
+# docs/ops/agentic-workflows.md.
+if: ${{ vars.AGENTIC_WORKFLOWS_ENABLED == 'true' }}
 
-network:
-  allowed:
-    - defaults
-    - aigw.simcorp.internal
+engine: copilot
+
+network: defaults
 
 tools:
   github:
@@ -37,6 +34,7 @@ tools:
 permissions:
   contents: read
   pull-requests: read
+  copilot-requests: write
 
 safe-outputs:
   create-pull-request:
@@ -48,18 +46,22 @@ safe-outputs:
 
 pre-agent-steps:
   - name: Collect changed files from the push
+    env:
+      BEFORE_SHA: ${{ github.event.before }}
+      AFTER_SHA: ${{ github.sha }}
     run: |
+      mkdir -p /tmp/gh-aw/agent
       # List files changed in this push (code only, not docs or markdown)
-      git diff --name-only ${{ github.event.before }} ${{ github.sha }} \
+      git diff --name-only "$BEFORE_SHA" "$AFTER_SHA" \
         | grep -v '\.md$' \
         | grep -v '^docs/' \
         | grep -v '^\.github/' \
-        > /tmp/changed_code_files.txt || true
+        > /tmp/gh-aw/agent/changed_code_files.txt || true
       echo "Changed code files:"
-      cat /tmp/changed_code_files.txt
+      cat /tmp/gh-aw/agent/changed_code_files.txt
       # Capture the short log for context
-      git log --oneline ${{ github.event.before }}..${{ github.sha }} \
-        > /tmp/push_commits.txt || true
+      git log --oneline "$BEFORE_SHA".."$AFTER_SHA" \
+        > /tmp/gh-aw/agent/push_commits.txt || true
 ---
 
 # Continuous Docs Maintenance Agent
@@ -72,13 +74,13 @@ to correct it.
 
 ## What changed
 
-The files modified in this push are listed in `/tmp/changed_code_files.txt`.
-The commit messages are in `/tmp/push_commits.txt`.
+The files modified in this push are listed in `/tmp/gh-aw/agent/changed_code_files.txt`.
+The commit messages are in `/tmp/gh-aw/agent/push_commits.txt`.
 
 ## Process
 
 1. **Read the changed files** — use the GitHub tools to read each file in
-   `/tmp/changed_code_files.txt`. Understand what was added, removed, or renamed.
+   `/tmp/gh-aw/agent/changed_code_files.txt`. Understand what was added, removed, or renamed.
 
 2. **Identify documentation that references these files or their contents**:
    - `README.md` — service list, port table, quick-start, architecture sections
