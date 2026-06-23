@@ -22,8 +22,9 @@ _log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/agentic-workflows", tags=["agentic-workflows"])
 
-# gh-aw agentic workflows live in .github/workflows/ and are named simcorp-*.
+# gh-aw agentic workflows live in .github/workflows/ and are named simcorp-*.lock.yml.
 _WORKFLOW_PATH_PREFIX = ".github/workflows/simcorp-"
+_WORKFLOW_PATH_SUFFIX = ".lock.yml"
 
 
 def _trim_run(run: dict) -> dict:
@@ -69,8 +70,17 @@ async def list_runs(limit: int = Query(30, ge=1, le=100)) -> dict:
             r = await client.get(url, headers=headers, params=params, timeout=20)
             r.raise_for_status()
             payload = r.json()
-    except Exception as exc:
-        _log.warning("agentic-workflows: GitHub API call failed: %s", exc)
+    except httpx.HTTPStatusError as exc:
+        _log.warning("agentic-workflows: GitHub API returned %s: %s", exc.response.status_code, exc)
+        return {
+            "configured": True,
+            "repo": settings.github_repo,
+            "runs": [],
+            "summary": {"total": 0, "success": 0, "failure": 0, "other": 0},
+            "detail": f"GitHub API returned HTTP {exc.response.status_code}.",
+        }
+    except httpx.RequestError as exc:
+        _log.warning("agentic-workflows: GitHub API request failed: %s", exc)
         return {
             "configured": True,
             "repo": settings.github_repo,
@@ -78,11 +88,21 @@ async def list_runs(limit: int = Query(30, ge=1, le=100)) -> dict:
             "summary": {"total": 0, "success": 0, "failure": 0, "other": 0},
             "detail": "Could not reach the GitHub Actions API.",
         }
+    except Exception as exc:
+        _log.warning("agentic-workflows: unexpected error: %s", exc)
+        return {
+            "configured": True,
+            "repo": settings.github_repo,
+            "runs": [],
+            "summary": {"total": 0, "success": 0, "failure": 0, "other": 0},
+            "detail": "Unexpected error fetching GitHub Actions data.",
+        }
 
     runs = [
         _trim_run(run)
         for run in payload.get("workflow_runs", [])
         if str(run.get("path", "")).startswith(_WORKFLOW_PATH_PREFIX)
+        and str(run.get("path", "")).endswith(_WORKFLOW_PATH_SUFFIX)
     ][:limit]
 
     success = sum(1 for r in runs if r["conclusion"] == "success")

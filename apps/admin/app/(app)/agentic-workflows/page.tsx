@@ -47,7 +47,7 @@ const columns: ColumnDef<Run>[] = [
     accessorKey: 'name',
     header: 'Workflow',
     cell: ({ row }) => (
-      <a href={row.original.html_url} target="_blank" rel="noreferrer">
+      <a href={row.original.html_url} target="_blank" rel="noopener noreferrer">
         {row.original.name} <span style={{ color: 'var(--fg-3)' }}>#{row.original.run_number}</span>
       </a>
     ),
@@ -108,7 +108,7 @@ export default function AgenticWorkflowsPage() {
             data={runs}
             getRowId={(r) => String(r.id)}
             emptyState={
-              isLoading ? 'Loading…' : 'No agentic-workflow runs yet (or workflows are dormant).'
+              isLoading ? 'Loading…' : (data?.detail ?? 'No agentic-workflow runs yet (or workflows are dormant).')
             }
           />
         </>

@@ -60,6 +60,14 @@ async def test_runs_filters_to_agentic_workflows_and_summarizes(client, monkeypa
                 "conclusion": "success",
                 "path": ".github/workflows/ci.yml",
             },
+            {
+                # simcorp-* but not a .lock.yml — must be filtered out.
+                "id": 4,
+                "name": "Simcorp Deploy",
+                "status": "completed",
+                "conclusion": "success",
+                "path": ".github/workflows/simcorp-deploy.yml",
+            },
         ]
     }
 
@@ -92,3 +100,33 @@ async def test_runs_filters_to_agentic_workflows_and_summarizes(client, monkeypa
     assert [r["id"] for r in body["runs"]] == [1, 2]
     assert body["runs"][0]["title"] == "Fix cache bug"
     assert body["summary"] == {"total": 2, "success": 1, "failure": 1, "other": 0}
+
+
+@pytest.mark.asyncio
+async def test_runs_http_status_error_returns_detail(client, monkeypatch):
+    """A GitHub API HTTP error (e.g. 401) surfaces the status code in detail."""
+    monkeypatch.setattr(settings, "github_token", "ghp_test")
+
+    import httpx as _httpx
+
+    class _FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def get(self, *a, **k):
+            response = _httpx.Response(401)
+            raise _httpx.HTTPStatusError("401 Unauthorized", request=None, response=response)
+
+    monkeypatch.setattr(
+        "app.routers.agentic_workflows.httpx.AsyncClient", lambda *a, **k: _FakeClient()
+    )
+
+    resp = await client.get("/agentic-workflows/runs")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["configured"] is True
+    assert body["runs"] == []
+    assert "401" in body["detail"]
