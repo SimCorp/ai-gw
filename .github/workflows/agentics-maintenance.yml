@@ -88,7 +88,7 @@ permissions: {}
 
 jobs:
   close-expired-entities:
-    if: ${{ (!(github.event.repository.fork)) && github.event_name != 'push' && (github.event_name != 'workflow_dispatch' && github.event_name != 'workflow_call' || inputs.operation == '') }}
+    if: ${{ vars.AGENTIC_WORKFLOWS_ENABLED == 'true' && (!(github.event.repository.fork)) && github.event_name != 'push' && (github.event_name != 'workflow_dispatch' && github.event_name != 'workflow_call' || inputs.operation == '') }}
     runs-on: ubuntu-slim
     permissions:
       discussions: write
@@ -128,7 +128,7 @@ jobs:
             await main();
 
   cleanup-cache-memory:
-    if: ${{ (!(github.event.repository.fork)) && github.event_name != 'push' && (github.event_name != 'workflow_dispatch' && github.event_name != 'workflow_call' || inputs.operation == '' || inputs.operation == 'clean_cache_memories') }}
+    if: ${{ vars.AGENTIC_WORKFLOWS_ENABLED == 'true' && (!(github.event.repository.fork)) && github.event_name != 'push' && (github.event_name != 'workflow_dispatch' && github.event_name != 'workflow_call' || inputs.operation == '' || inputs.operation == 'clean_cache_memories') }}
     runs-on: ubuntu-slim
     permissions:
       actions: write

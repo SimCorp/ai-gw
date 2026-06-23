@@ -33,7 +33,7 @@ permissions:
 safe-outputs:
   add-labels:
     allowed: [stale, needs-info]
-    max: 1
+    max: 20
   add-comment:
     max: 20
 ---
