@@ -260,9 +260,9 @@ function formatDateTime(iso: string | null | undefined) {
 
 function ServiceAccountsTab({ nodeId }: { nodeId: string }) {
   const qc = useQueryClient();
-  const { data, isLoading } = useQuery<Record<string, unknown>[]>({
+  const { data, isLoading, isError, error } = useQuery<Record<string, unknown>[]>({
     queryKey: ['node-service-accounts', nodeId],
-    queryFn: () => apiFetch<Record<string, unknown>[]>(`/auth/service-accounts?team_id=${nodeId}`).catch(() => []),
+    queryFn: () => apiFetch<Record<string, unknown>[]>(`/auth/service-accounts?team_id=${nodeId}`),
   });
   const revokeMut = useMutation({
     mutationFn: (id: string) => apiFetch(`/auth/service-accounts/${id}/status?status=revoked`, { method: 'PATCH' }),
@@ -270,6 +270,7 @@ function ServiceAccountsTab({ nodeId }: { nodeId: string }) {
   });
 
   if (isLoading) return <LoadingState rows={3} />;
+  if (isError) return <ErrorState error={new Error('Failed to load service accounts')} />;
   const items = data ?? [];
   return (
     <table className="tbl">
@@ -307,7 +308,7 @@ function ServiceAccountsTab({ nodeId }: { nodeId: string }) {
               <button
                 className="btn btn--sm btn--ghost"
                 style={{ color: 'var(--bad)' }}
-                disabled={sa.status === 'revoked'}
+                disabled={sa.status === 'revoked' || revokeMut.isPending}
                 onClick={() => revokeMut.mutate(sa.id as string)}
               >Revoke</button>
             </td>
