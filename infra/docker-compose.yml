@@ -17,6 +17,7 @@ services:
       # Creates the separate `litellm` database on first init (before healthy),
       # so LiteLLM's Prisma schema doesn't collide with the admin/Alembic DB.
       - ./postgres/init-litellm.sql:/docker-entrypoint-initdb.d/00-init-litellm.sql:ro
+      - ./postgres/init-rybbit.sql:/docker-entrypoint-initdb.d/01-init-rybbit.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U aigateway"]
       interval: 5s
@@ -580,6 +581,93 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # ── Rybbit analytics ──────────────────────────────────────────────────────────
+  # Self-hosted, privacy-first web analytics. Backend API on port 3001,
+  # client (Next.js) on port 3002, ClickHouse for event storage.
+  # Exposed via a dedicated Caddy vhost: rybbit.aigw.scdom.net.
+  # DNS prerequisite: CNAME rybbit.aigw.scdom.net → vm-aigw-dev-sdc.
+
+  rybbit-clickhouse:
+    image: clickhouse/clickhouse-server:25.4.2
+    volumes:
+      - rybbit_clickhouse_data:/var/lib/clickhouse
+      - ./clickhouse/config.d:/etc/clickhouse-server/config.d:ro
+    environment:
+      CLICKHOUSE_DB: analytics
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: ${RYBBIT_CLICKHOUSE_PASSWORD}
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8123/ping || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  rybbit-backend:
+    image: ghcr.io/rybbit-io/rybbit-backend:${RYBBIT_IMAGE_TAG:-latest}
+    ports:
+      - "127.0.0.1:8014:3001"
+    environment:
+      NODE_ENV: production
+      BASE_URL: "https://rybbit.aigw.scdom.net"
+      DOMAIN_NAME: "rybbit.aigw.scdom.net"
+      # ClickHouse — same image/version as upstream; full URL form required
+      CLICKHOUSE_HOST: "http://rybbit-clickhouse:8123"
+      CLICKHOUSE_DB: analytics
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: ${RYBBIT_CLICKHOUSE_PASSWORD}
+      # PostgreSQL — reuse existing aigateway postgres; rybbit DB created by
+      # infra/postgres/init-rybbit.sql on first cluster init.
+      # aigateway:aigateway matches the hardcoded password used by all other services.
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: rybbit
+      POSTGRES_USER: aigateway
+      POSTGRES_PASSWORD: aigateway
+      # Redis — reuse existing stack Redis (no requirepass configured)
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ""
+      BETTER_AUTH_SECRET: ${RYBBIT_BETTER_AUTH_SECRET}
+      DISABLE_SIGNUP: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rybbit-clickhouse:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3001/api/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 90s
+    restart: unless-stopped
+
+  rybbit-client:
+    image: ghcr.io/rybbit-io/rybbit-client:${RYBBIT_IMAGE_TAG:-latest}
+    ports:
+      - "127.0.0.1:8015:3002"
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_BACKEND_URL: "https://rybbit.aigw.scdom.net"
+    depends_on:
+      rybbit-backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3002 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 90s
+    restart: unless-stopped
+
   # ── Observability (single-host: logs + metrics for humans + the DevOps agent) ──
   # Open-standard stack: Alloy (OTel-native collector) ingests container logs +
   # host/cAdvisor metrics + (Phase 2) services' OTLP, and exports to standalone
@@ -680,6 +768,7 @@ volumes:
   obs_prometheus_data:
   obs_grafana_data:
   graphify_out:
+  rybbit_clickhouse_data:
 
 networks:
   default:
