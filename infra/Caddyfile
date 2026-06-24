@@ -1,6 +1,9 @@
 {
 	admin off
-	auto_https off
+	# disable_redirects keeps the explicit :80→:443 redirect working while
+	# still allowing tls internal on named-host vhosts (rybbit, future hosts).
+	# "auto_https off" suppresses tls internal cert issuance — verified broken.
+	auto_https disable_redirects
 }
 
 # Plain HTTP -> redirect to HTTPS (port 80 is open for this + future config needs).
@@ -119,5 +122,23 @@
 	# (Next.js app with no basePath: /, /keys, /docs, /_next/*, assets, …).
 	handle {
 		reverse_proxy portal:3002
+	}
+}
+
+# Rybbit analytics — dedicated subdomain (no sub-path support in Rybbit).
+# tls internal uses Caddy's built-in CA; replace with a corp cert when available.
+# DNS prerequisite: CNAME rybbit.aigw.scdom.net → vm-aigw-dev-sdc.
+rybbit.aigw.scdom.net:443 {
+	encode gzip
+	tls internal
+
+	# Backend API (tracker, auth, data endpoints)
+	handle /api/* {
+		reverse_proxy rybbit-backend:3001
+	}
+
+	# Rybbit web app (Next.js client, port 3002 internally)
+	handle {
+		reverse_proxy rybbit-client:3002
 	}
 }

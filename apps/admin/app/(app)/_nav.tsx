@@ -24,6 +24,7 @@ export const ADMIN_NAV: NavDomain[] = [
       { href: '/alerts', label: 'Alerts' },
       { href: '/service-status', label: 'Service Status' },
       { href: '/agentic-workflows', label: 'Agentic workflows' },
+      { href: '/portal-analytics', label: 'Portal Analytics' },
     ],
   },
   {
