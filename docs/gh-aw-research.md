@@ -1,5 +1,12 @@
 # GitHub Agentic Workflows (gh-aw) — Research Report
 
+> **Superseded for the live setup — see [`docs/ops/agentic-workflows.md`](ops/agentic-workflows.md).**
+> This report proposed routing inference through the AI Gateway (`codex` engine).
+> The gateway is internal-only and unreachable from GitHub-hosted runners, so the
+> active workflows now run on the **GitHub Copilot engine** with GitHub data only.
+> This document is retained for the trigger/output/security-model reference and the
+> (still-deferred) gateway-routed design.
+
 > Source: https://github.github.com/gh-aw/  
 > Researched: 2026-05-11  
 > Context: AI Gateway integration opportunities for SimCorp

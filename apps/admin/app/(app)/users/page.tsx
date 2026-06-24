@@ -1,8 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { LoadingState, ErrorState } from '../_components/PageStates';
+import { OrgNode } from '../_components/nodeTypes';
+import { OrgTree } from '../_components/OrgTree';
 import { apiFetch, BASE } from '../../../lib/apiClient';
 
 // ── Types ─────────────────────────────────────────────────────────────────
@@ -69,12 +72,18 @@ function avatarInitials(u: User) {
 }
 
 const ROLE_META: Record<string, { label: string; color: string }> = {
-  platform_admin: { label: 'Platform Admin', color: 'var(--cat-purple)' },
+  // Current canonical role names
+  gateway_admin:  { label: 'Gateway Admin',  color: 'var(--cat-purple)' },
   area_owner:     { label: 'Area Owner',     color: 'var(--accent)' },
+  unit_lead:      { label: 'Unit Lead',      color: 'var(--cat-teal)' },
   team_admin:     { label: 'Team Admin',     color: 'var(--cat-teal)' },
+  engineer:       { label: 'Engineer',       color: 'var(--good)' },
+  reporter:       { label: 'Reporter',       color: 'var(--fg-2)' },
+  service_account:{ label: 'Service Acct',  color: 'var(--cat-orange)' },
+  // Legacy aliases — kept for backward compat with old Redis sessions
+  platform_admin: { label: 'Platform Admin', color: 'var(--cat-purple)' },
   developer:      { label: 'Developer',      color: 'var(--good)' },
   viewer:         { label: 'Viewer',         color: 'var(--fg-2)' },
-  service_account:{ label: 'Service Acct',  color: 'var(--cat-orange)' },
 };
 
 function RoleBadge({ role }: { role: string }) {
@@ -87,6 +96,29 @@ function RoleBadge({ role }: { role: string }) {
   );
 }
 
+function ScopedRoleBadge({ role, scopeType, scopeId, nodeMap }: {
+  role: string;
+  scopeType: string;
+  scopeId: string | null;
+  nodeMap: Map<string, string>;
+}) {
+  const meta = ROLE_META[role] ?? { label: role, color: 'var(--fg-2)' };
+  const showScope = scopeId !== null && scopeType !== 'global';
+  const nodeName = showScope ? (nodeMap.get(scopeId!) ?? scopeId) : null;
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'baseline', gap: 3,
+      padding: '2px 7px', borderRadius: 4, fontSize: 11, fontWeight: 600,
+      background: `color-mix(in srgb, ${meta.color} 13%, transparent)`, color: meta.color, marginRight: 4,
+    }}>
+      {meta.label}
+      {nodeName && (
+        <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--fg-3)' }}>@ {nodeName}</span>
+      )}
+    </span>
+  );
+}
+
 function StatusPill({ status }: { status: UserStatus }) {
   switch (status) {
     case 'active':    return <span className="pill pill--good"><span className="dot" />Active</span>;
@@ -96,21 +128,35 @@ function StatusPill({ status }: { status: UserStatus }) {
   }
 }
 
+// ── Node tree flattening ──────────────────────────────────────────────────
+
+function flattenTree(node: OrgNode, map: Map<string, string>) {
+  map.set(node.id, node.name);
+  node.children?.forEach(c => flattenTree(c, map));
+}
+
 // ── Invite modal ──────────────────────────────────────────────────────────
 
 function InviteModal({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient();
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState('developer');
+  const [role, setRole] = useState('engineer');
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ accept_url: string; token: string } | null>(null);
   const [copied, setCopied] = useState(false);
+  const [selectedNode, setSelectedNode] = useState<OrgNode | null>(null);
+  const [showNodePicker, setShowNodePicker] = useState(false);
 
   const inviteMut = useMutation({
     mutationFn: async () => apiFetch<{ accept_url: string; token: string }>('/auth/invitations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, role, scope_type: 'global' }),
+      body: JSON.stringify({
+        email,
+        role,
+        scope_type: selectedNode ? selectedNode.type : 'global',
+        scope_id: selectedNode?.id ?? null,
+      }),
     }),
     onSuccess: (data) => {
       setResult(data);
@@ -185,18 +231,63 @@ function InviteModal({ onClose }: { onClose: () => void }) {
                   color: 'var(--fg-1)', fontFamily: 'inherit' }}
               />
             </div>
-            <div style={{ marginBottom: 20 }}>
+            <div style={{ marginBottom: 14 }}>
               <label style={{ display: 'block', fontSize: 12.5, fontWeight: 500, marginBottom: 6 }}>Role</label>
               <select value={role} onChange={e => setRole(e.target.value)}
                 style={{ width: '100%', padding: '8px 10px', fontSize: 13,
                   background: 'var(--surface-2)', border: '1px solid var(--rule)', borderRadius: 6,
                   color: 'var(--fg-1)', fontFamily: 'inherit' }}>
-                <option value="developer">Developer</option>
-                <option value="viewer">Viewer</option>
+                <option value="engineer">Engineer</option>
+                <option value="reporter">Reporter</option>
                 <option value="team_admin">Team Admin</option>
+                <option value="unit_lead">Unit Lead</option>
                 <option value="area_owner">Area Owner</option>
-                <option value="platform_admin">Platform Admin</option>
+                <option value="gateway_admin">Gateway Admin</option>
               </select>
+            </div>
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ display: 'block', fontSize: 12.5, fontWeight: 500, marginBottom: 6 }}>Org scope (optional)</label>
+              {!selectedNode && !showNodePicker && (
+                <button
+                  type="button"
+                  className="btn btn--ghost"
+                  style={{ fontSize: 12.5 }}
+                  onClick={() => setShowNodePicker(true)}
+                >
+                  Select team (optional)
+                </button>
+              )}
+              {showNodePicker && (
+                <div>
+                  <div style={{ maxHeight: 300, overflowY: 'auto', marginBottom: 6 }}>
+                    <OrgTree
+                      onSelect={(n) => { setSelectedNode(n); setShowNodePicker(false); }}
+                      selectedId={selectedNode?.id}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn--ghost"
+                    style={{ fontSize: 12.5 }}
+                    onClick={() => setShowNodePicker(false)}
+                  >
+                    × Cancel
+                  </button>
+                </div>
+              )}
+              {selectedNode && !showNodePicker && (
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6,
+                  padding: '4px 10px', borderRadius: 6, fontSize: 12.5,
+                  background: 'var(--surface-2)', border: '1px solid var(--rule)' }}>
+                  <span style={{ color: 'var(--fg-1)' }}>{selectedNode.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedNode(null)}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer',
+                      color: 'var(--fg-3)', fontSize: 14, lineHeight: 1, padding: 0 }}
+                  >×</button>
+                </div>
+              )}
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
               <button type="submit" className="btn btn--primary" style={{ flex: 1 }} disabled={inviteMut.isPending}>
@@ -217,10 +308,15 @@ type TabId = 'users' | 'invitations' | 'service-accounts';
 
 export default function UsersPage() {
   const qc = useQueryClient();
+  const searchParams = useSearchParams();
   const [tab, setTab] = useState<TabId>('users');
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(searchParams.get('search') ?? '');
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [showInvite, setShowInvite] = useState(false);
+
+  useEffect(() => {
+    setSearch(searchParams.get('search') ?? '');
+  }, [searchParams]);
 
   const usersQuery = useQuery<UsersResponse>({
     queryKey: ['admin-users', search, statusFilter],
@@ -231,6 +327,17 @@ export default function UsersPage() {
       return apiFetch(`/admin/users?${params}`);
     },
   });
+
+  const nodesTreeQuery = useQuery<OrgNode[]>({
+    queryKey: ['nodes-tree-list'],
+    queryFn: () => apiFetch<OrgNode[]>('/nodes/tree').catch(() => []),
+  });
+
+  const nodeMap = useMemo(() => {
+    const map = new Map<string, string>();
+    nodesTreeQuery.data?.forEach(root => flattenTree(root, map));
+    return map;
+  }, [nodesTreeQuery.data]);
 
   const invitesQuery = useQuery<Invitation[]>({
     queryKey: ['invitations'],
@@ -377,7 +484,7 @@ export default function UsersPage() {
                           </div>
                         </td>
                         <td>
-                          {u.roles.map(r => <RoleBadge key={`${r.role}-${r.scope_id}`} role={r.role} />)}
+                          {u.roles.map(r => <ScopedRoleBadge key={`${r.role}-${r.scope_id}`} role={r.role} scopeType={r.scope_type} scopeId={r.scope_id} nodeMap={nodeMap} />)}
                           {u.is_contractor && (
                             <span style={{
                               display: 'inline-block', padding: '2px 7px', borderRadius: 4,
