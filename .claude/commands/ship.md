@@ -37,15 +37,19 @@ survives wakeups. Read it at the top of each pass; create it on the first pass.
 
 2. **Read status.**
    - `gh pr view <pr> --json state,mergeable,mergeStateStatus,statusCheckRollup,headRefOid`
-   - Review threads via GraphQL:
+   - Review threads via GraphQL. Paginate to be exhaustive — a PR can have >100 threads, and
+     stopping at the first page would let `/ship` wrongly conclude "no unresolved threads" and
+     burn rounds. Follow `pageInfo.hasNextPage`/`endCursor` until done:
      ```
-     gh api graphql -f query='query($o:String!,$r:String!,$n:Int!){repository(owner:$o,name:$r){pullRequest(number:$n){reviewThreads(first:100){nodes{id isResolved comments(first:20){nodes{author{login} body path}}}}}}}' -f o=<owner> -f r=<repo> -F n=<pr>
+     gh api graphql -f query='query($o:String!,$r:String!,$n:Int!,$after:String){repository(owner:$o,name:$r){pullRequest(number:$n){reviewThreads(first:100,after:$after){pageInfo{hasNextPage endCursor} nodes{id isResolved comments(first:20){nodes{author{login} body path}}}}}}}' -f o=<owner> -f r=<repo> -F n=<pr> -f after=<cursor-or-omit>
      ```
 
-3. **Merged?** (`state == MERGED`) → **leave the worktree first**: relocate to the primary
-   checkout (`ExitWorktree`, or just call the script which uses `git -C <primary>`), then run
-   `~/.claude/scripts/git-sync-main.sh "<worktree>" "<branch>"`. `PushNotification` "PR #<pr>
-   merged & synced". Delete the state file. **Stop the loop** (do not re-arm).
+3. **Merged?** (`state == MERGED`) → run `~/.claude/scripts/git-sync-main.sh "<worktree>"
+   "<branch>"`. The script targets the primary checkout via `git -C <primary>`, so it is safe to
+   call from inside the worktree it removes — no need to relocate first. `PushNotification`
+   "PR #<pr> merged & synced". Delete the state file. **Stop the loop** (do not re-arm). If the
+   script exits non-zero (e.g. the default branch has diverged from origin and can't
+   fast-forward), **escalate** with its message rather than retrying.
 
 4. **A required check FAILED?**
    - Clearly ours and fixable (lint/format/unit failure from this change) → fix in the worktree,
