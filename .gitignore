@@ -33,5 +33,8 @@ infra/certs/
 .claude/worktrees/
 .claire/worktrees/
 
+# Local, per-machine bypass for the worktree-isolation hook — never commit
+.claude/allow-master-edit
+
 # claude-flow local tool state (sessions/data)
 .claude-flow/

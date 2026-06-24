@@ -1,0 +1,8 @@
+# Marker: this repo opts into enforced git-worktree isolation.
+#
+# When this file is present, ~/.claude/hooks/require-worktree.sh (a PreToolUse hook) blocks
+# the first edit to a file on the default branch in the PRIMARY checkout — forcing feature/fix
+# work into an isolated worktree (and a PR, since master is PR-only).
+#
+# Bypass a single deliberate edit: set env CLAUDE_ALLOW_MASTER_EDIT=1, or create
+# .claude/allow-master-edit (gitignored / local). See ~/.claude/CLAUDE.md "Git worktree isolation".

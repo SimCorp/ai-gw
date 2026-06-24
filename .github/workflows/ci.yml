@@ -61,7 +61,7 @@ jobs:
           while IFS= read -r f; do
             [ -z "$f" ] && continue
             case "$f" in
-              *.md|docs/*|.github/dependabot.yml|.claude/**) : ;;
+              *.md|docs/*|.github/dependabot.yml|.claude/**|.vscode/**|demo/**|.github/agentic-workflows/**|.github/aw/**) : ;;
               *) code=true ;;
             esac
           done <<< "$files"
@@ -115,7 +115,7 @@ jobs:
         id: pnpm-cache
         run: echo "dir=$(pnpm store path)" >> $GITHUB_OUTPUT
 
-      - uses: actions/cache@v5
+      - uses: actions/cache@v6
         with:
           path: ${{ steps.pnpm-cache.outputs.dir }}
           key: pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
@@ -158,7 +158,7 @@ jobs:
         id: pnpm-cache
         run: echo "dir=$(pnpm store path)" >> $GITHUB_OUTPUT
 
-      - uses: actions/cache@v5
+      - uses: actions/cache@v6
         with:
           path: ${{ steps.pnpm-cache.outputs.dir }}
           key: pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}

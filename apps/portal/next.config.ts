@@ -9,10 +9,10 @@ const securityHeaders = [
     key: "Content-Security-Policy",
     value: [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://rybbit.aigw.scdom.net",
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob:",
-      "connect-src 'self' https://aigw-dev.lab.cloud.scdom.net",
+      "connect-src 'self' https://aigw-dev.lab.cloud.scdom.net https://rybbit.aigw.scdom.net",
       "font-src 'self'",
       "frame-ancestors 'none'",
     ].join("; "),
