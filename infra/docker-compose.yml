@@ -634,18 +634,19 @@ services:
       CLICKHOUSE_PASSWORD: ${RYBBIT_CLICKHOUSE_PASSWORD}
       # PostgreSQL — reuse existing aigateway postgres; rybbit DB created by
       # infra/postgres/init-rybbit.sql on first cluster init.
-      # aigateway:aigateway matches the hardcoded password used by all other services.
+      # Dedicated 'rybbit' role with no access to the aigateway DB.
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
       POSTGRES_DB: rybbit
-      POSTGRES_USER: aigateway
-      POSTGRES_PASSWORD: aigateway
+      POSTGRES_USER: rybbit
+      POSTGRES_PASSWORD: ${RYBBIT_POSTGRES_PASSWORD}
       # Redis — reuse existing stack Redis (no requirepass configured)
       REDIS_HOST: redis
       REDIS_PORT: "6379"
       REDIS_PASSWORD: ""
       BETTER_AUTH_SECRET: ${RYBBIT_BETTER_AUTH_SECRET}
-      DISABLE_SIGNUP: "false"
+      # Set to false temporarily to create the first admin account, then set back to true.
+      DISABLE_SIGNUP: "true"
     depends_on:
       postgres:
         condition: service_healthy
