@@ -1,13 +1,19 @@
 ---
 description: Drive the current branch's PR to green & merged autonomously, working with Copilot's review, then sync + clean up.
 argument-hint: "[pr-number]   (optional; otherwise uses the PR for the current branch)"
-allowed-tools: Bash, Read, Edit, Write, Task, ScheduleWakeup, PushNotification
+allowed-tools: Bash, Read, Edit, Write, Task, PushNotification
 ---
 
 You are running `/ship`. Goal: take the current branch's PR all the way to **merged**, working
-*with* Copilot's automated review, with **no manual step** from the user in the happy path. Run
-**detached**: do one pass, and whenever you must wait, re-arm via `ScheduleWakeup` and end the
-turn so the user can walk away. Notify (`PushNotification`) only on **merge** or **escalation**.
+*with* Copilot's automated review, with **no manual step** from the user in the happy path.
+
+**For detached "walk-away" operation, invoke as `/loop /ship <pr>`** (no interval → self-paced
+dynamic mode). In that mode you do **one pass per iteration** and simply **end the turn** whenever
+you must wait for CI/review; `/loop` automatically schedules the next iteration (it picks the
+delay — short while CI is active, longer when idle). Do **not** call `ScheduleWakeup` yourself —
+that is `/loop`'s internal mechanism, and calling it from an ordinary turn is a no-op that would
+silently kill the loop. Run bare (`/ship <pr>`) and it just does a single pass.
+Notify (`PushNotification`) only on **merge** or **escalation**.
 
 ## The `master` merge gate (ai-gw, verified)
 
@@ -25,7 +31,7 @@ Re-read the gate at runtime; don't trust this snapshot if it looks stale.
 ## State
 
 Persist `{pr, branch, worktree, round}` in `~/.claude/state/ship-<pr>.json` so the round counter
-survives wakeups. Read it at the top of each pass; create it on the first pass.
+survives across loop iterations. Read it at the top of each pass; create it on the first pass.
 
 ## One pass
 
@@ -56,12 +62,12 @@ survives wakeups. Read it at the top of each pass; create it on the first pass.
 
 4. **A required check FAILED?**
    - Clearly ours and fixable (lint/format/unit failure from this change) → fix in the worktree,
-     commit, push (this re-triggers Copilot + CI). `round++`. Re-arm (step 7).
+     commit, push (this re-triggers Copilot + CI). `round++`. Go to step 7 (wait).
    - Infra/flaky/ambiguous, or a real failure needing a decision → **escalate**: `PushNotification`
      with a one-line summary + the failing check, and **stop**.
 
 5. **Checks still pending, or Copilot has not yet re-reviewed `headRefOid`** → nothing to do yet.
-   Re-arm (step 7).
+   Go to step 7 (wait).
 
 6. **Checks green but unresolved threads exist** → for each unresolved thread:
    - Address it in the worktree (fix the code), or reply with reasoning if it's a genuine
@@ -71,7 +77,7 @@ survives wakeups. Read it at the top of each pass; create it on the first pass.
      ```
    - **Never resolve a thread you haven't actually addressed.** Anything that reads as a real
      security or correctness concern you're not sure about → **escalate**, don't auto-resolve.
-   - Commit + push the fixes. `round++`. Re-arm (step 7).
+   - Commit + push the fixes. `round++`. Go to step 7 (wait).
 
    If checks are **green and no unresolved threads remain**: **if the diff touches any
    auth-adjacent service — `services/auth`, `services/cache`, `services/admin`,
@@ -82,11 +88,12 @@ survives wakeups. Read it at the top of each pass; create it on the first pass.
    call and go straight to step 3 cleanup; otherwise merge:
    `gh pr merge <pr> --squash --delete-branch` → go to step 3.
 
-7. **Re-arm / convergence guard.**
+7. **Wait / convergence guard.**
    - If `round > 3` and still not merged → **escalate** (stop + notify with a summary of what's
      blocking). No infinite nit-loops.
-   - Otherwise `ScheduleWakeup` (~270s while CI/Copilot is mid-flight to stay in cache; longer if
-     you know it'll be minutes) with this same `/ship <pr>` prompt, then **end the turn**.
+   - Otherwise **just end the turn.** Under `/loop /ship <pr>` the next iteration is scheduled
+     automatically (self-paced); the persisted state file carries `round` forward. Run bare
+     (no `/loop`), ending the turn simply stops — re-invoke `/ship <pr>` manually to continue.
 
 ## Principles
 
