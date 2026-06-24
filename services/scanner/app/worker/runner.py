@@ -108,6 +108,38 @@ def _run_container(
     return output
 
 
+def _run_container_with_file(
+    image: str,
+    command: list[str],
+    container_path: str,
+    timeout: int = settings.max_container_timeout_seconds,
+) -> str:
+    """Run a container and extract a file from its filesystem (e.g. ZAP JSON report)."""
+    import io
+    import tarfile
+
+    container = _docker().containers.run(
+        image,
+        command=command,
+        detach=True,
+        remove=False,
+        network=settings.docker_network,
+    )
+    try:
+        container.wait(timeout=timeout)
+        bits, _ = container.get_archive(container_path)
+        buf = io.BytesIO(b"".join(bits))
+        with tarfile.open(fileobj=buf) as tar:
+            member = tar.getmembers()[0]
+            f = tar.extractfile(member)
+            return f.read().decode("utf-8", errors="replace") if f else ""
+    except Exception as exc:
+        log.warning("Could not extract %s from container: %s", container_path, exc)
+        return ""
+    finally:
+        container.remove(force=True)
+
+
 async def _run_nmap(job_id: str, target_url: str, tier: str) -> None:
     from urllib.parse import urlparse
 
@@ -156,8 +188,10 @@ async def _run_nuclei(job_id: str, target_url: str, tier: str) -> None:
 
 
 async def _run_zap(job_id: str, target_url: str, openapi_spec_url: str) -> None:
-    output_file = None
+    from app.worker.parsers.zap import parse_zap_json
+
     results_path = "/zap/results.json"
+    output_file = None
     if _use_aca():
         from app.worker.aca_job_runner import new_run_token
 
@@ -174,19 +208,15 @@ async def _run_zap(job_id: str, target_url: str, openapi_spec_url: str) -> None:
         "-I",
     ]
     log.info("Running ZAP for job %s against spec %s", job_id, openapi_spec_url)
-    await asyncio.to_thread(_spawn_tool, "zaproxy/zap-stable", command, output_file)
-    findings = [
-        {
-            "scanner": "zap",
-            "severity": "info",
-            "category": "api_vuln",
-            "title": "ZAP API scan completed",
-            "description": f"ZAP deep API scan ran against OpenAPI spec at {openapi_spec_url}.",
-            "evidence": {"spec_url": openapi_spec_url},
-            "remediation": None,
-        }
-    ]
-    await _post_internal(f"/internal/jobs/{job_id}/findings", {"findings": findings})
+    if _use_aca():
+        zap_json = await asyncio.to_thread(_spawn_tool, "zaproxy/zap-stable", command, output_file)
+    else:
+        zap_json = await asyncio.to_thread(
+            _run_container_with_file, "zaproxy/zap-stable", command, results_path
+        )
+    findings = parse_zap_json(zap_json)
+    if findings:
+        await _post_internal(f"/internal/jobs/{job_id}/findings", {"findings": findings})
 
 
 async def _run_garak(job_id: str, target_url: str, tier: str) -> None:
