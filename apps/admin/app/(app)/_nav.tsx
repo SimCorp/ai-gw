@@ -22,6 +22,7 @@ export const ADMIN_NAV: NavDomain[] = [
       { href: '/requests', label: 'Live requests' },
       { href: '/reports', label: 'Cost reports' },
       { href: '/alerts', label: 'Alerts' },
+      { href: '/service-status', label: 'Service Status' },
       { href: '/agentic-workflows', label: 'Agentic workflows' },
     ],
   },

@@ -1,0 +1,122 @@
+storage:
+  type: sqlite
+  path: /data/gatus.db
+
+web:
+  port: 8080
+
+metrics: true
+
+endpoints:
+  - name: auth
+    url: http://auth:8001/health
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 500"
+
+  - name: cache
+    url: http://cache:8002/health
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 500"
+
+  - name: litellm
+    url: http://litellm:8003/health/liveliness
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 500"
+
+  - name: litellm-providers
+    url: http://litellm:8003/health/readiness
+    interval: 60s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 2000"
+
+  - name: observability
+    url: http://observability:8004/health
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 500"
+
+  - name: admin
+    url: http://admin:8005/health
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 500"
+
+  - name: identity
+    url: http://identity:8006/health
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 500"
+
+  - name: agent-relay
+    url: http://agent-relay:8007/health
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 500"
+
+  - name: librarian
+    url: http://librarian:8008/health
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 500"
+
+  - name: memory
+    url: http://memory:8009/health
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 500"
+
+  - name: league
+    url: http://league:8010/health
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 500"
+
+  - name: scanner
+    url: http://scanner:8011/health
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 500"
+
+  - name: graphify
+    url: http://graphify:8012/health
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 500"
+
+  - name: admin-portal
+    url: http://admin-portal:3001/admin/login
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 2000"
+
+  - name: portal
+    url: http://portal:3002/
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 2000"
+
+  # Checks the live TLS certificate. Fires if < 14 days remain.
+  - name: tls-cert
+    url: https://dev.aigw.scdom.net
+    interval: 1h
+    conditions:
+      - "[STATUS] == 200"
+      - "[CERTIFICATE_EXPIRATION] > 336h"

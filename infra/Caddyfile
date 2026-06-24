@@ -89,6 +89,29 @@
 		reverse_proxy obs-grafana:3000
 	}
 
+	# Gatus status page — served directly by Caddy so it stays up even if the
+	# admin portal container is down. ZPA-protected like the rest of the gateway.
+	#
+	# Gatus's Vue SPA hardcodes absolute asset paths (/js/*, /css/*, /api/v1/*).
+	# handle_path strips /status so Gatus serves its HTML from /, then the
+	# browser fetches those absolute assets — caught by the three routes below.
+	# Safe because Next.js bundles all its JS/CSS under /_next/static/, so
+	# /js/* and /css/* are exclusively Gatus assets on this host.
+	handle_path /status* {
+		reverse_proxy gatus:8080
+	}
+	handle /js/* {
+		reverse_proxy gatus:8080
+	}
+	handle /css/* {
+		reverse_proxy gatus:8080
+	}
+	# Gatus REST API used by its SPA. Not matched by @apimetrics (/api/*/metrics)
+	# and not used by any gateway service.
+	handle /api/v1/* {
+		reverse_proxy gatus:8080
+	}
+
 	# Dev portal at the root — catch-all for everything not matched above
 	# (Next.js app with no basePath: /, /keys, /docs, /_next/*, assets, …).
 	handle {
