@@ -1,10 +1,9 @@
-'use client';
-
 import React from 'react';
 import { PageHead } from '@aigw/ui';
 
-const ADMIN_EMBED = process.env.NEXT_PUBLIC_RYBBIT_ADMIN_EMBED_URL ?? '';
-const PORTAL_EMBED = process.env.NEXT_PUBLIC_RYBBIT_PORTAL_EMBED_URL ?? '';
+// Read at request time on the server — update infra/.env + restart (no rebuild needed)
+const ADMIN_EMBED = process.env.RYBBIT_EMBED_URL_ADMIN ?? '';
+const PORTAL_EMBED = process.env.RYBBIT_EMBED_URL_PORTAL ?? '';
 
 export default function PortalAnalyticsPage() {
   return (
@@ -24,7 +23,7 @@ export default function PortalAnalyticsPage() {
             />
           ) : (
             <p style={{ color: 'var(--fg-3)', fontSize: '0.875rem' }}>
-              No embed URL configured. Set <code>NEXT_PUBLIC_RYBBIT_ADMIN_EMBED_URL</code>.
+              No embed URL configured. Set <code>RYBBIT_EMBED_URL_ADMIN</code>.
             </p>
           )}
         </section>
@@ -41,7 +40,7 @@ export default function PortalAnalyticsPage() {
             />
           ) : (
             <p style={{ color: 'var(--fg-3)', fontSize: '0.875rem' }}>
-              No embed URL configured. Set <code>NEXT_PUBLIC_RYBBIT_PORTAL_EMBED_URL</code>.
+              No embed URL configured. Set <code>RYBBIT_EMBED_URL_PORTAL</code>.
             </p>
           )}
         </section>

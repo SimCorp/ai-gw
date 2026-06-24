@@ -26,7 +26,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ThemeProvider attribute="data-theme" defaultTheme="system" enableSystem>
           {children}
         </ThemeProvider>
-        {rybbitEnabled && rybbitSiteId && (
+        {rybbitEnabled && rybbitUrl && rybbitSiteId && (
           <Script
             src={`${rybbitUrl}/api/script.js`}
             data-site-id={rybbitSiteId}

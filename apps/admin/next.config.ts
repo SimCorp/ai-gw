@@ -16,7 +16,7 @@ const securityHeaders = [
       "img-src 'self' data: blob:",
       `connect-src 'self' ${adminApi} https://rybbit.aigw.scdom.net`,
       "font-src 'self'",
-      "frame-src https://rybbit.aigw.scdom.net",
+      "frame-src 'self' https://rybbit.aigw.scdom.net",
       "frame-ancestors 'none'",
     ].join("; "),
   },
