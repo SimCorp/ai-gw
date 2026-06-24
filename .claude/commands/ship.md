@@ -39,9 +39,12 @@ survives wakeups. Read it at the top of each pass; create it on the first pass.
    - `gh pr view <pr> --json state,mergeable,mergeStateStatus,statusCheckRollup,headRefOid`
    - Review threads via GraphQL. Paginate to be exhaustive — a PR can have >100 threads, and
      stopping at the first page would let `/ship` wrongly conclude "no unresolved threads" and
-     burn rounds. Follow `pageInfo.hasNextPage`/`endCursor` until done:
+     burn rounds. `$after` is nullable: **omit `-f after` entirely on the first call** (it
+     defaults to null), then pass `-f after="<endCursor>"` per page until `hasNextPage` is false:
      ```
-     gh api graphql -f query='query($o:String!,$r:String!,$n:Int!,$after:String){repository(owner:$o,name:$r){pullRequest(number:$n){reviewThreads(first:100,after:$after){pageInfo{hasNextPage endCursor} nodes{id isResolved comments(first:20){nodes{author{login} body path}}}}}}}' -f o=<owner> -f r=<repo> -F n=<pr> -f after=<cursor-or-omit>
+     # first page (no after):
+     gh api graphql -f query='query($o:String!,$r:String!,$n:Int!,$after:String){repository(owner:$o,name:$r){pullRequest(number:$n){reviewThreads(first:100,after:$after){pageInfo{hasNextPage endCursor} nodes{id isResolved comments(first:20){nodes{author{login} body path}}}}}}}' -f o=<owner> -f r=<repo> -F n=<pr>
+     # subsequent pages: append  -f after="<endCursor>"
      ```
 
 3. **Merged?** (`state == MERGED`) → run `~/.claude/scripts/git-sync-main.sh "<worktree>"
