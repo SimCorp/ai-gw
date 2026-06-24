@@ -70,10 +70,14 @@ survives wakeups. Read it at the top of each pass; create it on the first pass.
      security or correctness concern you're not sure about → **escalate**, don't auto-resolve.
    - Commit + push the fixes. `round++`. Re-arm (step 7).
 
-   If checks are **green and no unresolved threads remain**: **if the diff touches
-   `services/auth`, `services/cache`, or `services/admin`** (per repo `CLAUDE.md`), dispatch the
-   `security-reviewer` agent over the diff first — clean → proceed, any finding → **escalate**.
-   Then merge: `gh pr merge <pr> --squash --delete-branch` (or let auto-merge fire) → go to step 3.
+   If checks are **green and no unresolved threads remain**: **if the diff touches any
+   auth-adjacent service — `services/auth`, `services/cache`, `services/admin`,
+   `services/identity`, or `services/agent-relay`** (the `security-reviewer` agent covers auth,
+   key handling, input validation, and access control) — dispatch `security-reviewer` over the
+   diff first; clean → proceed, any finding → **escalate**. Then **re-check state** (`gh pr view
+   <pr> --json state`): if a backstop auto-merge already fired (`state == MERGED`), skip the merge
+   call and go straight to step 3 cleanup; otherwise merge:
+   `gh pr merge <pr> --squash --delete-branch` → go to step 3.
 
 7. **Re-arm / convergence guard.**
    - If `round > 3` and still not merged → **escalate** (stop + notify with a summary of what's
@@ -83,6 +87,10 @@ survives wakeups. Read it at the top of each pass; create it on the first pass.
 
 ## Principles
 
+- **"Escalate" means: `PushNotification` with a one-line summary of what's blocking, delete the
+  state file (`~/.claude/state/ship-<pr>.json`), and stop the loop without re-arming.** Deleting
+  the state file matters — a later `/ship` retry on the same PR (after you fix the blocker) must
+  start from a clean `round` counter, not an inflated one that trips the convergence guard early.
 - **Integrity over green.** The aim is a genuinely good merge, not a gamed gate. Resolve only
   what's addressed; surface doubt, don't bury it.
 - **Always re-confirm Copilot reviewed the current `headRefOid`** before declaring "no unresolved
