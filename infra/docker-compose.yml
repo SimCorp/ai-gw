@@ -416,6 +416,7 @@ services:
       NEXT_PUBLIC_MEMORY_BASE_URL: "https://dev.aigw.scdom.net/api/memory"
       NEXT_PUBLIC_LITELLM_BASE_URL: "https://dev.aigw.scdom.net/api/litellm"
       NEXT_PUBLIC_LEAGUE_API: "https://dev.aigw.scdom.net/api/league"
+      NEXT_PUBLIC_SCANNER_API: "https://dev.aigw.scdom.net/api/scanner"
       NEXT_PUBLIC_LITELLM_KEY: "sk-litellm-local-dev"
     depends_on:
       admin:

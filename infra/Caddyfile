@@ -62,6 +62,9 @@
 	handle_path /api/observability/* {
 		reverse_proxy observability:8004
 	}
+	handle_path /api/scanner/* {
+		reverse_proxy scanner:8011
+	}
 
 	# WebSocket relay bus (internal; prefix kept).
 	handle /agent-relay/* {
