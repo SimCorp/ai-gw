@@ -395,6 +395,9 @@ services:
       NEXT_PUBLIC_RYBBIT_ENABLED: "true"
       NEXT_PUBLIC_RYBBIT_URL: "https://rybbit.aigw.scdom.net"
       NEXT_PUBLIC_RYBBIT_SITE_ID: "${RYBBIT_SITE_ID_ADMIN}"
+      # Rybbit private embed URLs — populate post-DNS (pass aigw/rybbit-embed-admin / aigw/rybbit-embed-portal)
+      NEXT_PUBLIC_RYBBIT_ADMIN_EMBED_URL: "${RYBBIT_EMBED_URL_ADMIN}"
+      NEXT_PUBLIC_RYBBIT_PORTAL_EMBED_URL: "${RYBBIT_EMBED_URL_PORTAL}"
     depends_on:
       admin:
         condition: service_healthy
