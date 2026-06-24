@@ -1,3 +1,5 @@
+import json as _json
+
 from app.worker.parsers.garak import parse_garak_jsonl
 from app.worker.parsers.nmap import parse_nmap_xml
 from app.worker.parsers.nuclei import parse_nuclei_json
@@ -86,37 +88,42 @@ def test_garak_empty():
     assert parse_garak_jsonl("") == []
 
 
-import json as _json
-
-ZAP_SAMPLE = _json.dumps({
-    "site": [{
-        "name": "http://myapp.simcorp.internal",
-        "alerts": [
+ZAP_SAMPLE = _json.dumps(
+    {
+        "site": [
             {
-                "pluginid": "10202",
-                "name": "Absence of Anti-CSRF Tokens",
-                "riskcode": "2",
-                "confidence": "2",
-                "desc": "No Anti-CSRF tokens found in HTML forms.",
-                "instances": [{"uri": "http://myapp.simcorp.internal/form", "method": "GET"}],
-                "solution": "Use CSRF tokens in forms.",
-            },
-            {
-                "pluginid": "10049",
-                "name": "Non-Storable Content",
-                "riskcode": "0",
-                "confidence": "3",
-                "desc": "Response not storable by caching components.",
-                "instances": [],
-                "solution": "",
-            },
-        ],
-    }]
-})
+                "name": "http://myapp.simcorp.internal",
+                "alerts": [
+                    {
+                        "pluginid": "10202",
+                        "name": "Absence of Anti-CSRF Tokens",
+                        "riskcode": "2",
+                        "confidence": "2",
+                        "desc": "No Anti-CSRF tokens found in HTML forms.",
+                        "instances": [
+                            {"uri": "http://myapp.simcorp.internal/form", "method": "GET"}
+                        ],
+                        "solution": "Use CSRF tokens in forms.",
+                    },
+                    {
+                        "pluginid": "10049",
+                        "name": "Non-Storable Content",
+                        "riskcode": "0",
+                        "confidence": "3",
+                        "desc": "Response not storable by caching components.",
+                        "instances": [],
+                        "solution": "",
+                    },
+                ],
+            }
+        ]
+    }
+)
 
 
 def test_zap_parse_finds_findings():
     from app.worker.parsers.zap import parse_zap_json
+
     findings = parse_zap_json(ZAP_SAMPLE)
     assert len(findings) == 2
     assert all(f["scanner"] == "zap" for f in findings)
@@ -125,6 +132,7 @@ def test_zap_parse_finds_findings():
 
 def test_zap_parse_severity_mapping():
     from app.worker.parsers.zap import parse_zap_json
+
     findings = parse_zap_json(ZAP_SAMPLE)
     medium = next(f for f in findings if f["title"] == "Absence of Anti-CSRF Tokens")
     info = next(f for f in findings if f["title"] == "Non-Storable Content")
@@ -134,6 +142,7 @@ def test_zap_parse_severity_mapping():
 
 def test_zap_parse_empty_and_invalid():
     from app.worker.parsers.zap import parse_zap_json
+
     assert parse_zap_json("{}") == []
     assert parse_zap_json("") == []
     assert parse_zap_json("not json") == []

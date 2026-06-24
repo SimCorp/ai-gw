@@ -130,9 +130,11 @@ def _run_container_with_file(
         bits, _ = container.get_archive(container_path)
         buf = io.BytesIO(b"".join(bits))
         with tarfile.open(fileobj=buf) as tar:
-            member = tar.getmembers()[0]
-            f = tar.extractfile(member)
-            return f.read().decode("utf-8", errors="replace") if f else ""
+            for member in tar.getmembers():
+                f = tar.extractfile(member)
+                if f is not None:
+                    return f.read().decode("utf-8", errors="replace")
+            return ""
     except Exception as exc:
         log.warning("Could not extract %s from container: %s", container_path, exc)
         return ""
