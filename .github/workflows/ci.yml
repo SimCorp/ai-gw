@@ -61,7 +61,7 @@ jobs:
           while IFS= read -r f; do
             [ -z "$f" ] && continue
             case "$f" in
-              *.md|docs/*|.github/dependabot.yml|.claude/**) : ;;
+              *.md|docs/*|.github/dependabot.yml|.claude/**|.vscode/**|demo/**|.github/agentic-workflows/**|.github/aw/**) : ;;
               *) code=true ;;
             esac
           done <<< "$files"
