@@ -391,6 +391,10 @@ services:
       NEXT_TELEMETRY_DISABLED: "1"
       NEXT_PUBLIC_ADMIN_API: "https://dev.aigw.scdom.net/api/admin"
       NEXT_PUBLIC_LEAGUE_API: "https://dev.aigw.scdom.net/api/league"
+      # Rybbit analytics — site IDs populated post-DNS (pass aigw/rybbit-site-id-admin)
+      NEXT_PUBLIC_RYBBIT_ENABLED: "true"
+      NEXT_PUBLIC_RYBBIT_URL: "https://rybbit.aigw.scdom.net"
+      NEXT_PUBLIC_RYBBIT_SITE_ID: "${RYBBIT_SITE_ID_ADMIN}"
     depends_on:
       admin:
         condition: service_healthy
@@ -418,6 +422,10 @@ services:
       NEXT_PUBLIC_LITELLM_BASE_URL: "https://dev.aigw.scdom.net/api/litellm"
       NEXT_PUBLIC_LEAGUE_API: "https://dev.aigw.scdom.net/api/league"
       NEXT_PUBLIC_LITELLM_KEY: "sk-litellm-local-dev"
+      # Rybbit analytics — site IDs populated post-DNS (pass aigw/rybbit-site-id-portal)
+      NEXT_PUBLIC_RYBBIT_ENABLED: "true"
+      NEXT_PUBLIC_RYBBIT_URL: "https://rybbit.aigw.scdom.net"
+      NEXT_PUBLIC_RYBBIT_SITE_ID: "${RYBBIT_SITE_ID_PORTAL}"
     depends_on:
       admin:
         condition: service_healthy

@@ -12,7 +12,7 @@ const securityHeaders = [
       "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob:",
-      "connect-src 'self' https://aigw-dev.lab.cloud.scdom.net",
+      "connect-src 'self' https://aigw-dev.lab.cloud.scdom.net https://rybbit.aigw.scdom.net",
       "font-src 'self'",
       "frame-ancestors 'none'",
     ].join("; "),
