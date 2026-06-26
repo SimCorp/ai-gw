@@ -10,6 +10,12 @@ async def test_health(client):
     assert resp.json() == {"status": "ok"}
 
 
+async def test_ready(client):
+    resp = await client.get("/ready")
+    assert resp.status_code == 200
+    assert resp.json() == {"status": "ready"}
+
+
 async def test_resolve_ranks_exact_then_capability_then_partial_and_dedups(client, insert_agent):
     # "search" is an exact slug, a capability of another agent, and a partial
     # match of a third — verifies ordering and that no slug appears twice.

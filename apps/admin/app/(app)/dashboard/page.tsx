@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { PageHead, KpiCard, Pill, EmptyState, Button } from '@aigw/ui';
+import { ServiceHealthWidget } from './ServiceHealthWidget';
 import { Sparkline } from '@aigw/charts';
 import { LoadingState, ErrorState } from '../_components/PageStates';
 import { apiFetch } from '../../../lib/apiClient';
@@ -511,6 +512,9 @@ export default function DashboardPage() {
             )}
           </div>
         </div>
+
+        {/* Gatus probe summary */}
+        <ServiceHealthWidget />
 
         {/* Bottom: service health, infrastructure, alerts */}
         <div className="split-3">

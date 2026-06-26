@@ -21,6 +21,7 @@ from uuid import UUID
 import asyncpg
 import httpx
 from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.responses import JSONResponse
 from prometheus_client import make_asgi_app
 from pydantic import BaseModel, Field
 from redis.asyncio import Redis
@@ -294,6 +295,23 @@ def _check_service_token(request: Request) -> None:
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+@app.get("/ready")
+async def ready(request: Request):
+    errors: dict[str, str] = {}
+    try:
+        await request.app.state.redis.ping()
+    except Exception as exc:
+        errors["redis"] = str(exc)
+    try:
+        async with request.app.state.pool.acquire() as conn:
+            await conn.fetchval("SELECT 1")
+    except Exception as exc:
+        errors["postgres"] = str(exc)
+    if errors:
+        return JSONResponse({"status": "not_ready", "errors": errors}, status_code=503)
+    return {"status": "ready"}
 
 
 # ── List agents ──────────────────────────────────────────────────────────────
