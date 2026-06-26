@@ -124,6 +124,7 @@ OIDC groups are the source of truth for role assignments. Current single-host de
 **Environment Variables:**
 - `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` — Entra ID credentials (from Key Vault)
 - `OIDC_ISSUER` — Entra ID OIDC issuer URL
+- `OIDC_BASE_URL` — public base URL for the OIDC redirect_uri; required in production to prevent Host-header manipulation
 - `ENVIRONMENT` — development (synthetic admin) or production
 
 ---
