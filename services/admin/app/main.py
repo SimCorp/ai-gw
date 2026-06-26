@@ -107,6 +107,9 @@ from app.routers import (
     plugins as plugins_router,
 )
 from app.routers import (
+    portrait as portrait_router,
+)
+from app.routers import (
     prompts as prompts_router,
 )
 from app.routers import (
@@ -628,6 +631,7 @@ app.include_router(prompts_router.router)  # own auth per endpoint
 app.include_router(admin_ops_router.router, dependencies=_auth)
 app.include_router(admin_champions_router.router)  # own auth: require_admin_auth
 app.include_router(champions_router.router)  # developer-facing — no admin token required
+app.include_router(portrait_router.router)  # developer-facing — no admin token required
 app.include_router(scanner_router.router, dependencies=_auth)
 
 

@@ -6,6 +6,7 @@ import { CodeBlock, EmptyState, Pill, Skeleton } from "@aigw/ui";
 import { useTeam } from "./_lib/teamContext";
 import { useAuth } from "./_lib/authContext";
 import type { TeamMembership } from "./_lib/authContext";
+import UsagePortrait from "./_components/UsagePortrait";
 
 interface AiInsight {
   id: string;
@@ -284,6 +285,9 @@ export default function PortalHome() {
           </div>
         </div>
       )}
+
+      {/* Usage portrait — returning users only */}
+      {!firstRun && <UsagePortrait />}
 
       {/* Stat strip — returning users */}
       {!firstRun && (

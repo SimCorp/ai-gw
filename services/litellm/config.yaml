@@ -85,6 +85,14 @@ model_list:
       api_key: os.environ/AZURE_API_KEY
       api_version: os.environ/AZURE_API_VERSION
 
+  # ── Azure OpenAI — Image generation ─────────────────────────────────────────
+  - model_name: dall-e-3
+    litellm_params:
+      model: azure/dall-e-3
+      api_base: os.environ/AZURE_API_BASE
+      api_key: os.environ/AZURE_API_KEY
+      api_version: "2024-02-01"  # DALL-E 3 requires 2024-02-01+; chat models may use a different version
+
   # ── Azure AI Foundry — Microsoft Phi ────────────────────────────────────────
   # Serverless inference via Azure AI Services unified endpoint.
   # Requires: AZURE_AI_FOUNDRY_ENDPOINT, AZURE_AI_FOUNDRY_KEY in .env
