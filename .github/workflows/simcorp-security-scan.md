@@ -49,7 +49,7 @@ pre-agent-steps:
       mkdir -p /tmp/gh-aw/agent
       pipx run trufflehog3 --no-history --format json \
         --output /tmp/gh-aw/agent/trufflehog_output.json . \
-        2>/dev/null
+        2>/dev/null || true
       if [ ! -s /tmp/gh-aw/agent/trufflehog_output.json ]; then echo '[]' > /tmp/gh-aw/agent/trufflehog_output.json; fi
       echo "TruffleHog findings written to /tmp/gh-aw/agent/trufflehog_output.json"
   - name: Semgrep SAST

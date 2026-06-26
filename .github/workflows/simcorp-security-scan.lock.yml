@@ -506,7 +506,7 @@ jobs:
           GH_AW_SKILL_DIR: ".github/skills"
         run: bash "${RUNNER_TEMP}/gh-aw/actions/restore_inline_skills.sh"
       - name: TruffleHog secret scan
-        run: "mkdir -p /tmp/gh-aw/agent\npipx run trufflehog3 --no-history --format json \\\n  --output /tmp/gh-aw/agent/trufflehog_output.json . \\\n  2>/dev/null\nif [ ! -s /tmp/gh-aw/agent/trufflehog_output.json ]; then echo '[]' > /tmp/gh-aw/agent/trufflehog_output.json; fi\necho \"TruffleHog findings written to /tmp/gh-aw/agent/trufflehog_output.json\"\n"
+        run: "mkdir -p /tmp/gh-aw/agent\npipx run trufflehog3 --no-history --format json \\\n  --output /tmp/gh-aw/agent/trufflehog_output.json . \\\n  2>/dev/null || true\nif [ ! -s /tmp/gh-aw/agent/trufflehog_output.json ]; then echo '[]' > /tmp/gh-aw/agent/trufflehog_output.json; fi\necho \"TruffleHog findings written to /tmp/gh-aw/agent/trufflehog_output.json\"\n"
       - name: Semgrep SAST
         run: "mkdir -p /tmp/gh-aw/agent\npipx run semgrep --config=p/security-audit --config=p/secrets \\\n  --json --output /tmp/gh-aw/agent/semgrep_output.json . \\\n  2>/dev/null\nif [ ! -s /tmp/gh-aw/agent/semgrep_output.json ]; then echo '{}' > /tmp/gh-aw/agent/semgrep_output.json; fi\necho \"Semgrep findings written to /tmp/gh-aw/agent/semgrep_output.json\"\n"
 

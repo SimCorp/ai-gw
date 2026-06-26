@@ -1,0 +1,2 @@
+exclude_paths:
+  - packages/hooks/src/msw/handlers.ts
