@@ -49,7 +49,8 @@ def _build_scene(stats: dict) -> tuple[str, dict]:
     top_model: str | None = stats.get("top_model")
     cache_hit_pct: float = float(stats.get("cache_hit_pct") or 0.0)
     tool_ratio: float = float(stats.get("tool_ratio") or 0.0)
-    peak_hour: int = int(stats.get("peak_hour") or 12)
+    _ph = stats.get("peak_hour")
+    peak_hour: int = int(_ph) if _ph is not None else 12
     request_count: int = int(stats.get("request_count") or 0)
 
     creature_name, creature_emoji = _CREATURE_MAP.get(top_model or "", _DEFAULT_CREATURE)

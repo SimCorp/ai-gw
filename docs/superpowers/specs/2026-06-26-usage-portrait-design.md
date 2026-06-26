@@ -51,7 +51,7 @@ All signals come from `cost_records` WHERE `developer_id = $1 AND created_at >= 
 |---|---|---|
 | `top_model` | `model` with highest `COUNT(*)` | Creature: Sonnet→songbird, Opus→owl, Haiku→hummingbird, GPT-4→raven, others→heron |
 | `cache_hit_pct` | `AVG(cache_hit::int)` | Atmosphere: ≥50%→clear morning light, <50%→dense fog |
-| `tool_ratio` | `SUM(tool_invocation_count)` / `COUNT(*)` | Machinery: ≥0.3→clockwork gears and instruments in the scene, else none |
+| `tool_ratio` | `COUNT(*) FILTER (WHERE tool_invocation_count > 0)` / `COUNT(*)` — fraction of requests that used any tool (0.0–1.0) | Machinery: ≥0.3→clockwork gears and instruments in the scene, else none |
 | `peak_hour` | `EXTRACT(hour FROM created_at)` mode | Time: 0–6→moonlit, 7–11→dawn, 12–17→afternoon, 18–23→dusk |
 | `request_count` | `COUNT(*)` | Scale: ≥100→dense ancient forest, ≥20→forest clearing, else→single tree |
 | `budget_efficiency` | `(budget_usd - spent_usd) / budget_usd` (or 1.0 if no budget) | Season: ≥0.5→spring bloom, ≥0.0→late summer, <0.0→scorched summer *(v2 — not implemented in v1)* |

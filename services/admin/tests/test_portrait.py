@@ -54,6 +54,22 @@ def test_build_scene_sonnet_clear_no_tools():
     assert "single ancient tree" in prompt
 
 
+def test_build_scene_midnight_peak_hour_not_defaulted():
+    """peak_hour=0 is falsy but valid; must map to moonlit, not afternoon."""
+    from app.routers.portrait import _build_scene
+
+    stats = {
+        "top_model": "claude-sonnet-4-6",
+        "cache_hit_pct": 0.5,
+        "tool_ratio": 0.0,
+        "peak_hour": 0,
+        "request_count": 5,
+    }
+    prompt, scene_data = _build_scene(stats)
+    assert "moonlit" in prompt
+    assert scene_data["time"]["name"] == "moonlit scene"
+
+
 def test_build_scene_unknown_model_uses_default():
     from app.routers.portrait import _build_scene
 
