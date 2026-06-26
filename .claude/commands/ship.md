@@ -69,10 +69,10 @@ survives across loop iterations. Read it at the top of each pass; create it on t
    - Clearly ours and fixable (lint/format/unit failure from this change) → fix in the worktree.
      For Python lint (`Lint (Python)` check), **always try ruff auto-fix first**:
      ```
-     ~/.local/bin/ruff check --fix services/ && ~/.local/bin/ruff format services/
+     ruff check --fix services/ && ruff format services/
      ```
-     (install ruff via `curl -LsSf https://astral.sh/ruff/install.sh | sh` if absent). If ruff
-     leaves remaining errors, fix them manually. Then commit + push (re-triggers Copilot + CI).
+     (install via `pip install ruff` if absent). If ruff leaves remaining errors, fix them
+     manually. Then commit + push (re-triggers Copilot + CI).
      `round++`. Go to step 7 (wait).
    - Infra/flaky/ambiguous, or a real failure needing a decision → **escalate**: `PushNotification`
      with a one-line summary + the failing check, and **stop**.
@@ -107,7 +107,8 @@ survives across loop iterations. Read it at the top of each pass; create it on t
      Blocker: <one line per failing check or unresolved thread>.
      Manual intervention needed — fix the issue and re-invoke \`/loop /ship <pr>\`."
      ```
-     Then `PushNotification` with the same one-liner + stop. No infinite nit-loops.
+     Delete the state file (`~/.claude/state/ship-<pr>.json`). Then `PushNotification` with the
+     same one-liner + stop. No infinite nit-loops.
    - Otherwise **just end the turn.** Under `/loop /ship <pr>` the next iteration is scheduled
      automatically (self-paced); the persisted state file carries `round` forward. Run bare
      (no `/loop`), ending the turn simply stops — re-invoke `/ship <pr>` manually to continue.
