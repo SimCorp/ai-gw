@@ -906,7 +906,9 @@ async def ready() -> dict:
         async with app.state.pool.acquire() as conn:
             await conn.fetchval("SELECT 1")
     except Exception as exc:
-        return JSONResponse({"status": "not_ready", "errors": {"postgres": str(exc)}}, status_code=503)
+        return JSONResponse(
+            {"status": "not_ready", "errors": {"postgres": str(exc)}}, status_code=503
+        )
     return {"status": "ready"}
 
 
