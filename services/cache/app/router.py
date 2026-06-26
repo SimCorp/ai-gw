@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from app import exact, semantic
 from app.autoroute import record_request as _autoroute_record
+from app.autoroute import select_model_for_intent
 from app.config import settings
 from app.guardrails import evaluate_guardrails
 from app.policy import CachePolicy, get_policy
