@@ -242,8 +242,8 @@ async def get_my_portrait(
         log.warning("Failed to cache portrait for developer %s", developer_id, exc_info=True)
         try:
             await session.rollback()
-        except Exception:
-            pass
+        except Exception:  # noqa: BLE001 — rollback failure is unrecoverable; already in error path
+            log.debug("Rollback failed after portrait cache write error", exc_info=True)
 
     return {
         "image_base64": base64.b64encode(image_bytes).decode(),
