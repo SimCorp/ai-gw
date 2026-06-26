@@ -1,13 +1,8 @@
 """Unit tests for intent-aware model selection in autoroute.py."""
 
-import sys
-from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
-sys.path.insert(0, str(Path(__file__).parents[1]))
-
 from app.autoroute import _COMPLEX_INTENTS, select_model_for_intent
 
 
