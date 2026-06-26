@@ -125,8 +125,16 @@ async def _fetch_usage_stats(session: AsyncSession, developer_id: str) -> dict:
             )
         )
         .mappings()
-        .one()
+        .first()
     )
+    if row is None:
+        return {
+            "request_count": 0,
+            "top_model": None,
+            "cache_hit_pct": None,
+            "tool_ratio": None,
+            "peak_hour": None,
+        }
     return dict(row)
 
 
@@ -163,7 +171,8 @@ async def get_my_portrait(
     Returns 404 if the developer has no usage data in the past 7 days.
     """
     developer_id: str = developer["user_id"]
-    week_start: date = date.today() - timedelta(days=date.today().weekday())
+    today = date.today()
+    week_start: date = today - timedelta(days=today.weekday())
 
     # Check cache
     cached = (
@@ -213,7 +222,7 @@ async def get_my_portrait(
             "dev_id": developer_id,
             "week": week_start,
             "prompt": prompt,
-            "scene": __import__("json").dumps(scene_data),
+            "scene": json.dumps(scene_data),
             "image": image_bytes,
         },
     )
