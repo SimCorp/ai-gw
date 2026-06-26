@@ -4,6 +4,7 @@ LIBRARIAN_SERVICE_TOKEN="" (set in root conftest) makes _check_ingest_token
 fail-open, so no token header is needed in these tests.
 """
 
+import uuid
 from unittest.mock import AsyncMock, patch
 
 import app.main as main
@@ -24,9 +25,7 @@ async def test_ingest_successful(client):
     assert resp.status_code == 201
     data = resp.json()
     assert "id" in data
-    # Should be a valid UUID string
-    import uuid as _uuid
-    _uuid.UUID(data["id"])
+    uuid.UUID(data["id"])  # Raises ValueError if not a valid UUID
 
     # Embedding was stored in Redis
     main._redis.set.assert_called_once()
