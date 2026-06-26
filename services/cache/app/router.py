@@ -11,7 +11,6 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from app import exact, semantic
 from app.autoroute import record_request as _autoroute_record
-from app.autoroute import select_model_for_intent
 from app.config import settings
 from app.guardrails import evaluate_guardrails
 from app.policy import CachePolicy, get_policy
@@ -436,9 +435,7 @@ async def list_models(request: Request):
     )
 
 
-async def _handle_chat_completions(
-    request: Request, body: dict, *, autoroute_candidates: list[str] | None = None
-):
+async def _handle_chat_completions(request: Request, body: dict):
     """Core chat completions handler — shared by the normal and Auto-Drive endpoints."""
     redis = request.app.state.redis
     http = request.app.state.http
@@ -473,16 +470,6 @@ async def _handle_chat_completions(
 
     # Classify request intent from prompt text (no prompt stored)
     request_intent = _classify_intent(_prompt_text(body))
-
-    # Intent-aware model selection for Auto-Drive callers.
-    if autoroute_candidates:
-        complex_models = [
-            m.strip() for m in settings.autoroute_complex_models.split(",") if m.strip()
-        ]
-        chosen_model = await select_model_for_intent(
-            redis, request_intent, autoroute_candidates, complex_models
-        )
-        body = {**body, "model": chosen_model}
 
     try:
         policy = await get_policy(team_id, project_id, redis)
@@ -898,7 +885,19 @@ async def chat_completions_auto(request: Request):
     """
     body = await request.json()
     candidates = [m.strip() for m in settings.autoroute_models.split(",") if m.strip()]
-    return await _handle_chat_completions(request, body, autoroute_candidates=candidates)
+    if not candidates:
+        return JSONResponse(
+            {"error": "misconfigured_autoroute", "message": "AUTOROUTE_MODELS is empty"},
+            status_code=500,
+        )
+    redis = request.app.state.redis
+    complex_models = [m.strip() for m in settings.autoroute_complex_models.split(",") if m.strip()]
+    chosen_model = await select_model_for_intent(
+        redis, _classify_intent(_prompt_text(body)), candidates, complex_models
+    )
+    # Overwrite before _handle_chat_completions so _validate_token sees the actual routed model
+    body = {**body, "model": chosen_model}
+    return await _handle_chat_completions(request, body)
 
 
 async def _enforce_anthropic_policy(redis, team_id, project_id, body: dict, is_stream: bool):

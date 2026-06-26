@@ -161,7 +161,8 @@ async def select_model_for_intent(
     *complex_models* appear in *all_candidates*, falls back to the full list.
     """
     if intent in _COMPLEX_INTENTS and complex_models:
-        eligible = [m for m in all_candidates if m in set(complex_models)]
+        complex_set = set(complex_models)
+        eligible = [m for m in all_candidates if m in complex_set]
         if not eligible:
             eligible = all_candidates
     else:
