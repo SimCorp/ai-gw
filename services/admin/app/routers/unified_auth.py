@@ -23,10 +23,13 @@ import csv as _csv
 import hashlib
 import io as _io
 import json
+import logging
 import re
 import secrets
 from datetime import timedelta
 from uuid import UUID
+
+logger = logging.getLogger(__name__)
 
 import bcrypt
 from fastapi import APIRouter, Depends, File, Header, HTTPException, Request, UploadFile
@@ -1768,6 +1771,18 @@ oidc_router = APIRouter(prefix="/auth", tags=["auth-oidc"])
 _OIDC_STATE_TTL = 300  # 5 minutes
 
 
+def _oidc_redirect_uri(request: Request) -> str:
+    """Return the OIDC callback URI.
+
+    Uses OIDC_BASE_URL env-var when set (required in production to prevent
+    Host-header manipulation). Falls back to request.base_url for local dev.
+    """
+    from app.config import settings as _cfg
+
+    base = _cfg.oidc_base_url.rstrip("/") if _cfg.oidc_base_url else str(request.base_url).rstrip("/")
+    return base + "/auth/oidc/callback"
+
+
 @oidc_router.get("/oidc/login")
 async def oidc_login(request: Request):
     """Redirect to the configured OIDC provider (Dex / Entra ID)."""
@@ -1778,7 +1793,7 @@ async def oidc_login(request: Request):
     state = secrets.token_urlsafe(16)
     await request.app.state.redis.setex(f"oidc_state:{state}", _OIDC_STATE_TTL, "1")
 
-    redirect_uri = str(request.base_url).rstrip("/") + "/auth/oidc/callback"
+    redirect_uri = _oidc_redirect_uri(request)
     params = _up.urlencode(
         {
             "client_id": _cfg.oidc_client_id,
@@ -1808,10 +1823,11 @@ async def oidc_callback(
     # Validate state
     stored = await request.app.state.redis.get(f"oidc_state:{state}")
     if not stored:
+        logger.warning("OIDC state validation failed", extra={"state_prefix": state[:8]})
         raise HTTPException(status_code=400, detail="Invalid or expired OAuth state")
     await request.app.state.redis.delete(f"oidc_state:{state}")
 
-    redirect_uri = str(request.base_url).rstrip("/") + "/auth/oidc/callback"
+    redirect_uri = _oidc_redirect_uri(request)
 
     # Exchange code for tokens
     async with _httpx.AsyncClient() as client:

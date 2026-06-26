@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     # empty disables OIDC client-secret auth (admin-portal SSO) but lets the
     # service start. Set via Key Vault once the registration is created.
     oidc_client_secret: str = ""
+    # Explicit base URL for OIDC redirect_uri. Must be set in production to avoid
+    # Host-header manipulation. Defaults to request.base_url for local/dev only.
+    oidc_base_url: str = ""
 
     litellm_master_key: str
 
