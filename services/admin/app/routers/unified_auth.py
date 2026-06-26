@@ -1866,35 +1866,47 @@ async def oidc_callback(
         disco_resp = await client.get(f"{_cfg.oidc_issuer}/.well-known/openid-configuration")
         if disco_resp.status_code != 200:
             raise HTTPException(status_code=502, detail="OIDC discovery endpoint unavailable")
-        jwks_resp = await client.get(disco_resp.json()["jwks_uri"])
+        _jwks_uri = disco_resp.json().get("jwks_uri")
+        if not _jwks_uri:
+            raise HTTPException(status_code=502, detail="OIDC discovery document missing jwks_uri")
+        jwks_resp = await client.get(_jwks_uri)
         if jwks_resp.status_code != 200:
             raise HTTPException(status_code=502, detail="OIDC JWKS endpoint unavailable")
 
-    # Verify id_token: signature, issuer, audience, and expiry
+    # Verify id_token: signature (allow-listed alg only), issuer, audience, and expiry.
+    # Tries all candidate keys when kid is absent (handles key rotation without kid).
+    _ALLOWED_ALGS = frozenset({"RS256", "RS384", "RS512", "ES256", "ES384", "ES512"})
     _header = _jwt.get_unverified_header(id_token_raw)
-    _alg = _header.get("alg", "RS256")
+    _alg = _header.get("alg", "")
+    if _alg not in _ALLOWED_ALGS:
+        raise HTTPException(status_code=502, detail=f"Unsupported OIDC signing algorithm: {_alg!r}")
     _kid = _header.get("kid")
-    _key_data = next(
-        (k for k in jwks_resp.json().get("keys", []) if _kid is None or k.get("kid") == _kid),
-        None,
-    )
-    if _key_data is None:
+    _candidates = [
+        k for k in jwks_resp.json().get("keys", []) if _kid is None or k.get("kid") == _kid
+    ]
+    if not _candidates:
         raise HTTPException(status_code=502, detail="No matching OIDC signing key found")
-    try:
-        _signing_key = (
-            _ECAlg.from_jwk(_key_data) if _alg.startswith("ES") else _RSAAlg.from_jwk(_key_data)
-        )
-        claims = _jwt.decode(
-            id_token_raw,
-            _signing_key,
-            algorithms=[_alg],
-            audience=_cfg.oidc_client_id,
-            issuer=_cfg.oidc_issuer,
-        )
-    except _jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="OIDC id_token expired")
-    except Exception as exc:
-        logger.warning("OIDC id_token verification failed: %s", exc)
+    _last_exc = None
+    claims = None
+    for _key_data in _candidates:
+        try:
+            _signing_key = (
+                _ECAlg.from_jwk(_key_data) if _alg.startswith("ES") else _RSAAlg.from_jwk(_key_data)
+            )
+            claims = _jwt.decode(
+                id_token_raw,
+                _signing_key,
+                algorithms=[_alg],
+                audience=_cfg.oidc_client_id,
+                issuer=_cfg.oidc_issuer,
+            )
+            break
+        except _jwt.ExpiredSignatureError:
+            raise HTTPException(status_code=401, detail="OIDC id_token expired")
+        except Exception as exc:
+            _last_exc = exc
+    if claims is None:
+        logger.warning("OIDC id_token verification failed: %s", _last_exc)
         raise HTTPException(status_code=401, detail="OIDC id_token verification failed")
 
     email = claims.get("email", "").lower().strip()

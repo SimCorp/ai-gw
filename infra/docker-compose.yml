@@ -243,8 +243,11 @@ services:
     environment:
       ENVIRONMENT: development
       MCP_ALLOW_LOCAL_URLS: "true"
-      # Explicit OIDC callback base to prevent Host-header manipulation.
-      OIDC_BASE_URL: "${OIDC_BASE_URL:-https://dev.aigw.scdom.net}"
+      # Explicit OIDC callback base (prevents Host-header manipulation in production).
+      # Leave empty for local dev — the service falls back to request.base_url when
+      # ENVIRONMENT=development and OIDC_BASE_URL is unset. Set to the public domain
+      # in the VM's .env (e.g. OIDC_BASE_URL=https://dev.aigw.scdom.net).
+      OIDC_BASE_URL: "${OIDC_BASE_URL:-}"
       # Knowledge Graphs admin page proxies graphify; token must match graphify's.
       GRAPHIFY_URL: "http://graphify:8012"
       GRAPHIFY_SERVICE_TOKEN: ${GRAPHIFY_SERVICE_TOKEN:-${INTERNAL_API_KEY:-change-me-internal-key}}
