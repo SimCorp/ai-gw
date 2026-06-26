@@ -1839,7 +1839,11 @@ async def oidc_callback(
 
     redirect_uri = _oidc_redirect_uri(request)
 
-    # Exchange code for tokens
+    import jwt as _jwt
+    from jwt.algorithms import ECAlgorithm as _ECAlg
+    from jwt.algorithms import RSAAlgorithm as _RSAAlg
+
+    # Exchange code for tokens; fetch OIDC JWKS in the same connection for id_token verification
     async with _httpx.AsyncClient() as client:
         token_resp = await client.post(
             f"{_cfg.oidc_issuer}/token",
@@ -1852,21 +1856,46 @@ async def oidc_callback(
             },
             headers={"Accept": "application/json"},
         )
-    if token_resp.status_code != 200:
-        raise HTTPException(status_code=502, detail="OIDC token exchange failed")
+        if token_resp.status_code != 200:
+            raise HTTPException(status_code=502, detail="OIDC token exchange failed")
 
-    id_token_raw = token_resp.json().get("id_token")
-    if not id_token_raw:
-        raise HTTPException(status_code=502, detail="No id_token in OIDC response")
+        id_token_raw = token_resp.json().get("id_token")
+        if not id_token_raw:
+            raise HTTPException(status_code=502, detail="No id_token in OIDC response")
 
-    # Decode claims without full verification (Dex is internal; add jwks verification for production)
-    import base64 as _b64
+        disco_resp = await client.get(f"{_cfg.oidc_issuer}/.well-known/openid-configuration")
+        if disco_resp.status_code != 200:
+            raise HTTPException(status_code=502, detail="OIDC discovery endpoint unavailable")
+        jwks_resp = await client.get(disco_resp.json()["jwks_uri"])
+        if jwks_resp.status_code != 200:
+            raise HTTPException(status_code=502, detail="OIDC JWKS endpoint unavailable")
 
-    parts = id_token_raw.split(".")
-    if len(parts) < 2:
-        raise HTTPException(status_code=502, detail="Malformed id_token")
-    padding = 4 - len(parts[1]) % 4
-    claims = json.loads(_b64.urlsafe_b64decode(parts[1] + "=" * padding))
+    # Verify id_token: signature, issuer, audience, and expiry
+    _header = _jwt.get_unverified_header(id_token_raw)
+    _alg = _header.get("alg", "RS256")
+    _kid = _header.get("kid")
+    _key_data = next(
+        (k for k in jwks_resp.json().get("keys", []) if _kid is None or k.get("kid") == _kid),
+        None,
+    )
+    if _key_data is None:
+        raise HTTPException(status_code=502, detail="No matching OIDC signing key found")
+    try:
+        _signing_key = (
+            _ECAlg.from_jwk(_key_data) if _alg.startswith("ES") else _RSAAlg.from_jwk(_key_data)
+        )
+        claims = _jwt.decode(
+            id_token_raw,
+            _signing_key,
+            algorithms=[_alg],
+            audience=_cfg.oidc_client_id,
+            issuer=_cfg.oidc_issuer,
+        )
+    except _jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="OIDC id_token expired")
+    except Exception as exc:
+        logger.warning("OIDC id_token verification failed: %s", exc)
+        raise HTTPException(status_code=401, detail="OIDC id_token verification failed")
 
     email = claims.get("email", "").lower().strip()
     display_name = claims.get("name") or claims.get("preferred_username") or email.split("@")[0]
