@@ -13,7 +13,6 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-
 # ── Helpers (mirror test_mcp.py) ──────────────────────────────────────────────
 
 
@@ -204,7 +203,9 @@ async def test_traverse_builds_adjacency_graph(client):
 
 @pytest.mark.asyncio
 async def test_graph_stats_zero_nodes_zero_components(client):
-    with patch("app.store.kg_stats", new=AsyncMock(return_value={"total_nodes": 0, "total_edges": 0})):
+    with patch(
+        "app.store.kg_stats", new=AsyncMock(return_value={"total_nodes": 0, "total_edges": 0})
+    ):
         r = await client.post("/mcp", json=_tool_call("mempalace_graph_stats"), headers=_AUTH)
 
     assert r.status_code == 200
@@ -216,7 +217,9 @@ async def test_graph_stats_zero_nodes_zero_components(client):
 
 @pytest.mark.asyncio
 async def test_graph_stats_nonzero_nodes_one_component(client):
-    with patch("app.store.kg_stats", new=AsyncMock(return_value={"total_nodes": 5, "total_edges": 3})):
+    with patch(
+        "app.store.kg_stats", new=AsyncMock(return_value={"total_nodes": 5, "total_edges": 3})
+    ):
         r = await client.post("/mcp", json=_tool_call("mempalace_graph_stats"), headers=_AUTH)
 
     assert r.status_code == 200
