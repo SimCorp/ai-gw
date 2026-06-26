@@ -115,7 +115,8 @@ async def _fetch_usage_stats(session: AsyncSession, developer_id: str) -> dict:
                 SELECT
                     mode() WITHIN GROUP (ORDER BY model)                           AS top_model,
                     AVG(cache_hit::int)                                            AS cache_hit_pct,
-                    SUM(tool_invocation_count)::float / NULLIF(COUNT(*), 0)        AS tool_ratio,
+                    COUNT(*) FILTER (WHERE tool_invocation_count > 0)::float
+                        / NULLIF(COUNT(*), 0)                                      AS tool_ratio,
                     mode() WITHIN GROUP (ORDER BY EXTRACT(hour FROM created_at))   AS peak_hour,
                     COUNT(*)                                                        AS request_count
                 FROM cost_records
@@ -161,7 +162,11 @@ async def _generate_image(prompt: str) -> bytes:
     if resp.status_code != 200:
         log.error("DALL-E 3 generation failed: %s %s", resp.status_code, resp.text[:200])
         raise HTTPException(status_code=502, detail="Image generation failed")
-    b64 = resp.json()["data"][0]["b64_json"]
+    try:
+        b64 = resp.json()["data"][0]["b64_json"]
+    except (KeyError, IndexError, ValueError) as exc:
+        log.error("DALL-E 3 unexpected response schema: %s", resp.text[:200])
+        raise HTTPException(status_code=502, detail="Image generation failed") from exc
     return base64.b64decode(b64)
 
 
@@ -212,26 +217,33 @@ async def get_my_portrait(
     prompt, scene_data = _build_scene(stats)
     image_bytes = await _generate_image(prompt)
 
-    # Store in DB
-    await session.execute(
-        text("""
-            INSERT INTO usage_portraits (developer_id, week_start, scene_prompt, scene_data, image_data)
-            VALUES (CAST(:dev_id AS uuid), :week, :prompt, CAST(:scene AS jsonb), :image)
-            ON CONFLICT (developer_id, week_start) DO UPDATE
-                SET scene_prompt = EXCLUDED.scene_prompt,
-                    scene_data   = EXCLUDED.scene_data,
-                    image_data   = EXCLUDED.image_data,
-                    generated_at = NOW()
-        """),
-        {
-            "dev_id": developer_id,
-            "week": week_start,
-            "prompt": prompt,
-            "scene": json.dumps(scene_data),
-            "image": image_bytes,
-        },
-    )
-    await session.commit()
+    # Best-effort cache write — return the image even if the DB write fails.
+    try:
+        await session.execute(
+            text("""
+                INSERT INTO usage_portraits (developer_id, week_start, scene_prompt, scene_data, image_data)
+                VALUES (CAST(:dev_id AS uuid), :week, :prompt, CAST(:scene AS jsonb), :image)
+                ON CONFLICT (developer_id, week_start) DO UPDATE
+                    SET scene_prompt = EXCLUDED.scene_prompt,
+                        scene_data   = EXCLUDED.scene_data,
+                        image_data   = EXCLUDED.image_data,
+                        generated_at = NOW()
+            """),
+            {
+                "dev_id": developer_id,
+                "week": week_start,
+                "prompt": prompt,
+                "scene": json.dumps(scene_data),
+                "image": image_bytes,
+            },
+        )
+        await session.commit()
+    except Exception:
+        log.warning("Failed to cache portrait for developer %s", developer_id, exc_info=True)
+        try:
+            await session.rollback()
+        except Exception:
+            pass
 
     return {
         "image_base64": base64.b64encode(image_bytes).decode(),

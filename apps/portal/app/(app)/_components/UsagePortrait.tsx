@@ -57,6 +57,8 @@ export default function UsagePortrait() {
               style={{
                 width: "100%",
                 maxWidth: 480,
+                height: 240,
+                objectFit: "contain",
                 borderRadius: "var(--r-2)",
                 display: "block",
               }}
@@ -71,8 +73,8 @@ export default function UsagePortrait() {
               </button>
               {open && (
                 <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 5 }}>
-                  {Object.entries(data.scene_data).map(([, el]) => (
-                    <div key={el.name} style={{ display: "flex", gap: 10, fontSize: 12.5 }}>
+                  {Object.entries(data.scene_data).map(([key, el]) => (
+                    <div key={key} style={{ display: "flex", gap: 10, fontSize: 12.5 }}>
                       <span style={{ width: 20, textAlign: "center", flexShrink: 0 }}>{el.emoji}</span>
                       <span style={{ fontWeight: 500, color: "var(--fg-1)", minWidth: 120 }}>{el.name}</span>
                       <span className="muted">{el.reason}</span>

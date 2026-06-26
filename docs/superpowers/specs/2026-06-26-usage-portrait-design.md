@@ -37,7 +37,7 @@ New table `usage_portraits`:
 | `developer_id` | `UUID NOT NULL` | FK → `developers(id) ON DELETE CASCADE` |
 | `week_start` | `DATE NOT NULL` | ISO Monday for the week (Monday=1) |
 | `scene_prompt` | `TEXT NOT NULL` | Full DALL-E prompt for auditing |
-| `scene_data` | `JSONB NOT NULL DEFAULT '{}'` | `{creature, atmosphere, machinery, time, scale, season}` each with `{name, reason}` |
+| `scene_data` | `JSONB NOT NULL DEFAULT '{}'` | `{creature, atmosphere, machinery, time, scale}` each with `{name, reason}` (season deferred to v2) |
 | `image_data` | `BYTEA NOT NULL` | Raw PNG bytes from DALL-E |
 | `generated_at` | `TIMESTAMPTZ NOT NULL DEFAULT NOW()` | |
 
@@ -54,11 +54,11 @@ All signals come from `cost_records` WHERE `developer_id = $1 AND created_at >= 
 | `tool_ratio` | `SUM(tool_invocation_count)` / `COUNT(*)` | Machinery: ≥0.3→clockwork gears and instruments in the scene, else none |
 | `peak_hour` | `EXTRACT(hour FROM created_at)` mode | Time: 0–6→moonlit, 7–11→dawn, 12–17→afternoon, 18–23→dusk |
 | `request_count` | `COUNT(*)` | Scale: ≥100→dense ancient forest, ≥20→forest clearing, else→single tree |
-| `budget_efficiency` | `(budget_usd - spent_usd) / budget_usd` (or 1.0 if no budget) | Season: ≥0.5→spring bloom, ≥0.0→late summer, <0.0→scorched summer |
+| `budget_efficiency` | `(budget_usd - spent_usd) / budget_usd` (or 1.0 if no budget) | Season: ≥0.5→spring bloom, ≥0.0→late summer, <0.0→scorched summer *(v2 — not implemented in v1)* |
 
 Final prompt template:
 ```
-{scale}, {creature} perched{machinery}, {atmosphere}, {time}, {season},
+{scale}, {creature} perched{machinery}, {atmosphere}, {time},
 fine-line ink drawing, botanical illustration, monochromatic, high detail
 ```
 
@@ -79,8 +79,7 @@ Success (200):
     "atmosphere": {"name": "dense fog", "reason": "Cache hit rate: 31%"},
     "machinery": {"name": "clockwork gears", "reason": "High tool-call usage"},
     "time": {"name": "moonlit scene", "reason": "Peak usage: 01:00–04:00"},
-    "scale": {"name": "dense ancient forest", "reason": "142 requests this week"},
-    "season": {"name": "spring bloom", "reason": "Using 68% of budget"}
+    "scale": {"name": "dense ancient forest", "reason": "142 requests this week"}
   }
 }
 ```
@@ -97,7 +96,7 @@ Generation error (502): DALL-E call failed — component handles silently (no po
     model: azure/dall-e-3
     api_base: os.environ/AZURE_API_BASE
     api_key: os.environ/AZURE_API_KEY
-    api_version: os.environ/AZURE_API_VERSION
+    api_version: "2024-02-01"  # DALL-E 3 requires 2024-02-01+
 ```
 
 ## Portal component

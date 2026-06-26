@@ -87,9 +87,8 @@ async def db_engine(pg_container):
     # Run `alembic upgrade head` from the service root so the relative
     # 'migrations' path in alembic.ini resolves correctly.
     service_root = Path(__file__).parents[1]
-    alembic_exe = Path(sys.executable).parent / "alembic"
     result = subprocess.run(
-        [str(alembic_exe), "-c", "alembic.ini", "upgrade", "head"],
+        [sys.executable, "-m", "alembic", "-c", "alembic.ini", "upgrade", "head"],
         cwd=str(service_root),
         env={**os.environ, "DATABASE_URL": sqlalchemy_url},
         capture_output=True,
