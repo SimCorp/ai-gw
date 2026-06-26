@@ -41,6 +41,11 @@ survives across loop iterations. Read it at the top of each pass; create it on t
    (`gh api repos/{owner}/{repo} --jq .allow_auto_merge`), also set
    `gh pr merge <pr> --auto --squash` as a backstop (harmless if it later merges manually).
 
+   **On every pass (including the first), immediately after resolving `<pr>`**: check
+   `gh pr view <pr> --json state --jq .state`. If `MERGED` → go straight to step 3 cleanup. This
+   short-circuits stale loop iterations where the PR merged between passes and the loop fired again
+   before step 3 had a chance to run.
+
 2. **Read status.**
    - `gh pr view <pr> --json state,mergeable,mergeStateStatus,statusCheckRollup,headRefOid`
    - Review threads via GraphQL. Paginate to be exhaustive — a PR can have >100 threads, and
@@ -61,8 +66,14 @@ survives across loop iterations. Read it at the top of each pass; create it on t
    fast-forward), **escalate** with its message rather than retrying.
 
 4. **A required check FAILED?**
-   - Clearly ours and fixable (lint/format/unit failure from this change) → fix in the worktree,
-     commit, push (this re-triggers Copilot + CI). `round++`. Go to step 7 (wait).
+   - Clearly ours and fixable (lint/format/unit failure from this change) → fix in the worktree.
+     For Python lint (`Lint (Python)` check), **always try ruff auto-fix first**:
+     ```
+     ~/.local/bin/ruff check --fix services/ && ~/.local/bin/ruff format services/
+     ```
+     (install ruff via `curl -LsSf https://astral.sh/ruff/install.sh | sh` if absent). If ruff
+     leaves remaining errors, fix them manually. Then commit + push (re-triggers Copilot + CI).
+     `round++`. Go to step 7 (wait).
    - Infra/flaky/ambiguous, or a real failure needing a decision → **escalate**: `PushNotification`
      with a one-line summary + the failing check, and **stop**.
 
@@ -89,8 +100,14 @@ survives across loop iterations. Read it at the top of each pass; create it on t
    `gh pr merge <pr> --squash --delete-branch` → go to step 3.
 
 7. **Wait / convergence guard.**
-   - If `round > 3` and still not merged → **escalate** (stop + notify with a summary of what's
-     blocking). No infinite nit-loops.
+   - If `round > 3` and still not merged → **escalate**: post a PR comment AND a PushNotification
+     so the contributor can see the blocker on the PR itself:
+     ```
+     gh pr comment <pr> --body "🚫 /ship escalated after <round> rounds without merging.
+     Blocker: <one line per failing check or unresolved thread>.
+     Manual intervention needed — fix the issue and re-invoke \`/loop /ship <pr>\`."
+     ```
+     Then `PushNotification` with the same one-liner + stop. No infinite nit-loops.
    - Otherwise **just end the turn.** Under `/loop /ship <pr>` the next iteration is scheduled
      automatically (self-paced); the persisted state file carries `round` forward. Run bare
      (no `/loop`), ending the turn simply stops — re-invoke `/ship <pr>` manually to continue.
