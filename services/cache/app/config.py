@@ -23,7 +23,10 @@ class Settings(BaseSettings):
     conversation_turn_limit: int = 3
     budget_check_enabled: bool = True
     autoroute_enabled: bool = False
-    autoroute_models: str = "claude-haiku-4-5,gpt-4o-mini"
+    autoroute_models: str = "claude-haiku-4-5,gpt-4o-mini,claude-sonnet-4-6"
+    # Subset of autoroute_models reserved for complex intents (code generation,
+    # debugging, refactoring, testing).  Simple intents may use any candidate.
+    autoroute_complex_models: str = "claude-sonnet-4-6"
 
 
 settings = Settings()
