@@ -141,19 +141,23 @@ async def _fetch_usage_stats(session: AsyncSession, developer_id: str) -> dict:
 
 async def _generate_image(prompt: str) -> bytes:
     """Call litellm /v1/images/generations and return raw PNG bytes."""
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        resp = await client.post(
-            f"{settings.litellm_url}/v1/images/generations",
-            json={
-                "model": "dall-e-3",
-                "prompt": prompt,
-                "n": 1,
-                "size": "1024x1024",
-                "quality": "standard",
-                "response_format": "b64_json",
-            },
-            headers={"Authorization": f"Bearer {settings.litellm_master_key}"},
-        )
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.post(
+                f"{settings.litellm_url}/v1/images/generations",
+                json={
+                    "model": "dall-e-3",
+                    "prompt": prompt,
+                    "n": 1,
+                    "size": "1024x1024",
+                    "quality": "standard",
+                    "response_format": "b64_json",
+                },
+                headers={"Authorization": f"Bearer {settings.litellm_master_key}"},
+            )
+    except httpx.HTTPError as exc:
+        log.error("DALL-E 3 network error: %s", exc)
+        raise HTTPException(status_code=502, detail="Image generation failed") from exc
     if resp.status_code != 200:
         log.error("DALL-E 3 generation failed: %s %s", resp.status_code, resp.text[:200])
         raise HTTPException(status_code=502, detail="Image generation failed")

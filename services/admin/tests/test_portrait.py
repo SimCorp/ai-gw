@@ -91,7 +91,7 @@ async def portrait_client_no_data():
     no_row.mappings.return_value.first.return_value = None
 
     zero_stats = MagicMock()
-    zero_stats.mappings.return_value.one.return_value = {
+    zero_stats.mappings.return_value.first.return_value = {
         "top_model": None,
         "cache_hit_pct": None,
         "tool_ratio": None,
