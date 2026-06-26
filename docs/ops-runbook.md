@@ -414,6 +414,7 @@ The dashboard checks all of the following simultaneously:
 | Panel | What it shows |
 |-------|---------------|
 | Service status | HTTP reachability and latency for auth, cache, litellm, observability |
+| Gatus probes | Live liveness/readiness probe results for all services; degraded tiles link to `https://dev.aigw.scdom.net/status/` |
 | Redis | Ping latency, used memory (MB), connected client count |
 | PostgreSQL | Ping latency, active connection count |
 | LiteLLM models | Number of models available, providers with keys configured |
