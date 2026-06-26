@@ -456,7 +456,6 @@ async def list_models(request: Request):
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
     if isinstance(result, Response):
         return result
-    _team_id, _project_id, _key_id, _scope, _capture = result
     resp = await http.get(
         f"{settings.litellm_url}/v1/models",
         headers={"Authorization": f"Bearer {settings.litellm_master_key}"},
@@ -1038,7 +1037,7 @@ async def anthropic_proxy(path: str, request: Request):
         )
     if isinstance(result, Response):
         return result
-    team_id, project_id, key_id, _scope, _capture = result
+    team_id, project_id, key_id, *_ = result
 
     is_stream = body.get("stream", False)
 

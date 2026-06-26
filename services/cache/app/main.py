@@ -55,7 +55,7 @@ async def lifespan(app: FastAPI):
         try:
             await t
         except asyncio.CancelledError:
-            pass
+            pass  # expected on clean shutdown
     await app.state.pool.close()
     await app.state.redis.aclose()
     await app.state.http.aclose()

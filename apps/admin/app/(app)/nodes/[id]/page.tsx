@@ -489,6 +489,9 @@ function TrainingCapturePanel({ nodeId }: { nodeId: string }) {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <button
+            role="switch"
+            aria-checked={enabled}
+            aria-label="Toggle training capture"
             onClick={() => toggleMutation.mutate(!enabled)}
             disabled={toggleMutation.isPending}
             style={{
@@ -525,8 +528,7 @@ function TrainingCapturePanel({ nodeId }: { nodeId: string }) {
         </div>
         <div style={{ fontSize: 13, color: 'var(--fg-3)', marginBottom: 16, lineHeight: 1.5 }}>
           {pending.toLocaleString()} unexported rows. Auto-deleted after 90 days.
-          Use the export endpoint (<code style={{ fontSize: 12, background: 'var(--surface-2)', padding: '1px 4px', borderRadius: 3 }}>POST /nodes/{nodeId}/training-export</code>) to
-          download as JSONL before the retention window closes.
+          JSONL export (Stage 2) will be available in a future release.
         </div>
         <button
           onClick={() => {

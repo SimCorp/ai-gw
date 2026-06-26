@@ -1167,10 +1167,14 @@ async def get_training_capture(
     return {"training_capture_enabled": enabled, "pending_candidates": int(count)}
 
 
+class _TrainingCaptureUpdate(BaseModel):
+    training_capture_enabled: bool
+
+
 @router.put("/{node_id}/training-capture")
 async def set_training_capture(
     node_id: str,
-    body: dict,
+    body: _TrainingCaptureUpdate,
     request: Request,
     current_user: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
@@ -1179,7 +1183,7 @@ async def set_training_capture(
     if not can_access(current_user, row["path"], "area_owner"):
         raise HTTPException(403, "Requires area_owner or above")
 
-    enabled = bool(body.get("training_capture_enabled", False))
+    enabled = body.training_capture_enabled
     await session.execute(
         text(
             "UPDATE organization_nodes SET training_capture_enabled = :enabled "
@@ -1214,13 +1218,10 @@ async def erase_training_data(
         raise HTTPException(403, "Requires area_owner or above")
 
     result = await session.execute(
-        text(
-            "DELETE FROM training_candidates WHERE team_id = :nid AND exported_at IS NULL "
-            "RETURNING id"
-        ),
+        text("DELETE FROM training_candidates WHERE team_id = :nid AND exported_at IS NULL"),
         {"nid": node_id},
     )
-    deleted_count = len(result.fetchall())
+    deleted_count = result.rowcount
 
     from app import audit
 
