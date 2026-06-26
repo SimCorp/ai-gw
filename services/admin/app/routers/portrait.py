@@ -1,6 +1,7 @@
 """Developer usage portrait — AI-generated weekly illustration from usage telemetry."""
 
 import base64
+import json
 import logging
 from datetime import date, timedelta
 
