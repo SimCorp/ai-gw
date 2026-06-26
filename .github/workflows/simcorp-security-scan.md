@@ -47,9 +47,9 @@ pre-agent-steps:
   - name: TruffleHog secret scan
     run: |
       mkdir -p /tmp/gh-aw/agent
-      pipx run trufflehog3 --no-history --format json \
-        --output /tmp/gh-aw/agent/trufflehog_output.json . \
-        2>/dev/null || true
+      pipx run trufflehog3 --config .trufflehog3.yml --no-history --format json \
+        --output /tmp/gh-aw/agent/trufflehog_output.json . 2>&1; rc=$?
+      [ $rc -le 1 ] || { echo "TruffleHog failed with exit code $rc" >&2; exit $rc; }
       if [ ! -s /tmp/gh-aw/agent/trufflehog_output.json ]; then echo '[]' > /tmp/gh-aw/agent/trufflehog_output.json; fi
       echo "TruffleHog findings written to /tmp/gh-aw/agent/trufflehog_output.json"
   - name: Semgrep SAST
