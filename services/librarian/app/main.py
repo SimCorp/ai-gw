@@ -23,6 +23,7 @@ import httpx
 import numpy as np
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from openai import AsyncOpenAI
 from prometheus_client import make_asgi_app
 from pydantic import BaseModel
@@ -560,6 +561,25 @@ app.add_middleware(
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+@app.get("/ready")
+async def ready():
+    errors: dict[str, str] = {}
+    try:
+        redis = await get_redis()
+        await redis.ping()
+    except Exception as exc:
+        errors["redis"] = str(exc)
+    try:
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            await conn.fetchval("SELECT 1")
+    except Exception as exc:
+        errors["postgres"] = str(exc)
+    if errors:
+        return JSONResponse({"status": "not_ready", "errors": errors}, status_code=503)
+    return {"status": "ready"}
 
 
 # ---------------------------------------------------------------------------

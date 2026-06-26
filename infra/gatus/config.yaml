@@ -113,6 +113,51 @@ endpoints:
       - "[STATUS] == 200"
       - "[RESPONSE_TIME] < 2000"
 
+  # Readiness probes — check data-plane dependencies (Redis/Postgres).
+  # liveness-green + readiness-red = DB/Redis issue; liveness-red = container crash.
+
+  - name: auth-ready
+    url: http://auth:8001/ready
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 500"
+
+  - name: cache-ready
+    url: http://cache:8002/ready
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 500"
+
+  - name: admin-ready
+    url: http://admin:8005/ready
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 500"
+
+  - name: identity-ready
+    url: http://identity:8006/ready
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 500"
+
+  - name: librarian-ready
+    url: http://librarian:8008/ready
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 500"
+
+  - name: memory-ready
+    url: http://memory:8009/ready
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 500"
+
   # Checks the live TLS certificate. Fires if < 14 days remain.
   - name: tls-cert
     url: https://dev.aigw.scdom.net

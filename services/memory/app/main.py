@@ -17,7 +17,7 @@ from typing import Any, Awaitable, Callable
 import asyncpg
 import httpx
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 from openai import AsyncOpenAI
 from prometheus_client import make_asgi_app
 
@@ -898,6 +898,18 @@ mcp_server.add_tool("mempalace_graph_stats", "Return KG graph statistics", {}, _
 @app.get("/health")
 async def health() -> dict:
     return {"status": "ok"}
+
+
+@app.get("/ready")
+async def ready() -> dict:
+    try:
+        async with app.state.pool.acquire() as conn:
+            await conn.fetchval("SELECT 1")
+    except Exception as exc:
+        return JSONResponse(
+            {"status": "not_ready", "errors": {"postgres": str(exc)}}, status_code=503
+        )
+    return {"status": "ready"}
 
 
 @app.get("/mcp/tools")
