@@ -1,5 +1,4 @@
 """Tests for dag.py — condition evaluation, loop control, graph traversal."""
-import pytest
 
 
 def test_evaluate_condition_none_is_unconditional():

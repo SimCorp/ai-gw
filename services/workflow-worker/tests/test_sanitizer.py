@@ -1,5 +1,4 @@
 """Tests for sanitizer.py — @mention redaction, HTML escaping, size limits."""
-import pytest
 
 
 def test_sanitize_string_redacts_at_mentions():
