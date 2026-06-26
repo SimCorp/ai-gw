@@ -187,6 +187,7 @@ Authentication is handled by **Azure Entra ID**. The OIDC settings are supplied 
 OIDC_ISSUER=https://login.microsoftonline.com/aa81b43f-3969-4fd4-80c9-84c411508d82/v2.0
 OIDC_CLIENT_ID=<app-registration-client-id>
 OIDC_CLIENT_SECRET=<client-secret>   # Key Vault secret ref
+OIDC_BASE_URL=https://dev.aigw.scdom.net  # Required in production; prevents Host-header manipulation
 ```
 
 The redirect URI registered in Entra ID: `https://dev.aigw.scdom.net/auth/oidc/callback`
@@ -401,6 +402,7 @@ Services fail fast on startup if a required value is missing — there are no lo
 | `LITELLM_MASTER_KEY` | KV `litellm-master-key` | Shared secret between services |
 | `SECRET_KEY` | KV | Session signing key |
 | `OIDC_ISSUER` / `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` | KV | Entra ID SSO settings |
+| `OIDC_BASE_URL` | env | Public base URL for OIDC redirect_uri (e.g. `https://dev.aigw.scdom.net`); required in production to prevent Host-header manipulation |
 | `APPLICATIONINSIGHTS_CONNECTION_STRING` | KV `app-insights-conn` | Telemetry |
 | `SERVICE_BUS_CONNECTION` | KV `service-bus-conn` | Observability event bus |
 | `ANTHROPIC_API_KEY` / `GEMINI_API_KEY` / `GITHUB_MODELS_API_KEY` | KV | Provider keys |
