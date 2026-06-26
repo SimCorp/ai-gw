@@ -1135,6 +1135,107 @@ async def add_permission(
     return {"ok": True, "id": assignment_id}
 
 
+@router.get("/{node_id}/training-capture")
+async def get_training_capture(
+    node_id: str,
+    current_user: dict = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    row = await _get_node_row(session, node_id)
+    if not can_access(current_user, row["path"], "viewer"):
+        raise HTTPException(403, "Insufficient permissions")
+
+    result = (
+        await session.execute(
+            text(
+                "SELECT training_capture_enabled FROM organization_nodes WHERE id = CAST(:nid AS uuid)"
+            ),
+            {"nid": node_id},
+        )
+    ).first()
+    enabled = bool(result[0]) if result else False
+
+    count = (
+        await session.execute(
+            text(
+                "SELECT COUNT(*) FROM training_candidates WHERE team_id = :nid AND exported_at IS NULL"
+            ),
+            {"nid": node_id},
+        )
+    ).scalar() or 0
+
+    return {"training_capture_enabled": enabled, "pending_candidates": int(count)}
+
+
+@router.put("/{node_id}/training-capture")
+async def set_training_capture(
+    node_id: str,
+    body: dict,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    row = await _get_node_row(session, node_id)
+    if not can_access(current_user, row["path"], "area_owner"):
+        raise HTTPException(403, "Requires area_owner or above")
+
+    enabled = bool(body.get("training_capture_enabled", False))
+    await session.execute(
+        text(
+            "UPDATE organization_nodes SET training_capture_enabled = :enabled "
+            "WHERE id = CAST(:nid AS uuid)"
+        ),
+        {"enabled": enabled, "nid": node_id},
+    )
+    from app import audit
+
+    await audit.record(
+        session,
+        request,
+        "set_training_capture",
+        "node",
+        resource_id=node_id,
+        details={"training_capture_enabled": enabled},
+    )
+    await session.commit()
+    return {"training_capture_enabled": enabled}
+
+
+@router.delete("/{node_id}/training-data", status_code=200)
+async def erase_training_data(
+    node_id: str,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """GDPR Art. 17 right-to-erasure — delete all unexported training candidates for this node."""
+    row = await _get_node_row(session, node_id)
+    if not can_access(current_user, row["path"], "area_owner"):
+        raise HTTPException(403, "Requires area_owner or above")
+
+    result = await session.execute(
+        text(
+            "DELETE FROM training_candidates WHERE team_id = :nid AND exported_at IS NULL "
+            "RETURNING id"
+        ),
+        {"nid": node_id},
+    )
+    deleted_count = len(result.fetchall())
+
+    from app import audit
+
+    await audit.record(
+        session,
+        request,
+        "erase_training_data",
+        "node",
+        resource_id=node_id,
+        details={"deleted_count": deleted_count},
+    )
+    await session.commit()
+    return {"deleted": deleted_count}
+
+
 @router.delete("/{node_id}/permissions/{assignment_id}", status_code=204)
 async def remove_permission(
     node_id: str,

@@ -38,6 +38,7 @@ async def test_api_key_valid(mock_db):
             "team_id": "team-1",
             "project_id": None,
             "scopes": None,
+            "capture_content": False,
         }
     )
 
@@ -45,6 +46,7 @@ async def test_api_key_valid(mock_db):
 
     mock_db.fetchrow.assert_awaited_once()
     assert result["team_id"] == "team-1"
+    assert result["capture_content"] is False
 
 
 async def test_api_key_invalid(mock_db):

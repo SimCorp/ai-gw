@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from contextlib import asynccontextmanager
 
 import asyncpg
@@ -12,6 +13,8 @@ from app.logging_config import CorrelationIdMiddleware, init_logging
 from app.redis_utils import make_redis
 from app.router import router
 
+_log = logging.getLogger(__name__)
+
 
 async def _expire_loop(pool: asyncpg.Pool) -> None:
     """Delete expired cache entries every 10 minutes."""
@@ -23,18 +26,36 @@ async def _expire_loop(pool: asyncpg.Pool) -> None:
             pass  # fail-open: missed cleanup isn't critical
 
 
+async def _training_retention_loop(pool: asyncpg.Pool) -> None:
+    """Delete unexported training candidates older than 90 days every 6 hours."""
+    while True:
+        await asyncio.sleep(6 * 60 * 60)
+        try:
+            result = await pool.execute(
+                "DELETE FROM training_candidates "
+                "WHERE captured_at < NOW() - INTERVAL '90 days' AND exported_at IS NULL"
+            )
+            if result and result != "DELETE 0":
+                _log.info("training_retention: %s", result)
+        except Exception:
+            _log.warning("training_retention loop error", exc_info=True)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.redis = make_redis(settings.redis_url)
     app.state.http = httpx.AsyncClient()
     app.state.pool = await asyncpg.create_pool(settings.database_url, min_size=2, max_size=10)
     _expire_task = asyncio.create_task(_expire_loop(app.state.pool))
+    _retention_task = asyncio.create_task(_training_retention_loop(app.state.pool))
     yield
     _expire_task.cancel()
-    try:
-        await _expire_task
-    except asyncio.CancelledError:
-        pass
+    _retention_task.cancel()
+    for t in (_expire_task, _retention_task):
+        try:
+            await t
+        except asyncio.CancelledError:
+            pass
     await app.state.pool.close()
     await app.state.redis.aclose()
     await app.state.http.aclose()

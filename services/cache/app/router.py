@@ -206,6 +206,7 @@ class _CachedIdentity(NamedTuple):
     team_id: str
     project_id: str | None
     key_id: str | None
+    capture_content: bool
     expires_at: float  # monotonic
 
 
@@ -263,9 +264,37 @@ async def _emit_event(client: httpx.AsyncClient, event: dict) -> None:
         pass
 
 
+async def _capture_training_candidate(
+    pool,
+    team_id: str,
+    model: str | None,
+    prompt: str,
+    completion: str,
+    latency_ms: int,
+    session_trace_id: str | None,
+) -> None:
+    """Write a training candidate row directly to Postgres. Fires as create_task — must not raise."""
+    try:
+        await pool.execute(
+            """
+            INSERT INTO training_candidates
+                (team_id, model, prompt, completion, latency_ms, session_trace_id)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            """,
+            team_id,
+            model,
+            prompt,
+            completion,
+            latency_ms,
+            session_trace_id,
+        )
+    except Exception:
+        _log.warning("training_capture: write failed", exc_info=True)
+
+
 async def _validate_token(
     client: httpx.AsyncClient, token: str, model: str | None
-) -> tuple[str, str | None, str | None, str | None] | Response | None:
+) -> tuple[str, str | None, str | None, str | None, bool] | Response | None:
     """Validate token with auth service.
 
     Returns:
@@ -291,12 +320,14 @@ async def _validate_token(
                 data.get("project_id"),
                 data.get("key_id"),
                 data.get("scope"),
+                bool(data.get("capture_content", False)),
             )
             # Populate identity cache on every successful validation
             _identity_cache[token_key] = _CachedIdentity(
                 team_id=result[0],
                 project_id=result[1],
                 key_id=result[2],
+                capture_content=result[4],
                 expires_at=time.monotonic() + _IDENTITY_CACHE_TTL,
             )
             return result
@@ -313,7 +344,7 @@ async def _validate_token(
                 "Auth service unreachable, using cached identity (team=%s): %s", cached.team_id, exc
             )
             # Scope is not stored in the cache; treat as standard on fallback
-            return cached.team_id, cached.project_id, cached.key_id, None
+            return cached.team_id, cached.project_id, cached.key_id, None, cached.capture_content
         return None
 
 
@@ -425,7 +456,7 @@ async def list_models(request: Request):
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
     if isinstance(result, Response):
         return result
-    _team_id, _project_id, _key_id, _scope = result
+    _team_id, _project_id, _key_id, _scope, _capture = result
     resp = await http.get(
         f"{settings.litellm_url}/v1/models",
         headers={"Authorization": f"Bearer {settings.litellm_master_key}"},
@@ -448,7 +479,7 @@ async def _handle_chat_completions(request: Request, body: dict, _intent: str | 
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
     if isinstance(result, Response):
         return result
-    team_id, project_id, key_id, scope = result
+    team_id, project_id, key_id, scope, capture_content = result
 
     # Enforce scope: workflow-run keys may only call /v1/chat/completions
     if scope == "workflow-run" and not request.url.path.startswith("/v1/chat/completions"):
@@ -830,6 +861,25 @@ async def _handle_chat_completions(request: Request, body: dict, _intent: str | 
                 pass
 
     final_latency_ms = int((time.monotonic() - start) * 1000)
+
+    # Training capture — non-streaming only; bypass_cache already gates on PII + opt-out
+    if capture_content and resp.status_code == 200 and not body.get("stream") and not bypass_cache:
+        _pt = _prompt_text(body)
+        _choices = response_body.get("choices", [])
+        _ct = _choices[0].get("message", {}).get("content", "") if _choices else ""
+        if _pt and _ct:
+            asyncio.create_task(
+                _capture_training_candidate(
+                    request.app.state.pool,
+                    team_id,
+                    body.get("model"),
+                    _pt,
+                    _ct,
+                    final_latency_ms,
+                    session_trace_id,
+                )
+            )
+
     usage = response_body.get("usage", {})
     is_error = resp.status_code != 200
     asyncio.create_task(
@@ -988,7 +1038,7 @@ async def anthropic_proxy(path: str, request: Request):
         )
     if isinstance(result, Response):
         return result
-    team_id, project_id, key_id, _scope = result
+    team_id, project_id, key_id, _scope, _capture = result
 
     is_stream = body.get("stream", False)
 
