@@ -1774,17 +1774,23 @@ _OIDC_STATE_TTL = 300  # 5 minutes
 def _oidc_redirect_uri(request: Request) -> str:
     """Return the OIDC callback URI.
 
-    Requires OIDC_BASE_URL env-var to prevent Host-header manipulation.
-    Raises 500 if unset — set OIDC_BASE_URL=http://localhost:3001 for local dev.
+    Uses OIDC_BASE_URL when set (required in production). In non-production
+    environments (ENVIRONMENT=development|test|ci) falls back to request.base_url
+    so local dev works without explicit configuration. In production, raises 500
+    if OIDC_BASE_URL is unset to prevent Host-header manipulation.
     """
     from app.config import settings as _cfg
 
-    if not _cfg.oidc_base_url:
-        raise HTTPException(
-            status_code=500,
-            detail="OIDC_BASE_URL is not configured. Set it to prevent Host-header manipulation.",
-        )
-    return _cfg.oidc_base_url.rstrip("/") + "/auth/oidc/callback"
+    if _cfg.oidc_base_url:
+        return _cfg.oidc_base_url.rstrip("/") + "/auth/oidc/callback"
+
+    if _cfg.environment.lower() in ("development", "test", "ci"):
+        return str(request.base_url).rstrip("/") + "/auth/oidc/callback"
+
+    raise HTTPException(
+        status_code=500,
+        detail="OIDC_BASE_URL is not configured. Required in production to prevent Host-header manipulation.",
+    )
 
 
 @oidc_router.get("/oidc/login")

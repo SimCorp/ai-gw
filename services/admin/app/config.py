@@ -18,6 +18,11 @@ class Settings(BaseSettings):
     # Host-header manipulation. Defaults to request.base_url for local/dev only.
     oidc_base_url: str = ""
 
+    # Deployment environment. Set to "development" or "test" in non-production
+    # compose/CI configs to allow OIDC fallback to request.base_url when
+    # OIDC_BASE_URL is unset. Defaults to "production" (secure/fail-closed).
+    environment: str = "production"
+
     litellm_master_key: str
 
     # Sibling service URLs for system health checks
