@@ -11,7 +11,6 @@ dependencies = [
     "PyJWT[cryptography]>=2.13.0",
     "asyncpg>=0.31.0",
     "azure-monitor-opentelemetry>=1.8.8",
-    "opentelemetry-instrumentation-fastapi>=0.63b1",
     "prometheus-client>=0.25.0",
     "python-json-logger>=4.1.0,<5",
 ]
