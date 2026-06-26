@@ -81,7 +81,7 @@ async def test_update_drawer_content_change_re_embeds(client):
 
     with (
         patch("app.main._embed", new=AsyncMock(return_value=fake_embed)) as mock_embed,
-        patch("app.store.update_drawer", new=AsyncMock(return_value=updated)),
+        patch("app.store.update_drawer", new=AsyncMock(return_value=updated)) as mock_update,
     ):
         r = await client.post(
             "/mcp",
@@ -96,6 +96,10 @@ async def test_update_drawer_content_change_re_embeds(client):
     data = _parse_result(r.json())
     assert data["content"] == "new content"
     mock_embed.assert_called_once_with("new content")
+    # Verify the new embedding was forwarded to the store call.
+    assert mock_update.call_args.kwargs.get("embedding") == fake_embed, (
+        "update_drawer must be called with the new embedding"
+    )
 
 
 # ── get_drawer: not-found error contract ─────────────────────────────────────
@@ -150,7 +154,7 @@ async def test_follow_tunnels_does_not_revisit_wings(client):
     async def _fake_find_tunnels(pool, dev, wing):
         tunnels = {
             "alpha": [{"from_wing": "alpha", "to_wing": "beta", "label": "link"}],
-            "beta": [{"from_wing": "alpha", "to_wing": "beta", "label": "link"}],
+            "beta": [{"from_wing": "beta", "to_wing": "alpha", "label": "link"}],
         }
         return tunnels.get(wing, [])
 
