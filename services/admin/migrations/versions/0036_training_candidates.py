@@ -23,8 +23,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     op.execute(
-        "ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS "
-        "capture_content BOOL NOT NULL DEFAULT FALSE"
+        "ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS capture_content BOOL NOT NULL DEFAULT FALSE"
     )
     op.execute(
         "ALTER TABLE organization_nodes ADD COLUMN IF NOT EXISTS "
@@ -59,7 +58,5 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.execute("DROP TABLE IF EXISTS training_candidates")
-    op.execute(
-        "ALTER TABLE organization_nodes DROP COLUMN IF EXISTS training_capture_enabled"
-    )
+    op.execute("ALTER TABLE organization_nodes DROP COLUMN IF EXISTS training_capture_enabled")
     op.execute("ALTER TABLE api_keys DROP COLUMN IF EXISTS capture_content")

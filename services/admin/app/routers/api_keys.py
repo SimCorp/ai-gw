@@ -222,7 +222,12 @@ async def create_key(
         "create_api_key",
         "api_key",
         resource_id=api_key.id,
-        details={"name": body.name, "team_id": str(team_id), "scopes": scopes, "capture_content": body.capture_content},
+        details={
+            "name": body.name,
+            "team_id": str(team_id),
+            "scopes": scopes,
+            "capture_content": body.capture_content,
+        },
     )
     await session.commit()
     await session.refresh(api_key)
