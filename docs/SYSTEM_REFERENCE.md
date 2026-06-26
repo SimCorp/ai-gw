@@ -374,7 +374,10 @@ present) → `[DONE]`.
 
 The `/v1/chat/completions/auto` endpoint selects the best model from
 `AUTOROUTE_MODELS` (comma-separated list) based on a 5-minute rolling performance
-score.
+score. Selection is further filtered by request intent: complex tasks
+(`code_generation`, `debugging`, `refactoring`, `testing`) are restricted to models
+listed in `AUTOROUTE_COMPLEX_MODELS`; if none of those appear in `AUTOROUTE_MODELS`,
+the full candidate list is used as a fallback. Simple intents may use any candidate.
 
 **Scoring formula:**
 ```
@@ -498,8 +501,9 @@ Headers: `Retry-After: 30`
 #### `POST /v1/chat/completions/auto`
 
 Auto-Drive endpoint. Identical to `/v1/chat/completions` except the `model` field in
-the request body is **ignored** and the gateway selects the model with the highest
-rolling performance score from `AUTOROUTE_MODELS`.
+the request body is **ignored** and the gateway selects the best-scoring model from
+`AUTOROUTE_MODELS`, restricted to `AUTOROUTE_COMPLEX_MODELS` for complex intents
+(`code_generation`, `debugging`, `refactoring`, `testing`).
 
 **Example:**
 ```bash
@@ -571,7 +575,8 @@ Readiness probe — checks Redis connectivity.
 | `CONVERSATION_TURN_LIMIT` | `3` | Max user turns before bypassing semantic cache |
 | `BUDGET_CHECK_ENABLED` | `true` | Enable/disable the hard-budget gate |
 | `AUTOROUTE_ENABLED` | `false` | Feature flag for Auto-Drive (endpoint always accessible) |
-| `AUTOROUTE_MODELS` | `claude-haiku-4-5,gpt-4o-mini` | Comma-separated candidate model list |
+| `AUTOROUTE_MODELS` | `claude-haiku-4-5,gpt-4o-mini,claude-sonnet-4-6` | Comma-separated candidate model list |
+| `AUTOROUTE_COMPLEX_MODELS` | `claude-sonnet-4-6` | Subset of `AUTOROUTE_MODELS` reserved for complex intents (code generation, debugging, refactoring, testing) |
 
 ---
 
