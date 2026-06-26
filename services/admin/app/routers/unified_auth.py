@@ -29,8 +29,6 @@ import secrets
 from datetime import timedelta
 from uuid import UUID
 
-logger = logging.getLogger(__name__)
-
 import bcrypt
 from fastapi import APIRouter, Depends, File, Header, HTTPException, Request, UploadFile
 from pydantic import BaseModel, Field, field_validator
@@ -38,6 +36,8 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import async_session_maker, get_session
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -1779,7 +1779,9 @@ def _oidc_redirect_uri(request: Request) -> str:
     """
     from app.config import settings as _cfg
 
-    base = _cfg.oidc_base_url.rstrip("/") if _cfg.oidc_base_url else str(request.base_url).rstrip("/")
+    base = (
+        _cfg.oidc_base_url.rstrip("/") if _cfg.oidc_base_url else str(request.base_url).rstrip("/")
+    )
     return base + "/auth/oidc/callback"
 
 
