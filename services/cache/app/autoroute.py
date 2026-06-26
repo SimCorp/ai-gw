@@ -15,6 +15,11 @@ from __future__ import annotations
 import logging
 import time
 
+# Intents that require strong reasoning — only route to frontier/complex models.
+# All other intents (question, documentation, code_review, general, …) are eligible
+# for cheaper model substitution.
+_COMPLEX_INTENTS = frozenset({"code_generation", "debugging", "refactoring", "testing"})
+
 _log = logging.getLogger(__name__)
 
 _WINDOW_SECONDS = 300  # 5-minute rolling window
@@ -140,3 +145,26 @@ async def select_best_model(redis, candidates: list[str]) -> str:
     except Exception as exc:
         _log.warning("autoroute select_best_model failed, using first candidate: %s", exc)
         return candidates[0]
+
+
+async def select_model_for_intent(
+    redis,
+    intent: str,
+    all_candidates: list[str],
+    complex_models: list[str],
+) -> str:
+    """Select the best model for *intent*, restricting to *complex_models* for demanding tasks.
+
+    Simple intents (questions, documentation, code review) may use any candidate
+    from *all_candidates*.  Complex intents (code generation, debugging, refactoring,
+    testing) are restricted to *complex_models* so quality is preserved.  If no
+    *complex_models* appear in *all_candidates*, falls back to the full list.
+    """
+    if intent in _COMPLEX_INTENTS and complex_models:
+        complex_set = set(complex_models)
+        eligible = [m for m in all_candidates if m in complex_set]
+        if not eligible:
+            eligible = all_candidates
+    else:
+        eligible = all_candidates
+    return await select_best_model(redis, eligible)

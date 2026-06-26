@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from app import exact, semantic
 from app.autoroute import record_request as _autoroute_record
-from app.autoroute import select_best_model
+from app.autoroute import select_model_for_intent
 from app.config import settings
 from app.guardrails import evaluate_guardrails
 from app.policy import CachePolicy, get_policy
@@ -436,7 +436,7 @@ async def list_models(request: Request):
     )
 
 
-async def _handle_chat_completions(request: Request, body: dict):
+async def _handle_chat_completions(request: Request, body: dict, _intent: str | None = None):
     """Core chat completions handler — shared by the normal and Auto-Drive endpoints."""
     redis = request.app.state.redis
     http = request.app.state.http
@@ -469,8 +469,8 @@ async def _handle_chat_completions(request: Request, body: dict):
     session_purpose = request.headers.get("x-session-purpose")
     repo = request.headers.get("x-repo")
 
-    # Classify request intent from prompt text (no prompt stored)
-    request_intent = _classify_intent(_prompt_text(body))
+    # Classify request intent from prompt text (no prompt stored); caller may pass pre-computed value
+    request_intent = _intent or _classify_intent(_prompt_text(body))
 
     try:
         policy = await get_policy(team_id, project_id, redis)
@@ -879,19 +879,26 @@ async def chat_completions_auto(request: Request):
     """Auto-Drive endpoint — selects the best model based on rolling performance stats.
 
     The ``model`` field in the request body is ignored; instead the gateway picks
-    the highest-scoring model from ``settings.autoroute_models``.  All other
-    behaviour (auth, guardrails, budget, cache) is identical to the normal
-    ``/v1/chat/completions`` endpoint.
+    the best-scoring model from ``settings.autoroute_models``, further filtered by
+    request intent: complex tasks (code generation, debugging, refactoring, testing)
+    prefer models listed in ``settings.autoroute_complex_models``; if none of those
+    appear in the candidate list the full candidate list is used as a fallback.  All
+    other behaviour is identical to ``/v1/chat/completions``.
     """
     body = await request.json()
-    redis = request.app.state.redis
-
     candidates = [m.strip() for m in settings.autoroute_models.split(",") if m.strip()]
-    chosen_model = await select_best_model(redis, candidates)
-
-    # Overwrite the model field so the rest of the pipeline uses our choice
+    if not candidates:
+        return JSONResponse(
+            {"error": "misconfigured_autoroute", "message": "AUTOROUTE_MODELS is empty"},
+            status_code=500,
+        )
+    redis = request.app.state.redis
+    complex_models = [m.strip() for m in settings.autoroute_complex_models.split(",") if m.strip()]
+    intent = _classify_intent(_prompt_text(body))
+    chosen_model = await select_model_for_intent(redis, intent, candidates, complex_models)
+    # Overwrite before _handle_chat_completions so _validate_token sees the actual routed model
     body = {**body, "model": chosen_model}
-    return await _handle_chat_completions(request, body)
+    return await _handle_chat_completions(request, body, _intent=intent)
 
 
 async def _enforce_anthropic_policy(redis, team_id, project_id, body: dict, is_stream: bool):
