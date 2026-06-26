@@ -1,7 +1,7 @@
 """Tests for the /ingest endpoint and content validation.
 
-LIBRARIAN_SERVICE_TOKEN="" (set in root conftest) makes _check_ingest_token
-fail-open, so no token header is needed in these tests.
+LIBRARIAN_SERVICE_TOKEN defaults to "" so _check_ingest_token fails-open;
+no token header is needed in these tests.
 """
 
 import uuid
@@ -27,10 +27,9 @@ async def test_ingest_successful(client):
     assert "id" in data
     uuid.UUID(data["id"])  # Raises ValueError if not a valid UUID
 
-    # Embedding was stored in Redis
-    main._redis.set.assert_called_once()
-    redis_call_args = main._redis.set.call_args
-    assert redis_call_args[0][0].startswith("lib:embed:")
+    # Embedding was stored in Redis under exactly lib:embed:<doc_id>
+    main._redis.set.assert_awaited_once()
+    assert main._redis.set.call_args[0][0] == f"lib:embed:{data['id']}"
 
     # Row inserted via pool
     main._pool.acquire.assert_called()
