@@ -6,7 +6,7 @@ import pytest
 
 
 @pytest.fixture
-async def ready_client(client):
+async def ready_client(client, monkeypatch):
     """Override pool.acquire so it works as an async context manager."""
     from app.main import app
 
@@ -14,7 +14,7 @@ async def ready_client(client):
     ctx = AsyncMock()
     ctx.__aenter__ = AsyncMock(return_value=conn)
     ctx.__aexit__ = AsyncMock(return_value=None)
-    app.state.pool.acquire = MagicMock(return_value=ctx)
+    monkeypatch.setattr(app.state.pool, "acquire", MagicMock(return_value=ctx))
     yield client
 
 

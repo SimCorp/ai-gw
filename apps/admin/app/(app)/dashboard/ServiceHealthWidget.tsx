@@ -23,12 +23,24 @@ async function fetchGatusStatuses(): Promise<GatusEndpoint[]> {
 }
 
 export function ServiceHealthWidget() {
-  const { data, isError } = useQuery<GatusEndpoint[]>({
+  const { data, isError, isLoading } = useQuery<GatusEndpoint[]>({
     queryKey: ['gatus-statuses'],
     queryFn: fetchGatusStatuses,
     staleTime: 30_000,
+    refetchInterval: 30_000,
     retry: 1,
   });
+
+  if (isLoading) {
+    return (
+      <div className="card">
+        <div className="card__head">
+          <h3 className="card__title">Gatus probes</h3>
+          <span className="card__sub">loading…</span>
+        </div>
+      </div>
+    );
+  }
 
   if (isError || data === undefined) {
     return (

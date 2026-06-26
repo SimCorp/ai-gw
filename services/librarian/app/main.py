@@ -569,14 +569,14 @@ async def ready():
     try:
         redis = await get_redis()
         await redis.ping()
-    except Exception as exc:
-        errors["redis"] = str(exc)
+    except Exception:
+        errors["redis"] = "connection failed"
     try:
         pool = await get_pool()
         async with pool.acquire() as conn:
             await conn.fetchval("SELECT 1")
-    except Exception as exc:
-        errors["postgres"] = str(exc)
+    except Exception:
+        errors["postgres"] = "connection failed"
     if errors:
         return JSONResponse({"status": "not_ready", "errors": errors}, status_code=503)
     return {"status": "ready"}
