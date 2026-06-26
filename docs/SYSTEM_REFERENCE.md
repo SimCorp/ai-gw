@@ -72,10 +72,10 @@ target each service instead runs as an Azure Container App named `ca-<service>-d
 | litellm | `litellm` | 8003 | `GET /health/liveliness` | Provider routing, OpenAI-compatible API |
 | observability | `observability` | 8004 | `GET /health` | Async event ingestion, cost recording, budget counters |
 | admin | `admin` | 8005 | `GET /health` | Team management, API keys, policies, guardrails, budgets, workflows, MCP registry |
-| identity | `identity` | 8006 | `GET /health` | Agent identity tokens (RS256 JWTs, JWKS endpoint) |
+| identity | `identity` | 8006 | `GET /ready` | Agent identity tokens (RS256 JWTs, JWKS endpoint) |
 | agent-relay | `agent-relay` | 8007 | `GET /health` | WebSocket relay for laptop-hosted agents (v1.0) |
-| librarian | `librarian` | 8008 | `GET /health` | AI Librarian: shared research knowledge base with semantic search |
-| memory | `memory` | 8009 | `GET /health` | Persistent agent memory scoped to user/team |
+| librarian | `librarian` | 8008 | `GET /ready` | AI Librarian: shared research knowledge base with semantic search |
+| memory | `memory` | 8009 | `GET /ready` | Persistent agent memory scoped to user/team |
 | league | `league` | 8010 | `GET /health` | AI-League gamified challenge platform |
 | graphify | `graphify` | 8012 | `GET /health` | Knowledge-graph service — repo registry, code-graph builds, MCP query tools |
 | admin-portal | `admin-portal` | 3001 | — | Admin Next.js UI |
