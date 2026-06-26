@@ -302,13 +302,13 @@ async def ready(request: Request):
     errors: dict[str, str] = {}
     try:
         await request.app.state.redis.ping()
-    except Exception:
-        errors["redis"] = "connection failed"
+    except Exception as exc:
+        errors["redis"] = str(exc)
     try:
         async with request.app.state.pool.acquire() as conn:
             await conn.fetchval("SELECT 1")
-    except Exception:
-        errors["postgres"] = "connection failed"
+    except Exception as exc:
+        errors["postgres"] = str(exc)
     if errors:
         return JSONResponse({"status": "not_ready", "errors": errors}, status_code=503)
     return {"status": "ready"}
