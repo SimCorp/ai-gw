@@ -23,6 +23,7 @@ import csv as _csv
 import hashlib
 import io as _io
 import json
+import logging
 import re
 import secrets
 from datetime import timedelta
@@ -35,6 +36,8 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import async_session_maker, get_session
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -1768,6 +1771,28 @@ oidc_router = APIRouter(prefix="/auth", tags=["auth-oidc"])
 _OIDC_STATE_TTL = 300  # 5 minutes
 
 
+def _oidc_redirect_uri(request: Request) -> str:
+    """Return the OIDC callback URI.
+
+    Uses OIDC_BASE_URL when set (required in production). In non-production
+    environments (ENVIRONMENT=development|test|ci) falls back to request.base_url
+    so local dev works without explicit configuration. In production, raises 500
+    if OIDC_BASE_URL is unset to prevent Host-header manipulation.
+    """
+    from app.config import settings as _cfg
+
+    if _cfg.oidc_base_url:
+        return _cfg.oidc_base_url.rstrip("/") + "/auth/oidc/callback"
+
+    if _cfg.environment.lower() in ("development", "test", "ci"):
+        return str(request.base_url).rstrip("/") + "/auth/oidc/callback"
+
+    raise HTTPException(
+        status_code=500,
+        detail="OIDC_BASE_URL is not configured. Required in production to prevent Host-header manipulation.",
+    )
+
+
 @oidc_router.get("/oidc/login")
 async def oidc_login(request: Request):
     """Redirect to the configured OIDC provider (Dex / Entra ID)."""
@@ -1778,7 +1803,7 @@ async def oidc_login(request: Request):
     state = secrets.token_urlsafe(16)
     await request.app.state.redis.setex(f"oidc_state:{state}", _OIDC_STATE_TTL, "1")
 
-    redirect_uri = str(request.base_url).rstrip("/") + "/auth/oidc/callback"
+    redirect_uri = _oidc_redirect_uri(request)
     params = _up.urlencode(
         {
             "client_id": _cfg.oidc_client_id,
@@ -1808,12 +1833,17 @@ async def oidc_callback(
     # Validate state
     stored = await request.app.state.redis.get(f"oidc_state:{state}")
     if not stored:
+        logger.warning("OIDC state validation failed", extra={"state_prefix": state[:8]})
         raise HTTPException(status_code=400, detail="Invalid or expired OAuth state")
     await request.app.state.redis.delete(f"oidc_state:{state}")
 
-    redirect_uri = str(request.base_url).rstrip("/") + "/auth/oidc/callback"
+    redirect_uri = _oidc_redirect_uri(request)
 
-    # Exchange code for tokens
+    import jwt as _jwt
+    from jwt.algorithms import ECAlgorithm as _ECAlg
+    from jwt.algorithms import RSAAlgorithm as _RSAAlg
+
+    # Exchange code for tokens; fetch OIDC JWKS in the same connection for id_token verification
     async with _httpx.AsyncClient() as client:
         token_resp = await client.post(
             f"{_cfg.oidc_issuer}/token",
@@ -1826,21 +1856,58 @@ async def oidc_callback(
             },
             headers={"Accept": "application/json"},
         )
-    if token_resp.status_code != 200:
-        raise HTTPException(status_code=502, detail="OIDC token exchange failed")
+        if token_resp.status_code != 200:
+            raise HTTPException(status_code=502, detail="OIDC token exchange failed")
 
-    id_token_raw = token_resp.json().get("id_token")
-    if not id_token_raw:
-        raise HTTPException(status_code=502, detail="No id_token in OIDC response")
+        id_token_raw = token_resp.json().get("id_token")
+        if not id_token_raw:
+            raise HTTPException(status_code=502, detail="No id_token in OIDC response")
 
-    # Decode claims without full verification (Dex is internal; add jwks verification for production)
-    import base64 as _b64
+        disco_resp = await client.get(f"{_cfg.oidc_issuer}/.well-known/openid-configuration")
+        if disco_resp.status_code != 200:
+            raise HTTPException(status_code=502, detail="OIDC discovery endpoint unavailable")
+        _jwks_uri = disco_resp.json().get("jwks_uri")
+        if not _jwks_uri:
+            raise HTTPException(status_code=502, detail="OIDC discovery document missing jwks_uri")
+        jwks_resp = await client.get(_jwks_uri)
+        if jwks_resp.status_code != 200:
+            raise HTTPException(status_code=502, detail="OIDC JWKS endpoint unavailable")
 
-    parts = id_token_raw.split(".")
-    if len(parts) < 2:
-        raise HTTPException(status_code=502, detail="Malformed id_token")
-    padding = 4 - len(parts[1]) % 4
-    claims = json.loads(_b64.urlsafe_b64decode(parts[1] + "=" * padding))
+    # Verify id_token: signature (allow-listed alg only), issuer, audience, and expiry.
+    # Tries all candidate keys when kid is absent (handles key rotation without kid).
+    _ALLOWED_ALGS = frozenset({"RS256", "RS384", "RS512", "ES256", "ES384", "ES512"})
+    _header = _jwt.get_unverified_header(id_token_raw)
+    _alg = _header.get("alg", "")
+    if _alg not in _ALLOWED_ALGS:
+        raise HTTPException(status_code=502, detail=f"Unsupported OIDC signing algorithm: {_alg!r}")
+    _kid = _header.get("kid")
+    _candidates = [
+        k for k in jwks_resp.json().get("keys", []) if _kid is None or k.get("kid") == _kid
+    ]
+    if not _candidates:
+        raise HTTPException(status_code=502, detail="No matching OIDC signing key found")
+    _last_exc = None
+    claims = None
+    for _key_data in _candidates:
+        try:
+            _signing_key = (
+                _ECAlg.from_jwk(_key_data) if _alg.startswith("ES") else _RSAAlg.from_jwk(_key_data)
+            )
+            claims = _jwt.decode(
+                id_token_raw,
+                _signing_key,
+                algorithms=[_alg],
+                audience=_cfg.oidc_client_id,
+                issuer=_cfg.oidc_issuer,
+            )
+            break
+        except _jwt.ExpiredSignatureError:
+            raise HTTPException(status_code=401, detail="OIDC id_token expired")
+        except Exception as exc:
+            _last_exc = exc
+    if claims is None:
+        logger.warning("OIDC id_token verification failed: %s", _last_exc)
+        raise HTTPException(status_code=401, detail="OIDC id_token verification failed")
 
     email = claims.get("email", "").lower().strip()
     display_name = claims.get("name") or claims.get("preferred_username") or email.split("@")[0]
