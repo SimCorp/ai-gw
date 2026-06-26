@@ -6,9 +6,8 @@ fail-open, so no token header is needed in these tests.
 
 from unittest.mock import AsyncMock, patch
 
-import pytest
-
 import app.main as main
+import pytest
 
 
 @pytest.mark.asyncio
