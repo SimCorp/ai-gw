@@ -20,7 +20,7 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     op.execute("""
         CREATE TABLE IF NOT EXISTS usage_portraits (
-            developer_id  UUID        NOT NULL REFERENCES developers(id) ON DELETE CASCADE,
+            developer_id  UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
             week_start    DATE        NOT NULL,
             scene_prompt  TEXT        NOT NULL,
             scene_data    JSONB       NOT NULL DEFAULT '{}',
