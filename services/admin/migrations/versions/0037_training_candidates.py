@@ -4,8 +4,8 @@ Adds per-key and per-org opt-in flags and a training_candidates table for
 prompt/completion capture. Both flags default FALSE; production capture
 requires a completed DPA review before any node is toggled on.
 
-Revision ID: 0036
-Revises: 0035
+Revision ID: 0037
+Revises: 0036
 Create Date: 2026-06-26
 """
 
@@ -15,8 +15,8 @@ from typing import Sequence, Union
 
 from alembic import op
 
-revision: str = "0036"
-down_revision: Union[str, None] = "0035"
+revision: str = "0037"
+down_revision: Union[str, None] = "0036"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
