@@ -49,6 +49,24 @@ async def test_api_key_valid(mock_db):
     assert result["capture_content"] is False
 
 
+async def test_api_key_capture_content_true(mock_db):
+    """When DB returns capture_content=True (key AND org both enabled), validator passes it through."""
+    key = "sk-test-key-456"
+    mock_db.fetchrow = AsyncMock(
+        return_value={
+            "id": "key-uuid-2",
+            "team_id": "team-2",
+            "project_id": None,
+            "scopes": None,
+            "capture_content": True,
+        }
+    )
+
+    result = await validate_api_key(key, mock_db)
+
+    assert result["capture_content"] is True
+
+
 async def test_api_key_invalid(mock_db):
     mock_db.fetchrow = AsyncMock(return_value=None)
 

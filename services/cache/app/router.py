@@ -206,7 +206,6 @@ class _CachedIdentity(NamedTuple):
     team_id: str
     project_id: str | None
     key_id: str | None
-    capture_content: bool
     expires_at: float  # monotonic
 
 
@@ -327,7 +326,6 @@ async def _validate_token(
                 team_id=result[0],
                 project_id=result[1],
                 key_id=result[2],
-                capture_content=result[4],
                 expires_at=time.monotonic() + _IDENTITY_CACHE_TTL,
             )
             return result
@@ -343,8 +341,8 @@ async def _validate_token(
             _log.warning(
                 "Auth service unreachable, using cached identity (team=%s): %s", cached.team_id, exc
             )
-            # Scope is not stored in the cache; treat as standard on fallback
-            return cached.team_id, cached.project_id, cached.key_id, None, cached.capture_content
+            # Scope is not stored in the cache; fail closed on capture when auth is unreachable
+            return cached.team_id, cached.project_id, cached.key_id, None, False
         return None
 
 
@@ -865,8 +863,8 @@ async def _handle_chat_completions(request: Request, body: dict, _intent: str | 
     if capture_content and resp.status_code == 200 and not body.get("stream") and not bypass_cache:
         _pt = _prompt_text(body)
         _choices = response_body.get("choices", [])
-        _ct = _choices[0].get("message", {}).get("content", "") if _choices else ""
-        if _pt and _ct:
+        _ct = _choices[0].get("message", {}).get("content") if _choices else None
+        if _pt and isinstance(_ct, str) and _ct:
             asyncio.create_task(
                 _capture_training_candidate(
                     request.app.state.pool,
