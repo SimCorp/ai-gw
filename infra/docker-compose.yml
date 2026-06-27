@@ -160,6 +160,9 @@ services:
       # Dedicated DB (created by postgres init) — keeps Prisma's schema separate
       # from the admin/Alembic-owned `aigateway` DB (avoids Prisma P3005).
       DATABASE_URL: "postgresql://aigateway:aigateway@postgres:5432/litellm"
+    labels:
+      - "aigw.tier=0"
+      - "aigw.tier-name=critical"
     depends_on:
       postgres:
         condition: service_healthy
@@ -177,6 +180,9 @@ services:
     ports:
       - "127.0.0.1:8001:8001"
     env_file: ../.env
+    labels:
+      - "aigw.tier=0"
+      - "aigw.tier-name=critical"
     depends_on:
       db-migrate:
         condition: service_completed_successfully
@@ -200,6 +206,9 @@ services:
     environment:
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-change-me-internal-key}
       DATABASE_URL: "postgresql://aigateway:aigateway@postgres:5432/aigateway"
+    labels:
+      - "aigw.tier=0"
+      - "aigw.tier-name=critical"
     depends_on:
       redis:
         condition: service_healthy
@@ -223,6 +232,9 @@ services:
     env_file: ../.env
     environment:
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-change-me-internal-key}
+    labels:
+      - "aigw.tier=1"
+      - "aigw.tier-name=important"
     depends_on:
       db-migrate:
         condition: service_completed_successfully
@@ -251,6 +263,9 @@ services:
       # Knowledge Graphs admin page proxies graphify; token must match graphify's.
       GRAPHIFY_URL: "http://graphify:8012"
       GRAPHIFY_SERVICE_TOKEN: ${GRAPHIFY_SERVICE_TOKEN:-${INTERNAL_API_KEY:-change-me-internal-key}}
+    labels:
+      - "aigw.tier=1"
+      - "aigw.tier-name=important"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -281,6 +296,9 @@ services:
       # without wiring per-request Authorization headers in portal fetches.
       # Production must run with DEV_BYPASS_AUTH=false.
       DEV_BYPASS_AUTH: "true"
+    labels:
+      - "aigw.tier=2"
+      - "aigw.tier-name=background"
     depends_on:
       db-migrate:
         condition: service_completed_successfully
@@ -309,6 +327,9 @@ services:
       REDIS_URL: "redis://redis:6379/0"
       SCANNER_WORKER_SECRET: ${SCANNER_WORKER_SECRET:-dev-worker-secret}
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-change-me-internal-key}
+    labels:
+      - "aigw.tier=2"
+      - "aigw.tier-name=background"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     extra_hosts:
@@ -349,6 +370,9 @@ services:
       # Graphs page without a user sk-*. Defaults to the stack internal key.
       GRAPHIFY_SERVICE_TOKEN: ${GRAPHIFY_SERVICE_TOKEN:-${INTERNAL_API_KEY:-change-me-internal-key}}
       CORS_ORIGINS: "*"
+    labels:
+      - "aigw.tier=2"
+      - "aigw.tier-name=background"
     volumes:
       - graphify_out:/graphify-out
     depends_on:
@@ -377,6 +401,9 @@ services:
       GITHUB_ORG: ${GITHUB_ORG:-SimCorp}
       GRAPHIFY_OUT_DIR: /graphify-out
       WORKER_ID: "graphify-worker-1"
+    labels:
+      - "aigw.tier=2"
+      - "aigw.tier-name=background"
     volumes:
       - graphify_out:/graphify-out
     # A real video build (large-v3 Whisper + big tree-sitter parse) can exceed
@@ -404,6 +431,9 @@ services:
       # Rybbit private embed URLs — populate post-DNS (pass aigw/rybbit-embed-admin / aigw/rybbit-embed-portal)
       RYBBIT_EMBED_URL_ADMIN: "${RYBBIT_EMBED_URL_ADMIN}"
       RYBBIT_EMBED_URL_PORTAL: "${RYBBIT_EMBED_URL_PORTAL}"
+    labels:
+      - "aigw.tier=1"
+      - "aigw.tier-name=important"
     depends_on:
       admin:
         condition: service_healthy
@@ -436,6 +466,9 @@ services:
       NEXT_PUBLIC_RYBBIT_ENABLED: "true"
       NEXT_PUBLIC_RYBBIT_URL: "https://rybbit.aigw.scdom.net"
       NEXT_PUBLIC_RYBBIT_SITE_ID: "${RYBBIT_SITE_ID_PORTAL}"
+    labels:
+      - "aigw.tier=1"
+      - "aigw.tier-name=important"
     depends_on:
       admin:
         condition: service_healthy
@@ -459,6 +492,9 @@ services:
       # (its AGENT_RELAY_SECRET) — the relay validates RELAY_SECRET against it.
       AGENT_RELAY_SECRET: ${AGENT_RELAY_SECRET:-dev-relay-secret}
       RELAY_SECRET: ${RELAY_SECRET:-dev-relay-secret}
+    labels:
+      - "aigw.tier=2"
+      - "aigw.tier-name=background"
     depends_on:
       redis:
         condition: service_healthy
@@ -487,6 +523,9 @@ services:
       AGENT_RELAY_SECRET: ${AGENT_RELAY_SECRET:-dev-relay-secret}
       ADMIN_INTERNAL_TOKEN: ""
       ADMIN_URL: "http://admin:8005"
+    labels:
+      - "aigw.tier=2"
+      - "aigw.tier-name=background"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp/aigw-runs:/worker-runs
@@ -509,6 +548,9 @@ services:
       # Gates POST /agents/register + DELETE /agents/{slug}. Dev default keeps
       # the stack working; prod sets a real value from Key Vault.
       IDENTITY_SERVICE_TOKEN: ${IDENTITY_SERVICE_TOKEN:-dev-identity-token}
+    labels:
+      - "aigw.tier=2"
+      - "aigw.tier-name=background"
     depends_on:
       db-migrate:
         condition: service_completed_successfully
@@ -542,6 +584,9 @@ services:
       CACHE_URL: "http://cache:8002"
       LIBRARIAN_SERVICE_TOKEN: ""
       CORS_ORIGINS: "*"
+    labels:
+      - "aigw.tier=2"
+      - "aigw.tier-name=background"
     depends_on:
       db-migrate:
         condition: service_completed_successfully
@@ -569,6 +614,9 @@ services:
       EMBEDDING_MODEL: "${EMBEDDING_MODEL:-text-embedding-3-small}"
       EMBEDDING_API_KEY: "${EMBEDDING_API_KEY:-sk-local-placeholder}"
       EMBEDDING_BASE_URL: "${EMBEDDING_BASE_URL:-http://ollama:11434/v1}"
+    labels:
+      - "aigw.tier=2"
+      - "aigw.tier-name=background"
     depends_on:
       postgres:
         condition: service_healthy

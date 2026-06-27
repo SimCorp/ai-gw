@@ -37,6 +37,12 @@
 		reverse_proxy admin-portal:3001
 	}
 
+	# Public tier-status JSON — unauthenticated. Rewrites /api/status → /status on admin.
+	handle /api/status {
+		rewrite * /status
+		reverse_proxy admin:8005
+	}
+
 	# Backend service APIs — strip /api/<svc>/ -> service root.
 	handle_path /api/admin/* {
 		reverse_proxy admin:8005

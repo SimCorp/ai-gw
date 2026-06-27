@@ -112,6 +112,7 @@ from app.routers import (
 from app.routers import (
     prompts as prompts_router,
 )
+from app.routers import public_status as public_status_router
 from app.routers import (
     reports as reports_router,
 )
@@ -580,6 +581,7 @@ app.include_router(dev_auth.router)  # public — no admin auth
 app.include_router(admin_auth_router.router)  # public — IS the auth, no token required
 app.include_router(unified_auth_router.router)  # public — unified /auth/* endpoints
 app.include_router(unified_auth_router.oidc_router)  # public — OIDC SSO flow
+app.include_router(public_status_router.router)  # public — tier status probe endpoint
 app.include_router(users_router.router, dependencies=_auth)  # admin user management UI
 app.include_router(settings_router.router, dependencies=_auth)
 app.include_router(dashboard.router, dependencies=_auth)
