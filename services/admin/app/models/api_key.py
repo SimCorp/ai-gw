@@ -52,3 +52,4 @@ class APIKey(Base):
         ARRAY(Text), nullable=False, server_default=text("'{ai-gw:inference:*}'")
     )
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    capture_content: Mapped[bool] = mapped_column(nullable=False, server_default=text("FALSE"))

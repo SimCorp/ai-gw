@@ -38,3 +38,6 @@ class OrganizationNode(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=text("NOW()")
     )
+    training_capture_enabled: Mapped[bool] = mapped_column(
+        nullable=False, server_default=text("FALSE")
+    )

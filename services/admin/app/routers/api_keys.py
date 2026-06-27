@@ -176,6 +176,7 @@ class KeyCreate(BaseModel):
     project_id: UUID | None = None
     scopes: list[str] = ["ai-gw:inference:*"]
     expires_at: str | None = None
+    capture_content: bool = False
 
 
 @router.get("")
@@ -211,6 +212,7 @@ async def create_key(
         key_hash=key_hash,
         scopes=scopes,
         expires_at=expires_at,
+        capture_content=body.capture_content,
     )
     session.add(api_key)
     await session.flush()
@@ -220,7 +222,12 @@ async def create_key(
         "create_api_key",
         "api_key",
         resource_id=api_key.id,
-        details={"name": body.name, "team_id": str(team_id), "scopes": scopes},
+        details={
+            "name": body.name,
+            "team_id": str(team_id),
+            "scopes": scopes,
+            "capture_content": body.capture_content,
+        },
     )
     await session.commit()
     await session.refresh(api_key)

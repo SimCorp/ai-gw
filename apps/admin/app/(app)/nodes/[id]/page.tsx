@@ -14,12 +14,13 @@ import { PermissionsPanel } from './_components/PermissionsPanel';
 
 // ── Tab types ─────────────────────────────────────────────────────────────────
 
-type Tab = 'overview' | 'policy' | 'budget' | 'permissions';
+type Tab = 'overview' | 'policy' | 'budget' | 'permissions' | 'training';
 const TABS: { id: Tab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'policy', label: 'Policy' },
   { id: 'budget', label: 'Budget' },
   { id: 'permissions', label: 'Permissions' },
+  { id: 'training', label: 'Training' },
 ];
 
 // ── Member types ──────────────────────────────────────────────────────────────
@@ -437,6 +438,118 @@ export default function NodeDetailPage({ params }: { params: Promise<{ id: strin
       {activeTab === 'policy' && <PolicyPanel nodeId={id} nodeName={node.name} />}
       {activeTab === 'budget' && <BudgetPanel nodeId={id} />}
       {activeTab === 'permissions' && <PermissionsPanel nodeId={id} />}
+      {activeTab === 'training' && <TrainingCapturePanel nodeId={id} />}
+    </div>
+  );
+}
+
+// ── Training capture panel ────────────────────────────────────────────────────
+
+function TrainingCapturePanel({ nodeId }: { nodeId: string }) {
+  const queryClient = useQueryClient();
+
+  const { data, isLoading, error } = useQuery<{ training_capture_enabled: boolean; pending_candidates: number }>({
+    queryKey: ['node-training', nodeId],
+    queryFn: () => apiFetch(`/nodes/${nodeId}/training-capture`),
+    staleTime: 10_000,
+  });
+
+  const toggleMutation = useMutation({
+    mutationFn: (enabled: boolean) =>
+      apiFetch(`/nodes/${nodeId}/training-capture`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ training_capture_enabled: enabled }),
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['node-training', nodeId] }),
+  });
+
+  const eraseMutation = useMutation({
+    mutationFn: () => apiFetch(`/nodes/${nodeId}/training-data`, { method: 'DELETE' }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['node-training', nodeId] }),
+  });
+
+  if (isLoading) return <div style={{ color: 'var(--fg-3)', fontSize: 13 }}>Loading…</div>;
+  if (error) return <div style={{ color: 'var(--bad)', fontSize: 13 }}>Failed to load training data settings.</div>;
+
+  const enabled = data?.training_capture_enabled ?? false;
+  const pending = data?.pending_candidates ?? 0;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 560 }}>
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--rule)', borderRadius: 8, padding: '20px 24px' }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--fg-1)', marginBottom: 6 }}>
+          Training data capture
+        </div>
+        <div style={{ fontSize: 13, color: 'var(--fg-3)', marginBottom: 18, lineHeight: 1.5 }}>
+          When enabled, non-streaming prompt/completion pairs from opted-in API keys are
+          stored for model fine-tuning. Both this toggle <em>and</em> the key-level
+          <code style={{ fontSize: 12, background: 'var(--surface-2)', padding: '1px 4px', borderRadius: 3 }}>capture_content</code> flag
+          must be on. Requires completed DPA review before enabling in production.
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button
+            role="switch"
+            aria-checked={enabled}
+            aria-label="Toggle training capture"
+            onClick={() => toggleMutation.mutate(!enabled)}
+            disabled={toggleMutation.isPending}
+            style={{
+              width: 44,
+              height: 24,
+              borderRadius: 12,
+              border: 'none',
+              cursor: 'pointer',
+              background: enabled ? 'var(--accent)' : 'var(--rule)',
+              position: 'relative',
+              transition: 'background 0.15s',
+            }}
+          >
+            <span style={{
+              position: 'absolute',
+              top: 2,
+              left: enabled ? 22 : 2,
+              width: 20,
+              height: 20,
+              borderRadius: '50%',
+              background: '#fff',
+              transition: 'left 0.15s',
+            }} />
+          </button>
+          <span style={{ fontSize: 13, color: 'var(--fg-1)', fontWeight: 500 }}>
+            {enabled ? 'Enabled' : 'Disabled'}
+          </span>
+        </div>
+      </div>
+
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--rule)', borderRadius: 8, padding: '20px 24px' }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--fg-1)', marginBottom: 6 }}>
+          Captured candidates
+        </div>
+        <div style={{ fontSize: 13, color: 'var(--fg-3)', marginBottom: 16, lineHeight: 1.5 }}>
+          {pending.toLocaleString()} unexported rows. Auto-deleted after 90 days.
+          JSONL export (Stage 2) will be available in a future release.
+        </div>
+        <button
+          onClick={() => {
+            if (!confirm(`Delete all ${pending} unexported training candidates for this node? This cannot be undone.`)) return;
+            eraseMutation.mutate();
+          }}
+          disabled={eraseMutation.isPending || pending === 0}
+          style={{
+            padding: '7px 16px',
+            fontSize: 12,
+            background: 'transparent',
+            border: '1px solid color-mix(in srgb, var(--bad) 40%, transparent)',
+            borderRadius: 5,
+            color: 'var(--bad)',
+            cursor: pending === 0 ? 'not-allowed' : 'pointer',
+            opacity: pending === 0 ? 0.5 : 1,
+          }}
+        >
+          {eraseMutation.isPending ? 'Erasing…' : `Erase ${pending.toLocaleString()} candidates (GDPR Art. 17)`}
+        </button>
+      </div>
     </div>
   );
 }

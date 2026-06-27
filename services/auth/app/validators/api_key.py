@@ -22,12 +22,15 @@ async def validate_api_key(key: str, db: asyncpg.Connection, redis=None) -> dict
     try:
         row = await db.fetchrow(
             """
-            SELECT id, node_id AS team_id, project_id, scope,
-                   COALESCE(scopes, ARRAY['ai-gw:inference:*']) AS scopes
-            FROM api_keys
-            WHERE key_hash = $1
-              AND revoked_at IS NULL
-              AND (expires_at IS NULL OR expires_at > NOW())
+            SELECT ak.id, ak.node_id AS team_id, ak.project_id, ak.scope,
+                   COALESCE(ak.scopes, ARRAY['ai-gw:inference:*']) AS scopes,
+                   COALESCE(ak.capture_content, FALSE)
+                     AND COALESCE(on2.training_capture_enabled, FALSE) AS capture_content
+            FROM api_keys ak
+            LEFT JOIN organization_nodes on2 ON on2.id = ak.node_id
+            WHERE ak.key_hash = $1
+              AND ak.revoked_at IS NULL
+              AND (ak.expires_at IS NULL OR ak.expires_at > NOW())
             """,
             key_hash,
         )
@@ -46,6 +49,7 @@ async def validate_api_key(key: str, db: asyncpg.Connection, redis=None) -> dict
             "key_id": str(row["id"]),
             "scope": row["scope"] if "scope" in row else "standard",
             "scopes": list(row["scopes"]) if row["scopes"] else ["ai-gw:inference:*"],
+            "capture_content": bool(row["capture_content"]),
         }
 
         # Populate Redis cache for Postgres-outage survivability
